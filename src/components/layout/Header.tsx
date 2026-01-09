@@ -5,12 +5,26 @@ import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import ContractIcon from '@/components/ContractIcon';
 import { useRouter } from 'next/navigation';
+import { authService } from '@/services/authService';
+import { useState, useEffect } from 'react';
 
 export default function Header() {
     const router = useRouter();
+    const [userInitial, setUserInitial] = useState('U');
+    const [userEmail, setUserEmail] = useState('');
+
+    useEffect(() => {
+        const currentUser = authService.getCurrentUser();
+        if (currentUser && currentUser.email) {
+            // Get first letter of email and capitalize it
+            const initial = currentUser.email.charAt(0).toUpperCase();
+            setUserInitial(initial);
+            setUserEmail(currentUser.email);
+        }
+    }, []);
 
     const handleLogout = () => {
-        // TODO: Clear any auth tokens/session data here
+        authService.logout();
         console.log('Logging out...');
         router.push('/login');
     };
@@ -62,17 +76,20 @@ export default function Header() {
                             <NotificationsOutlinedIcon sx={{ color: 'text.secondary' }} />
                         </Badge>
                     </IconButton>
-                    <Avatar
-                        sx={{
-                            width: 36,
-                            height: 36,
-                            bgcolor: 'primary.main',
-                            fontSize: '0.875rem',
-                            fontWeight: 600,
-                        }}
-                    >
-                        JD
-                    </Avatar>
+                    <Tooltip title={userEmail || 'User'} arrow>
+                        <Avatar
+                            sx={{
+                                width: 36,
+                                height: 36,
+                                bgcolor: 'primary.main',
+                                fontSize: '0.875rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            {userInitial}
+                        </Avatar>
+                    </Tooltip>
 
                     <Tooltip title="Logout" arrow>
                         <IconButton

@@ -1,30 +1,42 @@
 'use client';
 
-import { Box, Typography, Paper, Button, IconButton, Chip, Grow } from '@mui/material';
+import { Box, Typography, Paper, Button, IconButton, Chip, Grow, Tooltip } from '@mui/material';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useState } from 'react';
 
 interface TemplateCardProps {
+    id: string;
     category: string;
     title: string;
     description: string;
     timesUsed: number;
     lastUsed: string;
     index?: number;
+    isAdmin?: boolean;
     onUse?: () => void;
+    onView?: (id: string) => void;
+    onEdit?: (id: string) => void;
+    onDelete?: (id: string) => void;
 }
 
 export default function TemplateCard({
+    id,
     category,
     title,
     description,
     timesUsed,
     lastUsed,
     index = 0,
+    isAdmin = false,
     onUse,
+    onView,
+    onEdit,
+    onDelete,
 }: TemplateCardProps) {
     const [isHovered, setIsHovered] = useState(false);
 
@@ -43,12 +55,20 @@ export default function TemplateCard({
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
+                    position: 'relative',
+                    overflow: 'hidden',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     cursor: 'pointer',
                     transform: isHovered ? 'translateY(-4px)' : 'translateY(0)',
                     boxShadow: isHovered
                         ? '0 12px 24px rgba(15, 118, 110, 0.15)'
                         : '0 2px 8px rgba(0, 0, 0, 0.04)',
+                    '&:hover': {
+                        '& .action-buttons': {
+                            opacity: 1,
+                            transform: 'translateY(0)',
+                        },
+                    },
                 }}
             >
                 {/* Header with Icon and Category */}
@@ -181,59 +201,114 @@ export default function TemplateCard({
                 </Box> */}
 
                 {/* Action Buttons */}
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <Button
-                        variant="contained"
-                        startIcon={<AddIcon />}
-                        fullWidth
-                        onClick={onUse}
-                        sx={{
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            py: 0.75,
-                            borderRadius: 1.5,
-                            bgcolor: 'primary.main',
-                            fontSize: '0.875rem',
-                            transition: 'all 0.3s',
-                            '&:hover': {
-                                bgcolor: 'primary.dark',
-                                transform: 'translateY(-2px)',
-                                boxShadow: '0 6px 16px rgba(26, 46, 35, 0.4)',
-                            },
-                        }}
-                    >
-                        Use
-                    </Button>
+                <Box
+                    className="action-buttons"
+                    sx={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        display: 'flex',
+                        gap: 1,
+                        p: 0.5,
+                        background: 'linear-gradient(to top, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 70%, rgba(255,255,255,0) 100%)',
+                        backdropFilter: 'blur(8px)',
+                        borderRadius: '0 0 12px 12px',
+                        opacity: { xs: 1, md: 0 },
+                        transform: { xs: 'translateY(0)', md: 'translateY(100%)' },
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    }}
+                >
+                    {/* View Icon Button */}
+                    <Tooltip title="View Template" arrow>
+                        <IconButton
+                            size="small"
+                            onClick={() => onView?.(id)}
+                            sx={{
+                                bgcolor: 'transparent',
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: 1.5,
+                                width: 36,
+                                height: 36,
+                                color: 'text.primary',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                    bgcolor: 'primary.main',
+                                    borderColor: 'primary.main',
+                                    color: 'white',
+                                    transform: 'translateY(-2px)',
+                                    boxShadow: '0 4px 8px rgba(15, 118, 110, 0.2)',
+                                },
+                            }}
+                        >
+                            <VisibilityOutlinedIcon sx={{ fontSize: '1.1rem' }} />
+                        </IconButton>
+                    </Tooltip>
 
-                    <IconButton
-                        sx={{
-                            borderRadius: 2,
-                            border: '1px solid',
-                            borderColor: 'rgba(0, 0, 0, 0.12)',
-                            transition: 'all 0.3s',
-                            '&:hover': {
-                                borderColor: 'primary.main',
-                                bgcolor: 'rgba(15, 118, 110, 0.04)',
-                            },
-                        }}
-                    >
-                        <VisibilityOutlinedIcon sx={{ fontSize: 20 }} />
-                    </IconButton>
+                    {/* Edit Icon Button - Admin Only */}
+                    {isAdmin && (
+                        <Tooltip title="Edit Template" arrow>
+                            <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEdit?.(id);
+                                }}
+                                sx={{
+                                    bgcolor: 'transparent',
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    borderRadius: 1.5,
+                                    width: 36,
+                                    height: 36,
+                                    color: 'text.primary',
+                                    transition: 'all 0.2s ease',
+                                    '&:hover': {
+                                        bgcolor: 'info.main',
+                                        borderColor: 'info.main',
+                                        color: 'white',
+                                        transform: 'translateY(-2px)',
+                                        boxShadow: '0 4px 8px rgba(2, 136, 209, 0.2)',
+                                    },
+                                }}
+                            >
+                                <EditOutlinedIcon sx={{ fontSize: '1.1rem' }} />
+                            </IconButton>
+                        </Tooltip>
+                    )}
 
-                    {/* <IconButton
-                        sx={{
-                            borderRadius: 2,
-                            border: '1px solid',
-                            borderColor: 'rgba(0, 0, 0, 0.12)',
-                            transition: 'all 0.3s',
-                            '&:hover': {
-                                borderColor: 'primary.main',
-                                bgcolor: 'rgba(15, 118, 110, 0.04)',
-                            },
-                        }}
-                    >
-                        <ContentCopyOutlinedIcon sx={{ fontSize: 20 }} />
-                    </IconButton> */}
+                    {/* Delete Icon Button - Admin Only */}
+                    {isAdmin && (
+                        <Tooltip title="Delete Template" arrow>
+                            <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDelete?.(id);
+                                }}
+                                sx={{
+                                    bgcolor: 'transparent',
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    borderRadius: 1.5,
+                                    width: 36,
+                                    height: 36,
+                                    color: 'text.primary',
+                                    transition: 'all 0.2s ease',
+                                    '&:hover': {
+                                        bgcolor: 'error.main',
+                                        borderColor: 'error.main',
+                                        color: 'white',
+                                        transform: 'translateY(-2px)',
+                                        boxShadow: '0 4px 8px rgba(211, 47, 47, 0.2)',
+                                    },
+                                }}
+                            >
+                                <DeleteOutlineIcon sx={{ fontSize: '1.1rem' }} />
+                            </IconButton>
+                        </Tooltip>
+                    )}
                 </Box>
             </Paper>
         </Grow>

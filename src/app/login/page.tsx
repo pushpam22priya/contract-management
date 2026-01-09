@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Box,
@@ -15,12 +15,15 @@ import {
     useMediaQuery,
     useTheme,
     Stack,
+    Alert,
+    CircularProgress,
 } from '@mui/material';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import GavelIcon from '@mui/icons-material/Gavel';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ContractIcon from '@/components/ContractIcon';
+import { authService } from '@/services/authService';
 
 export default function LoginPage() {
     const theme = useTheme();
@@ -28,9 +31,35 @@ export default function LoginPage() {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-    const handleSignIn = (e: React.FormEvent) => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+
+    const handleSignIn = async (e: React.FormEvent) => {
         e.preventDefault();
-        router.push('/dashboard');
+        setError('');
+        setSuccess('');
+        setLoading(true);
+
+        try {
+            const response = await authService.login({ email, password });
+
+            if (response.success) {
+                setSuccess(response.message);
+                // Navigate to dashboard after a short delay to show success message
+                setTimeout(() => {
+                    router.push('/dashboard');
+                }, 800);
+            } else {
+                setError(response.message);
+            }
+        } catch (err) {
+            setError('An unexpected error occurred. Please try again.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -212,6 +241,17 @@ export default function LoginPage() {
                     </Box>
 
                     <Box component="form" noValidate onSubmit={handleSignIn}>
+                        {error && (
+                            <Alert severity="error" sx={{ mb: 2 }}>
+                                {error}
+                            </Alert>
+                        )}
+                        {success && (
+                            <Alert severity="success" sx={{ mb: 2 }}>
+                                {success}
+                            </Alert>
+                        )}
+
                         <Stack spacing={2}>
                             <TextField
                                 required
@@ -221,6 +261,9 @@ export default function LoginPage() {
                                 name="email"
                                 autoComplete="email"
                                 autoFocus
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                disabled={loading}
                                 InputProps={{
                                     startAdornment: (
                                         <InputAdornment position="start">
@@ -237,6 +280,9 @@ export default function LoginPage() {
                                 type="password"
                                 id="password"
                                 autoComplete="current-password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                disabled={loading}
                                 InputProps={{
                                     startAdornment: (
                                         <InputAdornment position="start">
@@ -252,8 +298,8 @@ export default function LoginPage() {
                             fullWidth
                             variant="contained"
                             size="large"
-                            endIcon={<ArrowForwardIcon />}
-                            onClick={handleSignIn}
+                            endIcon={loading ? <CircularProgress size={20} color="inherit" /> : <ArrowForwardIcon />}
+                            disabled={loading}
                             sx={{
                                 py: 1.5,
                                 mt: 2,
@@ -264,9 +310,12 @@ export default function LoginPage() {
                                     background: '#0f4c47',
                                     boxShadow: '0 8px 24px rgba(15, 118, 110, 0.4)',
                                 },
+                                '&:disabled': {
+                                    background: '#115e5980',
+                                },
                             }}
                         >
-                            Sign In
+                            {loading ? 'Signing In...' : 'Sign In'}
                         </Button>
 
                     </Box>

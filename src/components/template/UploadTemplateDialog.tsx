@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Box,
     Button,
@@ -10,38 +10,55 @@ import {
     IconButton,
     Chip,
     alpha,
+    CircularProgress,
+    Alert,
 } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import { templateService } from '@/services/templateService';
+import { categoryService } from '@/services/categoryService';
+import { authService } from '@/services/authService';
 
 interface UploadTemplateDialogProps {
     open: boolean;
     onClose: () => void;
-    existingCategories?: string[];
+    onSuccess?: () => void;
 }
 
 export default function UploadTemplateDialog({
     open,
     onClose,
-    existingCategories = ['Service', 'Legal', 'HR', 'Procurement', 'Technology'],
+    onSuccess,
 }: UploadTemplateDialogProps) {
     const [templateName, setTemplateName] = useState('');
     const [description, setDescription] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-    const [categories, setCategories] = useState<string[]>(existingCategories);
+    const [categories, setCategories] = useState<string[]>([]);
     const [newCategory, setNewCategory] = useState('');
     const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [dragActive, setDragActive] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+
+    // Load categories on mount
+    useEffect(() => {
+        if (open) {
+            const allCategories = categoryService.getAllCategories();
+            setCategories(allCategories.map(cat => cat.name));
+        }
+    }, [open]);
 
     // Handle file upload
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
             setSelectedFile(file);
+            setError('');
         }
     };
 
@@ -73,53 +90,99 @@ export default function UploadTemplateDialog({
     };
 
     // Add new category
-    const handleAddNewCategory = () => {
-        if (newCategory.trim() && !categories.includes(newCategory.trim())) {
+    const handleAddNewCategory = async () => {
+        if (!newCategory.trim()) return;
+
+        setError('');
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) {
+            setError('You must be logged in to create categories');
+            return;
+        }
+
+        const result = await categoryService.createCategory(
+            { name: newCategory.trim() },
+            currentUser.email
+        );
+
+        if (result.success) {
             const updatedCategories = [...categories, newCategory.trim()];
             setCategories(updatedCategories);
             setSelectedCategory(newCategory.trim());
             setNewCategory('');
             setShowNewCategoryInput(false);
+        } else {
+            setError(result.message);
         }
     };
 
     // Handle submit
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
+        setError('');
+        setSuccess('');
+
         // Validate form
         if (!templateName.trim()) {
-            alert('Please enter a template name');
+            setError('Please enter a template name');
             return;
         }
         if (!selectedCategory) {
-            alert('Please select a category');
+            setError('Please select a category');
             return;
         }
         if (!selectedFile) {
-            alert('Please upload a file');
+            setError('Please upload a file');
             return;
         }
 
-        // Process upload here
-        console.log({
-            templateName,
-            description,
-            category: selectedCategory,
-            file: selectedFile,
-        });
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) {
+            setError('You must be logged in to upload templates');
+            return;
+        }
 
-        // Reset form and close
-        handleClose();
+        setUploading(true);
+
+        try {
+            const result = await templateService.uploadTemplate(
+                {
+                    name: templateName.trim(),
+                    description: description.trim(),
+                    category: selectedCategory,
+                    file: selectedFile,
+                },
+                currentUser.email
+            );
+
+            if (result.success) {
+                setSuccess(result.message);
+                setTimeout(() => {
+                    handleClose();
+                    onSuccess?.();
+                }, 1000);
+            } else {
+                setError(result.message);
+            }
+        } catch (err) {
+            setError('Failed to upload template. Please try again.');
+        } finally {
+            setUploading(false);
+        }
     };
 
     // Handle close
     const handleClose = () => {
-        setTemplateName('');
-        setDescription('');
-        setSelectedCategory(null);
-        setSelectedFile(null);
-        setNewCategory('');
-        setShowNewCategoryInput(false);
-        onClose();
+        if (!uploading) {
+            setTemplateName('');
+            setDescription('');
+            setSelectedCategory(null);
+            setSelectedFile(null);
+            setNewCategory('');
+            setShowNewCategoryInput(false);
+            setError('');
+            setSuccess('');
+            onClose();
+        }
     };
 
     const dialogActions = (
@@ -127,7 +190,8 @@ export default function UploadTemplateDialog({
             <Button
                 onClick={handleSubmit}
                 variant="contained"
-                disabled={!templateName || !selectedCategory || !selectedFile}
+                disabled={!templateName || !selectedCategory || !selectedFile || uploading}
+                startIcon={uploading ? <CircularProgress size={20} color="inherit" /> : null}
                 sx={{
                     textTransform: 'none',
                     fontWeight: 600,
@@ -146,7 +210,7 @@ export default function UploadTemplateDialog({
                     },
                 }}
             >
-                Upload Template
+                {uploading ? 'Uploading...' : 'Upload Template'}
             </Button>
         </>
     );
@@ -160,6 +224,18 @@ export default function UploadTemplateDialog({
             maxWidth="sm"
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {/* Error/Success Messages */}
+                {error && (
+                    <Alert severity="error" onClose={() => setError('')}>
+                        {error}
+                    </Alert>
+                )}
+                {success && (
+                    <Alert severity="success">
+                        {success}
+                    </Alert>
+                )}
+
                 {/* File Upload Area */}
                 <Box>
                     <Typography

@@ -1,62 +1,61 @@
 'use client';
 
-import { useState } from 'react';
-import { Box, Typography, Button, TextField, InputAdornment, Paper, Autocomplete, Tooltip, IconButton } from '@mui/material';
+import { useState, useEffect } from 'react';
+import { Box, Typography, Button, TextField, InputAdornment, Paper, Autocomplete, Tooltip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import UploadIcon from '@mui/icons-material/Upload';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import TemplateCard from '@/components/template/TemplateCard';
 import UploadTemplateDialog from '@/components/template/UploadTemplateDialog';
+import EditTemplateDialog from '@/components/template/EditTemplateDialog';
 import CreateContractWizard from '@/components/contracts/CreateContractWizard';
-
-const templates = [
-    {
-        id: 1,
-        category: 'Service',
-        title: 'Service Agreement Template',
-        description: 'Standard service agreement for ongoing services',
-        timesUsed: 45,
-        lastUsed: '12/28/2025',
-    },
-    {
-        id: 2,
-        category: 'Legal',
-        title: 'NDA Template',
-        description: 'Non-disclosure agreement for confidential information',
-        timesUsed: 32,
-        lastUsed: '12/30/2025',
-    },
-    {
-        id: 3,
-        category: 'HR',
-        title: 'Employment Contract',
-        description: 'Standard employment agreement template',
-        timesUsed: 28,
-        lastUsed: '12/25/2025',
-    },
-    {
-        id: 4,
-        category: 'Procurement',
-        title: 'Procurement Agreement',
-        description: 'Standard procurement contract template',
-        timesUsed: 19,
-        lastUsed: '12/22/2025',
-    },
-    {
-        id: 5,
-        category: 'Technology',
-        title: 'Licensing Agreement',
-        description: 'Software and technology licensing template',
-        timesUsed: 15,
-        lastUsed: '12/20/2025',
-    },
-];
+import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
+import { templateService } from '@/services/templateService';
+import { categoryService } from '@/services/categoryService';
+import { authService } from '@/services/authService';
+import { Template } from '@/types/template';
 
 export default function TemplatePage() {
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [wizardOpen, setWizardOpen] = useState(false);
     const [selectedTemplateForUse, setSelectedTemplateForUse] = useState<string | undefined>(undefined);
+    const [templates, setTemplates] = useState<Template[]>([]);
+    const [categories, setCategories] = useState<string[]>([]);
+    const [selectedCategory, setSelectedCategory] = useState<string>('All Categories');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isAdmin, setIsAdmin] = useState(false);
+
+    // Separate state for each dialog to prevent UI conflicts
+    const [viewerOpen, setViewerOpen] = useState(false);
+    const [templateToView, setTemplateToView] = useState<Template | null>(null);
+    const [templateToEdit, setTemplateToEdit] = useState<Template | null>(null);
+    const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    // Load data on mount
+    useEffect(() => {
+        loadTemplates();
+        loadCategories();
+        checkAdminStatus();
+    }, []);
+
+    const loadTemplates = () => {
+        const allTemplates = templateService.getAllTemplates();
+        setTemplates(allTemplates);
+    };
+
+    const loadCategories = () => {
+        const allCategories = categoryService.getAllCategories();
+        setCategories(['All Categories', ...allCategories.map(cat => cat.name)]);
+    };
+
+    const checkAdminStatus = () => {
+        const currentUser = authService.getCurrentUser();
+        setIsAdmin(currentUser?.isAdmin || false);
+    };
 
     const handleUseTemplate = (templateTitle: string) => {
         setSelectedTemplateForUse(templateTitle);
@@ -67,6 +66,69 @@ export default function TemplatePage() {
         setWizardOpen(false);
         setSelectedTemplateForUse(undefined);
     };
+
+    const handleUploadSuccess = () => {
+        loadTemplates();
+        loadCategories();
+    };
+
+    const handleViewTemplate = (templateId: string) => {
+        const template = templates.find(t => t.id === templateId);
+        if (template) {
+            setTemplateToView(template);
+            setViewerOpen(true);
+        }
+    };
+
+    const handleCloseViewer = () => {
+        setViewerOpen(false);
+        setTemplateToView(null);
+    };
+
+    const handleEditTemplate = (templateId: string) => {
+        const template = templates.find(t => t.id === templateId);
+        if (template) {
+            setTemplateToEdit(template);
+            setEditDialogOpen(true);
+        }
+    };
+
+    const handleDeleteTemplate = (templateId: string) => {
+        const template = templates.find(t => t.id === templateId);
+        if (template) {
+            setTemplateToDelete(template);
+            setDeleteDialogOpen(true);
+        }
+    };
+
+    const confirmDelete = async () => {
+        if (!templateToDelete) return;
+
+        setDeleting(true);
+        try {
+            // Simulate delete operation - replace with actual API call
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Remove template from state
+            setTemplates(templates.filter(t => t.id !== templateToDelete.id));
+
+            // Close dialog and reset
+            setDeleteDialogOpen(false);
+            setTemplateToDelete(null);
+        } catch (error) {
+            console.error('Failed to delete template:', error);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    // Filter templates
+    const filteredTemplates = templates.filter(template => {
+        const matchesCategory = selectedCategory === 'All Categories' || template.category === selectedCategory;
+        const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            template.description?.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesCategory && matchesSearch;
+    });
 
     return (
         <AppLayout>
@@ -105,56 +167,40 @@ export default function TemplatePage() {
                         </Typography>
                     </Box>
 
-                    {/* Action Buttons */}
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            gap: 1.5,
-                            width: { xs: '100%', sm: 'auto' },
-                            justifyContent: { xs: 'flex-end', sm: 'flex-start' },
-                        }}
-                    >
-                        <Tooltip title="Upload Template" arrow>
-                            <IconButton
-                                onClick={() => setUploadDialogOpen(true)}
-                                sx={{
-                                    bgcolor: 'white',
-                                    border: '1px solid',
-                                    borderColor: 'rgba(0, 0, 0, 0.23)',
-                                    color: 'text.primary',
-                                    width: 44,
-                                    height: 44,
-                                    transition: 'all 0.3s',
-                                    '&:hover': {
-                                        bgcolor: 'rgba(15, 118, 110, 0.04)',
-                                        borderColor: 'primary.main',
-                                        transform: 'translateY(-2px)',
-                                        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
-                                    },
-                                }}
-                            >
-                                <UploadIcon />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Create Template" arrow>
-                            <IconButton                                sx={{
-                                    bgcolor: 'primary.main',
-                                    color: 'white',
-                                    width: 44,
-                                    height: 44,
-                                    boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
-                                    transition: 'all 0.3s',
-                                    '&:hover': {
-                                        bgcolor: 'primary.dark',
-                                        transform: 'translateY(-2px)',
-                                        boxShadow: '0 6px 16px rgba(15, 118, 110, 0.35)',
-                                    },
-                                }}
-                            >
-                                <AddIcon />
-                            </IconButton>
-                        </Tooltip>
-                    </Box>
+                    {/* Action Buttons - Only show for admin */}
+                    {isAdmin && (
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                gap: 1.5,
+                                width: { xs: '100%', sm: 'auto' },
+                                justifyContent: { xs: 'flex-end', sm: 'flex-start' },
+                            }}
+                        >
+                            <Tooltip title="Upload Template" arrow>
+                                <IconButton
+                                    onClick={() => setUploadDialogOpen(true)}
+                                    sx={{
+                                        bgcolor: 'white',
+                                        border: '1px solid',
+                                        borderColor: 'rgba(0, 0, 0, 0.23)',
+                                        color: 'text.primary',
+                                        width: 44,
+                                        height: 44,
+                                        transition: 'all 0.3s',
+                                        '&:hover': {
+                                            bgcolor: 'rgba(15, 118, 110, 0.04)',
+                                            borderColor: 'primary.main',
+                                            transform: 'translateY(-2px)',
+                                            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+                                        },
+                                    }}
+                                >
+                                    <UploadIcon />
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
+                    )}
                 </Box>
 
                 {/* Search and Filters Section */}
@@ -182,6 +228,8 @@ export default function TemplatePage() {
                             fullWidth
                             placeholder="Search templates..."
                             variant="outlined"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
                             InputProps={{
                                 startAdornment: (
                                     <InputAdornment position="start">
@@ -229,8 +277,9 @@ export default function TemplatePage() {
                         >
                             {/* Category Filter */}
                             <Autocomplete
-                                options={['All Categories', 'Service', 'Legal', 'HR', 'Procurement', 'Technology']}
-                                defaultValue="All Categories"
+                                options={categories}
+                                value={selectedCategory}
+                                onChange={(event, newValue) => setSelectedCategory(newValue || 'All Categories')}
                                 disableClearable
                                 sx={{
                                     minWidth: { xs: '100%', sm: 220 },
@@ -285,24 +334,41 @@ export default function TemplatePage() {
                         gap: 1,
                     }}
                 >
-                    {templates.map((template, index) => (
-                        <TemplateCard
-                            key={template.id}
-                            category={template.category}
-                            title={template.title}
-                            description={template.description}
-                            timesUsed={template.timesUsed}
-                            lastUsed={template.lastUsed}
-                            index={index}
-                            onUse={() => handleUseTemplate(template.title)}
-                        />
-                    ))}
+                    {filteredTemplates.length > 0 ? (
+                        filteredTemplates.map((template, index) => (
+                            <TemplateCard
+                                key={template.id}
+                                id={template.id}
+                                category={template.category}
+                                title={template.name}
+                                description={template.description || ''}
+                                timesUsed={template.timesUsed}
+                                lastUsed={template.lastUsed}
+                                index={index}
+                                isAdmin={isAdmin}
+                                onUse={() => handleUseTemplate(template.name)}
+                                onView={handleViewTemplate}
+                                onEdit={handleEditTemplate}
+                                onDelete={handleDeleteTemplate}
+                            />
+                        ))
+                    ) : (
+                        <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                            <Typography variant="h6" color="text.secondary">
+                                No templates found
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                {searchQuery ? 'Try adjusting your search or filters' : 'Upload a template to get started'}
+                            </Typography>
+                        </Box>
+                    )}
                 </Box>
 
                 {/* Upload Template Dialog */}
                 <UploadTemplateDialog
                     open={uploadDialogOpen}
                     onClose={() => setUploadDialogOpen(false)}
+                    onSuccess={handleUploadSuccess}
                 />
 
                 {/* Create Contract Wizard */}
@@ -311,6 +377,76 @@ export default function TemplatePage() {
                     onClose={handleCloseWizard}
                     initialTemplate={selectedTemplateForUse}
                 />
+
+                {/* Document Viewer Dialog */}
+                {templateToView && (
+                    <DocumentViewerDialog
+                        open={viewerOpen}
+                        onClose={handleCloseViewer}
+                        fileUrl={templateToView.fileUrl}
+                        fileName={templateToView.fileName}
+                        title={templateToView.name}
+                    />
+                )}
+
+                {/* Edit Template Dialog */}
+                {templateToEdit && (
+                    <EditTemplateDialog
+                        open={editDialogOpen}
+                        onClose={() => {
+                            setEditDialogOpen(false);
+                            setTemplateToEdit(null);
+                        }}
+                        template={templateToEdit}
+                        onSuccess={() => {
+                            loadTemplates();
+                            setEditDialogOpen(false);
+                            setTemplateToEdit(null);
+                        }}
+                    />
+                )}
+
+                {/* Delete Confirmation Dialog */}
+                <Dialog
+                    open={deleteDialogOpen}
+                    onClose={() => !deleting && setDeleteDialogOpen(false)}
+                    maxWidth="sm"
+                    fullWidth
+                >
+                    <DialogTitle sx={{ fontWeight: 600, color: 'error.main' }}>
+                        Delete Template
+                    </DialogTitle>
+                    <DialogContent>
+                        <DialogContentText>
+                            Are you sure you want to delete the template <strong>"{templateToDelete?.name}"</strong>?
+                            This action cannot be undone.
+                        </DialogContentText>
+                    </DialogContent>
+                    <DialogActions sx={{ p: 2, gap: 1 }}>
+                        <Button
+                            onClick={() => setDeleteDialogOpen(false)}
+                            disabled={deleting}
+                            sx={{
+                                textTransform: 'none',
+                                color: 'text.secondary',
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={confirmDelete}
+                            variant="contained"
+                            color="error"
+                            disabled={deleting}
+                            sx={{
+                                textTransform: 'none',
+                                minWidth: 100,
+                            }}
+                        >
+                            {deleting ? 'Deleting...' : 'Delete'}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
             </Box>
         </AppLayout>
     );
