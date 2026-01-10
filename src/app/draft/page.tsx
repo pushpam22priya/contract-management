@@ -14,6 +14,7 @@ import RequestReviewDialog from '@/components/contracts/RequestReviewDialog';
 import { authService } from '@/services/authService';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { AlertColor } from '@mui/material';
+import { useSearchParams } from 'next/navigation';
 
 export default function DraftPage() {
     const [draftContracts, setDraftContracts] = useState<Contract[]>([]);
@@ -141,8 +142,18 @@ export default function DraftPage() {
 
     const totalDrafts = draftContracts.length;
 
+    // URL params for deep linking (e.g. from Dashboard)
+    const searchParams = useSearchParams();
+
     // Filter logic
     const filteredDrafts = draftContracts.filter(contract => {
+        // Status Param Filter (from URL)
+        // If ?status=review_approval, only show those.
+        const statusParam = searchParams.get('status');
+        if (statusParam && contract.status !== statusParam) {
+            return false;
+        }
+
         // Search Filter
         const matchesSearch = searchQuery === '' ||
             contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -155,7 +166,7 @@ export default function DraftPage() {
         // Date Filter
         let matchesDate = true;
         if (startDate || endDate) {
-            const contractDate = dayjs(contract.createdAt); // or startDate/updatedAt depending on requirement
+            const contractDate = dayjs(contract.createdAt);
             if (startDate && contractDate.isBefore(startDate, 'day')) matchesDate = false;
             if (endDate && contractDate.isAfter(endDate, 'day')) matchesDate = false;
         }
@@ -189,7 +200,8 @@ export default function DraftPage() {
                                 fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' },
                             }}
                         >
-                            Draft Contracts
+                            {/* Dynamic Title based on filter? Or just keep generic */}
+                            {searchParams.get('status') === 'review_approval' ? 'Pending Approvals' : 'Draft Contracts'}
                         </Typography>
                         <Typography
                             variant="body2"

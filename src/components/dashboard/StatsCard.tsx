@@ -17,6 +17,7 @@ interface StatsCardProps {
     iconColor: string;
     iconBgColor: string;
     index?: number;
+    onClick?: () => void;
 }
 
 const iconMap = {
@@ -36,6 +37,7 @@ export default function StatsCard({
     iconColor,
     iconBgColor,
     index = 0,
+    onClick,
 }: StatsCardProps) {
     const [displayValue, setDisplayValue] = useState(0);
     const [isHovered, setIsHovered] = useState(false);
@@ -68,6 +70,7 @@ export default function StatsCard({
                 elevation={0}
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
+                onClick={onClick}
                 sx={{
                     p: 2,
                     height: '100%',
@@ -77,7 +80,7 @@ export default function StatsCard({
                     bgcolor: 'white',
                     position: 'relative',
                     overflow: 'hidden',
-                    cursor: 'pointer',
+                    cursor: onClick ? 'pointer' : 'default',
                     transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                     transform: isHovered ? 'translateY(-8px)' : 'translateY(0)',
                     boxShadow: isHovered

@@ -1,55 +1,151 @@
 'use client';
 
 import { Box, Typography, Paper, Button, Chip, LinearProgress, Fade, Grow } from '@mui/material';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { contractService } from '@/services/contractService';
+import { authService } from '@/services/authService';
+import { Contract } from '@/types/contract';
+import dayjs from 'dayjs';
 
-interface Contract {
-    id: number;
+interface RecentContractDisplay {
+    id: string;
     title: string;
     company: string;
-    status: 'active' | 'expiring';
+    status: 'active' | 'expiring' | 'draft' | 'pending' | 'review_approval' | string;
     daysLeft: number;
     totalDays: number;
     value: string;
+    path: string; // Navigation path
 }
 
-const contracts: Contract[] = [
-    {
-        id: 1,
-        title: 'Annual Software Maintenance - TechCorp',
-        company: 'TechCorp Solutions',
-        status: 'active',
-        daysLeft: 362,
-        totalDays: 365,
-        value: '₹125K',
-    },
-    {
-        id: 2,
-        title: 'Consulting Services - Global Industries',
-        company: 'Global Industries Inc.',
-        status: 'expiring',
-        daysLeft: 28,
-        totalDays: 365,
-        value: ' ₹85K',
-    },
-];
-
 export default function RecentContracts() {
-    const [hoveredId, setHoveredId] = useState<number | null>(null);
+    const router = useRouter();
+    const [hoveredId, setHoveredId] = useState<string | null>(null);
+    const [recentContracts, setRecentContracts] = useState<RecentContractDisplay[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadRecentContracts = () => {
+            const currentUser = authService.getCurrentUser();
+            if (!currentUser) return;
+
+            const allContracts = contractService.getAllContracts();
+
+            // Filter relevant contracts (created by or signer)
+            const relevantContracts = allContracts.filter(c =>
+                c.createdBy === currentUser.email || c.signer?.email === currentUser.email
+            );
+
+            // Sort by creation date (newest first)
+            const sortedContracts = relevantContracts.sort((a, b) => {
+                return dayjs(b.createdAt).diff(dayjs(a.createdAt));
+            });
+
+            // Take top 2
+            const top2 = sortedContracts.slice(0, 2);
+
+            // Map to display format
+            const displayContracts = top2.map(c => {
+                // Calculate days left
+                const today = dayjs();
+                const end = c.endDate ? dayjs(c.endDate) : today;
+                const start = c.startDate ? dayjs(c.startDate) : today;
+
+                const totalDays = Math.max(1, end.diff(start, 'day'));
+                const daysLeft = Math.max(0, end.diff(today, 'day'));
+
+                // Determine navigation path
+                let path = `/contracts`;
+                if (c.status === 'review_approval') {
+                    path = `/review-approval?tab=approver`; // Or reviewer, simplified logic
+                } else if (c.status === 'draft') {
+                    path = `/draft`;
+                } else {
+                    // Navigate to contracts with search for this specific contract
+                    const params = new URLSearchParams();
+                    params.set('search', c.title);
+                    path = `/contracts?${params.toString()}`;
+                }
+
+                return {
+                    id: c.id,
+                    title: c.title,
+                    company: c.client || 'Unknown Client', // Fallback
+                    status: c.status,
+                    daysLeft: daysLeft,
+                    totalDays: totalDays,
+                    value: c.value ? `₹${c.value}` : '₹0',
+                    path: path
+                };
+            });
+
+            setRecentContracts(displayContracts);
+            setLoading(false);
+        };
+
+        loadRecentContracts();
+    }, []);
 
     const getStatusColor = (status: string) => {
-        return status === 'active'
-            ? { bg: '#d1fae5', text: '#10b981' }
-            : { bg: '#fef3c7', text: '#f59e0b' };
+        switch (status) {
+            case 'active':
+                return { bg: '#d1fae5', text: '#10b981' };
+            case 'expiring':
+                return { bg: '#fef3c7', text: '#f59e0b' };
+            case 'review_approval':
+                return { bg: '#dbeafe', text: '#3b82f6' };
+            case 'draft':
+                return { bg: '#f3f4f6', text: '#6b7280' };
+            default:
+                return { bg: '#e5e7eb', text: '#374151' };
+        }
     };
 
     const getProgressColor = (status: string) => {
-        return status === 'active' ? '#10b981' : '#f59e0b';
+        switch (status) {
+            case 'active': return '#10b981';
+            case 'expiring': return '#f59e0b';
+            case 'review_approval': return '#3b82f6';
+            default: return '#9ca3af';
+        }
     };
 
     const getProgressValue = (daysLeft: number, totalDays: number) => {
+        if (totalDays <= 0) return 0;
         return (daysLeft / totalDays) * 100;
     };
+
+    if (loading) {
+        return null; // Or a skeleton loader
+    }
+
+    // Only show if we have contracts
+    if (recentContracts.length === 0) {
+        return (
+            <Fade in timeout={800}>
+                <Paper
+                    elevation={0}
+                    sx={{
+                        p: { xs: 1.5, sm: 2 },
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: 'rgba(0, 0, 0, 0.08)',
+                        bgcolor: 'white',
+                    }}
+                >
+                    <Box sx={{ mb: 1 }}>
+                        <Typography variant="h6" fontWeight={700} sx={{ color: 'text.primary', fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
+                            Recent Contracts
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+                            No recent activity found.
+                        </Typography>
+                    </Box>
+                </Paper>
+            </Fade>
+        )
+    }
 
     return (
         <Fade in timeout={800}>
@@ -61,6 +157,7 @@ export default function RecentContracts() {
                     border: '1px solid',
                     borderColor: 'rgba(0, 0, 0, 0.08)',
                     bgcolor: 'white',
+                    height: '100%', // Match height of neighbors if needed
                 }}
             >
                 {/* Header */}
@@ -99,6 +196,7 @@ export default function RecentContracts() {
 
                     <Button
                         variant="text"
+                        onClick={() => router.push('/contracts')}
                         sx={{
                             textTransform: 'none',
                             fontWeight: 600,
@@ -116,7 +214,7 @@ export default function RecentContracts() {
 
                 {/* Contract Cards */}
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    {contracts.map((contract, index) => {
+                    {recentContracts.map((contract, index) => {
                         const statusColors = getStatusColor(contract.status);
                         const progressColor = getProgressColor(contract.status);
                         const progressValue = getProgressValue(contract.daysLeft, contract.totalDays);
@@ -132,6 +230,7 @@ export default function RecentContracts() {
                                 <Box
                                     onMouseEnter={() => setHoveredId(contract.id)}
                                     onMouseLeave={() => setHoveredId(null)}
+                                    onClick={() => router.push(contract.path)}
                                     sx={{
                                         p: { xs: 1, sm: 1 },
                                         borderRadius: 2.5,
@@ -164,12 +263,17 @@ export default function RecentContracts() {
                                                     sx={{
                                                         color: 'text.primary',
                                                         fontSize: { xs: '0.95rem', sm: '1rem' },
+                                                        // Truncate long titles
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        whiteSpace: 'nowrap',
+                                                        maxWidth: '300px'
                                                     }}
                                                 >
                                                     {contract.title}
                                                 </Typography>
                                                 <Chip
-                                                    label={contract.status}
+                                                    label={contract.status.replace('_', ' ')}
                                                     size="small"
                                                     sx={{
                                                         bgcolor: statusColors.bg,
@@ -207,7 +311,8 @@ export default function RecentContracts() {
                                         </Typography>
                                     </Box>
 
-                                    {/* Progress Bar */}
+                                    {/* Progress Bar (Only for active/expiring/etc with dates) */}
+                                    {/* If pending/draft, maybe show something else or hide? Keeping it consistent for now */}
                                     <Box sx={{ mb: 1 }}>
                                         <LinearProgress
                                             variant="determinate"
@@ -243,12 +348,19 @@ export default function RecentContracts() {
                                                 fontWeight: 500,
                                             }}
                                         >
-                                            {contract.daysLeft} days left
+                                            {/* Show "days left" or generic status text */}
+                                            {contract.status === 'review_approval' ? 'Waiting for approval' :
+                                                contract.status === 'draft' ? 'Draft in progress' :
+                                                    `${contract.daysLeft} days left`}
                                         </Typography>
 
                                         <Button
                                             variant={isHovered ? 'contained' : 'text'}
                                             size="small"
+                                            onClick={(e) => {
+                                                e.stopPropagation(); // prevent double nav
+                                                router.push(contract.path);
+                                            }}
                                             sx={{
                                                 textTransform: 'none',
                                                 fontWeight: 600,

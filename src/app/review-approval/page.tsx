@@ -3,6 +3,7 @@
 import { Box, Typography, Tab, Tabs, Alert } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { contractService } from '@/services/contractService';
 import { Contract } from '@/types/contract';
 import { authService } from '@/services/authService';
@@ -42,9 +43,19 @@ export default function ReviewApprovalPage() {
     });
 
     // Load contracts on mount
+    const searchParams = useSearchParams();
+
     useEffect(() => {
         loadContracts();
-    }, []);
+
+        // Handle tab param
+        const tabParam = searchParams.get('tab');
+        if (tabParam === 'approver') {
+            setTabValue(1);
+        } else if (tabParam === 'reviewer') {
+            setTabValue(0);
+        }
+    }, [searchParams]);
 
     /**
      * Load contracts assigned to current user

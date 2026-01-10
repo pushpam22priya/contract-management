@@ -11,6 +11,7 @@ interface QuickAction {
     id: number;
     label: string;
     icon: React.ReactNode;
+    actionKey: string;
 }
 
 const actions: QuickAction[] = [
@@ -18,25 +19,33 @@ const actions: QuickAction[] = [
         id: 1,
         label: 'Create New Contract',
         icon: <AddIcon />,
+        actionKey: 'create',
     },
     {
         id: 2,
         label: 'Browse Templates',
         icon: <DescriptionOutlinedIcon />,
+        actionKey: 'templates',
     },
     {
         id: 3,
         label: 'Review Expiring Contracts',
         icon: <WarningAmberOutlinedIcon />,
+        actionKey: 'expiring',
     },
     {
         id: 4,
         label: 'Pending Approvals',
         icon: <AccessTimeOutlinedIcon />,
+        actionKey: 'approvals',
     },
 ];
 
-export default function QuickActions() {
+interface QuickActionsProps {
+    onActionClick?: (actionKey: string) => void;
+}
+
+export default function QuickActions({ onActionClick }: QuickActionsProps) {
     const [hoveredId, setHoveredId] = useState<number | null>(null);
 
     return (
@@ -91,6 +100,7 @@ export default function QuickActions() {
                                     variant="outlined"
                                     onMouseEnter={() => setHoveredId(action.id)}
                                     onMouseLeave={() => setHoveredId(null)}
+                                    onClick={() => onActionClick && onActionClick(action.actionKey)}
                                     sx={{
                                         display: 'flex',
                                         justifyContent: 'flex-start',

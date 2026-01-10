@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import AppLayout from '@/components/layout/AppLayout';
 import { Search, FilterList, ExpandMore, ExpandLess } from '@mui/icons-material';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -23,7 +23,10 @@ import { AlertColor } from '@mui/material';
 const statusOptions = [
     { label: 'All Status', value: 'all' },
     { label: 'Active', value: 'active' },
+    { label: 'Expiring', value: 'expiring' },
     { label: 'Pending', value: 'pending' },
+    { label: 'Waiting for Signature', value: 'waiting_for_signature' },
+    { label: 'Signed', value: 'signed' },
     { label: 'Expired', value: 'expired' },
     { label: 'Draft', value: 'draft' },
 ];
@@ -69,12 +72,30 @@ export default function ContractsPage() {
         setSnackbar({ open: true, message, severity });
     };
 
+    const searchParams = useSearchParams();
+
+    useEffect(() => {
+        // Handle URL filters
+        const statusParam = searchParams.get('status');
+        const searchParam = searchParams.get('search');
+
+        if (statusParam) {
+            const foundStatus = statusOptions.find(opt => opt.value === statusParam);
+            if (foundStatus) setStatusFilter(foundStatus);
+        }
+
+        if (searchParam) {
+            setSearchQuery(searchParam);
+        }
+    }, [searchParams]);
+
     useEffect(() => {
         loadContracts();
     }, []);
 
     const loadContracts = () => {
         setLoading(true);
+        // ... (rest of loadContracts logic)
         const currentUser = authService.getCurrentUser();
 
         if (!currentUser) {
@@ -90,12 +111,10 @@ export default function ContractsPage() {
             const isCreator = c.createdBy === currentUser.email;
 
             // For signer: show if they are the signer AND status is one of the lifecycle statuses
-            // This ensures they see it when it moves from 'signed' -> 'active' -> 'expiring' -> 'expired'
             const isSigner = c.signer?.email === currentUser.email;
             const isValidSignerStatus = ['signed', 'active', 'expiring', 'expired'].includes(c.status);
             const isSignerAndVisible = isSigner && isValidSignerStatus;
 
-            // Filter by status for creator (active, expiring, expired, waiting_for_signature, signed)
             if (isCreator) {
                 return ['active', 'expiring', 'expired', 'waiting_for_signature', 'signed'].includes(c.status);
             }
