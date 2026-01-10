@@ -19,6 +19,7 @@ import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import DraftsIcon from '@mui/icons-material/Drafts';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
+import RateReviewIcon from '@mui/icons-material/RateReview';
 import MenuIcon from '@mui/icons-material/Menu';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 
@@ -27,7 +28,7 @@ const menuItems = [
     { text: 'Template', icon: <DescriptionOutlinedIcon />, path: '/template' },
     { text: 'Contracts', icon: <ArticleOutlinedIcon />, path: '/contracts' },
     { text: 'Draft', icon: <DraftsIcon />, path: '/draft' },
-    // { text: 'Review & Approve', icon: <DraftsIcon />, path: '/review-approve' },
+    { text: 'Review & Approval', icon: <RateReviewIcon />, path: '/review-approval' },
 ];
 
 interface SidebarProps {

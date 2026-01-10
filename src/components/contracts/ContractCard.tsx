@@ -10,6 +10,28 @@ interface ContractCardProps {
 }
 
 const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps) => {
+    /**
+     * Format status for display
+     */
+    const getStatusLabel = (status: Contract['status']): string => {
+        switch (status) {
+            case 'active':
+                return 'Active';
+            case 'expiring':
+                return 'Expiring';
+            case 'expired':
+                return 'Expired';
+            case 'review_approval':
+                return 'Review and Approval';
+            case 'waiting_for_signature':
+                return 'Waiting for Signature';
+            case 'draft':
+                return 'Draft';
+            default:
+                return status;
+        }
+    };
+
     const getStatusColor = (status: Contract['status']) => {
         switch (status) {
             case 'active':
@@ -20,6 +42,8 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                 return { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' };
             case 'review_approval':
                 return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' };
+            case 'waiting_for_signature':
+                return { bg: '#fff9c4', color: '#f57f17', border: '#fff176' };
             case 'draft':
                 return { bg: '#f3f4f6', color: '#374151', border: '#d1d5db' };
             default:
@@ -93,7 +117,7 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                 </Typography>
 
                 <Chip
-                    label={contract.status}
+                    label={getStatusLabel(contract.status)}
                     size="small"
                     sx={{
                         bgcolor: statusColors.bg,

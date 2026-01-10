@@ -7,7 +7,15 @@ export interface Contract {
     value: string;
     category: string;
     expiresInDays: number;
-    status: 'active' | 'expiring' | 'expired' | 'review_approval' | 'draft';
+    status: 'active' | 'expiring' | 'expired' | 'review_approval' | 'waiting_for_signature' | 'draft';
+
+    // Review & Approval Workflow tracking
+    reviewers?: ReviewerInfo[];      // Multiple reviewers can be assigned
+    approver?: ApproverInfo;         // Single approver
+    reviewStatus?: 'pending' | 'in_review' | 'reviewed' | 'changes_requested';
+    approvalStatus?: 'pending' | 'approved' | 'rejected';
+    modificationComments?: string;   // Comments when changes are requested (legacy)
+    modificationRequests?: ModificationRequest[];  // NEW: Detailed modification requests
 
     // Template info
     templateId: string;
@@ -29,4 +37,34 @@ export interface Contract {
     createdAt: string;
     createdBy: string;
     updatedAt?: string;
+}
+
+/**
+ * Information about a modification request
+ */
+export interface ModificationRequest {
+    requestedBy: string;                    // Email of requester
+    role: 'reviewer' | 'approver';         // Role of requester
+    comments: string;                       // Modification comments
+    requestedAt: string;                    // Timestamp
+}
+
+/**
+ * Information about a reviewer assigned to a contract
+ */
+export interface ReviewerInfo {
+    email: string;                                               // Reviewer's email
+    status: 'pending' | 'reviewed' | 'requested_changes';       // Review status
+    reviewedAt?: string;                                         // Timestamp when reviewed
+    comments?: string;                                           // Comments from reviewer
+}
+
+/**
+ * Information about the approver assigned to a contract
+ */
+export interface ApproverInfo {
+    email: string;                                               // Approver's email
+    status: 'pending' | 'approved' | 'rejected';                // Approval status
+    approvedAt?: string;                                         // Timestamp when approved
+    comments?: string;                                           // Comments from approver
 }

@@ -9,7 +9,11 @@ import { useEffect, useState } from 'react';
 import { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
 import { Contract } from '@/types/contract';
-import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog'; // ← ADD THIS
+import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
+import RequestReviewDialog from '@/components/contracts/RequestReviewDialog';
+import { authService } from '@/services/authService';
+import NotificationSnackbar from '@/components/common/NotificationSnackbar';
+import { AlertColor } from '@mui/material';
 
 export default function DraftPage() {
     const [draftContracts, setDraftContracts] = useState<Contract[]>([]);
@@ -18,15 +22,33 @@ export default function DraftPage() {
     const [viewerOpen, setViewerOpen] = useState(false);
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
 
+    // Request Review Dialog state
+    const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+    const [contractForReview, setContractForReview] = useState<Contract | null>(null);
+
+    // Snackbar state
+    const [snackbar, setSnackbar] = useState({
+        open: false,
+        message: '',
+        severity: 'success' as AlertColor,
+    });
+
     // Load draft contracts
     useEffect(() => {
         loadDrafts();
     }, []);
 
-     const handleView = (id: string) => {
+    /**
+     * Show snackbar notification
+     */
+    const showNotification = (message: string, severity: AlertColor = 'success') => {
+        setSnackbar({ open: true, message, severity });
+    };
+
+    const handleView = (id: string) => {
         const contract = draftContracts.find(c => c.id === id);
         if (!contract) return;
-        
+
         setSelectedContract(contract);
         setViewerOpen(true);
     };
@@ -41,10 +63,10 @@ export default function DraftPage() {
     const handleApprove = async (id: string) => {
         const result = await contractService.approveContract(id);
         if (result.success) {
-            alert('Contract approved! ✅\nMoved to Contracts page');
+            showNotification('Contract approved! ✅ Moved to Contracts page', 'success');
             loadDrafts(); // Reload drafts
         } else {
-            alert('Failed to approve contract: ' + result.message);
+            showNotification('Failed to approve contract: ' + result.message, 'error');
         }
     };
     const handleReject = async (id: string) => {
@@ -52,10 +74,10 @@ export default function DraftPage() {
         if (!confirmed) return;
         const result = await contractService.deleteContract(id);
         if (result.success) {
-            alert('Contract rejected and deleted');
+            showNotification('Contract rejected and deleted', 'success');
             loadDrafts(); // Reload drafts
         } else {
-            alert('Failed to reject contract: ' + result.message);
+            showNotification('Failed to reject contract: ' + result.message, 'error');
         }
     };
     const handleDownload = (id: string) => {
@@ -63,8 +85,41 @@ export default function DraftPage() {
         // TODO: Implement download functionality
     };
     const handleShare = (id: string) => {
-        console.log('Share draft for review or approval:', id);
-        // TODO: Implement share functionality
+        const contract = draftContracts.find(c => c.id === id);
+        if (!contract) return;
+
+        setContractForReview(contract);
+        setReviewDialogOpen(true);
+    };
+
+    /**
+     * Submit contract for review and approval
+     */
+    const handleSubmitForReview = async (newReviewers: string[], approver: string) => {
+        if (!contractForReview) return;
+
+        // Get existing reviewers if any
+        const existingReviewerEmails = contractForReview.reviewers?.map(r => r.email) || [];
+
+        // Merge existing and new reviewers (removing duplicates)
+        const allReviewers = Array.from(new Set([
+            ...existingReviewerEmails,
+            ...newReviewers
+        ]));
+
+        const result = await contractService.submitForReview(
+            contractForReview.id,
+            allReviewers,
+            approver
+        );
+
+        if (result.success) {
+            showNotification('✅ Contract submitted for review and approval!', 'success');
+            loadDrafts(); // Reload drafts
+        } else {
+            showNotification('Failed to submit: ' + result.message, 'error');
+            throw new Error(result.message);
+        }
     };
 
     // Filter states
@@ -172,14 +227,14 @@ export default function DraftPage() {
                     }}
                 >
                     {draftContracts.map((contract) => (
-                    <DraftCard
-                        key={contract.id}
-                        contract={contract}
-                        onView={handleView}  // ← ADD THIS
-                        onDownload={handleDownload}
-                        onShare={handleShare}
-                    />
-                ))}
+                        <DraftCard
+                            key={contract.id}
+                            contract={contract}
+                            onView={handleView}  // ← ADD THIS
+                            onDownload={handleDownload}
+                            onShare={handleShare}
+                        />
+                    ))}
                 </Box>
             </Box>
             {/* ← ADD VIEWER DIALOG */}
@@ -198,6 +253,28 @@ export default function DraftPage() {
                     fieldValues={selectedContract.fieldValues}
                 />
             )}
+
+            {/* Request Review Dialog */}
+            {contractForReview && (
+                <RequestReviewDialog
+                    open={reviewDialogOpen}
+                    onClose={() => {
+                        setReviewDialogOpen(false);
+                        setContractForReview(null);
+                    }}
+                    contractId={contractForReview.id}
+                    contractTitle={contractForReview.title}
+                    onSubmit={handleSubmitForReview}
+                />
+            )}
+
+            {/* Notification Snackbar */}
+            <NotificationSnackbar
+                open={snackbar.open}
+                message={snackbar.message}
+                severity={snackbar.severity}
+                onClose={() => setSnackbar({ ...snackbar, open: false })}
+            />
         </AppLayout>
     );
 }

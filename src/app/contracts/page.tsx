@@ -57,9 +57,9 @@ export default function ContractsPage() {
     const loadContracts = () => {
         setLoading(true);
         const allContracts = contractService.getAllContracts();
-        // Only show approved contracts (not drafts or review_approval)
+        // Show approved contracts: active, expiring, expired, and waiting_for_signature
         const approvedContracts = allContracts.filter(c =>
-            c.status === 'active' || c.status === 'expiring' || c.status === 'expired'
+            c.status === 'active' || c.status === 'expiring' || c.status === 'expired' || c.status === 'waiting_for_signature'
         );
         setContracts(approvedContracts || []);
         setLoading(false);

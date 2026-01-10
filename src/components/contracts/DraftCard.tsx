@@ -5,13 +5,45 @@ import { Contract } from '@/types/contract';
 
 interface DraftCardProps {
     contract: Contract;
-    onView?: (id: string) => void;  
+    onView?: (id: string) => void;
     onDownload?: (id: string) => void;
     onShare?: (id: string) => void;
 }
 
 const DraftCard = ({ contract, onView, onDownload, onShare }: DraftCardProps) => {
+    /**
+     * Format status for display
+     */
+    const getStatusLabel = (status: Contract['status']): string => {
+        // Check for returned for modification
+        if (status === 'draft' && contract.reviewStatus === 'changes_requested') {
+            return 'Returned for Modification';
+        }
+
+        switch (status) {
+            case 'active':
+                return 'Active';
+            case 'expiring':
+                return 'Expiring';
+            case 'expired':
+                return 'Expired';
+            case 'review_approval':
+                return 'Review and Approval';
+            case 'waiting_for_signature':
+                return 'Waiting for Signature';
+            case 'draft':
+                return 'Draft';
+            default:
+                return status;
+        }
+    };
+
     const getStatusColor = (status: Contract['status']) => {
+        // Check for returned for modification
+        if (status === 'draft' && contract.reviewStatus === 'changes_requested') {
+            return { bg: '#fff7ed', color: '#c2410c', border: '#fdba74' }; // Orange/Amber
+        }
+
         switch (status) {
             case 'active':
                 return { bg: '#dcfce7', color: '#166534', border: '#86efac' };
@@ -21,6 +53,8 @@ const DraftCard = ({ contract, onView, onDownload, onShare }: DraftCardProps) =>
                 return { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' };
             case 'review_approval':
                 return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' };
+            case 'waiting_for_signature':
+                return { bg: '#fff9c4', color: '#f57f17', border: '#fff176' };
             case 'draft':
                 return { bg: '#f3f4f6', color: '#374151', border: '#d1d5db' };
             default:
@@ -93,7 +127,7 @@ const DraftCard = ({ contract, onView, onDownload, onShare }: DraftCardProps) =>
                 </Typography>
 
                 <Chip
-                    label={contract.status}
+                    label={getStatusLabel(contract.status)}
                     size="small"
                     sx={{
                         bgcolor: statusColors.bg,

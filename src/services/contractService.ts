@@ -1,4 +1,4 @@
-import { Contract } from '@/types/contract';
+import { Contract, ReviewerInfo, ApproverInfo, ModificationRequest } from '@/types/contract';
 
 const CONTRACTS_STORAGE_KEY = 'cms_contracts';
 
@@ -216,13 +216,20 @@ class ContractService {
     }
 
     /**
-     * Approve contract (change status from review_approval to active)
+     * Submit contract for review and approval
+     * @param contractId - ID of the contract
+     * @param reviewers - Array of reviewer email addresses
+     * @param approver - Approver email address
      */
-    async approveContract(id: string): Promise<{ success: boolean; message: string; contract?: Contract }> {
-        await new Promise(resolve => setTimeout(resolve, 300));
+    async submitForReview(
+        contractId: string,
+        reviewers: string[],
+        approver: string
+    ): Promise<{ success: boolean; message: string; contract?: Contract }> {
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         const contracts = this.getAllContracts();
-        const index = contracts.findIndex(c => c.id === id);
+        const index = contracts.findIndex(c => c.id === contractId);
 
         if (index === -1) {
             return {
@@ -231,9 +238,26 @@ class ContractService {
             };
         }
 
-        const updatedContract = {
+        // Create reviewer info objects
+        const reviewerInfo = reviewers.map(email => ({
+            email,
+            status: 'pending' as const,
+        }));
+
+        // Create approver info object
+        const approverInfo = approver ? {
+            email: approver,
+            status: 'pending' as const,
+        } : undefined;
+
+        // Update contract with review/approval tracking
+        const updatedContract: Contract = {
             ...contracts[index],
-            status: 'active' as const,
+            status: 'review_approval' as const,
+            reviewers: reviewerInfo.length > 0 ? reviewerInfo : undefined,
+            approver: approverInfo,
+            reviewStatus: reviewers.length > 0 ? 'pending' : undefined,
+            approvalStatus: approver ? 'pending' : undefined,
             updatedAt: new Date().toISOString(),
         };
 
@@ -242,9 +266,283 @@ class ContractService {
 
         return {
             success: true,
-            message: 'Contract approved and moved to active contracts',
+            message: 'Contract submitted for review and approval',
             contract: updatedContract,
         };
+    }
+
+    /**
+     * Mark contract as reviewed by a specific reviewer
+     * @param contractId - ID of the contract
+     * @param reviewerEmail - Email of the reviewer
+     */
+    async markAsReviewed(
+        contractId: string,
+        reviewerEmail: string
+    ): Promise<{ success: boolean; message: string; contract?: Contract }> {
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        const contracts = this.getAllContracts();
+        const index = contracts.findIndex(c => c.id === contractId);
+
+        if (index === -1) {
+            return {
+                success: false,
+                message: 'Contract not found',
+            };
+        }
+
+        const contract = contracts[index];
+
+        // Find reviewer in the reviewers list
+        if (!contract.reviewers) {
+            return {
+                success: false,
+                message: 'No reviewers assigned to this contract',
+            };
+        }
+
+        const reviewerIndex = contract.reviewers.findIndex(r => r.email === reviewerEmail);
+
+        if (reviewerIndex === -1) {
+            return {
+                success: false,
+                message: 'You are not assigned as a reviewer for this contract',
+            };
+        }
+
+        // Update reviewer status
+        const updatedReviewers = [...contract.reviewers];
+        updatedReviewers[reviewerIndex] = {
+            ...updatedReviewers[reviewerIndex],
+            status: 'reviewed' as const,
+            reviewedAt: new Date().toISOString(),
+        };
+
+        // Check if all reviewers have reviewed
+        const allReviewed = updatedReviewers.every(r => r.status === 'reviewed');
+
+        const updatedContract: Contract = {
+            ...contract,
+            reviewers: updatedReviewers,
+            reviewStatus: allReviewed ? 'reviewed' : 'in_review',
+            updatedAt: new Date().toISOString(),
+        };
+
+        contracts[index] = updatedContract;
+        this.saveContracts(contracts);
+
+        return {
+            success: true,
+            message: allReviewed
+                ? 'All reviews complete! Contract ready for approval.'
+                : 'Contract marked as reviewed',
+            contract: updatedContract,
+        };
+    }
+
+    /**
+     * Request modification for a contract
+     * @param contractId - ID of the contract
+     * @param requesterEmail - Email of the user requesting changes
+     * @param requesterRole - Role of the user ('reviewer' | 'approver')
+     * @param comments - Modification comments
+     */
+    async requestModification(
+        contractId: string,
+        requesterEmail: string,
+        requesterRole: 'reviewer' | 'approver',
+        comments: string
+    ): Promise<{ success: boolean; message: string; contract?: Contract }> {
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const contracts = this.getAllContracts();
+        const index = contracts.findIndex(c => c.id === contractId);
+
+        if (index === -1) {
+            return {
+                success: false,
+                message: 'Contract not found',
+            };
+        }
+
+        const contract = contracts[index];
+
+        // Create new modification request
+        const newHelperAttempt: ModificationRequest = {
+            requestedBy: requesterEmail,
+            role: requesterRole,
+            comments,
+            requestedAt: new Date().toISOString(),
+        };
+
+        // Update contract status and add modification request
+        const updatedContract: Contract = {
+            ...contract,
+            status: 'draft', // Return to draft
+            reviewStatus: 'changes_requested',
+            // Add to existing requests or create new array
+            modificationRequests: [
+                ...(contract.modificationRequests || []),
+                newHelperAttempt,
+            ],
+            // Keep legacy comments for backward compatibility
+            modificationComments: comments,
+            // Clear current reviewers and approver as the process will restart
+            reviewers: undefined,
+            approver: undefined,
+            approvalStatus: undefined,
+            updatedAt: new Date().toISOString(),
+        };
+
+        contracts[index] = updatedContract;
+        this.saveContracts(contracts);
+
+        return {
+            success: true,
+            message: 'Modification requested. Contract returned to initiator.',
+            contract: updatedContract,
+        };
+    }
+
+    /**
+     * Approve contract (updated to check reviewers and change status to waiting_for_signature)
+     * @param contractId - ID of the contract
+     * @param approverEmail - Email of the approver
+     */
+    async approveContract(
+        contractId: string,
+        approverEmail?: string
+    ): Promise<{ success: boolean; message: string; contract?: Contract }> {
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        const contracts = this.getAllContracts();
+        const index = contracts.findIndex(c => c.id === contractId);
+
+        if (index === -1) {
+            return {
+                success: false,
+                message: 'Contract not found',
+            };
+        }
+
+        const contract = contracts[index];
+
+        // Check if all reviewers have reviewed (if reviewers exist)
+        if (contract.reviewers && contract.reviewers.length > 0) {
+            const allReviewed = contract.reviewers.every(r => r.status === 'reviewed');
+
+            if (!allReviewed) {
+                return {
+                    success: false,
+                    message: 'Cannot approve: Not all reviewers have completed their review',
+                };
+            }
+        }
+
+        // Update approver status if approver email is provided
+        let updatedApprover = contract.approver;
+        if (approverEmail && contract.approver && contract.approver.email === approverEmail) {
+            updatedApprover = {
+                ...contract.approver,
+                status: 'approved' as const,
+                approvedAt: new Date().toISOString(),
+            };
+        }
+
+        // Update contract to waiting_for_signature status
+        const updatedContract: Contract = {
+            ...contract,
+            status: 'waiting_for_signature' as const,
+            approver: updatedApprover,
+            approvalStatus: 'approved',
+            updatedAt: new Date().toISOString(),
+        };
+
+        contracts[index] = updatedContract;
+        this.saveContracts(contracts);
+
+        return {
+            success: true,
+            message: 'Contract approved! Now waiting for signature.',
+            contract: updatedContract,
+        };
+    }
+
+    /**
+     * Submit contract for further review with additional reviewers
+     * This allows a reviewer to add more reviewers after marking as reviewed
+     * @param contractId - ID of the contract
+     * @param additionalReviewers - Array of additional reviewer email addresses
+     * @param submittedBy - Email of the user submitting for further review
+     */
+    async submitForFurtherReview(
+        contractId: string,
+        additionalReviewers: string[],
+        submittedBy: string
+    ): Promise<{ success: boolean; message: string; contract?: Contract }> {
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const contracts = this.getAllContracts();
+        const index = contracts.findIndex(c => c.id === contractId);
+
+        if (index === -1) {
+            return {
+                success: false,
+                message: 'Contract not found',
+            };
+        }
+
+        const contract = contracts[index];
+
+        // Create new reviewer info objects for additional reviewers
+        const newReviewers = additionalReviewers.map(email => ({
+            email,
+            status: 'pending' as const,
+        }));
+
+        // Combine existing reviewers with new ones
+        const updatedReviewers = [
+            ...(contract.reviewers || []),
+            ...newReviewers,
+        ];
+
+        // Update contract with additional reviewers
+        const updatedContract: Contract = {
+            ...contract,
+            reviewers: updatedReviewers,
+            reviewStatus: 'in_review', // Reset to in_review since new reviewers added
+            updatedAt: new Date().toISOString(),
+        };
+
+        contracts[index] = updatedContract;
+        this.saveContracts(contracts);
+
+        return {
+            success: true,
+            message: `Contract sent to ${additionalReviewers.length} additional reviewer${additionalReviewers.length > 1 ? 's' : ''} for review`,
+            contract: updatedContract,
+        };
+    }
+
+    /**
+     * Get contracts assigned to a user for review or approval
+     * @param userEmail - Email of the user
+     * @returns Array of contracts where user is reviewer or approver
+     */
+    getContractsForReview(userEmail: string): Contract[] {
+        const allContracts = this.getAllContracts();
+
+        return allContracts.filter(contract => {
+            // Check if user is a reviewer
+            const isReviewer = contract.reviewers?.some(r => r.email === userEmail);
+
+            // Check if user is the approver
+            const isApprover = contract.approver?.email === userEmail;
+
+            // Return contracts where user is involved and status is review_approval
+            return (isReviewer || isApprover) && contract.status === 'review_approval';
+        });
     }
 
     /**
