@@ -14,19 +14,19 @@ const DEFAULT_CONTRACTS: Contract[] = [
         category: 'Service',
         expiresInDays: 245,
         status: 'active',
-        
+
         // Template info
         templateId: 'temp_2',
         templateName: 'Service Agreement',
-        
+
         // Content
         content: 'Populated contract content...',
         fieldValues: {},
-        
+
         // Dates
         startDate: '2024-01-15',
         endDate: '2024-12-31',
-        
+
         // Metadata
         createdAt: new Date('2024-01-15').toISOString(),
         createdBy: 'admin@demo.com',
@@ -36,11 +36,11 @@ const DEFAULT_CONTRACTS: Contract[] = [
         title: 'Employee NDA',
         client: 'John Smith',
         description: 'Non-disclosure agreement for new hire',
-        value:  '',
+        value: '',
         category: 'NDA',
         expiresInDays: 380,
         status: 'active',
-        
+
         templateId: 'temp_3',
         templateName: 'NDA Template',
         content: 'Populated NDA content...',
@@ -58,8 +58,8 @@ const DEFAULT_CONTRACTS: Contract[] = [
         value: '50000',
         category: 'Lease',
         expiresInDays: 20,
-        status: 'pending',
-        
+        status: 'review_approval',
+
         templateId: 'temp_5',
         templateName: 'Lease Agreement',
         content: 'Populated lease content...',
@@ -212,6 +212,38 @@ class ContractService {
         return {
             success: true,
             message: 'Contract deleted successfully',
+        };
+    }
+
+    /**
+     * Approve contract (change status from review_approval to active)
+     */
+    async approveContract(id: string): Promise<{ success: boolean; message: string; contract?: Contract }> {
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        const contracts = this.getAllContracts();
+        const index = contracts.findIndex(c => c.id === id);
+
+        if (index === -1) {
+            return {
+                success: false,
+                message: 'Contract not found',
+            };
+        }
+
+        const updatedContract = {
+            ...contracts[index],
+            status: 'active' as const,
+            updatedAt: new Date().toISOString(),
+        };
+
+        contracts[index] = updatedContract;
+        this.saveContracts(contracts);
+
+        return {
+            success: true,
+            message: 'Contract approved and moved to active contracts',
+            contract: updatedContract,
         };
     }
 

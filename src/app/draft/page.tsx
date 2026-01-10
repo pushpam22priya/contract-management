@@ -4,81 +4,64 @@ import { Box, Typography, Tooltip, IconButton } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import AddIcon from '@mui/icons-material/Add';
 import DraftCard from '@/components/contracts/DraftCard';
-import { Contract } from '@/components/contracts/ContractCard';
 import DraftFilters from '@/components/filters/DraftFilters';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Dayjs } from 'dayjs';
+import { contractService } from '@/services/contractService';
+import { Contract } from '@/types/contract';
+import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog'; // ← ADD THIS
 
 export default function DraftPage() {
-    // Mock draft contracts data
-    const draftContracts: Contract[] = [
-        {
-            id: '1',
-            title: 'Office Lease Agreement - Draft',
-            description: 'New office space lease pending final approval and review',
-            client: 'Prime Properties LLC',
-            value: '₹420K',
-            category: 'Legal',
-            expiresInDays: 0,
-            status: 'draft',
-        },
-        {
-            id: '2',
-            title: 'Partnership Agreement - Tech Ventures',
-            description: 'Strategic partnership proposal for joint technology development',
-            client: 'Tech Ventures Group',
-            value: '₹890K',
-            category: 'Legal',
-            expiresInDays: 30,
-            status: 'draft',
-        },
-        {
-            id: '3',
-            title: 'Marketing Services Contract',
-            description: 'Annual marketing and branding services agreement draft',
-            client: 'Brand Boost Inc.',
-            value: '₹125K',
-            category: 'Sales',
-            expiresInDays: 45,
-            status: 'draft',
-        },
-        {
-            id: '4',
-            title: 'IT Support Services - Draft',
-            description: 'Comprehensive IT infrastructure support and maintenance contract',
-            client: 'SecureTech Solutions',
-            value: '₹275K',
-            category: 'Service',
-            expiresInDays: 60,
-            status: 'draft',
-        },
-        {
-            id: '5',
-            title: 'Employee Benefits Package',
-            description: 'Updated employee health and wellness benefits program',
-            client: 'WellCare Partners',
-            value: '₹180K',
-            category: 'HR',
-            expiresInDays: 15,
-            status: 'draft',
-        },
-        {
-            id: '6',
-            title: 'Cloud Migration Agreement',
-            description: 'Enterprise cloud infrastructure migration and setup services',
-            client: 'CloudWorks Global',
-            value: '₹650K',
-            category: 'Finance',
-            expiresInDays: 90,
-            status: 'draft',
-        },
-    ];
+    const [draftContracts, setDraftContracts] = useState<Contract[]>([]);
+    const [loading, setLoading] = useState(true);
 
+    const [viewerOpen, setViewerOpen] = useState(false);
+    const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+
+    // Load draft contracts
+    useEffect(() => {
+        loadDrafts();
+    }, []);
+
+     const handleView = (id: string) => {
+        const contract = draftContracts.find(c => c.id === id);
+        if (!contract) return;
+        
+        setSelectedContract(contract);
+        setViewerOpen(true);
+    };
+    const loadDrafts = () => {
+        setLoading(true);
+        // Get all contracts with 'draft' or 'review_approval' status
+        const allContracts = contractService.getAllContracts();
+        const drafts = allContracts.filter(c => c.status === 'draft' || c.status === 'review_approval');
+        setDraftContracts(drafts);
+        setLoading(false);
+    };
+    const handleApprove = async (id: string) => {
+        const result = await contractService.approveContract(id);
+        if (result.success) {
+            alert('Contract approved! ✅\nMoved to Contracts page');
+            loadDrafts(); // Reload drafts
+        } else {
+            alert('Failed to approve contract: ' + result.message);
+        }
+    };
+    const handleReject = async (id: string) => {
+        const confirmed = confirm('Are you sure you want to reject this contract?');
+        if (!confirmed) return;
+        const result = await contractService.deleteContract(id);
+        if (result.success) {
+            alert('Contract rejected and deleted');
+            loadDrafts(); // Reload drafts
+        } else {
+            alert('Failed to reject contract: ' + result.message);
+        }
+    };
     const handleDownload = (id: string) => {
         console.log('Download draft:', id);
         // TODO: Implement download functionality
     };
-
     const handleShare = (id: string) => {
         console.log('Share draft for review or approval:', id);
         // TODO: Implement share functionality
@@ -189,15 +172,32 @@ export default function DraftPage() {
                     }}
                 >
                     {draftContracts.map((contract) => (
-                        <DraftCard
-                            key={contract.id}
-                            contract={contract}
-                            onDownload={handleDownload}
-                            onShare={handleShare}
-                        />
-                    ))}
+                    <DraftCard
+                        key={contract.id}
+                        contract={contract}
+                        onView={handleView}  // ← ADD THIS
+                        onDownload={handleDownload}
+                        onShare={handleShare}
+                    />
+                ))}
                 </Box>
             </Box>
+            {/* ← ADD VIEWER DIALOG */}
+            {selectedContract && (
+                <DocumentViewerDialog
+                    open={viewerOpen}
+                    onClose={() => {
+                        setViewerOpen(false);
+                        setSelectedContract(null);
+                    }}
+                    fileUrl=""
+                    fileName={selectedContract.title}
+                    title={selectedContract.title}
+                    content={selectedContract.content}
+                    templateDocxBase64={selectedContract.templateDocxBase64}
+                    fieldValues={selectedContract.fieldValues}
+                />
+            )}
         </AppLayout>
     );
 }

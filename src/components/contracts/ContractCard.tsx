@@ -18,7 +18,7 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                 return { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' };
             case 'expired':
                 return { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' };
-            case 'pending':
+            case 'review_approval':
                 return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' };
             case 'draft':
                 return { bg: '#f3f4f6', color: '#374151', border: '#d1d5db' };

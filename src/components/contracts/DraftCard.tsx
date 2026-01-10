@@ -1,14 +1,16 @@
 import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
 import { FileDownload, Share, Visibility } from '@mui/icons-material';
-import { Contract } from './ContractCard';
+import { Contract } from '@/types/contract';
+// import { Contract } from './ContractCard';
 
 interface DraftCardProps {
     contract: Contract;
+    onView?: (id: string) => void;  
     onDownload?: (id: string) => void;
     onShare?: (id: string) => void;
 }
 
-const DraftCard = ({ contract, onDownload, onShare }: DraftCardProps) => {
+const DraftCard = ({ contract, onView, onDownload, onShare }: DraftCardProps) => {
     const getStatusColor = (status: Contract['status']) => {
         switch (status) {
             case 'active':
@@ -17,7 +19,7 @@ const DraftCard = ({ contract, onDownload, onShare }: DraftCardProps) => {
                 return { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' };
             case 'expired':
                 return { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' };
-            case 'pending':
+            case 'review_approval':
                 return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' };
             case 'draft':
                 return { bg: '#f3f4f6', color: '#374151', border: '#d1d5db' };
@@ -271,7 +273,7 @@ const DraftCard = ({ contract, onDownload, onShare }: DraftCardProps) => {
                 <Tooltip title="View" arrow>
                     <IconButton
                         size="small"
-                        onClick={() => onDownload?.(contract.id)}
+                        onClick={() => onView?.(contract.id)}
                         sx={{
                             bgcolor: 'transparent',
                             border: '1px solid',
@@ -322,7 +324,7 @@ const DraftCard = ({ contract, onDownload, onShare }: DraftCardProps) => {
                 </Tooltip> */}
 
                 {/* Share Icon Button */}
-                <Tooltip title="Share for review or approval" arrow>
+                <Tooltip title="Submit for review or approval" arrow>
                     <IconButton
                         size="small"
                         onClick={() => onShare?.(contract.id)}

@@ -57,7 +57,11 @@ export default function ContractsPage() {
     const loadContracts = () => {
         setLoading(true);
         const allContracts = contractService.getAllContracts();
-        setContracts(allContracts || []);  // ← Add fallback to empty array
+        // Only show approved contracts (not drafts or review_approval)
+        const approvedContracts = allContracts.filter(c =>
+            c.status === 'active' || c.status === 'expiring' || c.status === 'expired'
+        );
+        setContracts(approvedContracts || []);
         setLoading(false);
     };
 

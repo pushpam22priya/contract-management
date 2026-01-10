@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation'; // ← ADD THIS
 import {
     Box,
     Typography,
@@ -60,6 +61,7 @@ interface CreateContractWizardProps {
 }
 
 const CreateContractWizard = ({ open, onClose, initialTemplate }: CreateContractWizardProps) => {
+    const router = useRouter(); // ← ADD THIS
     const [activeStep, setActiveStep] = useState(0);
     const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
     const [templates, setTemplates] = useState<Template[]>([]);
@@ -202,7 +204,7 @@ const CreateContractWizard = ({ open, onClose, initialTemplate }: CreateContract
                 value: contractValue || '',
                 category: category?.label || 'Uncategorized',
                 expiresInDays: calculateExpiresInDays(contractEndDate),
-                status: 'draft' as const,
+                status: 'review_approval' as const,  // Waiting for review and approval
                 templateDocxBase64: selectedTemplate.docxBase64, // Store for later use
                 templateFileName: selectedTemplate.fileName,
 
@@ -225,12 +227,12 @@ const CreateContractWizard = ({ open, onClose, initialTemplate }: CreateContract
             const result = await contractService.createContract(contractData);
 
             if (result.success) {
-                alert('Contract created successfully! ✅');
+                // alert('Contract created successfully! ✅\nRedirecting to drafts...');
                 handleClose();
-                // Optionally reload the page to show new contract
-                window.location.reload();
+                // Navigate to draft page to show the newly created contract
+                router.push('/draft');
             } else {
-                alert('Failed to create contract: ' + result.message);
+                // alert('Failed to create contract: ' + result.message);
             }
         } catch (error) {
             console.error('Error creating contract:', error);

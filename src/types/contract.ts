@@ -7,7 +7,7 @@ export interface Contract {
     value: string;
     category: string;
     expiresInDays: number;
-    status: 'active' | 'expiring' | 'expired' | 'pending' | 'draft';
+    status: 'active' | 'expiring' | 'expired' | 'review_approval' | 'draft';
 
     // Template info
     templateId: string;
