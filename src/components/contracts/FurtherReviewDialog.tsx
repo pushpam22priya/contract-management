@@ -194,13 +194,8 @@ export default function FurtherReviewDialog({
                     </Alert>
                 )}
 
-                {/* Info Alert */}
-                <Alert severity="info" icon={<InfoOutlinedIcon />}>
-                    Select additional reviewers to review this contract. The contract will remain in review status until all reviewers complete their review.
-                </Alert>
-
                 {/* Excluded Users Info */}
-                <Paper
+                {/* <Paper
                     elevation={0}
                     sx={{
                         bgcolor: '#fef3c7',
@@ -212,7 +207,7 @@ export default function FurtherReviewDialog({
                     <Typography variant="caption" color="#92400e">
                         ℹ️ {getExcludedUserSummary()}
                     </Typography>
-                </Paper>
+                </Paper> */}
 
                 {/* Additional Reviewers Selection */}
                 <Box>

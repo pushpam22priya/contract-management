@@ -85,6 +85,54 @@ class ContractService {
     }
 
     /**
+     * Update contract statuses based on date logic
+     */
+    private updateContractStatuses(contracts: Contract[]): Contract[] {
+        const today = new Date().toISOString().split('T')[0];
+        let hasChanges = false;
+
+        const updatedContracts = contracts.map(contract => {
+            let newStatus = contract.status;
+
+            // 1. Signed -> Active (if start date reached)
+            if (contract.status === 'signed' && contract.startDate && contract.startDate <= today) {
+                newStatus = 'active';
+            }
+
+            // 2. Active -> Expiring (if within 30 days of end date)
+            if (contract.status === 'active' && contract.endDate) {
+                const endDate = new Date(contract.endDate);
+                const warningDate = new Date(endDate);
+                warningDate.setDate(endDate.getDate() - 30);
+                const warningDateString = warningDate.toISOString().split('T')[0];
+
+                if (today >= warningDateString && today <= contract.endDate) {
+                    newStatus = 'expiring';
+                }
+            }
+
+            // 3. active/expiring/signed -> Expired (if end date passed)
+            if ((contract.status === 'active' || contract.status === 'expiring' || contract.status === 'signed') && contract.endDate) {
+                if (today > contract.endDate) {
+                    newStatus = 'expired';
+                }
+            }
+
+            if (newStatus !== contract.status) {
+                hasChanges = true;
+                return { ...contract, status: newStatus };
+            }
+            return contract;
+        });
+
+        if (hasChanges && typeof window !== 'undefined') {
+            localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(updatedContracts));
+        }
+
+        return updatedContracts;
+    }
+
+    /**
      * Get all contracts from localStorage
      */
     getAllContracts(): Contract[] {
@@ -92,7 +140,12 @@ class ContractService {
 
         this.initializeContracts();
         const contractsData = localStorage.getItem(CONTRACTS_STORAGE_KEY);
-        return contractsData ? JSON.parse(contractsData) : DEFAULT_CONTRACTS;
+        let contracts = contractsData ? JSON.parse(contractsData) : DEFAULT_CONTRACTS;
+
+        // Run status updates logic
+        contracts = this.updateContractStatuses(contracts);
+
+        return contracts;
     }
 
     /**
@@ -559,6 +612,109 @@ class ContractService {
     clearAllContracts(): void {
         if (typeof window === 'undefined') return;
         localStorage.removeItem(CONTRACTS_STORAGE_KEY);
+    }
+    /**
+     * Submit contract for signature
+     */
+    async submitForSignature(
+        contractId: string,
+        signerEmail: string
+    ): Promise<{ success: boolean; message: string; contract?: Contract }> {
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const contracts = this.getAllContracts();
+        const index = contracts.findIndex(c => c.id === contractId);
+
+        if (index === -1) {
+            return {
+                success: false,
+                message: 'Contract not found',
+            };
+        }
+
+        const contract = contracts[index];
+
+        const updatedContract: Contract = {
+            ...contract,
+            status: 'waiting_for_signature',
+            signer: {
+                email: signerEmail,
+                status: 'pending',
+            },
+            updatedAt: new Date().toISOString(),
+        };
+
+        contracts[index] = updatedContract;
+        this.saveContracts(contracts);
+
+        return {
+            success: true,
+            message: 'Contract submitted for signature',
+            contract: updatedContract,
+        };
+    }
+
+    /**
+     * Get contracts for signature for a specific user
+     */
+    getContractsForSignature(userEmail: string): Contract[] {
+        const allContracts = this.getAllContracts();
+        return allContracts.filter(c =>
+            c.status === 'waiting_for_signature' &&
+            c.signer?.email === userEmail &&
+            c.signer?.status === 'pending'
+        );
+    }
+
+    /**
+     * Sign a contract
+     */
+    async signContract(
+        contractId: string,
+        signerEmail: string,
+        signatureImage?: string
+    ): Promise<{ success: boolean; message: string; contract?: Contract }> {
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const contracts = this.getAllContracts();
+        const index = contracts.findIndex(c => c.id === contractId);
+
+        if (index === -1) {
+            return {
+                success: false,
+                message: 'Contract not found',
+            };
+        }
+
+        const contract = contracts[index];
+
+        if (contract.signer?.email !== signerEmail) {
+            return {
+                success: false,
+                message: 'You are not authorized to sign this contract',
+            };
+        }
+
+        const updatedContract: Contract = {
+            ...contract,
+            status: 'signed', // or 'active' depending on final workflow
+            signer: {
+                ...contract.signer,
+                status: 'signed',
+                signedAt: new Date().toISOString(),
+                signatureImage,
+            },
+            updatedAt: new Date().toISOString(),
+        };
+
+        contracts[index] = updatedContract;
+        this.saveContracts(contracts);
+
+        return {
+            success: true,
+            message: 'Contract successfully signed!',
+            contract: updatedContract,
+        };
     }
 }
 

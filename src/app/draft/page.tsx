@@ -6,7 +6,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DraftCard from '@/components/contracts/DraftCard';
 import DraftFilters from '@/components/filters/DraftFilters';
 import { useEffect, useState } from 'react';
-import { Dayjs } from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
 import { Contract } from '@/types/contract';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
@@ -124,7 +124,7 @@ export default function DraftPage() {
         );
 
         if (result.success) {
-            showNotification('✅ Contract submitted for review and approval!', 'success');
+            showNotification('Contract submitted for review and approval!', 'success');
             loadDrafts(); // Reload drafts
         } else {
             showNotification('Failed to submit: ' + result.message, 'error');
@@ -140,7 +140,30 @@ export default function DraftPage() {
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
     const totalDrafts = draftContracts.length;
-    const filteredCount = draftContracts.length;
+
+    // Filter logic
+    const filteredDrafts = draftContracts.filter(contract => {
+        // Search Filter
+        const matchesSearch = searchQuery === '' ||
+            contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            contract.client?.toLowerCase().includes(searchQuery.toLowerCase());
+
+        // Category Filter
+        const matchesCategory = categoryFilter.value === 'all' ||
+            contract.category === categoryFilter.value;
+
+        // Date Filter
+        let matchesDate = true;
+        if (startDate || endDate) {
+            const contractDate = dayjs(contract.createdAt); // or startDate/updatedAt depending on requirement
+            if (startDate && contractDate.isBefore(startDate, 'day')) matchesDate = false;
+            if (endDate && contractDate.isAfter(endDate, 'day')) matchesDate = false;
+        }
+
+        return matchesSearch && matchesCategory && matchesDate;
+    });
+
+    const filteredCount = filteredDrafts.length;
 
     return (
         <AppLayout>
@@ -236,7 +259,7 @@ export default function DraftPage() {
                         gap: 1,
                     }}
                 >
-                    {draftContracts.map((contract) => (
+                    {filteredDrafts.map((contract) => (
                         <DraftCard
                             key={contract.id}
                             contract={contract}

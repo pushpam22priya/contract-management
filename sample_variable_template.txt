@@ -1,0 +1,27 @@
+NON-DISCLOSURE AGREEMENT
+
+This Non-Disclosure Agreement (the "Agreement") is made effective as of <Effective Date>, by and between <Company Name> ("Disclosing Party") and <Client Name> ("Receiving Party").
+
+1. CONFIDENTIAL INFORMATION
+Receiving Party agrees to protect the confidentiality of all information disclosed by Disclosing Party.
+
+2. OBLIGATIONS
+Receiving Party shall hold and maintain the Confidential Information in strictest confidence for the sole and exclusive benefit of the Disclosing Party.
+
+3. DURATION
+The obligations of this Agreement shall survive for a period of <Duration Years> years from the date of disclosure.
+
+IN WITNESS WHEREOF, the parties have executed this Agreement as of the date first above written.
+
+Disclosing Party:
+Name: <Signatory Name>
+Title: <Signatory Title>
+
+Signature: __________________________
+
+
+Receiving Party:
+Name: <Client Contact Name>
+Title: <Client Contact Title>
+
+Signature: __________________________

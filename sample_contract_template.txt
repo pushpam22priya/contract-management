@@ -1,0 +1,27 @@
+SERVICE AGREEMENT
+
+This Service Agreement (the "Agreement") is entered into between "Provider" and "Client".
+
+1. SERVICES
+Provider agrees to perform the services described in the attached Statement of Work.
+
+2. COMPENSATION
+Client agrees to pay Provider according to the schedule set forth in Exhibit A.
+
+3. TERM
+This Agreement shall commence on the date of signature and continue until services are completed.
+
+IN WITNESS WHEREOF, the parties have executed this Agreement.
+
+Provider:
+Name: Admin User
+Title: CEO
+
+Signature: __________________________
+
+
+Client:
+Name: [Client Name]
+Title: Manager
+
+Signature: __________________________

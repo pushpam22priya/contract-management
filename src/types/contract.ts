@@ -1,3 +1,13 @@
+/**
+ * Information about the signer
+ */
+export interface SignerInfo {
+    email: string;
+    status: 'pending' | 'signed' | 'rejected';
+    signedAt?: string;
+    signatureImage?: string; // Base64 data URL of the signature
+}
+
 export interface Contract {
     // Card display fields (from Step 2 - Basic Information)
     id: string;
@@ -7,11 +17,12 @@ export interface Contract {
     value: string;
     category: string;
     expiresInDays: number;
-    status: 'active' | 'expiring' | 'expired' | 'review_approval' | 'waiting_for_signature' | 'draft';
+    status: 'active' | 'expiring' | 'expired' | 'review_approval' | 'waiting_for_signature' | 'draft' | 'signed'; // Added 'signed'
 
     // Review & Approval Workflow tracking
     reviewers?: ReviewerInfo[];      // Multiple reviewers can be assigned
     approver?: ApproverInfo;         // Single approver
+    signer?: SignerInfo;             // Single signer
     reviewStatus?: 'pending' | 'in_review' | 'reviewed' | 'changes_requested';
     approvalStatus?: 'pending' | 'approved' | 'rejected';
     modificationComments?: string;   // Comments when changes are requested (legacy)

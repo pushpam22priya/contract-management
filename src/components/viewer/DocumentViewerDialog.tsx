@@ -133,8 +133,9 @@ interface DocumentViewerDialogProps {
     fileName?: string;
     title?: string;
     content?: string;
-    templateDocxBase64?: string;  // ← ADD THIS
-    fieldValues?: Record<string, string>;  // ← ADD THIS
+    templateDocxBase64?: string;
+    fieldValues?: Record<string, string>;
+    signatureImage?: string;
 }
 
 export default function DocumentViewerDialog({
@@ -144,8 +145,9 @@ export default function DocumentViewerDialog({
     fileName,
     title,
     content,
-    templateDocxBase64,  // ← ADD THIS
-    fieldValues  // ← ADD THIS
+    templateDocxBase64,
+    fieldValues,
+    signatureImage
 }: DocumentViewerDialogProps) {
 
     return (

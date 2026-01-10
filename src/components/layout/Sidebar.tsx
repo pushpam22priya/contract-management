@@ -20,6 +20,7 @@ import DraftsIcon from '@mui/icons-material/Drafts';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import RateReviewIcon from '@mui/icons-material/RateReview';
+import DrawIcon from '@mui/icons-material/Draw';
 import MenuIcon from '@mui/icons-material/Menu';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 
@@ -29,6 +30,7 @@ const menuItems = [
     { text: 'Contracts', icon: <ArticleOutlinedIcon />, path: '/contracts' },
     { text: 'Draft', icon: <DraftsIcon />, path: '/draft' },
     { text: 'Review & Approval', icon: <RateReviewIcon />, path: '/review-approval' },
+    { text: 'Contract for Signature', icon: <DrawIcon />, path: '/signatures' },
 ];
 
 interface SidebarProps {
@@ -136,6 +138,7 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                                     primaryTypographyProps={{
                                         sx: {
                                             color: isSelected ? '#0f766e' : 'white',
+                                            fontSize: '14px'
                                         }
                                     }}
                                 />

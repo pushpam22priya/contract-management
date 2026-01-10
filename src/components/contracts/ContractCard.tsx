@@ -347,32 +347,34 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                     </IconButton>
                 </Tooltip> */}
 
-                {/* Share Icon Button */}
-                <Tooltip title="Share for signature" arrow>
-                    <IconButton
-                        size="small"
-                        onClick={() => onShare?.(contract.id)}
-                        sx={{
-                            bgcolor: 'transparent',
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            borderRadius: 1.5,
-                            width: 36,
-                            height: 36,
-                            color: 'text.primary',
-                            transition: 'all 0.2s ease',
-                            '&:hover': {
-                                bgcolor: 'primary.main',
-                                borderColor: 'primary.main',
-                                color: 'white',
-                                transform: 'translateY(-2px)',
-                                boxShadow: '0 4px 8px rgba(0, 0, 0, 0.15)',
-                            },
-                        }}
-                    >
-                        <Share sx={{ fontSize: '1.1rem' }} />
-                    </IconButton>
-                </Tooltip>
+                {/* Share Icon Button (Only for Draft, Waiting for Signature, or Review) */}
+                {!['signed', 'active', 'expiring', 'expired'].includes(contract.status) && (
+                    <Tooltip title="Share for signature" arrow>
+                        <IconButton
+                            size="small"
+                            onClick={() => onShare?.(contract.id)}
+                            sx={{
+                                bgcolor: 'transparent',
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: 1.5,
+                                width: 36,
+                                height: 36,
+                                color: 'text.primary',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                    bgcolor: 'primary.main',
+                                    borderColor: 'primary.main',
+                                    color: 'white',
+                                    transform: 'translateY(-2px)',
+                                    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.15)',
+                                },
+                            }}
+                        >
+                            <Share sx={{ fontSize: '1.1rem' }} />
+                        </IconButton>
+                    </Tooltip>
+                )}
             </Box>
         </Box>
     );

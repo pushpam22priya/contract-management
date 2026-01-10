@@ -16,6 +16,9 @@ import { contractService } from '@/services/contractService';
 import { Contract } from '@/types/contract';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { authService } from '@/services/authService';
+import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
+import NotificationSnackbar from '@/components/common/NotificationSnackbar';
+import { AlertColor } from '@mui/material';
 
 const statusOptions = [
     { label: 'All Status', value: 'all' },
@@ -51,6 +54,21 @@ export default function ContractsPage() {
     const [contractViewerOpen, setContractViewerOpen] = useState(false);
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
 
+    // Signature Dialog State
+    const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
+    const [contractForSignature, setContractForSignature] = useState<Contract | null>(null);
+
+    // Snackbar state
+    const [snackbar, setSnackbar] = useState({
+        open: false,
+        message: '',
+        severity: 'success' as AlertColor,
+    });
+
+    const showNotification = (message: string, severity: AlertColor = 'success') => {
+        setSnackbar({ open: true, message, severity });
+    };
+
     useEffect(() => {
         loadContracts();
     }, []);
@@ -65,33 +83,66 @@ export default function ContractsPage() {
             return;
         }
 
-        const allContracts = contractService.getContractsCreatedByUser(currentUser.email);
-        // Show approved contracts: active, expiring, expired, and waiting_for_signature
-        const approvedContracts = allContracts.filter(c =>
-            c.status === 'active' || c.status === 'expiring' || c.status === 'expired' || c.status === 'waiting_for_signature'
-        );
-        setContracts(approvedContracts || []);
+        const allContracts = contractService.getAllContracts(); // Fetch ALL to filter
+
+        // Show contracts created by user OR signed by user
+        const relevantContracts = allContracts.filter(c => {
+            const isCreator = c.createdBy === currentUser.email;
+
+            // For signer: show if they are the signer AND status is one of the lifecycle statuses
+            // This ensures they see it when it moves from 'signed' -> 'active' -> 'expiring' -> 'expired'
+            const isSigner = c.signer?.email === currentUser.email;
+            const isValidSignerStatus = ['signed', 'active', 'expiring', 'expired'].includes(c.status);
+            const isSignerAndVisible = isSigner && isValidSignerStatus;
+
+            // Filter by status for creator (active, expiring, expired, waiting_for_signature, signed)
+            if (isCreator) {
+                return ['active', 'expiring', 'expired', 'waiting_for_signature', 'signed'].includes(c.status);
+            }
+
+            return isSignerAndVisible;
+        });
+
+        setContracts(relevantContracts || []);
         setLoading(false);
     };
 
     const totalContracts = contracts.length;
-    const filteredCount = contracts.length;
+
+    // Filter Logic
+    const filteredContracts = contracts.filter(contract => {
+        // Search Filter
+        const matchesSearch = searchQuery === '' ||
+            contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            contract.client?.toLowerCase().includes(searchQuery.toLowerCase());
+
+        // Status Filter
+        const matchesStatus = statusFilter.value === 'all' ||
+            contract.status === statusFilter.value;
+
+        // Category Filter
+        const matchesCategory = categoryFilter.value === 'all' ||
+            contract.category === categoryFilter.value;
+
+        // Date Filter
+        let matchesDate = true;
+        if (startDate || endDate) {
+            const contractDate = dayjs(contract.createdAt); // Using createdAt primarily, could be startDate
+            if (startDate && contractDate.isBefore(startDate, 'day')) matchesDate = false;
+            if (endDate && contractDate.isAfter(endDate, 'day')) matchesDate = false;
+        }
+
+        return matchesSearch && matchesStatus && matchesCategory && matchesDate;
+    });
+
+    const filteredCount = filteredContracts.length;
 
     const handleViewContract = (id: string) => {
         console.log('📄 View Contract Clicked:', id);
         const contract = contracts.find(c => c.id === id);
-        console.log('  - Contract found:', !!contract);
-        console.log('  - Contract title:', contract?.title);
-        console.log('  - Contract content length:', contract?.content?.length || 0);
-        console.log('  - Content preview:', contract?.content?.substring(0, 150));
 
-        if (!contract) {
-            console.log('❌ Contract not found!');
-            return;
-        }
+        if (!contract) return;
 
-        // When view is clicked, set the contract and open the viewer dialog
-        console.log('✅ Opening viewer with contract');
         setSelectedContract(contract);
         setContractViewerOpen(true);
     };
@@ -102,8 +153,24 @@ export default function ContractsPage() {
     };
 
     const handleShareContract = (id: string) => {
-        console.log('Share contract for signature:', id);
-        // TODO: Implement share for signature functionality
+        const contract = contracts.find(c => c.id === id);
+        if (!contract) return;
+
+        setContractForSignature(contract);
+        setSignatureDialogOpen(true);
+    };
+
+    const handleSignatureSubmit = async (signerEmail: string) => {
+        if (!contractForSignature) return;
+
+        const result = await contractService.submitForSignature(contractForSignature.id, signerEmail);
+
+        if (result.success) {
+            showNotification(result.message, 'success');
+            loadContracts();
+        } else {
+            showNotification(result.message, 'error');
+        }
     };
 
     return (
@@ -481,7 +548,7 @@ export default function ContractsPage() {
                             gap: 1,
                         }}
                     >
-                        {(contracts || []).map((contract) => (
+                        {(filteredContracts || []).map((contract) => (
                             <ContractCard
                                 key={contract.id}
                                 contract={contract}
@@ -509,9 +576,23 @@ export default function ContractsPage() {
                         content={selectedContract.content} // ← Pass the populated content
                         templateDocxBase64={selectedContract.templateDocxBase64}  // ← ADD
                         fieldValues={selectedContract.fieldValues}  // ← ADD
-
+                        signatureImage={selectedContract.signer?.signatureImage} // ← PASS SIGNATURE IMAGE
                     />
                 )}
+
+                <SubmitForSignatureDialog
+                    open={signatureDialogOpen}
+                    onClose={() => setSignatureDialogOpen(false)}
+                    onSubmit={handleSignatureSubmit}
+                    contractTitle={contractForSignature?.title}
+                />
+
+                <NotificationSnackbar
+                    open={snackbar.open}
+                    message={snackbar.message}
+                    severity={snackbar.severity}
+                    onClose={() => setSnackbar({ ...snackbar, open: false })}
+                />
             </AppLayout>
         </LocalizationProvider>
     );
