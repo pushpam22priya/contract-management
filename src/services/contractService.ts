@@ -96,6 +96,14 @@ class ContractService {
     }
 
     /**
+     * Get contracts created by specific user
+     */
+    getContractsCreatedByUser(email: string): Contract[] {
+        const allContracts = this.getAllContracts();
+        return allContracts.filter(c => c.createdBy === email);
+    }
+
+    /**
      * Save all contracts to localStorage
      */
     private saveContracts(contracts: Contract[]): void {

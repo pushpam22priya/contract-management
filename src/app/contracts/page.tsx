@@ -15,6 +15,7 @@ import CreateContractWizard from '@/components/contracts/CreateContractWizard';
 import { contractService } from '@/services/contractService';
 import { Contract } from '@/types/contract';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
+import { authService } from '@/services/authService';
 
 const statusOptions = [
     { label: 'All Status', value: 'all' },
@@ -56,7 +57,15 @@ export default function ContractsPage() {
 
     const loadContracts = () => {
         setLoading(true);
-        const allContracts = contractService.getAllContracts();
+        const currentUser = authService.getCurrentUser();
+
+        if (!currentUser) {
+            setContracts([]);
+            setLoading(false);
+            return;
+        }
+
+        const allContracts = contractService.getContractsCreatedByUser(currentUser.email);
         // Show approved contracts: active, expiring, expired, and waiting_for_signature
         const approvedContracts = allContracts.filter(c =>
             c.status === 'active' || c.status === 'expiring' || c.status === 'expired' || c.status === 'waiting_for_signature'

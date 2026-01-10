@@ -54,9 +54,19 @@ export default function DraftPage() {
     };
     const loadDrafts = () => {
         setLoading(true);
-        // Get all contracts with 'draft' or 'review_approval' status
-        const allContracts = contractService.getAllContracts();
-        const drafts = allContracts.filter(c => c.status === 'draft' || c.status === 'review_approval');
+        const currentUser = authService.getCurrentUser();
+
+        if (!currentUser) {
+            setDraftContracts([]);
+            setLoading(false);
+            return;
+        }
+
+        // Get contracts created by user
+        const userContracts = contractService.getContractsCreatedByUser(currentUser.email);
+
+        // Filter for drafts and review_approval
+        const drafts = userContracts.filter(c => c.status === 'draft' || c.status === 'review_approval');
         setDraftContracts(drafts);
         setLoading(false);
     };
