@@ -10,6 +10,8 @@ export interface Template {
     lastUsed: string;
     uploadedBy: string;
     uploadedAt: string;
+    content?: string; // The actual text content of the template
+    docxBase64?: string; // ← ADD THIS: Original DOCX file as base64
 }
 
 export interface Category {

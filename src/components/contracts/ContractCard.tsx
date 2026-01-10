@@ -1,16 +1,6 @@
 import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
 import { Visibility, FileDownload, Share } from '@mui/icons-material';
-
-export interface Contract {
-    id: string;
-    title: string;
-    description: string;
-    client: string;
-    value: string;
-    category: string;
-    expiresInDays: number;
-    status: 'active' | 'expiring' | 'expired' | 'pending' | 'draft';
-}
+import { Contract } from '@/types/contract';
 
 interface ContractCardProps {
     contract: Contract;

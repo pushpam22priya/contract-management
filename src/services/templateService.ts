@@ -16,6 +16,19 @@ const DEFAULT_TEMPLATES: Template[] = [
         lastUsed: '2 days ago',
         uploadedBy: 'admin@demo.com',
         uploadedAt: new Date('2024-01-15').toISOString(),
+        content: `EMPLOYMENT AGREEMENT
+
+This Employment Agreement is entered into on <start_date> between <company_name> and <employee_name>.
+
+Position: <job_position>
+Department: <department>
+Salary: <salary_amount>
+Start Date: <start_date>
+End Date: <end_date>
+
+Signed by:
+<authorized_signatory>
+Date: <sign_date>`,
     },
     {
         id: 'temp_2',
@@ -29,6 +42,18 @@ const DEFAULT_TEMPLATES: Template[] = [
         lastUsed: '5 days ago',
         uploadedBy: 'admin@demo.com',
         uploadedAt: new Date('2024-01-10').toISOString(),
+        content: `SERVICE AGREEMENT
+
+This Service Agreement is made on <start_date> between <service_provider> and <client_name>.
+
+Service Description: <service_description>
+Duration: From <start_date> to <end_date>
+Payment Terms: <payment_terms>
+Total Amount: <total_amount>
+
+Provider: <service_provider>
+Client: <client_name>
+Signed: <sign_date>`,
     },
     {
         id: 'temp_3',
@@ -42,6 +67,23 @@ const DEFAULT_TEMPLATES: Template[] = [
         lastUsed: '1 day ago',
         uploadedBy: 'admin@demo.com',
         uploadedAt: new Date('2024-01-20').toISOString(),
+        content: `NON-DISCLOSURE AGREEMENT (NDA)
+
+This Non-Disclosure Agreement ("Agreement") is entered into on <start_date>
+and shall remain in effect until <end_date>.
+
+This Agreement is between <company_name>, having its registered office at
+<company_address>, and <recipient_name>.
+
+The purpose of this Agreement is <purpose_of_disclosure>.
+
+All confidential information disclosed by <company_name> shall remain strictly
+confidential.
+
+Signed by:
+<authorized_signatory>
+Designation: <designation>
+Date: <sign_date>`,
     },
     {
         id: 'temp_4',
@@ -55,6 +97,25 @@ const DEFAULT_TEMPLATES: Template[] = [
         lastUsed: '3 days ago',
         uploadedBy: 'admin@demo.com',
         uploadedAt: new Date('2024-01-12').toISOString(),
+        content: `SALES CONTRACT
+
+This Sales Contract is executed on <start_date> between:
+Seller: <seller_name>
+Buyer: <buyer_name>
+
+Product/Service: <product_description>
+Quantity: <quantity>
+Unit Price: <unit_price>
+Total Amount: <total_amount>
+
+Delivery Date: <delivery_date>
+Payment Terms: <payment_terms>
+
+Valid from <start_date> to <end_date>
+
+Seller Signature: <seller_signature>
+Buyer Signature: <buyer_signature>
+Date: <sign_date>`,
     },
     {
         id: 'temp_5',
@@ -68,6 +129,21 @@ const DEFAULT_TEMPLATES: Template[] = [
         lastUsed: '1 week ago',
         uploadedBy: 'admin@demo.com',
         uploadedAt: new Date('2024-01-08').toISOString(),
+        content: `LEASE AGREEMENT
+
+This Lease Agreement is made on <start_date> between:
+Landlord: <landlord_name>
+Tenant: <tenant_name>
+
+Property Address: <property_address>
+Lease Period: From <start_date> to <end_date>
+
+Monthly Rent: <monthly_rent>
+Security Deposit: <security_deposit>
+
+Landlord: <landlord_name>
+Tenant: <tenant_name>
+Date: <sign_date>`,
     },
 ];
 
@@ -135,6 +211,29 @@ class TemplateService {
     }
 
     /**
+     * Extract text content from DOCX file
+     */
+    private async extractTextFromDocx(file: File): Promise<string> {
+        try {
+            // Only try to extract from DOCX files
+            if (!file.name.toLowerCase().endsWith('.docx')) {
+                console.log('⚠️ Not a DOCX file, skipping text extraction');
+                return '';
+            }
+
+            // Use mammoth to extract text from DOCX
+            const mammoth = await import('mammoth');
+            const arrayBuffer = await file.arrayBuffer();
+            const result = await mammoth.extractRawText({ arrayBuffer });
+            console.log('✅ Text extracted successfully, length:', result.value.length);
+            return result.value;
+        } catch (error) {
+            console.error('⚠️ Error extracting text from DOCX (non-fatal):', error);
+            return ''; // Return empty string if extraction fails - don't block upload
+        }
+    }
+
+    /**
      * Upload new template
      */
     async uploadTemplate(data: UploadTemplateData, userEmail: string): Promise<{ success: boolean; message: string; template?: Template }> {
@@ -182,8 +281,33 @@ class TemplateService {
         }
 
         try {
-            // Convert file to base64 for storage (in real app, you'd upload to a server)
-            const fileUrl = await this.fileToBase64(data.file);
+            // Read file as base64 for storage AND extract text content
+            const fileUrlPromise = this.fileToBase64(data.file);
+
+            // Extract base64 without data URL prefix (for docxtemplater)
+            const docxBase64Promise = new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64 = (reader.result as string).split(',')[1]; // Remove data:... prefix
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(data.file);
+            });
+
+            // Extract text content from DOCX (for placeholder detection)
+            let textContent = '';
+            try {
+                textContent = await this.extractTextFromDocx(data.file);
+            } catch (error) {
+                console.warn('Text extraction failed, continuing without it:', error);
+                textContent = '';
+            }
+            // Wait for base64 conversions
+            const [fileUrl, docxBase64] = await Promise.all([
+                fileUrlPromise,
+                docxBase64Promise
+            ]);
 
             const newTemplate: Template = {
                 id: this.generateTemplateId(),
@@ -197,6 +321,8 @@ class TemplateService {
                 lastUsed: 'Never',
                 uploadedBy: userEmail,
                 uploadedAt: new Date().toISOString(),
+                content: textContent, // For placeholder extraction
+                docxBase64: docxBase64, // For template filling
             };
 
             const templates = this.getAllTemplates();

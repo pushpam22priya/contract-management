@@ -1,7 +1,7 @@
 'use client';
 
 import { Box, Typography, Tooltip, IconButton, TextField, InputAdornment, Autocomplete, Collapse, Button } from '@mui/material';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import AppLayout from '@/components/layout/AppLayout';
 import { Search, FilterList, ExpandMore, ExpandLess } from '@mui/icons-material';
@@ -10,8 +10,11 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { Dayjs } from 'dayjs';
-import ContractCard, { Contract } from '@/components/contracts/ContractCard';
+import ContractCard from '@/components/contracts/ContractCard';
 import CreateContractWizard from '@/components/contracts/CreateContractWizard';
+import { contractService } from '@/services/contractService';
+import { Contract } from '@/types/contract';
+import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 
 const statusOptions = [
     { label: 'All Status', value: 'all' },
@@ -40,95 +43,44 @@ export default function ContractsPage() {
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [wizardOpen, setWizardOpen] = useState(false);
 
-    // Mock contract data - would come from API in real app
-    const mockContracts: Contract[] = [
-        {
-            id: '1',
-            title: 'Annual Software Maintenance - TechCorp',
-            description: 'Yearly maintenance and support contract for enterprise software',
-            client: 'TechCorp Solutions',
-            value: '₹125K',
-            category: 'Service',
-            expiresInDays: 362,
-            status: 'active',
-        },
-        {
-            id: '2',
-            title: 'Consulting Services - Global Industries',
-            description: 'Strategic consulting services for Q1 2025',
-            client: 'Global Industries Inc.',
-            value: '₹89K',
-            category: 'Service',
-            expiresInDays: 28,
-            status: 'expiring',
-        },
-        {
-            id: '3',
-            title: 'Cloud Infrastructure Agreement',
-            description: 'Multi-year cloud hosting and infrastructure management',
-            client: 'DataFlow Systems',
-            value: '₹250K',
-            category: 'Finance',
-            expiresInDays: 180,
-            status: 'active',
-        },
-        {
-            id: '4',
-            title: 'Legal Retainer - Smith & Associates',
-            description: 'General corporate legal services and consultation',
-            client: 'Smith & Associates',
-            value: '₹45K',
-            category: 'Legal',
-            expiresInDays: 90,
-            status: 'active',
-        },
-        {
-            id: '5',
-            title: 'HR Training Program',
-            description: 'Employee development and leadership training initiative',
-            client: 'Talent Hub Inc.',
-            value: '₹32K',
-            category: 'HR',
-            expiresInDays: 15,
-            status: 'expiring',
-        },
-        {
-            id: '6',
-            title: 'Marketing Campaign Partnership',
-            description: 'Q4 digital marketing and brand awareness campaign',
-            client: 'Creative Minds Agency',
-            value: '₹78K',
-            category: 'Sales',
-            expiresInDays: -5,
-            status: 'expired',
-        },
-        {
-            id: '7',
-            title: 'Enterprise Software License',
-            description: 'Annual licensing agreement for business analytics platform',
-            client: 'Analytics Pro',
-            value: '₹156K',
-            category: 'Finance',
-            expiresInDays: 240,
-            status: 'active',
-        },
-        {
-            id: '8',
-            title: 'Office Lease Agreement - Draft',
-            description: 'New office space lease pending final approval',
-            client: 'Prime Properties LLC',
-            value: '₹420K',
-            category: 'Legal',
-            expiresInDays: 0,
-            status: 'active',
-        },
-    ];
+    const [contracts, setContracts] = useState<Contract[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const totalContracts = mockContracts.length;
-    const filteredCount = mockContracts.length;
+    // Track which contract to view and whether the viewer dialog is open.
+    const [contractViewerOpen, setContractViewerOpen] = useState(false);
+    const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+
+    useEffect(() => {
+        loadContracts();
+    }, []);
+
+    const loadContracts = () => {
+        setLoading(true);
+        const allContracts = contractService.getAllContracts();
+        setContracts(allContracts || []);  // ← Add fallback to empty array
+        setLoading(false);
+    };
+
+    const totalContracts = contracts.length;
+    const filteredCount = contracts.length;
 
     const handleViewContract = (id: string) => {
-        router.push(`/contracts/${id}`);
+        console.log('📄 View Contract Clicked:', id);
+        const contract = contracts.find(c => c.id === id);
+        console.log('  - Contract found:', !!contract);
+        console.log('  - Contract title:', contract?.title);
+        console.log('  - Contract content length:', contract?.content?.length || 0);
+        console.log('  - Content preview:', contract?.content?.substring(0, 150));
+
+        if (!contract) {
+            console.log('❌ Contract not found!');
+            return;
+        }
+
+        // When view is clicked, set the contract and open the viewer dialog
+        console.log('✅ Opening viewer with contract');
+        setSelectedContract(contract);
+        setContractViewerOpen(true);
     };
 
     const handleExportContract = (id: string) => {
@@ -516,7 +468,7 @@ export default function ContractsPage() {
                             gap: 1,
                         }}
                     >
-                        {mockContracts.map((contract) => (
+                        {(contracts || []).map((contract) => (
                             <ContractCard
                                 key={contract.id}
                                 contract={contract}
@@ -530,6 +482,23 @@ export default function ContractsPage() {
 
                 {/* Create Contract Wizard */}
                 <CreateContractWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
+
+                {selectedContract && (
+                    <DocumentViewerDialog
+                        open={contractViewerOpen}
+                        onClose={() => {
+                            setContractViewerOpen(false);
+                            setSelectedContract(null);
+                        }}
+                        fileUrl="" // Not used for text content
+                        fileName={`${selectedContract.title}.txt`}
+                        title={selectedContract.title}
+                        content={selectedContract.content} // ← Pass the populated content
+                        templateDocxBase64={selectedContract.templateDocxBase64}  // ← ADD
+                        fieldValues={selectedContract.fieldValues}  // ← ADD
+
+                    />
+                )}
             </AppLayout>
         </LocalizationProvider>
     );
