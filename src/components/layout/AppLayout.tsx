@@ -53,9 +53,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 component="main"
                 sx={{
                     flexGrow: 1,
-                    p: 2,
+                    p: 1.5,
                     width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
-                    mt: '64px', // AppBar height
+                    mt: '60px', // AppBar height
                     transition: theme.transitions.create(['margin', 'width'], {
                         easing: theme.transitions.easing.sharp,
                         duration: theme.transitions.duration.enteringScreen,

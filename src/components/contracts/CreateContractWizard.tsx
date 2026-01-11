@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation'; // ← ADD THIS
+import { useRouter } from 'next/navigation';
 import {
     Box,
     Typography,
@@ -201,8 +201,8 @@ const CreateContractWizard = ({ open, onClose, initialTemplate }: CreateContract
                 title: contractTitle,
                 client: clientName,  // ← Changed from clientName to client
                 description: description || '',
-                value: contractValue || '',
-                category: category?.label || 'Uncategorized',
+                value: contractValue || 'N/A',
+                category: selectedTemplate?.category || 'Uncategorized',
                 expiresInDays: calculateExpiresInDays(contractEndDate),
                 status: 'review_approval' as const,  // Waiting for review and approval
                 templateDocxBase64: selectedTemplate.docxBase64, // Store for later use
@@ -398,7 +398,7 @@ const CreateContractWizard = ({ open, onClose, initialTemplate }: CreateContract
                     </Box>
 
                     {/* Step Content */}
-                    <Box sx={{ minHeight: 280 }}>
+                    <Box sx={{ minHeight: 280, px: 2 }}>
                         {/* Step 1: Template Selection */}
                         {activeStep === 0 && (
                             <Slide
@@ -800,7 +800,7 @@ const CreateContractWizard = ({ open, onClose, initialTemplate }: CreateContract
                                             </Box>
 
                                             {/* Category */}
-                                            <Box>
+                                            {/* <Box>
                                                 <Typography
                                                     variant="subtitle2"
                                                     fontWeight={600}
@@ -839,7 +839,7 @@ const CreateContractWizard = ({ open, onClose, initialTemplate }: CreateContract
                                                         />
                                                     )}
                                                 />
-                                            </Box>
+                                            </Box> */}
                                         </Box>
                                     </Box>
                                 </Box>
@@ -1109,13 +1109,13 @@ const CreateContractWizard = ({ open, onClose, initialTemplate }: CreateContract
                                                     Category
                                                 </Typography>
                                                 <Typography variant="body1" fontWeight={500}>
-                                                    {category?.label || '-'}
+                                                    {selectedTemplate?.category || '-'}
                                                 </Typography>
                                             </Box>
                                         </Box>
 
                                         {/* Start Date & End Date */}
-                                        <Box
+                                        {/* <Box
                                             sx={{
                                                 display: 'grid',
                                                 gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
@@ -1144,7 +1144,7 @@ const CreateContractWizard = ({ open, onClose, initialTemplate }: CreateContract
                                                     {endDate ? endDate.format('MM/DD/YYYY') : '-'}
                                                 </Typography>
                                             </Box>
-                                        </Box>
+                                        </Box> */}
 
                                         {/* Description */}
                                         <Box>

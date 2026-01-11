@@ -213,7 +213,7 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                             fontSize: '0.75rem',
                         }}
                     >
-                        {contract.value}
+                        {`₹ ${contract.value}`}
                     </Typography>
                 </Box>
 

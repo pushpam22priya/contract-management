@@ -71,7 +71,11 @@ export default function Header() {
 
                 {/* Right: Notifications + Avatar */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <IconButton size="large" color="inherit">
+                    <IconButton
+                        size="large"
+                        color="inherit"
+                        onClick={() => router.push('/notifications')}
+                    >
                         <Badge badgeContent={3} color="error">
                             <NotificationsOutlinedIcon sx={{ color: 'text.secondary' }} />
                         </Badge>

@@ -62,44 +62,49 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
 
     const drawerWidth = open ? 240 : 64;
 
+    // For mobile, always show expanded view. For desktop, use the open state
+    const showExpanded = isMobile ? true : open;
+
     const drawer = (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: "primary.main" }}>
             {/* Spacer for AppBar */}
             <Box sx={{ height: 64, borderBottom: '1px solid', borderColor: 'divider' }} />
 
-            {/* Toggle Button - Above Menu Items */}
-            <Box sx={{ px: 1, pt: 2, pb: 1 }}>
-                <Tooltip title={!open ? 'Expand' : ''} placement="right" arrow>
-                    <IconButton
-                        onClick={onToggle}
-                        sx={{
-                            borderRadius: 2,
-                            color: 'white',
-                            // width: open ? '100%' : 48,
-                            width: 48,
-                            height: 48,
-                            display: 'flex',
-                            justifyContent: open ? 'flex-start' : 'center',
-                            mx: open ? 0 : 'auto',
-                            '&:hover': {
-                                bgcolor: 'rgba(255, 255, 255, 0.1)',
-                            },
-                        }}
-                    >
-                        {open ? <MenuOpenIcon /> : <MenuIcon />}
-                    </IconButton>
-                </Tooltip>
-            </Box>
+            {/* Toggle Button - Above Menu Items - Hide on mobile */}
+            {!isMobile && (
+                <Box sx={{ px: 1, pt: 2, pb: 1 }}>
+                    <Tooltip title={!open ? 'Expand' : ''} placement="right" arrow>
+                        <IconButton
+                            onClick={onToggle}
+                            sx={{
+                                borderRadius: 2,
+                                color: 'white',
+                                // width: open ? '100%' : 48,
+                                width: 48,
+                                height: 48,
+                                display: 'flex',
+                                justifyContent: open ? 'flex-start' : 'center',
+                                mx: open ? 0 : 'auto',
+                                '&:hover': {
+                                    bgcolor: 'rgba(255, 255, 255, 0.1)',
+                                },
+                            }}
+                        >
+                            {open ? <MenuOpenIcon /> : <MenuIcon />}
+                        </IconButton>
+                    </Tooltip>
+                </Box>
+            )}
 
             {/* Menu Items */}
-            <List sx={{ flex: 1, px: 1, pt: 0 }}>
+            <List sx={{ flex: 1, px: 1, pt: !isMobile ? 0 : 2 }}>
                 {menuItems.map((item) => {
                     const isSelected = pathname === item.path;
 
                     return (
                         <Tooltip
                             key={item.text}
-                            title={!open ? item.text : ''}
+                            title={!showExpanded ? item.text : ''}
                             placement="right"
                             arrow
                         >
@@ -109,7 +114,7 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                                     mb: 0.5,
                                     borderRadius: 2,
                                     minHeight: 48,
-                                    justifyContent: open ? 'initial' : 'center',
+                                    justifyContent: showExpanded ? 'initial' : 'center',
                                     px: 2.5,
                                     bgcolor: isSelected ? 'white' : 'transparent',
                                     color: isSelected ? '#0f766e' : '#f8fff8ff',
@@ -122,7 +127,7 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                                 <ListItemIcon
                                     sx={{
                                         minWidth: 0,
-                                        mr: open ? 2 : 'auto',
+                                        mr: showExpanded ? 2 : 'auto',
                                         justifyContent: 'center',
                                         color: isSelected ? '#0f766e' : 'white',
                                     }}
@@ -132,8 +137,8 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                                 <ListItemText
                                     primary={item.text}
                                     sx={{
-                                        opacity: open ? 1 : 0,
-                                        display: open ? 'block' : 'none',
+                                        opacity: showExpanded ? 1 : 0,
+                                        display: showExpanded ? 'block' : 'none',
                                     }}
                                     primaryTypographyProps={{
                                         sx: {
