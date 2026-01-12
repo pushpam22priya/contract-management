@@ -223,7 +223,7 @@ const DraftCard = ({ contract, onView, onDownload, onShare }: DraftCardProps) =>
                             fontSize: '0.75rem',
                         }}
                     >
-                        {contract.value}
+                        ₹ {contract.value}
                     </Typography>
                 </Box>
 

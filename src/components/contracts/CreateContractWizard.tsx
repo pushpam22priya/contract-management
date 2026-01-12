@@ -45,8 +45,8 @@ const steps = [
         description: 'Contract details',
     },
     {
-        label: 'Terms & Dates',
-        description: 'Set contract period',
+        label: 'Template Fields',
+        description: 'Template-specific fields',
     },
     {
         label: 'Review & Create',
@@ -858,7 +858,7 @@ const CreateContractWizard = ({ open, onClose, initialTemplate }: CreateContract
                                         fontWeight={600}
                                         sx={{ mb: 1, color: 'text.primary' }}
                                     >
-                                        {templateFields.length > 0 ? 'Template Fields' : 'Terms & Dates'}
+                                        {templateFields.length > 0 ? 'Template Fields' : 'Template Fields'}
                                     </Typography>
                                     <Typography
                                         variant="body2"
@@ -866,8 +866,8 @@ const CreateContractWizard = ({ open, onClose, initialTemplate }: CreateContract
                                         sx={{ mb: 3 }}
                                     >
                                         {templateFields.length > 0
-                                            ? 'Fill in the template-specific fields'
-                                            : 'Set contract period'}
+                                            ? 'Template-specific fields'
+                                            : 'Template-specific fields'}
                                     </Typography>
 
                                     {templateFields.length > 0 ? (
@@ -877,73 +877,81 @@ const CreateContractWizard = ({ open, onClose, initialTemplate }: CreateContract
                                                 This template requires {templateFields.length} field(s) to be filled
                                             </Alert>
 
-                                            {templateFields.map((field, index) => (
-                                                <Box key={field.name}>
-                                                    <Typography
-                                                        variant="subtitle2"
-                                                        fontWeight={600}
-                                                        sx={{ mb: 1.5, color: 'text.primary' }}
-                                                    >
-                                                        {field.label} {field.required && <span style={{ color: '#d32f2f' }}>*</span>}
-                                                    </Typography>
+                                            {templateFields.map((field, index) => {
+                                                // Check if field name contains 'description' or 'content' (case-insensitive)
+                                                const isMultiline = field.name.toLowerCase().includes('description') ||
+                                                    field.name.toLowerCase().includes('content');
 
-                                                    {field.type === 'date' ? (
-                                                        <DatePicker
-                                                            value={fieldValues[field.name] ? dayjs(fieldValues[field.name]) : null}
-                                                            onChange={(newValue) => {
-                                                                setFieldValues(prev => ({
-                                                                    ...prev,
-                                                                    [field.name]: newValue ? newValue.format('YYYY-MM-DD') : ''
-                                                                }));
-                                                            }}
-                                                            slotProps={{
-                                                                textField: {
-                                                                    fullWidth: true,
-                                                                    placeholder: field.placeholder,
-                                                                    sx: {
-                                                                        '& .MuiOutlinedInput-root': {
-                                                                            bgcolor: '#f8fafc',
-                                                                            borderRadius: 2,
-                                                                            '&:hover': { bgcolor: '#f1f5f9' },
-                                                                            '&.Mui-focused': { bgcolor: 'background.paper' },
-                                                                        },
-                                                                        '& .MuiOutlinedInput-input': {
-                                                                            py: 1.5,
-                                                                            fontSize: '0.95rem',
+                                                return (
+                                                    <Box key={field.name}>
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            fontWeight={600}
+                                                            sx={{ mb: 1.5, color: 'text.primary' }}
+                                                        >
+                                                            {field.label} {field.required && <span style={{ color: '#d32f2f' }}>*</span>}
+                                                        </Typography>
+
+                                                        {field.type === 'date' ? (
+                                                            <DatePicker
+                                                                value={fieldValues[field.name] ? dayjs(fieldValues[field.name]) : null}
+                                                                onChange={(newValue) => {
+                                                                    setFieldValues(prev => ({
+                                                                        ...prev,
+                                                                        [field.name]: newValue ? newValue.format('YYYY-MM-DD') : ''
+                                                                    }));
+                                                                }}
+                                                                slotProps={{
+                                                                    textField: {
+                                                                        fullWidth: true,
+                                                                        placeholder: field.placeholder,
+                                                                        sx: {
+                                                                            '& .MuiOutlinedInput-root': {
+                                                                                bgcolor: '#f8fafc',
+                                                                                borderRadius: 2,
+                                                                                '&:hover': { bgcolor: '#f1f5f9' },
+                                                                                '&.Mui-focused': { bgcolor: 'background.paper' },
+                                                                            },
+                                                                            '& .MuiOutlinedInput-input': {
+                                                                                py: 1.5,
+                                                                                fontSize: '0.95rem',
+                                                                            },
                                                                         },
                                                                     },
-                                                                },
-                                                            }}
-                                                        />
-                                                    ) : (
-                                                        <TextField
-                                                            fullWidth
-                                                            type={field.type}
-                                                            placeholder={field.placeholder}
-                                                            value={fieldValues[field.name] || ''}
-                                                            onChange={(e) => {
-                                                                setFieldValues(prev => ({
-                                                                    ...prev,
-                                                                    [field.name]: e.target.value
-                                                                }));
-                                                            }}
-                                                            autoFocus={index === 0}
-                                                            sx={{
-                                                                '& .MuiOutlinedInput-root': {
-                                                                    bgcolor: '#f8fafc',
-                                                                    borderRadius: 2,
-                                                                    '&:hover': { bgcolor: '#f1f5f9' },
-                                                                    '&.Mui-focused': { bgcolor: 'background.paper' },
-                                                                },
-                                                                '& .MuiOutlinedInput-input': {
-                                                                    py: 1.5,
-                                                                    fontSize: '0.95rem',
-                                                                },
-                                                            }}
-                                                        />
-                                                    )}
-                                                </Box>
-                                            ))}
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <TextField
+                                                                fullWidth
+                                                                type={field.type}
+                                                                placeholder={field.placeholder}
+                                                                value={fieldValues[field.name] || ''}
+                                                                onChange={(e) => {
+                                                                    setFieldValues(prev => ({
+                                                                        ...prev,
+                                                                        [field.name]: e.target.value
+                                                                    }));
+                                                                }}
+                                                                autoFocus={index === 0}
+                                                                multiline={isMultiline}
+                                                                rows={isMultiline ? 3 : undefined}
+                                                                sx={{
+                                                                    '& .MuiOutlinedInput-root': {
+                                                                        bgcolor: '#f8fafc',
+                                                                        borderRadius: 2,
+                                                                        '&:hover': { bgcolor: '#f1f5f9' },
+                                                                        '&.Mui-focused': { bgcolor: 'background.paper' },
+                                                                    },
+                                                                    '& .MuiOutlinedInput-input': {
+                                                                        py: isMultiline ? undefined : 1.5,
+                                                                        fontSize: '0.95rem',
+                                                                    },
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </Box>
+                                                );
+                                            })}
                                         </Box>
                                     ) : (
                                         // DEFAULT DATE RANGE FIELDS (for templates without placeholders)
