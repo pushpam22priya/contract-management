@@ -15,9 +15,13 @@ import { useRouter } from 'next/navigation';
 export default function DashboardPage() {
     const router = useRouter();
     const [stats, setStats] = useState({
+        totalCount: 0,
+        draftCount: 0,
+        underReviewCount: 0,
+        approvedCount: 0,
         activeCount: 0,
         expiringCount: 0,
-        pendingCount: 0
+        expiredCount: 0
     });
 
     useEffect(() => {
@@ -26,10 +30,14 @@ export default function DashboardPage() {
 
         const allContracts = contractService.getAllContracts();
 
-        // Count logic
+        // Count logic for all statuses
+        let total = 0;
+        let draft = 0;
+        let underReview = 0;
+        let approved = 0;
         let active = 0;
         let expiring = 0;
-        let pending = 0; // Contracts requiring review/approval
+        let expired = 0;
 
         allContracts.forEach(c => {
             const isRelevant = c.createdBy === currentUser.email || c.signer?.email === currentUser.email;
@@ -37,26 +45,68 @@ export default function DashboardPage() {
             // Only count if relevant to the user
             if (!isRelevant) return;
 
+            total++;
+
+            if (c.status === 'draft') draft++;
+            if (c.status === 'review_approval') underReview++;
+            if (c.status === 'waiting_for_signature') approved++;
             if (c.status === 'active') active++;
             if (c.status === 'expiring') expiring++;
-
-            // "Pending Approval" usually refers to contracts in 'review_approval' status
-            // Depending on definition, it could also include 'waiting_for_signature' but user specifically said "approval screen"
-            if (c.status === 'review_approval') pending++;
+            if (c.status === 'expired') expired++;
         });
 
         setStats({
+            totalCount: total,
+            draftCount: draft,
+            underReviewCount: underReview,
+            approvedCount: approved,
             activeCount: active,
             expiringCount: expiring,
-            pendingCount: pending
+            expiredCount: expired
         });
     }, []);
 
     const statsData = [
         {
+            title: 'Total Contracts',
+            value: stats.totalCount,
+            description: 'All contracts',
+            icon: 'document' as const,
+            iconColor: '#6366f1',
+            iconBgColor: '#e0e7ff',
+            path: '/contracts'
+        },
+        {
+            title: 'Draft',
+            value: stats.draftCount,
+            description: 'In draft status',
+            icon: 'hourglass' as const,
+            iconColor: '#8b5cf6',
+            iconBgColor: '#ede9fe',
+            path: '/draft?status=draft'
+        },
+        {
+            title: 'Under Review',
+            value: stats.underReviewCount,
+            description: 'Awaiting review',
+            icon: 'clock' as const,
+            iconColor: '#3b82f6',
+            iconBgColor: '#dbeafe',
+            path: '/draft?status=review_approval'
+        },
+        {
+            title: 'Approved',
+            value: stats.approvedCount,
+            description: 'Waiting for signature',
+            icon: 'check' as const,
+            iconColor: '#14b8a6',
+            iconBgColor: '#ccfbf1',
+            path: '/contracts?status=waiting_for_signature'
+        },
+        {
             title: 'Active Contracts',
             value: stats.activeCount,
-            description: 'Currently Active',
+            description: 'Currently active',
             icon: 'check' as const,
             iconColor: '#10b981',
             iconBgColor: '#d1fae5',
@@ -72,13 +122,13 @@ export default function DashboardPage() {
             path: '/contracts?status=expiring'
         },
         {
-            title: 'Pending Approval',
-            value: stats.pendingCount,
-            description: 'Awaiting review',
-            icon: 'clock' as const,
-            iconColor: '#3b82f6',
-            iconBgColor: '#dbeafe',
-            path: '/draft?status=review_approval'
+            title: 'Expired/Terminated',
+            value: stats.expiredCount,
+            description: 'No longer active',
+            icon: 'cancel' as const,
+            iconColor: '#ef4444',
+            iconBgColor: '#fee2e2',
+            path: '/contracts?status=expired'
         },
     ];
 
@@ -121,7 +171,8 @@ export default function DashboardPage() {
                         gridTemplateColumns: {
                             xs: '1fr',
                             sm: 'repeat(2, 1fr)',
-                            lg: 'repeat(3, 1fr)',
+                            md: 'repeat(3, 1fr)',
+                            lg: 'repeat(4, 1fr)',
                         },
                         gap: 1,
                     }}
