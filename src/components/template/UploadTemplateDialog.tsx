@@ -392,7 +392,7 @@ export default function UploadTemplateDialog({
                         onChange={(e) => setTemplateName(e.target.value)}
                         sx={{
                             '& .MuiOutlinedInput-root': {
-                                borderRadius: 2,  
+                                borderRadius: 2,
                                 '&:hover fieldset': {
                                     borderColor: 'rgba(0, 0, 0, 0.3)',
                                 },
@@ -481,19 +481,22 @@ export default function UploadTemplateDialog({
                                         }}
                                     />
                                 )}
-                                renderOption={(props, option) => (
-                                    <li {...props}>
-                                        <Chip
-                                            label={option}
-                                            size="small"
-                                            sx={{
-                                                bgcolor: 'rgba(15, 118, 110, 0.08)',
-                                                color: 'primary.main',
-                                                fontWeight: 500,
-                                            }}
-                                        />
-                                    </li>
-                                )}
+                                renderOption={(props, option) => {
+                                    const { key, ...otherProps } = props;
+                                    return (
+                                        <li key={key} {...otherProps}>
+                                            <Chip
+                                                label={option}
+                                                size="small"
+                                                sx={{
+                                                    bgcolor: 'rgba(15, 118, 110, 0.08)',
+                                                    color: 'primary.main',
+                                                    fontWeight: 500,
+                                                }}
+                                            />
+                                        </li>
+                                    );
+                                }}
                             />
                             <Button
                                 variant="outlined"
@@ -541,9 +544,9 @@ export default function UploadTemplateDialog({
                                         },
                                     },
                                     '& .MuiOutlinedInput-input': {
-                                py: 1.25,
-                                px: 1.5,
-                            },
+                                        py: 1.25,
+                                        px: 1.5,
+                                    },
                                 }}
                             />
                             <Button

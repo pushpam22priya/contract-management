@@ -7,6 +7,7 @@ import StatsCard from '@/components/dashboard/StatsCard';
 import RecentContracts from '@/components/dashboard/RecentContracts';
 import QuickActions from '@/components/dashboard/QuickActions';
 import CreateContractWizard from '@/components/contracts/CreateContractWizard';
+import ContractsPieChart from '@/components/dashboard/ContractsPieChart';
 import { useState, useEffect } from 'react';
 import { contractService } from '@/services/contractService';
 import { authService } from '@/services/authService';
@@ -164,7 +165,7 @@ export default function DashboardPage() {
                 {/* Critical Alerts Section */}
                 <CriticalAlerts />
 
-                {/* Stats Cards Grid */}
+                {/* Stats Cards Grid with Pie Chart */}
                 <Box
                     sx={{
                         display: 'grid',
@@ -190,6 +191,18 @@ export default function DashboardPage() {
                             onClick={() => router.push(stat.path)}
                         />
                     ))}
+
+                    {/* Pie Chart in the 8th position */}
+                    <ContractsPieChart
+                        stats={{
+                            draftCount: stats.draftCount,
+                            underReviewCount: stats.underReviewCount,
+                            approvedCount: stats.approvedCount,
+                            activeCount: stats.activeCount,
+                            expiringCount: stats.expiringCount,
+                            expiredCount: stats.expiredCount,
+                        }}
+                    />
                 </Box>
 
                 {/* Recent Contracts and Quick Actions Section */}

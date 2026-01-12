@@ -106,15 +106,19 @@ export default function TemplatePage() {
 
         setDeleting(true);
         try {
-            // Simulate delete operation - replace with actual API call
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Call the service to delete from localStorage
+            const result = await templateService.deleteTemplate(templateToDelete.id);
 
-            // Remove template from state
-            setTemplates(templates.filter(t => t.id !== templateToDelete.id));
+            if (result.success) {
+                // Remove template from state
+                setTemplates(templates.filter(t => t.id !== templateToDelete.id));
 
-            // Close dialog and reset
-            setDeleteDialogOpen(false);
-            setTemplateToDelete(null);
+                // Close dialog and reset
+                setDeleteDialogOpen(false);
+                setTemplateToDelete(null);
+            } else {
+                console.error('Failed to delete template:', result.message);
+            }
         } catch (error) {
             console.error('Failed to delete template:', error);
         } finally {

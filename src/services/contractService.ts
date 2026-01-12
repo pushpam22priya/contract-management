@@ -4,71 +4,71 @@ const CONTRACTS_STORAGE_KEY = 'cms_contracts';
 
 // Default demo contracts
 const DEFAULT_CONTRACTS: Contract[] = [
-    {
-        // Card display fields
-        id: 'contract_1',
-        title: 'Software Development Agreement',
-        client: 'TechCorp Inc.',
-        description: 'Custom software development project',
-        value: '150000',
-        category: 'Service',
-        expiresInDays: 245,
-        status: 'active',
+    // {
+    //     // Card display fields
+    //     id: 'contract_1',
+    //     title: 'Software Development Agreement',
+    //     client: 'TechCorp Inc.',
+    //     description: 'Custom software development project',
+    //     value: '150000',
+    //     category: 'Service',
+    //     expiresInDays: 245,
+    //     status: 'active',
 
-        // Template info
-        templateId: 'temp_2',
-        templateName: 'Service Agreement',
+    //     // Template info
+    //     templateId: 'temp_2',
+    //     templateName: 'Service Agreement',
 
-        // Content
-        content: 'Populated contract content...',
-        fieldValues: {},
+    //     // Content
+    //     content: 'Populated contract content...',
+    //     fieldValues: {},
 
-        // Dates
-        startDate: '2024-01-15',
-        endDate: '2024-12-31',
+    //     // Dates
+    //     startDate: '2024-01-15',
+    //     endDate: '2024-12-31',
 
-        // Metadata
-        createdAt: new Date('2024-01-15').toISOString(),
-        createdBy: 'admin@demo.com',
-    },
-    {
-        id: 'contract_2',
-        title: 'Employee NDA',
-        client: 'John Smith',
-        description: 'Non-disclosure agreement for new hire',
-        value: '',
-        category: 'NDA',
-        expiresInDays: 380,
-        status: 'active',
+    //     // Metadata
+    //     createdAt: new Date('2024-01-15').toISOString(),
+    //     createdBy: 'admin@demo.com',
+    // },
+    // {
+    //     id: 'contract_2',
+    //     title: 'Employee NDA',
+    //     client: 'John Smith',
+    //     description: 'Non-disclosure agreement for new hire',
+    //     value: '',
+    //     category: 'NDA',
+    //     expiresInDays: 380,
+    //     status: 'active',
 
-        templateId: 'temp_3',
-        templateName: 'NDA Template',
-        content: 'Populated NDA content...',
-        fieldValues: {},
-        startDate: '2024-02-01',
-        endDate: '2025-02-01',
-        createdAt: new Date('2024-02-01').toISOString(),
-        createdBy: 'admin@demo.com',
-    },
-    {
-        id: 'contract_3',
-        title: 'Office Lease Agreement',
-        client: 'ABC Properties Ltd.',
-        description: 'Commercial office space rental',
-        value: '50000',
-        category: 'Lease',
-        expiresInDays: 20,
-        status: 'review_approval',
+    //     templateId: 'temp_3',
+    //     templateName: 'NDA Template',
+    //     content: 'Populated NDA content...',
+    //     fieldValues: {},
+    //     startDate: '2024-02-01',
+    //     endDate: '2025-02-01',
+    //     createdAt: new Date('2024-02-01').toISOString(),
+    //     createdBy: 'admin@demo.com',
+    // },
+    // {
+    //     id: 'contract_3',
+    //     title: 'Office Lease Agreement',
+    //     client: 'ABC Properties Ltd.',
+    //     description: 'Commercial office space rental',
+    //     value: '50000',
+    //     category: 'Lease',
+    //     expiresInDays: 20,
+    //     status: 'review_approval',
 
-        templateId: 'temp_5',
-        templateName: 'Lease Agreement',
-        content: 'Populated lease content...',
-        fieldValues: {},
-        startDate: '2024-01-01',
-        endDate: '2024-12-31',
-        createdAt: new Date('2024-01-01').toISOString(),
-        createdBy: 'admin@demo.com',
-    },
+    //     templateId: 'temp_5',
+    //     templateName: 'Lease Agreement',
+    //     content: 'Populated lease content...',
+    //     fieldValues: {},
+    //     startDate: '2024-01-01',
+    //     endDate: '2024-12-31',
+    //     createdAt: new Date('2024-01-01').toISOString(),
+    //     createdBy: 'admin@demo.com',
+    // },
 ];
 
 class ContractService {

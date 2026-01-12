@@ -523,19 +523,22 @@ export default function EditTemplateDialog({
                                         }}
                                     />
                                 )}
-                                renderOption={(props, option) => (
-                                    <li {...props}>
-                                        <Chip
-                                            label={option}
-                                            size="small"
-                                            sx={{
-                                                bgcolor: 'rgba(15, 118, 110, 0.08)',
-                                                color: 'primary.main',
-                                                fontWeight: 500,
-                                            }}
-                                        />
-                                    </li>
-                                )}
+                                renderOption={(props, option) => {
+                                    const { key, ...otherProps } = props;
+                                    return (
+                                        <li key={key} {...otherProps}>
+                                            <Chip
+                                                label={option}
+                                                size="small"
+                                                sx={{
+                                                    bgcolor: 'rgba(15, 118, 110, 0.08)',
+                                                    color: 'primary.main',
+                                                    fontWeight: 500,
+                                                }}
+                                            />
+                                        </li>
+                                    );
+                                }}
                             />
                             <Button
                                 variant="outlined"
