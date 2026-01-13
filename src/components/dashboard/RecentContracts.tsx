@@ -55,18 +55,12 @@ export default function RecentContracts() {
                 const totalDays = Math.max(1, end.diff(start, 'day'));
                 const daysLeft = Math.max(0, end.diff(today, 'day'));
 
-                // Determine navigation path
-                let path = `/contracts`;
-                if (c.status === 'review_approval') {
-                    path = `/review-approval?tab=approver`; // Or reviewer, simplified logic
-                } else if (c.status === 'draft') {
-                    path = `/draft`;
-                } else {
-                    // Navigate to contracts with search for this specific contract
-                    const params = new URLSearchParams();
-                    params.set('search', c.title);
-                    path = `/contracts?${params.toString()}`;
-                }
+                // Navigate to draft page if review_approval, otherwise contracts page
+                // Add search parameter to filter by contract title
+                const basePath = c.status === 'review_approval' ? `/draft` : `/contracts`;
+                const params = new URLSearchParams();
+                params.set('search', c.title);
+                const path = `${basePath}?${params.toString()}`;
 
                 return {
                     id: c.id,
