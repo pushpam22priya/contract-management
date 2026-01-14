@@ -252,6 +252,42 @@ class ContractService {
     }
 
     /**
+     * Update contract XFDF data (for client signatures)
+     */
+    async updateContractXfdf(id: string, xfdfString: string): Promise<{
+        success: boolean;
+        message: string;
+        contract?: Contract;
+    }> {
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        const contracts = this.getAllContracts();
+        const index = contracts.findIndex(c => c.id === id);
+
+        if (index === -1) {
+            return {
+                success: false,
+                message: 'Contract not found',
+            };
+        }
+
+        const updatedContract = {
+            ...contracts[index],
+            xfdfString, // Update XFDF data with client signature
+            updatedAt: new Date().toISOString(),
+        };
+
+        contracts[index] = updatedContract;
+        this.saveContracts(contracts);
+
+        return {
+            success: true,
+            message: 'Signature saved successfully',
+            contract: updatedContract,
+        };
+    }
+
+    /**
      * Delete contract
      */
     async deleteContract(id: string): Promise<{ success: boolean; message: string }> {

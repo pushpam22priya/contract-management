@@ -5,6 +5,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { contractService } from '@/services/contractService';
+import { templateService } from '@/services/templateService';
 import { Contract } from '@/types/contract';
 import { authService } from '@/services/authService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
@@ -318,12 +319,22 @@ export default function ReviewApprovalPage() {
                             setViewerOpen(false);
                             setSelectedContract(null);
                         }}
-                        fileUrl=""
+                        fileUrl={(() => {
+                            if (selectedContract.xfdfString && selectedContract.templateId) {
+                                const template = templateService.getTemplateById(selectedContract.templateId);
+                                console.log('📄 Template for review viewing:', template);
+                                const url = template?.fileUrl || "";
+                                console.log('📄 Using fileUrl:', url.substring(0, 50));
+                                return url;
+                            }
+                            return "";
+                        })()}
                         fileName={selectedContract.title}
                         title={selectedContract.title}
-                        content={selectedContract.content}
+                        content={selectedContract.xfdfString ? undefined : selectedContract.content}
                         templateDocxBase64={selectedContract.templateDocxBase64}
                         fieldValues={selectedContract.fieldValues}
+                        xfdfString={selectedContract.xfdfString}
                     />
                 )}
 

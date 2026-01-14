@@ -32,6 +32,7 @@ interface BaseDialogProps {
     actions?: React.ReactNode;
     maxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
     fullWidth?: boolean;
+    customHeight?: string; // NEW: Allow custom height like '100vh', '90vh', etc.
 }
 
 export default function BaseDialog({
@@ -42,6 +43,7 @@ export default function BaseDialog({
     actions,
     maxWidth = 'sm',
     fullWidth = true,
+    customHeight, // NEW
 }: BaseDialogProps) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -59,6 +61,7 @@ export default function BaseDialog({
                     borderRadius: isMobile ? 0 : 3,
                     boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
                     overflow: 'visible',
+                    ...(customHeight && { height: customHeight, maxHeight: customHeight }), // Apply custom height
                 },
             }}
             sx={{

@@ -2,8 +2,9 @@
 
 import { Box, Typography, Alert, AlertColor, Button, Paper } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { contractService } from '@/services/contractService';
+import { templateService } from '@/services/templateService';
 import { Contract } from '@/types/contract';
 import { authService } from '@/services/authService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
@@ -85,7 +86,49 @@ export default function SignaturesPage() {
     };
 
     /**
-     * Handle Sign Contract
+     * Handle saving client signature (from PDF viewer)
+     * This also marks the contract as signed automatically
+     */
+    const handleSaveSignature = async (xfdfString: string) => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser || !selectedContract) return;
+
+        console.log('💾 Saving client signature to contract:', selectedContract.id);
+        console.log('📋 Updated XFDF length:', xfdfString.length);
+
+        try {
+            // First, update the XFDF data
+            const updateResult = await contractService.updateContractXfdf(selectedContract.id, xfdfString);
+
+            if (!updateResult.success) {
+                showNotification(updateResult.message || 'Failed to save signature', 'error');
+                return;
+            }
+
+            // Then, mark the contract as signed
+            const signResult = await contractService.signContract(
+                selectedContract.id,
+                currentUser.email,
+                '' // No separate signature image needed since it's in the XFDF
+            );
+
+            if (signResult.success) {
+                showNotification('Contract signed successfully!', 'success');
+                setViewerOpen(false); // Close the viewer
+                setSelectedContract(null);
+                loadContracts(); // Reload to remove from signatures list
+            } else {
+                showNotification(signResult.message || 'Signature saved but failed to update status', 'warning');
+                loadContracts(); // Still reload to show updated XFDF
+            }
+        } catch (error) {
+            console.error('Error saving signature:', error);
+            showNotification('Failed to save signature', 'error');
+        }
+    };
+
+    /**
+     * Handle Sign Contract (from signature pad dialog)
      */
     const handleSign = async (signatureImage: string) => {
         const currentUser = authService.getCurrentUser();
@@ -153,29 +196,11 @@ export default function SignaturesPage() {
                         }}
                     >
                         {contracts.map((contract) => (
-                            <Box key={contract.id} sx={{ position: 'relative' }}>
-                                <ContractCard
-                                    contract={contract}
-                                    onView={handleView}
-                                // We can reuse onShare or add a custom action button prop to ContractCard if needed.
-                                // For now, let's just use the card display and maybe add a "Sign" button below/over it
-                                // OR we can rely on opening the viewer to sign (common pattern)
-                                />
-                                <Button
-                                    variant="contained"
-                                    startIcon={<DrawIcon />}
-                                    onClick={() => handleOpenSignaturePad(contract)}
-                                    className="action-button" // Reuse existing hover styles if we want
-                                    sx={{
-                                        mt: 1,
-                                        width: '100%',
-                                        bgcolor: '#f57f17', // Match waiting_for_signature color
-                                        '&:hover': { bgcolor: '#f9a825' },
-                                    }}
-                                >
-                                    Sign Contract
-                                </Button>
-                            </Box>
+                            <ContractCard
+                                key={contract.id}
+                                contract={contract}
+                                onView={handleView}
+                            />
                         ))}
                     </Box>
                 )}
@@ -188,12 +213,24 @@ export default function SignaturesPage() {
                             setViewerOpen(false);
                             setSelectedContract(null);
                         }}
-                        fileUrl=""
-                        fileName={`${selectedContract.title}.txt`}
+                        fileUrl={(() => {
+                            if (selectedContract.xfdfString && selectedContract.templateId) {
+                                const template = templateService.getTemplateById(selectedContract.templateId);
+                                console.log('📄 Template for signature viewing:', template);
+                                const url = template?.fileUrl || "";
+                                console.log('📄 Using fileUrl:', url.substring(0, 50));
+                                return url;
+                            }
+                            return "";
+                        })()}
+                        fileName={`${selectedContract.title}.pdf`}
                         title={selectedContract.title}
-                        content={selectedContract.content}
+                        content={selectedContract.xfdfString ? undefined : selectedContract.content}
                         templateDocxBase64={selectedContract.templateDocxBase64}
                         fieldValues={selectedContract.fieldValues}
+                        xfdfString={selectedContract.xfdfString}
+                        contractId={selectedContract.id}
+                        onSave={handleSaveSignature}
                     />
                 )}
 

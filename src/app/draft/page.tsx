@@ -15,6 +15,7 @@ import { authService } from '@/services/authService';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { AlertColor } from '@mui/material';
 import { useSearchParams } from 'next/navigation';
+import { templateService } from '@/services/templateService';
 
 export default function DraftPage() {
     const [draftContracts, setDraftContracts] = useState<Contract[]>([]);
@@ -290,12 +291,24 @@ export default function DraftPage() {
                         setViewerOpen(false);
                         setSelectedContract(null);
                     }}
-                    fileUrl=""
-                    fileName={selectedContract.title}
+                    fileUrl={(() => {
+                        // Get template fileUrl if XFDF data exists
+                        if (selectedContract.xfdfString && selectedContract.templateId) {
+                            const template = templateService.getTemplateById(selectedContract.templateId);
+                            console.log('📄 Template for viewing:', template);
+                            const url = template?.fileUrl || "";
+                            console.log('📄 Using fileUrl:', url.substring(0, 50));
+                            return url;
+                        }
+                        return "";
+                    })()}
+                    fileName={`${selectedContract.title}.${selectedContract.xfdfString ? 'pdf' : 'txt'}`}
                     title={selectedContract.title}
-                    content={selectedContract.content}
+                    content={selectedContract.xfdfString ? undefined : selectedContract.content}
                     templateDocxBase64={selectedContract.templateDocxBase64}
                     fieldValues={selectedContract.fieldValues}
+                    signatureImage={selectedContract.signer?.signatureImage}
+                    xfdfString={selectedContract.xfdfString}
                 />
             )}
 

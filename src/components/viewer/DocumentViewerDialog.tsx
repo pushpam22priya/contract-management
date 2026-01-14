@@ -1,106 +1,10 @@
-// 'use client';
-
-// import { Dialog, DialogContent, DialogTitle, IconButton, Box, Typography } from '@mui/material';
-// import CloseIcon from '@mui/icons-material/Close';
-// import dynamic from 'next/dynamic';
-// import { useEffect } from 'react';
-
-// // Dynamically import DocumentViewer to avoid SSR issues
-// const DocumentViewer = dynamic(() => import('./DocumentViewer'), {
-//     ssr: false,
-//     loading: () => (
-//         <Box
-//             sx={{
-//                 width: '100%',
-//                 height: '600px',
-//                 display: 'flex',
-//                 alignItems: 'center',
-//                 justifyContent: 'center',
-//             }}
-//         >
-//             <Typography variant="body1" color="text.secondary">
-//                 Loading document viewer...
-//             </Typography>
-//         </Box>
-//     ),
-// });
-
-// interface DocumentViewerDialogProps {
-//     open: boolean;
-//     onClose: () => void;
-//     fileUrl: string;
-//     fileName?: string;
-//     title?: string;
-//     content?: string;
-// }
-
-// export default function DocumentViewerDialog({
-//     open,
-//     onClose,
-//     fileUrl,
-//     fileName,
-//     title,
-//     content
-// }: DocumentViewerDialogProps) {
-
-//     return (
-//         <Dialog
-//             open={open}
-//             onClose={onClose}
-//             maxWidth="lg"
-//             fullWidth
-//             PaperProps={{
-//                 sx: {
-//                     height: '90vh',
-//                     maxHeight: '90vh',
-//                 },
-//             }}
-//         >
-//             <DialogTitle
-//                 sx={{
-//                     display: 'flex',
-//                     justifyContent: 'space-between',
-//                     alignItems: 'center',
-//                     borderBottom: '1px solid',
-//                     borderColor: 'divider',
-//                     py: 2,
-//                     px: 3,
-//                 }}
-//             >
-//                     {title || fileName || 'Document Viewer'}
-
-//                 <IconButton
-//                     onClick={onClose}
-//                     sx={{
-//                         ml: 2,
-//                         color: 'text.secondary',
-//                         '&:hover': {
-//                             bgcolor: 'rgba(0, 0, 0, 0.04)',
-//                         },
-//                     }}
-//                 >
-//                     <CloseIcon />
-//                 </IconButton>
-//             </DialogTitle>
-//             <DialogContent
-//                 sx={{
-//                     p: 0,
-//                     height: '100%',
-//                     overflow: 'hidden',
-//                 }}
-//             >
-//                 <DocumentViewer fileUrl={fileUrl} fileName={fileName} content={content} />
-//             </DialogContent>
-//         </Dialog>
-//     );
-// }
-
-
 'use client';
 
-import { Dialog, DialogContent, DialogTitle, IconButton, Box, Typography } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
+import { Box, Button } from '@mui/material';
+import SaveIcon from '@mui/icons-material/Save';
 import dynamic from 'next/dynamic';
+import { useRef, useState } from 'react';
+import BaseDialog from '@/components/common/BaseDialog';
 
 // Dynamically import viewers
 const DocumentViewer = dynamic(() => import('./DocumentViewer'), {
@@ -115,15 +19,30 @@ const DocumentViewer = dynamic(() => import('./DocumentViewer'), {
                 justifyContent: 'center',
             }}
         >
-            <Typography variant="body1" color="text.secondary">
-                Loading document viewer...
-            </Typography>
+            Loading document viewer...
         </Box>
     ),
 });
 
 const SimpleContractViewer = dynamic(() => import('./SimpleContractViewer'), {
     ssr: false,
+});
+
+const PDFViewerContainer = dynamic(() => import('./PDFViewerContainer'), {
+    ssr: false,
+    loading: () => (
+        <Box
+            sx={{
+                width: '100%',
+                height: '600px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+            }}
+        >
+            Loading PDF viewer...
+        </Box>
+    ),
 });
 
 interface DocumentViewerDialogProps {
@@ -136,6 +55,9 @@ interface DocumentViewerDialogProps {
     templateDocxBase64?: string;
     fieldValues?: Record<string, string>;
     signatureImage?: string;
+    xfdfString?: string; // NEW: XFDF data for filled PDFs
+    contractId?: string; // NEW: Contract ID for saving changes
+    onSave?: (xfdfString: string) => Promise<void>; // NEW: Save callback
 }
 
 export default function DocumentViewerDialog({
@@ -147,91 +69,81 @@ export default function DocumentViewerDialog({
     content,
     templateDocxBase64,
     fieldValues,
-    signatureImage
+    signatureImage,
+    xfdfString, // NEW
+    contractId,
+    onSave
 }: DocumentViewerDialogProps) {
+    const pdfViewerRef = useRef<any>(null);
+    const [saving, setSaving] = useState(false);
+
+    // Custom title with Save Changes button
+    const customTitle = (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 2 }}>
+            <Box>{title || fileName || 'Document Viewer'}</Box>
+            {onSave && xfdfString && (
+                <Button
+                    variant="contained"
+                    startIcon={<SaveIcon />}
+                    onClick={async () => {
+                        if (!pdfViewerRef.current) return;
+
+                        setSaving(true);
+                        try {
+                            // Export current annotations from PDFViewerContainer
+                            const updatedXfdf = await pdfViewerRef.current.exportAnnotations();
+
+                            if (updatedXfdf && onSave) {
+                                await onSave(updatedXfdf);
+                                console.log('✅ Changes saved successfully!');
+                            }
+                        } catch (error) {
+                            console.error('❌ Error saving changes:', error);
+                        } finally {
+                            setSaving(false);
+                        }
+                    }}
+                    disabled={saving}
+                    size="small"
+                    sx={{ flexShrink: 0 }}
+                >
+                    {saving ? 'Saving...' : 'Save Changes'}
+                </Button>
+            )}
+        </Box>
+    );
 
     return (
-        <Dialog
+        <BaseDialog
             open={open}
             onClose={onClose}
+            title={customTitle as any}
             maxWidth="lg"
             fullWidth
-            PaperProps={{
-                sx: {
-                    height: '90vh',
-                    maxHeight: '90vh',
-                },
-            }}
+            customHeight="98vh"
         >
-            <DialogTitle
-                sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    // py: 2,
-                    // px: 3,
-                }}
-            >
-                {title || fileName || 'Document Viewer'}
+            <Box sx={{ height: 'calc(100vh - 98px)', overflow: 'hidden', p: 0 , m: 0 }}>
+                {(() => {
+                    // Debug logging
+                    console.log('DocumentViewerDialog render:', {
+                        hasXfdfString: !!xfdfString,
+                        hasFileUrl: !!fileUrl,
+                        fileUrl: fileUrl?.substring(0, 100),
+                        xfdfString: xfdfString?.substring(0, 50)
+                    });
 
-                <IconButton
-                    onClick={onClose}
-                    sx={{
-                        ml: 2,
-                        color: 'text.secondary',
-                        '&:hover': {
-                            bgcolor: 'rgba(0, 0, 0, 0.04)',
-                        },
-                    }}
-                >
-                    <CloseIcon />
-                </IconButton>
-            </DialogTitle>
-            <DialogContent
-                sx={{
-                    p: 0,
-                    height: '100%',
-                    overflow: 'hidden',
-                }}
-            >
-                {/* Use SimpleContractViewer for contracts, DocumentViewer for templates */}
-                {content ? (
-                    <SimpleContractViewer
-                        content={content}
-                        title={title || 'Contract'}
-                    />
-                ) : (
-                    <DocumentViewer
-                        fileUrl={fileUrl}
-                        fileName={fileName}
-                        templateDocxBase64={templateDocxBase64}  // ← ADD THIS
-                        fieldValues={fieldValues}  // ← ADD THIS
-                    />
-                )}
-
-                {/* PRIORITY: Use DocumentViewer with template if available, otherwise SimpleContractViewer */}
-                {/* {templateDocxBase64 && fieldValues ? (
-                    <DocumentViewer
-                        fileUrl={fileUrl}
-                        fileName={fileName}
-                        content={content}
-                        templateDocxBase64={templateDocxBase64}
-                        fieldValues={fieldValues}
-                    />
-                ) : content ? (
-                    <SimpleContractViewer
-                        content={content}
-                        title={title || 'Contract'}
-                    />
-                ) : (
-                    <DocumentViewer
-                        fileUrl={fileUrl}
-                        fileName={fileName}
-                    />
-                )} */}
-            </DialogContent>
-        </Dialog>
+                    // ALWAYS show PDFTron viewer with annotation toolbar enabled
+                    console.log('✅ Rendering PDFViewerContainer');
+                    return (
+                        <PDFViewerContainer
+                            ref={pdfViewerRef}
+                            documentUrl={fileUrl || ""}
+                            xfdfString={xfdfString}
+                            readOnly={false}
+                        />
+                    );
+                })()}
+            </Box>
+        </BaseDialog>
     );
 }

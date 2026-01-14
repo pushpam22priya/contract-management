@@ -11,7 +11,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { Dayjs } from 'dayjs';
 import ContractCard from '@/components/contracts/ContractCard';
-import CreateContractWizard from '@/components/contracts/CreateContractWizard';
+import CreateContractDialog from '@/components/contracts/CreateContractDialog';
 import { contractService } from '@/services/contractService';
 import { Contract } from '@/types/contract';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
@@ -19,6 +19,7 @@ import { authService } from '@/services/authService';
 import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { AlertColor } from '@mui/material';
+import { templateService } from '@/services/templateService';
 
 const statusOptions = [
     { label: 'All Status', value: 'all' },
@@ -579,8 +580,8 @@ export default function ContractsPage() {
                     </Box>
                 </Box>
 
-                {/* Create Contract Wizard */}
-                <CreateContractWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
+                {/* Create Contract Dialog with PDFTron */}
+                <CreateContractDialog open={wizardOpen} onClose={() => setWizardOpen(false)} />
 
                 {selectedContract && (
                     <DocumentViewerDialog
@@ -589,13 +590,25 @@ export default function ContractsPage() {
                             setContractViewerOpen(false);
                             setSelectedContract(null);
                         }}
-                        fileUrl="" // Not used for text content
-                        fileName={`${selectedContract.title}.txt`}
+                        fileUrl={(() => {
+                            // Get template fileUrl if XFDF data exists
+                            if (selectedContract.xfdfString && selectedContract.templateId) {
+                                const template = templateService.getTemplateById(selectedContract.templateId);
+                                console.log('📄 Template for viewing:', template);
+                                // Use the template's fileUrl which contains base64 data
+                                const url = template?.fileUrl || "";
+                                console.log('📄 Using fileUrl:', url.substring(0, 50));
+                                return url;
+                            }
+                            return "";
+                        })()}
+                        fileName={`${selectedContract.title}.${selectedContract.xfdfString ? 'pdf' : 'txt'}`}
                         title={selectedContract.title}
-                        content={selectedContract.content} // ← Pass the populated content
-                        templateDocxBase64={selectedContract.templateDocxBase64}  // ← ADD
-                        fieldValues={selectedContract.fieldValues}  // ← ADD
-                        signatureImage={selectedContract.signer?.signatureImage} // ← PASS SIGNATURE IMAGE
+                        content={selectedContract.xfdfString ? undefined : selectedContract.content}
+                        templateDocxBase64={selectedContract.templateDocxBase64}
+                        fieldValues={selectedContract.fieldValues}
+                        signatureImage={selectedContract.signer?.signatureImage}
+                        xfdfString={selectedContract.xfdfString}
                     />
                 )}
 

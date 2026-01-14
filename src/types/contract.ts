@@ -40,6 +40,9 @@ export interface Contract {
     content: string;              // Populated template content
     fieldValues: Record<string, string>;  // The values user filled in Step 3
 
+    // PDFTron WebViewer data
+    xfdfString?: string;          // XFDF annotations and form data from PDFTron
+
     // Dates
     startDate?: string;
     endDate?: string;
