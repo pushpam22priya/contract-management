@@ -13,7 +13,7 @@ import {
     alpha,
     Divider,
 } from '@mui/material';
-import { Save, Close } from '@mui/icons-material';
+import { Save, Close, ArrowBack, ArrowForward } from '@mui/icons-material';
 import BaseDialog from '@/components/common/BaseDialog';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import { templateService } from '@/services/templateService';
@@ -30,6 +30,9 @@ interface CreateContractDialogProps {
 const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
     const router = useRouter();
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
+
+    // Wizard State
+    const [currentStep, setCurrentStep] = useState<1 | 2>(1);
 
     // State
     const [templates, setTemplates] = useState<Template[]>([]);
@@ -178,6 +181,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
 
     const handleClose = () => {
         // Reset all state
+        setCurrentStep(1); // Reset to Step 1
         setSelectedTemplate(null);
         setContractTitle('');
         setClientName('');
@@ -194,20 +198,78 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
         onClose();
     };
 
+    const handleNextStep = () => {
+        // Validation before proceeding to Step 2
+        if (!selectedTemplate) {
+            setError('Please select a template');
+            return;
+        }
+        if (!contractTitle.trim()) {
+            setError('Contract title is required');
+            return;
+        }
+        if (!clientName.trim()) {
+            setError('Client name is required');
+            return;
+        }
+
+        setError('');
+        setCurrentStep(2);
+    };
+
     const canSave = selectedTemplate && contractTitle.trim() && clientName.trim() && documentLoaded;
 
-    // Action buttons for fixed footer (like UploadTemplateDialog)
-    const dialogActions = (
+    // Step 1: Contract Details Actions
+    const step1Actions = (
         <>
+            <Button
+                onClick={handleNextStep}
+                endIcon={<ArrowForward />}
+                variant="contained"
+                disabled={!selectedTemplate || !contractTitle.trim() || !clientName.trim()}
+                sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    px: 3,
+                    borderRadius: 2,
+                    bgcolor: 'primary.main',
+                    boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
+                    '&:hover': {
+                        bgcolor: 'primary.dark',
+                        boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
+                    },
+                }}
+            >
+                Next: Edit Document
+            </Button>
+        </>
+    );
+
+    // Step 2: PDF Editing Actions
+    const step2Actions = (
+        <>
+            <Button
+                onClick={() => setCurrentStep(1)}
+                startIcon={<ArrowBack />}
+                variant="outlined"
+                sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderRadius: 2,
+                }}
+            >
+                Back to Details
+            </Button>
+
             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                {documentLoaded && (
+                {/* {documentLoaded && (
                     <Chip
                         label="✓ Document Ready"
                         color="success"
                         size="small"
                         sx={{ fontWeight: 600 }}
                     />
-                )}
+                )} */}
                 <Button
                     onClick={handleSave}
                     startIcon={<Save />}
@@ -233,20 +295,31 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
         </>
     );
 
+    // Conditional dialog actions based on current step
+    const dialogActions = currentStep === 1 ? step1Actions : step2Actions;
+
     return (
         <BaseDialog
             open={open}
             onClose={handleClose}
-            title="Create Contract"
+            title={currentStep === 1 ? "Create Contract - Step 1: Contract Details" : `Create Contract - Step 2: Edit Document`}
             maxWidth="xl"
             fullWidth
             customHeight="98vh"
             actions={dialogActions}
+            disableEnforceFocus={true} // Allow PDFTron text fields to work properly
         >
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(98vh - 128px)' }}>
-                {/* Top Section: Template Selection & Contract Info - Made More Compact */}
-                <Box sx={{ px: 2, pt: 1, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5, mb: 1.5 }}>
+            {/* STEP 1: Contract Details Form */}
+            {currentStep === 1 && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', p: 3 }}>
+                    {/* Error Alert */}
+                    {error && (
+                        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+                            {error}
+                        </Alert>
+                    )}
+
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 3 }}>
                         {/* Template Selection */}
                         <Autocomplete
                             value={selectedTemplate}
@@ -257,14 +330,12 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                             options={templates}
                             getOptionLabel={(option) => option.name}
                             loading={loadingTemplates}
-                            size="small"
                             renderInput={(params) => (
                                 <TextField
                                     {...params}
                                     label="Select Template"
-                                    placeholder="Choose a template to edit..."
+                                    placeholder="Choose a template..."
                                     required
-                                    size="small"
                                 />
                             )}
                             renderOption={(props, option) => {
@@ -272,7 +343,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                                 return (
                                     <li key={key} {...otherProps}>
                                         <Box>
-                                            <Typography variant="body2">{option.name}</Typography>
+                                            <Typography variant="body2" fontWeight={600}>{option.name}</Typography>
                                             <Typography variant="caption" color="text.secondary">
                                                 {option.category}
                                             </Typography>
@@ -286,9 +357,9 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                         {selectedTemplate && (
                             <Box
                                 sx={{
-                                    p: 1,
+                                    p: 2,
                                     bgcolor: alpha('#0f766e', 0.05),
-                                    borderRadius: 1,
+                                    borderRadius: 2,
                                     border: '1px solid',
                                     borderColor: alpha('#0f766e', 0.2),
                                     display: 'flex',
@@ -297,7 +368,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                                 }}
                             >
                                 <Box sx={{ flex: 1 }}>
-                                    <Typography variant="body2" fontWeight={600} color="primary">
+                                    <Typography variant="body1" fontWeight={600} color="primary">
                                         {selectedTemplate.name}
                                     </Typography>
                                     <Chip
@@ -305,8 +376,6 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                                         size="small"
                                         sx={{
                                             mt: 0.5,
-                                            height: 20,
-                                            fontSize: '0.7rem',
                                             bgcolor: 'primary.main',
                                             color: 'white',
                                         }}
@@ -322,13 +391,16 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                         )}
                     </Box>
 
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
+                    <Divider sx={{ my: 2 }} />
+
+                    <Typography variant="h6" gutterBottom>Contract Information</Typography>
+
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mb: 2 }}>
                         <TextField
                             label="Contract Title"
                             value={contractTitle}
                             onChange={(e) => setContractTitle(e.target.value)}
                             required
-                            size="small"
                             placeholder="e.g., Software License Agreement"
                         />
                         <TextField
@@ -336,26 +408,16 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                             value={clientName}
                             onChange={(e) => setClientName(e.target.value)}
                             required
-                            size="small"
                             placeholder="e.g., ABC Corp"
                         />
+                    </Box>
+
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
                         <TextField
                             label="Contract Value"
                             value={contractValue}
                             onChange={(e) => setContractValue(e.target.value)}
-                            size="small"
                             placeholder="Optional"
-                        />
-                    </Box>
-
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 1.5, mt: 1.5 }}>
-                        <TextField
-                            label="Description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            size="small"
-                            placeholder="Optional description..."
-                            sx={{ gridColumn: { xs: 'span 1', md: 'span 1' } }}
                         />
                         <TextField
                             label="Start Date"
@@ -363,7 +425,6 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                             value={startDate}
                             onChange={(e) => setStartDate(e.target.value)}
                             InputLabelProps={{ shrink: true }}
-                            size="small"
                         />
                         <TextField
                             label="End Date"
@@ -371,61 +432,93 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
                             InputLabelProps={{ shrink: true }}
-                            size="small"
                         />
                     </Box>
+
+                    <TextField
+                        label="Description"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        multiline
+                        rows={3}
+                        placeholder="Optional description..."
+                        sx={{ mt: 2 }}
+                    />
                 </Box>
+            )}
 
-                {/* Error Alert */}
-                {error && (
-                    <Alert severity="error" sx={{ mx: 2, mt: 2 }} onClose={() => setError('')}>
-                        {error}
-                    </Alert>
-                )}
-
-                {/* PDF Viewer Section */}
-                <Box sx={{ flex: 1, p: 2, overflow: 'hidden' }}>
-                    {selectedTemplate ? (
-                        <Box sx={{
-                            height: '100%',
-                            border: '2px solid',
-                            borderColor: 'divider',
-                            borderRadius: 2,
-                            overflow: 'hidden'
-                        }}>
-                            <PDFViewerContainer
-                                ref={pdfViewerRef}
-                                documentUrl={selectedTemplate.fileUrl}
-                                readOnly={false}
-                                onDocumentLoaded={() => setDocumentLoaded(true)}
-                                onError={(err) => setError(err)}
-                            />
-                        </Box>
-                    ) : (
-                        <Box
-                            sx={{
-                                height: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: '2px dashed',
-                                borderColor: 'divider',
-                                borderRadius: 2,
-                                bgcolor: 'grey.50'
-                            }}
-                        >
-                            <Box sx={{ textAlign: 'center', maxWidth: 400 }}>
-                                <Typography variant="h6" color="text.secondary" gutterBottom>
-                                    No Template Selected
-                                </Typography>
+            {/* STEP 2: Full-Screen PDF Editor */}
+            {currentStep === 2 && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(98vh - 128px)' }}>
+                    {/* Minimal Header with Contract Info */}
+                    {/* <Box sx={{
+                        px: 2,
+                        py: 1.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: alpha('#0f766e', 0.02),
+                    }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Box>
+                                <Typography variant="h6" fontWeight={600}>{contractTitle}</Typography>
                                 <Typography variant="body2" color="text.secondary">
-                                    Select a template from the dropdown above to start editing
+                                    Template: {selectedTemplate?.name} • Client: {clientName}
                                 </Typography>
                             </Box>
                         </Box>
+                    </Box> */}
+
+                    {/* Error Alert */}
+                    {error && (
+                        <Alert severity="error" sx={{ mx: 2, mt: 2 }} onClose={() => setError('')}>
+                            {error}
+                        </Alert>
                     )}
+
+                    {/* Full-Height PDF Viewer */}
+                    <Box sx={{ flex: 1, p: 2, overflow: 'hidden' }}>
+                        {selectedTemplate ? (
+                            <Box sx={{
+                                height: '100%',
+                                border: '2px solid',
+                                borderColor: 'divider',
+                                borderRadius: 2,
+                                overflow: 'hidden'
+                            }}>
+                                <PDFViewerContainer
+                                    ref={pdfViewerRef}
+                                    documentUrl={selectedTemplate.fileUrl}
+                                    readOnly={false}
+                                    onDocumentLoaded={() => setDocumentLoaded(true)}
+                                    onError={(err) => setError(err)}
+                                />
+                            </Box>
+                        ) : (
+                            <Box
+                                sx={{
+                                    height: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: '2px dashed',
+                                    borderColor: 'divider',
+                                    borderRadius: 2,
+                                    bgcolor: 'grey.50'
+                                }}
+                            >
+                                <Box sx={{ textAlign: 'center', maxWidth: 400 }}>
+                                    <Typography variant="h6" color="text.secondary" gutterBottom>
+                                        No Template Selected
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Select a template from the dropdown above to start editing
+                                    </Typography>
+                                </Box>
+                            </Box>
+                        )}
+                    </Box>
                 </Box>
-            </Box>
+            )}
         </BaseDialog>
     );
 };

@@ -33,6 +33,7 @@ interface BaseDialogProps {
     maxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
     fullWidth?: boolean;
     customHeight?: string; // NEW: Allow custom height like '100vh', '90vh', etc.
+    disableEnforceFocus?: boolean; // NEW: Disable focus enforcement for embedded editors like PDFTron
 }
 
 export default function BaseDialog({
@@ -44,6 +45,7 @@ export default function BaseDialog({
     maxWidth = 'sm',
     fullWidth = true,
     customHeight, // NEW
+    disableEnforceFocus = false, // NEW
 }: BaseDialogProps) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -56,6 +58,7 @@ export default function BaseDialog({
             maxWidth={maxWidth}
             fullWidth={fullWidth}
             fullScreen={isMobile}
+            disableEnforceFocus={disableEnforceFocus} // Allow embedded editors to manage their own focus
             PaperProps={{
                 sx: {
                     borderRadius: isMobile ? 0 : 3,
