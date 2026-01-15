@@ -34,6 +34,7 @@ interface BaseDialogProps {
     fullWidth?: boolean;
     customHeight?: string; // NEW: Allow custom height like '100vh', '90vh', etc.
     disableEnforceFocus?: boolean; // NEW: Disable focus enforcement for embedded editors like PDFTron
+    disableBackdropClick?: boolean; // NEW: Prevent closing dialog when clicking backdrop
 }
 
 export default function BaseDialog({
@@ -45,7 +46,8 @@ export default function BaseDialog({
     maxWidth = 'sm',
     fullWidth = true,
     customHeight, // NEW
-    disableEnforceFocus = false, // NEW
+    disableEnforceFocus = true, // NEW: Default to true for better compatibility with PDFTron
+    disableBackdropClick = false, // NEW
 }: BaseDialogProps) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -53,7 +55,12 @@ export default function BaseDialog({
     return (
         <Dialog
             open={open}
-            onClose={onClose}
+            onClose={(event, reason) => {
+                if (disableBackdropClick && reason === 'backdropClick') {
+                    return;
+                }
+                onClose();
+            }}
             TransitionComponent={Transition}
             maxWidth={maxWidth}
             fullWidth={fullWidth}
@@ -64,6 +71,7 @@ export default function BaseDialog({
                     borderRadius: isMobile ? 0 : 3,
                     boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
                     overflow: 'visible',
+                    zIndex: 1300, // Ensure dialog paper is above backdrop but below PDFTron modals
                     ...(customHeight && { height: customHeight, maxHeight: customHeight }), // Apply custom height
                 },
             }}
@@ -71,6 +79,12 @@ export default function BaseDialog({
                 '& .MuiBackdrop-root': {
                     backgroundColor: 'rgba(0, 0, 0, 0.5)',
                     backdropFilter: 'blur(4px)',
+                    zIndex: 1299, // Backdrop should be below dialog paper
+                },
+                // Ensure PDFTron's internal modals and dialogs appear on top
+                '& .webviewer': {
+                    position: 'relative',
+                    zIndex: 1,
                 },
             }}
         >

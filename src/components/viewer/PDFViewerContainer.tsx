@@ -148,6 +148,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         {
                             path: '/webviewer',
                             licenseKey: process.env.NEXT_PUBLIC_PDFTRON_LICENSE_KEY,
+                            // Ensure PDFTron's internal modals appear above the parent dialog
+                            css: '/webviewer-custom.css',
                         },
                         viewerDiv.current
                     );

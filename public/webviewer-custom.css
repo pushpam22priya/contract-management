@@ -1,0 +1,74 @@
+/* ========================================
+   Z-INDEX FIXES FOR PDFTRON WITHIN MATERIAL-UI
+   ======================================== */
+
+/* Ensure all PDFTron modal dialogs appear above Material-UI Dialog (z-index 1300) */
+.modal,
+.ui__choice__modal,
+.SignatureModal,
+[data-element="signatureModal"],
+[data-element="signatureOverlay"],
+.Overlay,
+.modal-container,
+.ReactModal__Overlay {
+  z-index: 9999 !important;
+}
+
+/* Ensure the iframe and App container allow proper layering */
+#app,
+.App {
+  position: relative;
+  z-index: auto;
+}
+
+/* Fix for signature create dialog specifically */
+[class*="signature"],
+[class*="Signature"] {
+  z-index: 9999 !important;
+}
+
+/* Ensure annotation popups and tooltips are also visible */
+.annotation-popup,
+.Popup,
+[data-element="annotationPopup"],
+[data-element="toolsHeader"] {
+  z-index: 9999 !important;
+}
+
+
+/* ========================================
+   SIGNATURE DIALOG CUSTOM STYLING
+   ======================================== */
+
+/* Signature Modal Container */
+.SignatureModal,
+[data-element="signatureModal"] {
+
+  bottom: 50px !important;
+}
+
+/* Reduce padding in signature dialog header */
+.modal-container .wrapper .header-container,
+.SignatureModal .modal-container .wrapper .header-container {
+  padding: 4px 6px !important;
+}
+
+/* Reduce padding in signature dialog footer (button section) */
+.SignatureModal .modal-container .footer,
+.modal-container .footer {
+  padding: 4px 6px !important;
+}
+
+/* Reduce padding in signature dialog tabs header */
+.SignatureModal .modal-container .tabs-header-container,
+.modal-container .tabs-header-container {
+  padding: 4px 6px !important;
+}
+
+/* Reduce padding for ink signature drawing area */
+.SignatureModal .ink-signature,
+.modal-container .ink-signature,
+.modal-container .text-signature,
+.modal-container .image-signature {
+  padding: 6px !important;
+}

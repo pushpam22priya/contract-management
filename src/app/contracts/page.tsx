@@ -563,9 +563,9 @@ export default function ContractsPage() {
                             gridTemplateColumns: {
                                 xs: '1fr',
                                 sm: 'repeat(2, 1fr)',
-                                lg: 'repeat(3, 1fr)',
+                                lg: 'repeat(4, 1fr)',
                             },
-                            gap: 1,
+                            gap: 0.75,
                         }}
                     >
                         {(filteredContracts || []).map((contract) => (

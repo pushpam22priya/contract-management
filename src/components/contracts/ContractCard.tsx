@@ -70,7 +70,7 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
             sx={{
                 bgcolor: 'background.paper',
                 borderRadius: 3,
-                p: 1.5,
+                p: 1,
                 border: '1px solid',
                 borderColor: 'divider',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -140,7 +140,7 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                 variant="body2"
                 sx={{
                     color: 'text.secondary',
-                    mb: 2,
+                    mb: 1.5,
                     fontSize: '0.8rem',
                     // lineHeight: 1.5,
                     display: '-webkit-box',
@@ -156,8 +156,8 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
             <Box
                 sx={{
                     display: 'grid',
-                    gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' },
-                    gap: 2,
+                    gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' },
+                    gap: 1.5,
                     mb: 1,
                 }}
             >
@@ -186,34 +186,6 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                         }}
                     >
                         {truncateText(contract.client, 10)}
-                    </Typography>
-                </Box>
-
-                {/* Value */}
-                <Box>
-                    <Typography
-                        variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            fontSize: '0.75rem',
-                            fontWeight: 500,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            display: 'block',
-                            mb: 0.5,
-                        }}
-                    >
-                        Value
-                    </Typography>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: 'primary.main',
-                            fontWeight: 500,
-                            fontSize: '0.75rem',
-                        }}
-                    >
-                        {`₹ ${contract.value}`}
                     </Typography>
                 </Box>
 

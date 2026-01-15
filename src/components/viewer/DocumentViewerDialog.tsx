@@ -122,7 +122,7 @@ export default function DocumentViewerDialog({
             fullWidth
             customHeight="98vh"
         >
-            <Box sx={{ height: 'calc(100vh - 98px)', overflow: 'hidden', p: 0 , m: 0 }}>
+            <Box sx={{ height: 'calc(100vh - 98px)', overflow: 'hidden', p: 0, m: 0 }}>
                 {(() => {
                     // Debug logging
                     console.log('DocumentViewerDialog render:', {

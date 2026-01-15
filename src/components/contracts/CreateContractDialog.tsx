@@ -230,7 +230,6 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                 sx={{
                     textTransform: 'none',
                     fontWeight: 600,
-                    px: 3,
                     borderRadius: 2,
                     bgcolor: 'primary.main',
                     boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
@@ -278,7 +277,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                     sx={{
                         textTransform: 'none',
                         fontWeight: 600,
-                        px: 3,
+                        // px: 3,
                         borderRadius: 2,
                         minWidth: 150,
                         bgcolor: 'primary.main',
@@ -303,15 +302,16 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
             open={open}
             onClose={handleClose}
             title={currentStep === 1 ? "Create Contract - Step 1: Contract Details" : `Create Contract - Step 2: Edit Document`}
-            maxWidth="xl"
+            maxWidth={currentStep === 1 ? "md" : "xl"} // Compact for Step 1, Full-width for Step 2
             fullWidth
-            customHeight="98vh"
+            customHeight={currentStep === 1 ? undefined : "98vh"} // Auto height for Step 1, Full height for Step 2
             actions={dialogActions}
             disableEnforceFocus={true} // Allow PDFTron text fields to work properly
+            disableBackdropClick={false} // Allow closing on backdrop click
         >
             {/* STEP 1: Contract Details Form */}
             {currentStep === 1 && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', p: 3 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     {/* Error Alert */}
                     {error && (
                         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
@@ -319,7 +319,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                         </Alert>
                     )}
 
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 3 }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
                         {/* Template Selection */}
                         <Autocomplete
                             value={selectedTemplate}
@@ -336,6 +336,12 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                                     label="Select Template"
                                     placeholder="Choose a template..."
                                     required
+                                    sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                            padding: '4px',
+                                        },
+
+                                    }}
                                 />
                             )}
                             renderOption={(props, option) => {
@@ -357,7 +363,8 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                         {selectedTemplate && (
                             <Box
                                 sx={{
-                                    p: 2,
+                                    p: 0.5,
+                                    px: 1,
                                     bgcolor: alpha('#0f766e', 0.05),
                                     borderRadius: 2,
                                     border: '1px solid',
@@ -367,7 +374,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                                     justifyContent: 'space-between',
                                 }}
                             >
-                                <Box sx={{ flex: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                                     <Typography variant="body1" fontWeight={600} color="primary">
                                         {selectedTemplate.name}
                                     </Typography>
@@ -375,23 +382,16 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                                         label={selectedTemplate.category}
                                         size="small"
                                         sx={{
-                                            mt: 0.5,
                                             bgcolor: 'primary.main',
                                             color: 'white',
                                         }}
                                     />
                                 </Box>
-                                <Chip
-                                    label="Selected"
-                                    size="small"
-                                    color="success"
-                                    sx={{ fontWeight: 600 }}
-                                />
                             </Box>
                         )}
                     </Box>
 
-                    <Divider sx={{ my: 2 }} />
+                    <Divider sx={{ my: 1 }} />
 
                     <Typography variant="h6" gutterBottom>Contract Information</Typography>
 
@@ -402,6 +402,20 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                             onChange={(e) => setContractTitle(e.target.value)}
                             required
                             placeholder="e.g., Software License Agreement"
+                            sx={{
+                                '& .MuiInputBase-input': {
+                                    padding: '10px 12px',
+                                },
+                                // Adjust floating label position when focused/filled
+                                '& .MuiInputLabel-root': {
+                                    transform: 'translate(14px, 10px) scale(1)',
+                                },
+                                // Adjust floating label when shrunk (focused or has value)
+                                '& .MuiInputLabel-root.MuiInputLabel-shrink': {
+                                    transform: 'translate(14px, -9px) scale(0.75)',
+                                },
+                            }}
+
                         />
                         <TextField
                             label="Client Name"
@@ -409,22 +423,35 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                             onChange={(e) => setClientName(e.target.value)}
                             required
                             placeholder="e.g., ABC Corp"
+                            sx={{
+                                '& .MuiInputBase-input': {
+                                    padding: '10px 12px',
+                                },
+                                // Adjust floating label position when focused/filled
+                                '& .MuiInputLabel-root': {
+                                    transform: 'translate(14px, 10px) scale(1)',
+                                },
+                                // Adjust floating label when shrunk (focused or has value)
+                                '& .MuiInputLabel-root.MuiInputLabel-shrink': {
+                                    transform: 'translate(14px, -9px) scale(0.75)',
+                                },
+                            }}
+
                         />
                     </Box>
 
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
-                        <TextField
-                            label="Contract Value"
-                            value={contractValue}
-                            onChange={(e) => setContractValue(e.target.value)}
-                            placeholder="Optional"
-                        />
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
                         <TextField
                             label="Start Date"
                             type="date"
                             value={startDate}
                             onChange={(e) => setStartDate(e.target.value)}
                             InputLabelProps={{ shrink: true }}
+                            sx={{
+                                '& .MuiInputBase-input': {
+                                    padding: '10px 12px',
+                                }
+                            }}
                         />
                         <TextField
                             label="End Date"
@@ -432,6 +459,11 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
                             InputLabelProps={{ shrink: true }}
+                            sx={{
+                                '& .MuiInputBase-input': {
+                                    padding: '10px 12px',
+                                }
+                            }}
                         />
                     </Box>
 
@@ -449,7 +481,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
 
             {/* STEP 2: Full-Screen PDF Editor */}
             {currentStep === 2 && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(98vh - 128px)' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(98vh - 150px)' }}>
                     {/* Minimal Header with Contract Info */}
                     {/* <Box sx={{
                         px: 2,
@@ -476,11 +508,11 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                     )}
 
                     {/* Full-Height PDF Viewer */}
-                    <Box sx={{ flex: 1, p: 2, overflow: 'hidden' }}>
+                    <Box sx={{ flex: 1, p: 0.5, overflow: 'hidden' }}>
                         {selectedTemplate ? (
                             <Box sx={{
                                 height: '100%',
-                                border: '2px solid',
+                                border: '1px solid',
                                 borderColor: 'divider',
                                 borderRadius: 2,
                                 overflow: 'hidden'
