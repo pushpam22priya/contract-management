@@ -335,6 +335,7 @@ export default function ReviewApprovalPage() {
                         templateDocxBase64={selectedContract.templateDocxBase64}
                         fieldValues={selectedContract.fieldValues}
                         xfdfString={selectedContract.xfdfString}
+                        readOnly={true}
                     />
                 )}
 

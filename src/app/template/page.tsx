@@ -390,6 +390,7 @@ export default function TemplatePage() {
                         fileUrl={templateToView.fileUrl}
                         fileName={templateToView.fileName}
                         title={templateToView.name}
+                        readOnly={true}
                     />
                 )}
 

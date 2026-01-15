@@ -108,8 +108,8 @@ export default function ReviewApprovalCard({
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="caption" fontWeight={600} sx={{ color: statusColors.color }}>
                         {userRole === 'reviewer'
-                            ? (myReviewerStatus === 'reviewed' ? '✅ REVIEWED' : '⏳ PENDING REVIEW')
-                            : (allReviewersComplete() ? '✅ READY FOR APPROVAL' : '⏳ AWAITING REVIEWS')}
+                            ? (myReviewerStatus === 'reviewed' ? 'REVIEWED' : 'PENDING REVIEW')
+                            : (allReviewersComplete() ? 'READY FOR APPROVAL' : 'AWAITING REVIEWS')}
                     </Typography>
                     <Chip
                         label={contract.category}

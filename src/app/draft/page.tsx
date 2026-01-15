@@ -75,7 +75,7 @@ export default function DraftPage() {
     const handleApprove = async (id: string) => {
         const result = await contractService.approveContract(id);
         if (result.success) {
-            showNotification('Contract approved! ✅ Moved to Contracts page', 'success');
+            showNotification('Contract approved! Moved to Contracts page', 'success');
             loadDrafts(); // Reload drafts
         } else {
             showNotification('Failed to approve contract: ' + result.message, 'error');
@@ -130,6 +130,23 @@ export default function DraftPage() {
             loadDrafts(); // Reload drafts
         } else {
             showNotification('Failed to submit: ' + result.message, 'error');
+            throw new Error(result.message);
+        }
+    };
+
+    /**
+     * Save contract changes from PDF viewer
+     */
+    const handleSaveChanges = async (xfdfString: string) => {
+        if (!selectedContract) return;
+
+        const result = await contractService.updateContractXfdf(selectedContract.id, xfdfString);
+
+        if (result.success) {
+            showNotification('Changes saved successfully!', 'success');
+            loadDrafts(); // Reload to get updated contract
+        } else {
+            showNotification('Failed to save changes: ' + result.message, 'error');
             throw new Error(result.message);
         }
     };
@@ -309,6 +326,8 @@ export default function DraftPage() {
                     fieldValues={selectedContract.fieldValues}
                     signatureImage={selectedContract.signer?.signatureImage}
                     xfdfString={selectedContract.xfdfString}
+                    contractId={selectedContract.id}
+                    onSave={handleSaveChanges}
                 />
             )}
 

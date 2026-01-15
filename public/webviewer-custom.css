@@ -44,7 +44,7 @@
 .SignatureModal,
 [data-element="signatureModal"] {
 
-  bottom: 50px !important;
+  bottom: 60px !important;
 }
 
 /* Reduce padding in signature dialog header */

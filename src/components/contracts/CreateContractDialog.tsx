@@ -154,13 +154,13 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                 xfdfString: xfdf,
             });
 
-            console.log('💾 Contract creation result:', result);
+            console.log('Contract creation result:', result);
 
             if (result.success) {
-                console.log('✅ Contract created successfully with XFDF!');
-                console.log('📊 Contract ID:', result.contract?.id);
-                console.log('📊 XFDF stored length:', result.contract?.xfdfString?.length);
-                console.log('⏳ Waiting 2 seconds before navigation so you can see logs...');
+                console.log('Contract created successfully with XFDF!');
+                console.log('Contract ID:', result.contract?.id);
+                console.log('XFDF stored length:', result.contract?.xfdfString?.length);
+                console.log('Waiting 2 seconds before navigation so you can see logs...');
 
                 // Wait 2 seconds so logs are visible before navigation
                 await new Promise(resolve => setTimeout(resolve, 2000));

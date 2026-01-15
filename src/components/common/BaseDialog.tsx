@@ -147,7 +147,7 @@ export default function BaseDialog({
                         borderTop: '1px solid',
                         borderColor: 'rgba(0, 0, 0, 0.08)',
                         bgcolor: '#fafafa',
-                        gap: 1.5,
+                        gap: 1,
                         borderRadius: "0 0 16px 16px",
                     }}
                 >

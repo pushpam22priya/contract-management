@@ -58,6 +58,7 @@ interface DocumentViewerDialogProps {
     xfdfString?: string; // NEW: XFDF data for filled PDFs
     contractId?: string; // NEW: Contract ID for saving changes
     onSave?: (xfdfString: string) => Promise<void>; // NEW: Save callback
+    readOnly?: boolean; // NEW: Control annotation toolbar visibility
 }
 
 export default function DocumentViewerDialog({
@@ -72,57 +73,61 @@ export default function DocumentViewerDialog({
     signatureImage,
     xfdfString, // NEW
     contractId,
-    onSave
+    onSave,
+    readOnly = false // Default to false for backward compatibility
 }: DocumentViewerDialogProps) {
     const pdfViewerRef = useRef<any>(null);
     const [saving, setSaving] = useState(false);
 
-    // Custom title with Save Changes button
-    const customTitle = (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 2 }}>
-            <Box>{title || fileName || 'Document Viewer'}</Box>
-            {onSave && xfdfString && (
-                <Button
-                    variant="contained"
-                    startIcon={<SaveIcon />}
-                    onClick={async () => {
-                        if (!pdfViewerRef.current) return;
+    // Handle save button click
+    const handleSaveClick = async () => {
+        if (!pdfViewerRef.current) return;
 
-                        setSaving(true);
-                        try {
-                            // Export current annotations from PDFViewerContainer
-                            const updatedXfdf = await pdfViewerRef.current.exportAnnotations();
+        setSaving(true);
+        try {
+            // Export current annotations from PDFViewerContainer
+            const updatedXfdf = await pdfViewerRef.current.exportAnnotations();
 
-                            if (updatedXfdf && onSave) {
-                                await onSave(updatedXfdf);
-                                console.log('✅ Changes saved successfully!');
-                            }
-                        } catch (error) {
-                            console.error('❌ Error saving changes:', error);
-                        } finally {
-                            setSaving(false);
-                        }
-                    }}
-                    disabled={saving}
-                    size="small"
-                    sx={{ flexShrink: 0 }}
-                >
-                    {saving ? 'Saving...' : 'Save Changes'}
-                </Button>
-            )}
-        </Box>
-    );
+            if (updatedXfdf && onSave) {
+                await onSave(updatedXfdf);
+                console.log('Changes saved successfully!');
+            }
+        } catch (error) {
+            console.error('Error saving changes:', error);
+        } finally {
+            setSaving(false);
+            onClose()
+        }
+    };
+
+    // Action buttons for dialog footer
+    const dialogActions = onSave && xfdfString ? (
+        <Button
+            variant="contained"
+            startIcon={<SaveIcon />}
+            onClick={handleSaveClick}
+            disabled={saving}
+        >
+            {saving ? 'Saving...' : 'Save Changes'}
+        </Button>
+    ) : undefined;
 
     return (
         <BaseDialog
             open={open}
             onClose={onClose}
-            title={customTitle as any}
+            title={title || fileName || 'Document Viewer'}
             maxWidth="lg"
             fullWidth
             customHeight="98vh"
+            actions={dialogActions}
         >
-            <Box sx={{ height: 'calc(100vh - 98px)', overflow: 'hidden', p: 0, m: 0 }}>
+            <Box sx={{
+                height: dialogActions ? 'calc(100vh - 160px)' : 'calc(100vh - 100px)',
+                overflow: 'hidden',
+                p: 0,
+                m: 0
+            }}>
                 {(() => {
                     // Debug logging
                     console.log('DocumentViewerDialog render:', {
@@ -133,13 +138,13 @@ export default function DocumentViewerDialog({
                     });
 
                     // ALWAYS show PDFTron viewer with annotation toolbar enabled
-                    console.log('✅ Rendering PDFViewerContainer');
+                    console.log('Rendering PDFViewerContainer');
                     return (
                         <PDFViewerContainer
                             ref={pdfViewerRef}
                             documentUrl={fileUrl || ""}
                             xfdfString={xfdfString}
-                            readOnly={false}
+                            readOnly={readOnly}
                         />
                     );
                 })()}

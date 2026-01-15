@@ -319,7 +319,7 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                     </IconButton>
                 </Tooltip> */}
 
-                {/* Share Icon Button (Only for Draft, Waiting for Signature, or Review) */}
+                {/* Share Icon Button (For Draft, Review, or Waiting for Signature) */}
                 {!['signed', 'active', 'expiring', 'expired'].includes(contract.status) && (
                     <Tooltip title="Share for signature" arrow>
                         <IconButton
