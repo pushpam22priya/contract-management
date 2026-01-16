@@ -7,17 +7,20 @@ interface PDFViewerContainerProps {
     documentUrl?: string;
     xfdfString?: string;
     readOnly?: boolean;
+    toolbarMode?: 'annotate' | 'forms'; // 'annotate' for contracts, 'forms' for template builder
+    formFields?: any[]; // Form field definitions to display as overlays
     onDocumentLoaded?: () => void;
     onError?: (error: string) => void;
 }
 
 export interface PDFViewerHandle {
     exportAnnotations: () => Promise<string>;
+    exportFormFields: () => Promise<any[]>; // Returns FormFieldDefinition[]
     dispose: () => void;
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, xfdfString, readOnly = false, onDocumentLoaded, onError }, ref) => {
+    ({ documentUrl, xfdfString, readOnly = false, toolbarMode = 'annotate', formFields, onDocumentLoaded, onError }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const [loading, setLoading] = useState(true);
@@ -25,6 +28,12 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
         // Manual annotation storage to work around PDFTron losing annotations
         const manualAnnotations = useRef<any[]>([]);
+
+        // Log when form fields are received for display
+        if (formFields && formFields.length > 0) {
+            console.log('📋 PDFViewerContainer: Received formFields for display:', formFields.length);
+            console.log('  - Fields:', formFields);
+        }
 
         useImperativeHandle(ref, () => ({
             /**
@@ -120,6 +129,118 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     return null;
                 }
             },
+
+            /**
+             * Export form fields as FormFieldDefinition array
+             */
+            exportFormFields: async () => {
+                if (!viewerInstance.current) {
+                    console.error('Cannot export: Viewer instance not initialized');
+                    return [];
+                }
+
+                try {
+                    const { Core } = viewerInstance.current;
+                    const annotationManager = Core.annotationManager;
+
+                    console.log('Extracting form fields...');
+
+                    // Add manually stored annotations back to the manager (same as exportAnnotations)
+                    console.log('Manually stored annotations:', manualAnnotations.current.length);
+                    if (manualAnnotations.current.length > 0) {
+                        console.log('Adding manually stored annotations to manager...');
+                        manualAnnotations.current.forEach((annot: any) => {
+                            try {
+                                const existing = annotationManager.getAnnotationById(annot.Id);
+                                if (!existing) {
+                                    annotationManager.addAnnotation(annot);
+                                    console.log('Added annotation:', annot.Id);
+                                }
+                            } catch (e) {
+                                console.warn('Failed to add annotation:', e);
+                            }
+                        });
+                        // Force redraw
+                        annotationManager.drawAnnotationsFromList(manualAnnotations.current);
+                    }
+
+                    // Get all annotations
+                    const annotations = annotationManager.getAnnotationsList();
+                    console.log('  - Total annotations:', annotations.length);
+
+                    const formFields: any[] = [];
+
+                    // Filter for widget annotations (form fields)
+                    const widgetAnnotations = annotations.filter((annot: any) =>
+                        annot instanceof Core.Annotations.WidgetAnnotation ||
+                        annot.constructor.name.includes('Widget')
+                    );
+
+                    console.log('  - Widget annotations (form fields):', widgetAnnotations.length);
+
+                    for (const widget of widgetAnnotations) {
+                        try {
+                            const fieldName = widget.fieldName || widget.getField?.()?.name || `field_${Date.now()}`;
+                            const rect = widget.getRect();
+                            const pageNumber = widget.getPageNumber();
+
+                            // Determine field type
+                            let fieldType = 'text';
+                            const widgetType = widget.getFormFieldPlaceHolderType?.() || '';
+                            const widgetClassName = widget.constructor.name;
+                            const field = widget.getField?.();
+                            const fieldTypeProp = field?.type || '';
+
+                            console.log(`    - Widget: ${fieldName}, Class: ${widgetClassName}, PlaceholderType: ${widgetType}, FieldType: ${fieldTypeProp}`);
+
+                            // Check for signature field (multiple checks for reliability)
+                            if (
+                                widgetClassName.includes('Signature') ||
+                                widgetType.includes('Signature') ||
+                                fieldTypeProp === 'Sig' ||
+                                widget.fieldFlags?.SignatureField ||
+                                fieldName.toLowerCase().includes('signature')
+                            ) {
+                                fieldType = 'signature';
+                            } else if (widgetType.includes('CheckBox') || widgetClassName.includes('CheckBox') || widget.fieldFlags?.CheckBox) {
+                                fieldType = 'checkbox';
+                            } else if (widgetType.includes('RadioButton') || widgetClassName.includes('Radio')) {
+                                fieldType = 'radio';
+                            } else if (widgetType.includes('ListBox') || widgetType.includes('ComboBox')) {
+                                fieldType = 'dropdown';
+                            } else if (fieldName.toLowerCase().includes('date')) {
+                                fieldType = 'date';
+                            }
+
+                            const formField = {
+                                name: fieldName,
+                                type: fieldType,
+                                x: rect.x1,
+                                y: rect.y1,
+                                width: rect.x2 - rect.x1,
+                                height: rect.y2 - rect.y1,
+                                pageNumber: pageNumber,
+                                required: false,
+                                placeholder: '',
+                                label: fieldName.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+                            };
+
+                            formFields.push(formField);
+                            console.log(`  ✓ Extracted: ${fieldName} (${fieldType}) on page ${pageNumber}`);
+                        } catch (err) {
+                            console.warn('Failed to extract field:', err);
+                        }
+                    }
+
+                    console.log('Form fields extracted:', formFields.length);
+                    return formFields;
+
+                } catch (error) {
+                    console.error('Error extracting form fields:', error);
+                    return [];
+                }
+            },
+
             dispose: () => {
                 if (viewerInstance.current) {
                     try {
@@ -169,11 +290,18 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             UI.Feature.Download,
                         ]);
                     } else {
-                        // Editing mode - show annotation toolbar
-                        // Set toolbar to show annotation tools
-                        UI.setToolbarGroup('toolbarGroup-Annotate');
+                        // Editing mode - set toolbar based on mode
+                        if (toolbarMode === 'forms') {
+                            // Forms mode - show form building tools
+                            UI.setToolbarGroup('toolbarGroup-Forms');
+                            console.log('📝 Forms toolbar enabled for template building');
+                        } else {
+                            // Annotation mode - show annotation tools (default for contracts)
+                            UI.setToolbarGroup('toolbarGroup-Annotate');
+                            console.log('📝 Annotation toolbar enabled');
+                        }
 
-                        // Enable all necessary features for annotation
+                        // Enable all necessary features for editing
                         UI.enableFeatures([
                             UI.Feature.Annotations,
                             UI.Feature.TextSelection,
@@ -241,6 +369,91 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             }
                         } else {
                             console.log('⚠️ No XFDF string provided - skipping import');
+                        }
+
+                        // Create form fields from metadata (if formFields provided)
+                        if (formFields && formFields.length > 0 && !xfdfString) {
+                            console.log('📋 Creating form fields from metadata:', formFields.length);
+
+                            try {
+                                const { Annotations } = Core;
+                                const annotationManager = Core.annotationManager;
+                                const doc = Core.documentViewer.getDocument();
+
+                                for (const fieldDef of formFields) {
+                                    console.log(`  ✏️ Creating field: ${fieldDef.name} (${fieldDef.type})`);
+
+                                    // Create form field based on type
+                                    let field;
+
+                                    if (fieldDef.type === 'text') {
+                                        field = new Annotations.Forms.Field(fieldDef.name, {
+                                            type: 'Tx',
+                                            value: ''
+                                        });
+                                    } else if (fieldDef.type === 'signature') {
+                                        field = new Annotations.Forms.Field(fieldDef.name, {
+                                            type: 'Sig',
+                                            value: ''
+                                        });
+                                    } else if (fieldDef.type === 'checkbox') {
+                                        field = new Annotations.Forms.Field(fieldDef.name, {
+                                            type: 'Btn',
+                                            value: 'Off'
+                                        });
+                                    } else {
+                                        // Default to text field
+                                        field = new Annotations.Forms.Field(fieldDef.name, {
+                                            type: 'Tx',
+                                            value: ''
+                                        });
+                                    }
+
+                                    // Create widget annotation at the specified position
+                                    // Use the correct widget type based on field type
+                                    let widget: any;
+
+                                    if (fieldDef.type === 'signature') {
+                                        widget = new Annotations.SignatureWidgetAnnotation(field);
+                                        console.log(`    🖊️ Creating SignatureWidgetAnnotation`);
+                                    } else if (fieldDef.type === 'checkbox') {
+                                        widget = new Annotations.CheckButtonWidgetAnnotation(field);
+                                        console.log(`    ☑️ Creating CheckButtonWidgetAnnotation`);
+                                    } else {
+                                        // Text field or default
+                                        widget = new Annotations.TextWidgetAnnotation(field);
+                                        console.log(`    📝 Creating TextWidgetAnnotation`);
+                                    }
+
+                                    // Set position and size from stored coordinates
+                                    widget.PageNumber = fieldDef.pageNumber;
+                                    widget.X = fieldDef.x;
+                                    widget.Y = fieldDef.y;
+                                    widget.Width = fieldDef.width;
+                                    widget.Height = fieldDef.height;
+
+                                    // Style the widget with blue border like Apryse demo
+                                    (widget as any).StrokeColor = new Annotations.Color(0, 118, 220); // Blue border
+                                    (widget as any).StrokeThickness = 2;
+
+                                    // CRITICAL: Add to BOTH managers (Field + Widget pattern)
+                                    // 1. Add field to FieldManager
+                                    const fieldManager = annotationManager.getFieldManager();
+                                    fieldManager.addField(field);
+
+                                    // 2. Add widget to AnnotationManager
+                                    annotationManager.addAnnotation(widget);
+
+                                    // 3. Draw to make visible
+                                    annotationManager.drawAnnotationsFromList([widget]);
+
+                                    console.log(`    ✅ Created: ${fieldDef.name} (${fieldDef.type}) at (${fieldDef.x}, ${fieldDef.y})`);
+                                }
+
+                                console.log('✅ All form fields created successfully!');
+                            } catch (err) {
+                                console.error('❌ Error creating form fields:', err);
+                            }
                         }
 
                         setLoading(false);

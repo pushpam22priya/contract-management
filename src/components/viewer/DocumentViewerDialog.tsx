@@ -59,6 +59,7 @@ interface DocumentViewerDialogProps {
     contractId?: string; // NEW: Contract ID for saving changes
     onSave?: (xfdfString: string) => Promise<void>; // NEW: Save callback
     readOnly?: boolean; // NEW: Control annotation toolbar visibility
+    formFields?: any[]; // NEW: Form field definitions for template viewing
 }
 
 export default function DocumentViewerDialog({
@@ -74,10 +75,16 @@ export default function DocumentViewerDialog({
     xfdfString, // NEW
     contractId,
     onSave,
-    readOnly = false // Default to false for backward compatibility
+    readOnly = false, // Default to false for backward compatibility
+    formFields // NEW
 }: DocumentViewerDialogProps) {
     const pdfViewerRef = useRef<any>(null);
     const [saving, setSaving] = useState(false);
+
+    // Log form fields when component mounts/updates
+    if (formFields && formFields.length > 0) {
+        console.log('📋 DocumentViewerDialog: Received form fields:', formFields.length);
+    }
 
     // Handle save button click
     const handleSaveClick = async () => {
@@ -145,6 +152,7 @@ export default function DocumentViewerDialog({
                             documentUrl={fileUrl || ""}
                             xfdfString={xfdfString}
                             readOnly={readOnly}
+                            formFields={formFields}
                         />
                     );
                 })()}

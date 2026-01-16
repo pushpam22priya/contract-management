@@ -72,11 +72,19 @@ export default function TemplatePage() {
         loadCategories();
     };
 
-    const handleViewTemplate = (templateId: string) => {
-        const template = templates.find(t => t.id === templateId);
-        if (template) {
-            setTemplateToView(template);
+    const handleViewTemplate = async (templateId: string) => {
+        console.log('👁️  Viewing template:', templateId);
+
+        // Import and call MockAPI
+        const { mockApiService } = await import('@/services/mockApiService');
+        const result = await mockApiService.getTemplateById(templateId);
+
+        if (result.success && result.template) {
+            console.log('✅ Template fetched via MockAPI');
+            setTemplateToView(result.template);
             setViewerOpen(true);
+        } else {
+            console.error('❌ Failed to fetch template');
         }
     };
 
@@ -391,6 +399,7 @@ export default function TemplatePage() {
                         fileName={templateToView.fileName}
                         title={templateToView.name}
                         readOnly={true}
+                        formFields={templateToView.formFields}
                     />
                 )}
 
