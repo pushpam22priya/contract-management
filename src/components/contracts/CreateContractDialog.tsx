@@ -52,6 +52,11 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
     // Saving state
     const [saving, setSaving] = useState(false);
 
+    // Track filled field values
+    // Explanation: This stores the values user enters in form fields (e.g., {"client_name": "John Doe"})
+    // These values are specific to THIS contract only - template remains unchanged
+    const [filledFieldValues, setFilledFieldValues] = useState<Record<string, string>>({});
+
     // Load templates when dialog opens
     useEffect(() => {
         if (open) {
@@ -70,6 +75,17 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
         } finally {
             setLoadingTemplates(false);
         }
+    };
+
+    // Handle form field changes
+    // Explanation: When user types in a form field, this function captures the value
+    // and stores it in filledFieldValues state so we can save it with the contract
+    const handleFieldChange = (fieldName: string, value: any) => {
+        console.log(`📝 Field changed: ${fieldName} = ${value}`);
+        setFilledFieldValues(prev => ({
+            ...prev,
+            [fieldName]: value?.toString() || ''
+        }));
     };
 
     const handleSave = async () => {
@@ -106,9 +122,13 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
 
             console.log('🔍 Starting XFDF export...');
             console.log('📄 PDF Viewer Ref exists:', !!pdfViewerRef.current);
+            console.log('📝 Field values to export:', filledFieldValues);
 
             // Export XFDF data from PDF
-            const xfdf = await pdfViewerRef.current?.exportAnnotations();
+            // CRITICAL: Pass filledFieldValues so PDFViewer can set them before export
+            // Explanation: Per Apryse docs, we must use fieldManager.getField().setValue()
+            // to properly set field values before export
+            const xfdf = await pdfViewerRef.current?.exportAnnotations(filledFieldValues);
 
             console.log('📋 XFDF Export Result:');
             console.log('  - XFDF exists:', !!xfdf);
@@ -145,7 +165,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                 templateId: selectedTemplate.id,
                 templateName: selectedTemplate.name,
                 content: selectedTemplate.content || '',
-                fieldValues: {},
+                fieldValues: filledFieldValues,  // Save filled values (e.g., {\"client_name\": \"ABC Corp\"})
                 startDate: finalStartDate,
                 endDate: finalEndDate,
                 createdBy: currentUser.email,
@@ -191,6 +211,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
         setEndDate('');
         setDocumentLoaded(false);
         setError('');
+        setFilledFieldValues({}); // Reset for next contract
 
         // Dispose PDF viewer
         pdfViewerRef.current?.dispose();
@@ -520,7 +541,14 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                                 <PDFViewerContainer
                                     ref={pdfViewerRef}
                                     documentUrl={selectedTemplate.fileUrl}
+                                    // Pass form fields from template so PDF can recreate them
+                                    // Explanation: selectedTemplate.formFields contains field definitions
+                                    // created when template was uploaded. PDFViewer recreates these fields.
+                                    formFields={selectedTemplate?.formFields}
                                     readOnly={false}
+                                    // Callback when user fills any field  
+                                    // Explanation: Fires when user types/checks a field, stores value
+                                    onFieldChange={handleFieldChange}
                                     onDocumentLoaded={() => setDocumentLoaded(true)}
                                     onError={(err) => setError(err)}
                                 />

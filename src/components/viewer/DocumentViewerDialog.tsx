@@ -59,6 +59,9 @@ interface DocumentViewerDialogProps {
     contractId?: string; // NEW: Contract ID for saving changes
     onSave?: (xfdfString: string) => Promise<void>; // NEW: Save callback
     readOnly?: boolean; // NEW: Control annotation toolbar visibility
+    commentsOnly?: boolean; // NEW: Read + Comments access for reviewers/approvers
+    clientSigningMode?: boolean; // NEW: Client can only fill empty, non-readOnly fields
+    templateFormFields?: any[]; // NEW: Template's form field definitions (for readOnly flags)
     formFields?: any[]; // NEW: Form field definitions for template viewing
 }
 
@@ -76,8 +79,13 @@ export default function DocumentViewerDialog({
     contractId,
     onSave,
     readOnly = false, // Default to false for backward compatibility
+    commentsOnly = false, // NEW: Default to false
+    clientSigningMode = false, // NEW: Default to false
+    templateFormFields, // NEW
     formFields // NEW
 }: DocumentViewerDialogProps) {
+
+
     const pdfViewerRef = useRef<any>(null);
     const [saving, setSaving] = useState(false);
 
@@ -152,9 +160,14 @@ export default function DocumentViewerDialog({
                             documentUrl={fileUrl || ""}
                             xfdfString={xfdfString}
                             readOnly={readOnly}
+                            commentsOnly={commentsOnly}
+                            clientSigningMode={clientSigningMode}
+                            templateFormFields={templateFormFields}
                             formFields={formFields}
                         />
                     );
+
+
                 })()}
             </Box>
         </BaseDialog>

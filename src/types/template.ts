@@ -10,10 +10,23 @@ export interface FormFieldDefinition {
     width: number;             // Field width
     height: number;            // Field height
     pageNumber: number;        // Which page the field is on (1-indexed)
+
+    // Widget Flags (Apryse standard properties)
     required: boolean;         // Is this field required to fill?
+    readOnly?: boolean;        // Field cannot be edited
+    multiline?: boolean;       // Text field allows multiple lines (text fields only)
+    doNotScroll?: boolean;     // Do not scroll text (text fields only)
+    doNotSpellCheck?: boolean; // Disable spell check (text fields only)
+
+    // Value properties (Phase 2)
+    defaultValue?: string;     // Default value to pre-fill field
     placeholder?: string;      // Placeholder text for text fields
+
+    // Appearance properties (Phase 2)
+    appearance?: string;       // Base64 image for signature placeholder
+
+    // Other properties
     options?: string[];        // Options for dropdown/radio fields
-    flags?: FormFieldFlags;    // Additional field properties
     label?: string;            // Human-readable label
 }
 

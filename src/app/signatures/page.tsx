@@ -231,8 +231,15 @@ export default function SignaturesPage() {
                         xfdfString={selectedContract.xfdfString}
                         contractId={selectedContract.id}
                         onSave={handleSaveSignature}
+                        clientSigningMode={true}
+                        templateFormFields={
+                            selectedContract.templateId
+                                ? templateService.getTemplateById(selectedContract.templateId)?.formFields
+                                : undefined
+                        }
                     />
                 )}
+
 
                 {/* Signature Pad Dialog */}
                 <SignaturePadDialog
