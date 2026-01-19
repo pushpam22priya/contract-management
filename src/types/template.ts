@@ -10,6 +10,7 @@ export interface FormFieldDefinition {
     width: number;             // Field width
     height: number;            // Field height
     pageNumber: number;        // Which page the field is on (1-indexed)
+    annotationId?: string;     // Unique annotation ID for tracking updates
 
     // Widget Flags (Apryse standard properties)
     required: boolean;         // Is this field required to fill?

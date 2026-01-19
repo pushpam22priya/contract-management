@@ -767,8 +767,12 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             }
 
                                             // Check if already tracked
-                                            const exists = createdFormFieldsRef.current.find((f: any) => f.name === fieldName);
-                                            if (!exists) {
+                                            // 1. Try by Annotation ID (most reliable)
+                                            const existingById = createdFormFieldsRef.current.find((f: any) => f.annotationId === annot.Id);
+                                            // 2. Fallback to name (for legacy/other cases)
+                                            const existingByName = createdFormFieldsRef.current.find((f: any) => f.name === fieldName);
+
+                                            if (!existingById && !existingByName) {
                                                 console.log('✅ Form field created via toolbar:', fieldName, annot.constructor.name);
 
                                                 // Extract and store immediately
@@ -780,6 +784,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                                 const fieldData: FormFieldDefinition = {
                                                     name: fieldName,
+                                                    annotationId: annot.Id, // Store ID for tracking
                                                     type: fieldType,
                                                     x: rect.x1,
                                                     y: rect.y1,
@@ -796,7 +801,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                 };
 
                                                 createdFormFieldsRef.current.push(fieldData);
-                                                console.log(`📦 Stored field: ${fieldName}, Total: ${createdFormFieldsRef.current.length}`);
+                                                console.log(`📦 Stored field: ${fieldName} (ID: ${annot.Id}), Total: ${createdFormFieldsRef.current.length}`);
                                             }
                                         } catch (err) {
                                             console.warn('Failed to extract newly created field:', err);
@@ -804,7 +809,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     }
                                 });
                             } else if (action === 'modify') {
-                                // Handle field modifications (e.g., checking Required checkbox)
+                                // Handle field modifications (e.g., checking Required checkbox, moving, resizing)
                                 annotations.forEach((annot: any) => {
                                     if (!isWidgetAnnotation(annot, Core)) return;
 
@@ -815,22 +820,47 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         if (!fieldName) return;
 
                                         // Find and update existing field
-                                        const existingIndex = createdFormFieldsRef.current.findIndex((f) => f.name === fieldName);
+                                        // CRITICAL: Look up by Annotation ID first to handle Renaming
+                                        let existingIndex = createdFormFieldsRef.current.findIndex((f) => f.annotationId === annot.Id);
+
+                                        // Fallback: Look up by name if ID lookup fails
+                                        if (existingIndex === -1) {
+                                            existingIndex = createdFormFieldsRef.current.findIndex((f) => f.name === fieldName);
+                                        }
+
                                         if (existingIndex > -1) {
                                             // Extract updated flags
                                             const flags = extractWidgetFlags(field);
 
+                                            // Extract updated coordinates
+                                            const rect = annot.getRect();
+                                            const pageNumber = annot.getPageNumber();
+
+                                            const oldName = createdFormFieldsRef.current[existingIndex].name;
+                                            const nameChanged = oldName !== fieldName;
+
                                             // Update the stored field data
                                             createdFormFieldsRef.current[existingIndex] = {
                                                 ...createdFormFieldsRef.current[existingIndex],
+                                                // Update name (in case it was renamed)
+                                                name: fieldName,
+                                                // Ensure ID is set
+                                                annotationId: annot.Id,
+                                                // Update flags
                                                 required: flags.required,
                                                 readOnly: flags.readOnly,
                                                 multiline: flags.multiline,
                                                 doNotScroll: flags.doNotScroll,
                                                 doNotSpellCheck: flags.doNotSpellCheck,
+                                                // Update coordinates
+                                                x: rect.x1,
+                                                y: rect.y1,
+                                                width: rect.x2 - rect.x1,
+                                                height: rect.y2 - rect.y1,
+                                                pageNumber: pageNumber,
                                             };
 
-                                            console.log(`🔄 Updated field: ${fieldName} [required: ${flags.required}, readOnly: ${flags.readOnly}]`);
+                                            console.log(`🔄 Updated field: ${fieldName} ${nameChanged ? `(was ${oldName})` : ''} [required: ${flags.required}, pos: ${rect.x1.toFixed(0)},${rect.y1.toFixed(0)}]`);
                                         }
                                     } catch (err) {
                                         console.warn('Failed to update modified field:', err);
@@ -839,7 +869,18 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             } else if (action === 'delete') {
                                 // Remove from tracked fields
                                 annotations.forEach((annot: any) => {
-                                    const index = createdFormFieldsRef.current.findIndex((f: any) => f.annotationId === annot.Id);
+                                    // Try find by ID first
+                                    let index = createdFormFieldsRef.current.findIndex((f: any) => f.annotationId === annot.Id);
+
+                                    // Fallback to name if not found by ID (and if it's a widget)
+                                    if (index === -1 && isWidgetAnnotation(annot, Core)) {
+                                        const field = annot.getField?.();
+                                        const fieldName = getFieldName(annot, field);
+                                        if (fieldName) {
+                                            index = createdFormFieldsRef.current.findIndex((f: any) => f.name === fieldName);
+                                        }
+                                    }
+
                                     if (index > -1) {
                                         console.log('🗑️ Field deleted:', createdFormFieldsRef.current[index].name);
                                         createdFormFieldsRef.current.splice(index, 1);
