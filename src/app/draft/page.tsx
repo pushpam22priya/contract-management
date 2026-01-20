@@ -4,7 +4,6 @@ import { Box, Typography, Tooltip, IconButton } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import AddIcon from '@mui/icons-material/Add';
 import DraftCard from '@/components/contracts/DraftCard';
-import DraftFilters from '@/components/filters/DraftFilters';
 import { useEffect, useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
@@ -16,6 +15,8 @@ import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { AlertColor } from '@mui/material';
 import { useSearchParams } from 'next/navigation';
 import { templateService } from '@/services/templateService';
+import { categoryService } from '@/services/categoryService';
+import ReusableFilter from '@/components/common/ReusableFilter';
 
 export default function DraftPage() {
     const [draftContracts, setDraftContracts] = useState<Contract[]>([]);
@@ -35,10 +36,25 @@ export default function DraftPage() {
         severity: 'success' as AlertColor,
     });
 
+    const [categoryOptions, setCategoryOptions] = useState<{ label: string; value: string }[]>([
+        { label: 'All Categories', value: 'all' }
+    ]);
+    const [categoryFilter, setCategoryFilter] = useState({ label: 'All Categories', value: 'all' });
+
     // Load draft contracts
     useEffect(() => {
         loadDrafts();
+        loadCategories();
     }, []);
+
+    const loadCategories = () => {
+        const categories = categoryService.getAllCategories();
+        const options = [
+            { label: 'All Categories', value: 'all' },
+            ...categories.map(cat => ({ label: cat.name, value: cat.name }))
+        ];
+        setCategoryOptions(options);
+    };
 
     /**
      * Show snackbar notification
@@ -152,8 +168,15 @@ export default function DraftPage() {
     };
 
     // Filter states
+    const statusOptions = [
+        { label: 'All Status', value: 'all' },
+        { label: 'Draft', value: 'draft' },
+        { label: 'Review and Approve', value: 'review_approval' },
+    ];
+
     const [searchQuery, setSearchQuery] = useState('');
-    const [categoryFilter, setCategoryFilter] = useState({ label: 'All Categories', value: 'all' });
+    const [statusFilter, setStatusFilter] = useState(statusOptions[0]);
+    // categoryFilter removed (declared above)
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -172,6 +195,10 @@ export default function DraftPage() {
             return false;
         }
 
+        // Local Status Filter
+        const matchesStatus = statusFilter.value === 'all' ||
+            contract.status === statusFilter.value;
+
         // Search Filter
         const matchesSearch = searchQuery === '' ||
             contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -189,7 +216,7 @@ export default function DraftPage() {
             if (endDate && contractDate.isAfter(endDate, 'day')) matchesDate = false;
         }
 
-        return matchesSearch && matchesCategory && matchesDate;
+        return matchesStatus && matchesSearch && matchesCategory && matchesDate;
     });
 
     const filteredCount = filteredDrafts.length;
@@ -262,19 +289,35 @@ export default function DraftPage() {
                 </Box>
 
                 {/* Filter Section */}
-                <DraftFilters
+                <ReusableFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    categoryFilter={categoryFilter}
-                    onCategoryChange={setCategoryFilter}
+                    searchPlaceholder="Search drafts or clients..."
+                    filters={[
+                        {
+                            label: 'Status',
+                            value: statusFilter,
+                            onChange: (newValue) => setStatusFilter(newValue || statusOptions[0]),
+                            options: statusOptions,
+                        },
+                        {
+                            label: 'Category',
+                            value: categoryFilter,
+                            onChange: (newValue) => setCategoryFilter(newValue || { label: 'All Categories', value: 'all' }),
+                            options: categoryOptions,
+                        }
+                    ]}
+                    enableDateFilter={true}
                     startDate={startDate}
                     onStartDateChange={setStartDate}
                     endDate={endDate}
                     onEndDateChange={setEndDate}
                     showAdvancedFilters={showAdvancedFilters}
                     onAdvancedFiltersToggle={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                    totalCount={totalDrafts}
+                    dateFilterTitle="Filter by Draft Date Range"
                     filteredCount={filteredCount}
+                    totalCount={totalDrafts}
+                    countLabel="drafts"
                 />
 
                 {/* Drafts Grid */}
@@ -293,7 +336,7 @@ export default function DraftPage() {
                         <DraftCard
                             key={contract.id}
                             contract={contract}
-                            onView={handleView}  // ← ADD THIS
+                            onView={handleView}
                             onDownload={handleDownload}
                             onShare={handleShare}
                         />

@@ -4,147 +4,147 @@ const TEMPLATES_STORAGE_KEY = 'cms_templates';
 
 // Default templates for demo
 const DEFAULT_TEMPLATES: Template[] = [
-    {
-        id: 'temp_1',
-        name: 'Employment Contract Template',
-        description: 'Standard employment agreement for full-time employees',
-        category: 'Employment',
-        fileName: 'employment_contract.pdf',
-        fileUrl: '/templates/employment_contract.pdf',
-        fileType: 'pdf',
-        timesUsed: 45,
-        lastUsed: '2 days ago',
-        uploadedBy: 'admin@demo.com',
-        uploadedAt: new Date('2024-01-15').toISOString(),
-        content: `EMPLOYMENT AGREEMENT
+    //     {
+    //         id: 'temp_1',
+    //         name: 'Employment Contract Template',
+    //         description: 'Standard employment agreement for full-time employees',
+    //         category: 'Employment',
+    //         fileName: 'employment_contract.pdf',
+    //         fileUrl: '/templates/employment_contract.pdf',
+    //         fileType: 'pdf',
+    //         timesUsed: 45,
+    //         lastUsed: '2 days ago',
+    //         uploadedBy: 'admin@demo.com',
+    //         uploadedAt: new Date('2024-01-15').toISOString(),
+    //         content: `EMPLOYMENT AGREEMENT
 
-This Employment Agreement is entered into on <start_date> between <company_name> and <employee_name>.
+    // This Employment Agreement is entered into on <start_date> between <company_name> and <employee_name>.
 
-Position: <job_position>
-Department: <department>
-Salary: <salary_amount>
-Start Date: <start_date>
-End Date: <end_date>
+    // Position: <job_position>
+    // Department: <department>
+    // Salary: <salary_amount>
+    // Start Date: <start_date>
+    // End Date: <end_date>
 
-Signed by:
-<authorized_signatory>
-Date: <sign_date>`,
-    },
-    {
-        id: 'temp_2',
-        name: 'Service Agreement',
-        description: 'Professional services contract template',
-        category: 'Service',
-        fileName: 'service_agreement.docx',
-        fileUrl: '/templates/service_agreement.docx',
-        fileType: 'docx',
-        timesUsed: 32,
-        lastUsed: '5 days ago',
-        uploadedBy: 'admin@demo.com',
-        uploadedAt: new Date('2024-01-10').toISOString(),
-        content: `SERVICE AGREEMENT
+    // Signed by:
+    // <authorized_signatory>
+    // Date: <sign_date>`,
+    //     },
+    //     {
+    //         id: 'temp_2',
+    //         name: 'Service Agreement',
+    //         description: 'Professional services contract template',
+    //         category: 'Service',
+    //         fileName: 'service_agreement.docx',
+    //         fileUrl: '/templates/service_agreement.docx',
+    //         fileType: 'docx',
+    //         timesUsed: 32,
+    //         lastUsed: '5 days ago',
+    //         uploadedBy: 'admin@demo.com',
+    //         uploadedAt: new Date('2024-01-10').toISOString(),
+    //         content: `SERVICE AGREEMENT
 
-This Service Agreement is made on <start_date> between <service_provider> and <client_name>.
+    // This Service Agreement is made on <start_date> between <service_provider> and <client_name>.
 
-Service Description: <service_description>
-Duration: From <start_date> to <end_date>
-Payment Terms: <payment_terms>
-Total Amount: <total_amount>
+    // Service Description: <service_description>
+    // Duration: From <start_date> to <end_date>
+    // Payment Terms: <payment_terms>
+    // Total Amount: <total_amount>
 
-Provider: <service_provider>
-Client: <client_name>
-Signed: <sign_date>`,
-    },
-    {
-        id: 'temp_3',
-        name: 'NDA Template',
-        description: 'Non-disclosure agreement for confidential information',
-        category: 'NDA',
-        fileName: 'nda_template.pdf',
-        fileUrl: '/templates/nda_template.pdf',
-        fileType: 'pdf',
-        timesUsed: 67,
-        lastUsed: '1 day ago',
-        uploadedBy: 'admin@demo.com',
-        uploadedAt: new Date('2024-01-20').toISOString(),
-        content: `NON-DISCLOSURE AGREEMENT (NDA)
+    // Provider: <service_provider>
+    // Client: <client_name>
+    // Signed: <sign_date>`,
+    //     },
+    //     {
+    //         id: 'temp_3',
+    //         name: 'NDA Template',
+    //         description: 'Non-disclosure agreement for confidential information',
+    //         category: 'NDA',
+    //         fileName: 'nda_template.pdf',
+    //         fileUrl: '/templates/nda_template.pdf',
+    //         fileType: 'pdf',
+    //         timesUsed: 67,
+    //         lastUsed: '1 day ago',
+    //         uploadedBy: 'admin@demo.com',
+    //         uploadedAt: new Date('2024-01-20').toISOString(),
+    //         content: `NON-DISCLOSURE AGREEMENT (NDA)
 
-This Non-Disclosure Agreement ("Agreement") is entered into on <start_date>
-and shall remain in effect until <end_date>.
+    // This Non-Disclosure Agreement ("Agreement") is entered into on <start_date>
+    // and shall remain in effect until <end_date>.
 
-This Agreement is between <company_name>, having its registered office at
-<company_address>, and <recipient_name>.
+    // This Agreement is between <company_name>, having its registered office at
+    // <company_address>, and <recipient_name>.
 
-The purpose of this Agreement is <purpose_of_disclosure>.
+    // The purpose of this Agreement is <purpose_of_disclosure>.
 
-All confidential information disclosed by <company_name> shall remain strictly
-confidential.
+    // All confidential information disclosed by <company_name> shall remain strictly
+    // confidential.
 
-Signed by:
-<authorized_signatory>
-Designation: <designation>
-Date: <sign_date>`,
-    },
-    {
-        id: 'temp_4',
-        name: 'Sales Contract',
-        description: 'Template for product or service sales agreements',
-        category: 'Sales',
-        fileName: 'sales_contract.pdf',
-        fileUrl: '/templates/sales_contract.pdf',
-        fileType: 'pdf',
-        timesUsed: 28,
-        lastUsed: '3 days ago',
-        uploadedBy: 'admin@demo.com',
-        uploadedAt: new Date('2024-01-12').toISOString(),
-        content: `SALES CONTRACT
+    // Signed by:
+    // <authorized_signatory>
+    // Designation: <designation>
+    // Date: <sign_date>`,
+    //     },
+    //     {
+    //         id: 'temp_4',
+    //         name: 'Sales Contract',
+    //         description: 'Template for product or service sales agreements',
+    //         category: 'Sales',
+    //         fileName: 'sales_contract.pdf',
+    //         fileUrl: '/templates/sales_contract.pdf',
+    //         fileType: 'pdf',
+    //         timesUsed: 28,
+    //         lastUsed: '3 days ago',
+    //         uploadedBy: 'admin@demo.com',
+    //         uploadedAt: new Date('2024-01-12').toISOString(),
+    //         content: `SALES CONTRACT
 
-This Sales Contract is executed on <start_date> between:
-Seller: <seller_name>
-Buyer: <buyer_name>
+    // This Sales Contract is executed on <start_date> between:
+    // Seller: <seller_name>
+    // Buyer: <buyer_name>
 
-Product/Service: <product_description>
-Quantity: <quantity>
-Unit Price: <unit_price>
-Total Amount: <total_amount>
+    // Product/Service: <product_description>
+    // Quantity: <quantity>
+    // Unit Price: <unit_price>
+    // Total Amount: <total_amount>
 
-Delivery Date: <delivery_date>
-Payment Terms: <payment_terms>
+    // Delivery Date: <delivery_date>
+    // Payment Terms: <payment_terms>
 
-Valid from <start_date> to <end_date>
+    // Valid from <start_date> to <end_date>
 
-Seller Signature: <seller_signature>
-Buyer Signature: <buyer_signature>
-Date: <sign_date>`,
-    },
-    {
-        id: 'temp_5',
-        name: 'Lease Agreement',
-        description: 'Residential or commercial property lease template',
-        category: 'Lease',
-        fileName: 'lease_agreement.docx',
-        fileUrl: '/templates/lease_agreement.docx',
-        fileType: 'docx',
-        timesUsed: 19,
-        lastUsed: '1 week ago',
-        uploadedBy: 'admin@demo.com',
-        uploadedAt: new Date('2024-01-08').toISOString(),
-        content: `LEASE AGREEMENT
+    // Seller Signature: <seller_signature>
+    // Buyer Signature: <buyer_signature>
+    // Date: <sign_date>`,
+    //     },
+    //     {
+    //         id: 'temp_5',
+    //         name: 'Lease Agreement',
+    //         description: 'Residential or commercial property lease template',
+    //         category: 'Lease',
+    //         fileName: 'lease_agreement.docx',
+    //         fileUrl: '/templates/lease_agreement.docx',
+    //         fileType: 'docx',
+    //         timesUsed: 19,
+    //         lastUsed: '1 week ago',
+    //         uploadedBy: 'admin@demo.com',
+    //         uploadedAt: new Date('2024-01-08').toISOString(),
+    //         content: `LEASE AGREEMENT
 
-This Lease Agreement is made on <start_date> between:
-Landlord: <landlord_name>
-Tenant: <tenant_name>
+    // This Lease Agreement is made on <start_date> between:
+    // Landlord: <landlord_name>
+    // Tenant: <tenant_name>
 
-Property Address: <property_address>
-Lease Period: From <start_date> to <end_date>
+    // Property Address: <property_address>
+    // Lease Period: From <start_date> to <end_date>
 
-Monthly Rent: <monthly_rent>
-Security Deposit: <security_deposit>
+    // Monthly Rent: <monthly_rent>
+    // Security Deposit: <security_deposit>
 
-Landlord: <landlord_name>
-Tenant: <tenant_name>
-Date: <sign_date>`,
-    },
+    // Landlord: <landlord_name>
+    // Tenant: <tenant_name>
+    // Date: <sign_date>`,
+    //     },
 ];
 
 class TemplateService {

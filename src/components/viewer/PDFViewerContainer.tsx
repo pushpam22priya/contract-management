@@ -635,7 +635,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     const instance = await WebViewer(
                         {
                             path: '/webviewer',
-                            licenseKey: process.env.NEXT_PUBLIC_PDFTRON_LICENSE_KEY,
+                            licenseKey: "demo:sakshi.goswami@costacloud.com:60a6909e0200000000a794128274a97e87e16be4eb06822f68e26eff47",
                             // Ensure PDFTron's internal modals appear above the parent dialog
                             css: '/webviewer-custom.css',
                         },

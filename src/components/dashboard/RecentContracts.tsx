@@ -293,7 +293,7 @@ export default function RecentContracts() {
                                             </Typography>
                                         </Box>
 
-                                        <Typography
+                                        {/* <Typography
                                             variant="h6"
                                             fontWeight={700}
                                             sx={{
@@ -302,7 +302,7 @@ export default function RecentContracts() {
                                             }}
                                         >
                                             {contract.value}
-                                        </Typography>
+                                        </Typography> */}
                                     </Box>
 
                                     {/* Progress Bar (Only for active/expiring/etc with dates) */}

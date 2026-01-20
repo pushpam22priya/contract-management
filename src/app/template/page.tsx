@@ -1,11 +1,11 @@
 'use client';
 
+
 import { useState, useEffect } from 'react';
-import { Box, Typography, Button, TextField, InputAdornment, Paper, Autocomplete, Tooltip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
+import { Box, Typography, Button, Tooltip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import UploadIcon from '@mui/icons-material/Upload';
 import AddIcon from '@mui/icons-material/Add';
-import SearchIcon from '@mui/icons-material/Search';
 import TemplateCard from '@/components/template/TemplateCard';
 import UploadTemplateDialog from '@/components/template/UploadTemplateDialog';
 import EditTemplateDialog from '@/components/template/EditTemplateDialog';
@@ -15,6 +15,7 @@ import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import { authService } from '@/services/authService';
 import { Template } from '@/types/template';
+import ReusableFilter from '@/components/common/ReusableFilter';
 
 export default function TemplatePage() {
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -216,123 +217,21 @@ export default function TemplatePage() {
                 </Box>
 
                 {/* Search and Filters Section */}
-                <Paper
-                    elevation={0}
-                    sx={{
-                        mb: 1.5,
-                        p: 1,
-                        bgcolor: '#fff',
-                        borderRadius: 2,
-                        border: '1px solid',
-                        borderColor: 'rgba(0, 0, 0, 0.06)',
-                    }}
-                >
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            gap: 2,
-                            alignItems: 'center',
-                            flexDirection: { xs: 'column', md: 'row' },
-                        }}
-                    >
-                        {/* Search Bar */}
-                        <TextField
-                            fullWidth
-                            placeholder="Search templates..."
-                            variant="outlined"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
-                                    </InputAdornment>
-                                ),
-                            }}
-                            sx={{
-                                flex: { md: 1 },
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    bgcolor: '#fafafa',
-                                    border: 'none',
-                                    '& fieldset': {
-                                        border: '1px solid',
-                                        borderColor: 'rgba(0, 0, 0, 0.1)',
-                                    },
-                                    '&:hover': {
-                                        '& fieldset': {
-                                            borderColor: 'rgba(0, 0, 0, 0.2)',
-                                        },
-                                    },
-                                    '&.Mui-focused': {
-                                        '& fieldset': {
-                                            borderColor: 'primary.main',
-                                            borderWidth: 2,
-                                        },
-                                    },
-                                },
-                                '& .MuiOutlinedInput-input': {
-                                    py: 1.25,
-                                    fontSize: '0.95rem',
-                                },
-                            }}
-                        />
-
-                        {/* Filters Container */}
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                gap: 2,
-                                width: { xs: '100%', md: 'auto' },
-                                flexDirection: { xs: 'column', sm: 'row' },
-                            }}
-                        >
-                            {/* Category Filter */}
-                            <Autocomplete
-                                options={categories}
-                                value={selectedCategory}
-                                onChange={(event, newValue) => setSelectedCategory(newValue || 'All Categories')}
-                                disableClearable
-                                sx={{
-                                    minWidth: { xs: '100%', sm: 220 },
-                                }}
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params}
-                                        placeholder="All Categories"
-                                        sx={{
-                                            '& .MuiOutlinedInput-root': {
-                                                borderRadius: 2,
-                                                padding: 0.5,
-                                                bgcolor: '#fafafa',
-                                                '& fieldset': {
-                                                    border: '1px solid',
-                                                    borderColor: 'rgba(0, 0, 0, 0.1)',
-                                                },
-                                                '&:hover': {
-                                                    '& fieldset': {
-                                                        borderColor: 'rgba(0, 0, 0, 0.2)',
-                                                    },
-                                                },
-                                                '&.Mui-focused': {
-                                                    '& fieldset': {
-                                                        borderColor: 'primary.main',
-                                                        borderWidth: 2,
-                                                    },
-                                                },
-                                            },
-                                            '& .MuiOutlinedInput-input': {
-                                                // py: 1.25,
-                                                fontSize: '0.95rem',
-                                                fontWeight: 500,
-                                            },
-                                        }}
-                                    />
-                                )}
-                            />
-                        </Box>
-                    </Box>
-                </Paper>
+                <ReusableFilter
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    searchPlaceholder="Search templates..."
+                    filters={[
+                        {
+                            label: 'Category',
+                            value: { label: selectedCategory, value: selectedCategory },
+                            onChange: (newValue) => setSelectedCategory(newValue?.value || 'All Categories'),
+                            options: categories.map(c => ({ label: c, value: c })),
+                            minWidth: 220
+                        }
+                    ]}
+                    showCounts={false}
+                />
 
                 {/* Template Cards Grid */}
                 <Box
