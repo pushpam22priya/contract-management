@@ -1,6 +1,6 @@
 import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
 import { FileDownload, Share, Visibility } from '@mui/icons-material';
-import { Contract } from '@/types/contract';
+import { Contract, ContractStatus } from '@/types/contract';
 // import { Contract } from './ContractCard';
 
 interface DraftCardProps {
@@ -15,23 +15,22 @@ const DraftCard = ({ contract, onView, onDownload, onShare }: DraftCardProps) =>
      * Format status for display
      */
     const getStatusLabel = (status: Contract['status']): string => {
-        // Check for returned for modification
-        if (status === 'draft' && contract.reviewStatus === 'changes_requested') {
+        // Use Enum for comparison
+        if (status === ContractStatus.DRAFT && contract.reviewStatus === 'changes_requested') {
             return 'Returned for Modification';
         }
-
         switch (status) {
-            case 'active':
+            case ContractStatus.ACTIVE:
                 return 'Active';
-            case 'expiring':
+            case ContractStatus.EXPIRING:
                 return 'Expiring';
-            case 'expired':
+            case ContractStatus.EXPIRED:
                 return 'Expired';
-            case 'review_approval':
+            case ContractStatus.REVIEW_APPROVAL:
                 return 'Review and Approval';
-            case 'waiting_for_signature':
+            case ContractStatus.WAITING_FOR_SIGNATURE:
                 return 'Waiting for Signature';
-            case 'draft':
+            case ContractStatus.DRAFT:
                 return 'Draft';
             default:
                 return status;
@@ -39,23 +38,22 @@ const DraftCard = ({ contract, onView, onDownload, onShare }: DraftCardProps) =>
     };
 
     const getStatusColor = (status: Contract['status']) => {
-        // Check for returned for modification
-        if (status === 'draft' && contract.reviewStatus === 'changes_requested') {
-            return { bg: '#fff7ed', color: '#c2410c', border: '#fdba74' }; // Orange/Amber
+        // Use Enum for comparison
+        if (status === ContractStatus.DRAFT && contract.reviewStatus === 'changes_requested') {
+            return { bg: '#fff7ed', color: '#c2410c', border: '#fdba74' };
         }
-
         switch (status) {
-            case 'active':
+            case ContractStatus.ACTIVE:
                 return { bg: '#dcfce7', color: '#166534', border: '#86efac' };
-            case 'expiring':
+            case ContractStatus.EXPIRING:
                 return { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' };
-            case 'expired':
+            case ContractStatus.EXPIRED:
                 return { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' };
-            case 'review_approval':
+            case ContractStatus.REVIEW_APPROVAL:
                 return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' };
-            case 'waiting_for_signature':
+            case ContractStatus.WAITING_FOR_SIGNATURE:
                 return { bg: '#fff9c4', color: '#f57f17', border: '#fff176' };
-            case 'draft':
+            case ContractStatus.DRAFT:
                 return { bg: '#f3f4f6', color: '#374151', border: '#d1d5db' };
             default:
                 return { bg: '#f3f4f6', color: '#374151', border: '#d1d5db' };
@@ -135,7 +133,6 @@ const DraftCard = ({ contract, onView, onDownload, onShare }: DraftCardProps) =>
                         border: `1px solid ${statusColors.border}`,
                         fontWeight: 600,
                         fontSize: '0.75rem',
-                        textTransform: 'lowercase',
                         height: '24px',
                         minWidth: '70px',
                         '& .MuiChip-label': {

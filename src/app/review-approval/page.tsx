@@ -14,6 +14,7 @@ import ReviewConfirmationDialog from '@/components/contracts/ReviewConfirmationD
 import FurtherReviewDialog from '@/components/contracts/FurtherReviewDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { AlertColor } from '@mui/material';
+import { useRouter } from 'next/navigation';
 
 /**
  * Review & Approval Page
@@ -23,6 +24,8 @@ export default function ReviewApprovalPage() {
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
     const [tabValue, setTabValue] = useState(0); // 0 = As Reviewer, 1 = As Approver
+
+    const router = useRouter();
 
     // Viewer state
     const [viewerOpen, setViewerOpen] = useState(false);
@@ -182,7 +185,9 @@ export default function ReviewApprovalPage() {
 
         if (result.success) {
             showNotification(result.message, 'success');
-            loadContracts();
+            // NAVIGATE TO CONTRACTS PAGE
+            router.push('/contracts');
+            // loadContracts();
         } else {
             showNotification(result.message, 'error');
         }

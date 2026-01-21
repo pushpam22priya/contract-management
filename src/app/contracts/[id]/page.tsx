@@ -17,6 +17,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AppLayout from '@/components/layout/AppLayout';
 import ContractInformation from '@/components/contracts/ContractInformation';
 import ContractDetailsPanel from '@/components/contracts/ContractDetailsPanel';
+import { ContractStatus } from '@/types/contract';
 
 export default function ContractViewPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -27,7 +28,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
         id: id,
         title: 'Consulting Services - Global Industries',
         description: 'Strategic consulting services for Q1 2025',
-        status: 'expiring',
+        status: ContractStatus.EXPIRING,
         client: 'Global Industries Inc.',
         value: '₹89K',
         category: 'Service',

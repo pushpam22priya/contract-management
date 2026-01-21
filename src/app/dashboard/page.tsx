@@ -6,12 +6,13 @@ import CriticalAlerts from '@/components/dashboard/CriticalAlerts';
 import StatsCard from '@/components/dashboard/StatsCard';
 import RecentContracts from '@/components/dashboard/RecentContracts';
 import QuickActions from '@/components/dashboard/QuickActions';
-import CreateContractWizard from '@/components/contracts/CreateContractWizard';
 import ContractsPieChart from '@/components/dashboard/ContractsPieChart';
 import { useState, useEffect } from 'react';
 import { contractService } from '@/services/contractService';
 import { authService } from '@/services/authService';
 import { useRouter } from 'next/navigation';
+import CreateContractDialog from '@/components/contracts/CreateContractDialog';
+import { ContractStatus } from '@/types/contract';
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -48,12 +49,12 @@ export default function DashboardPage() {
 
             total++;
 
-            if (c.status === 'draft') draft++;
-            if (c.status === 'review_approval') underReview++;
-            if (c.status === 'waiting_for_signature') approved++;
-            if (c.status === 'active') active++;
-            if (c.status === 'expiring') expiring++;
-            if (c.status === 'expired') expired++;
+            if (c.status === ContractStatus.DRAFT) draft++;
+            if (c.status === ContractStatus.REVIEW_APPROVAL) underReview++;
+            if (c.status === ContractStatus.WAITING_FOR_SIGNATURE) approved++;
+            if (c.status === ContractStatus.ACTIVE) active++;
+            if (c.status === ContractStatus.EXPIRING) expiring++;
+            if (c.status === ContractStatus.EXPIRED) expired++;
         });
 
         setStats({
@@ -144,7 +145,7 @@ export default function DashboardPage() {
                 router.push('/template');
                 break;
             case 'expiring':
-                router.push('/contracts?status=expiring');
+                router.push(`/contracts?status=${ContractStatus.EXPIRING}`);
                 break;
             case 'approvals':
                 router.push('/review-approval?tab=approver');
@@ -223,7 +224,7 @@ export default function DashboardPage() {
             </Box>
 
             {/* Create Contract Wizard */}
-            <CreateContractWizard
+            <CreateContractDialog
                 open={createWizardOpen}
                 onClose={() => setCreateWizardOpen(false)}
             />

@@ -162,7 +162,7 @@ export default function ReviewApprovalCard({
                                     {reviewer.email}
                                 </Typography>
                                 <Chip
-                                    label={reviewer.status}
+                                    label={reviewer.status.charAt(0).toUpperCase() + reviewer.status.slice(1).replace('_', ' ')}
                                     size="small"
                                     sx={{
                                         ml: 1,

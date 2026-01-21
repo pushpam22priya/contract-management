@@ -1,75 +1,6 @@
-import { Contract, ReviewerInfo, ApproverInfo, ModificationRequest } from '@/types/contract';
+import { Contract, ReviewerInfo, ApproverInfo, ModificationRequest, ContractStatus } from '@/types/contract';
 
 const CONTRACTS_STORAGE_KEY = 'cms_contracts';
-
-// Default demo contracts
-const DEFAULT_CONTRACTS: Contract[] = [
-    // {
-    //     // Card display fields
-    //     id: 'contract_1',
-    //     title: 'Software Development Agreement',
-    //     client: 'TechCorp Inc.',
-    //     description: 'Custom software development project',
-    //     value: '150000',
-    //     category: 'Service',
-    //     expiresInDays: 245,
-    //     status: 'active',
-
-    //     // Template info
-    //     templateId: 'temp_2',
-    //     templateName: 'Service Agreement',
-
-    //     // Content
-    //     content: 'Populated contract content...',
-    //     fieldValues: {},
-
-    //     // Dates
-    //     startDate: '2024-01-15',
-    //     endDate: '2024-12-31',
-
-    //     // Metadata
-    //     createdAt: new Date('2024-01-15').toISOString(),
-    //     createdBy: 'admin@demo.com',
-    // },
-    // {
-    //     id: 'contract_2',
-    //     title: 'Employee NDA',
-    //     client: 'John Smith',
-    //     description: 'Non-disclosure agreement for new hire',
-    //     value: '',
-    //     category: 'NDA',
-    //     expiresInDays: 380,
-    //     status: 'active',
-
-    //     templateId: 'temp_3',
-    //     templateName: 'NDA Template',
-    //     content: 'Populated NDA content...',
-    //     fieldValues: {},
-    //     startDate: '2024-02-01',
-    //     endDate: '2025-02-01',
-    //     createdAt: new Date('2024-02-01').toISOString(),
-    //     createdBy: 'admin@demo.com',
-    // },
-    // {
-    //     id: 'contract_3',
-    //     title: 'Office Lease Agreement',
-    //     client: 'ABC Properties Ltd.',
-    //     description: 'Commercial office space rental',
-    //     value: '50000',
-    //     category: 'Lease',
-    //     expiresInDays: 20,
-    //     status: 'review_approval',
-
-    //     templateId: 'temp_5',
-    //     templateName: 'Lease Agreement',
-    //     content: 'Populated lease content...',
-    //     fieldValues: {},
-    //     startDate: '2024-01-01',
-    //     endDate: '2024-12-31',
-    //     createdAt: new Date('2024-01-01').toISOString(),
-    //     createdBy: 'admin@demo.com',
-    // },
-];
 
 class ContractService {
     /**
@@ -80,7 +11,7 @@ class ContractService {
 
         const existing = localStorage.getItem(CONTRACTS_STORAGE_KEY);
         if (!existing) {
-            localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(DEFAULT_CONTRACTS));
+            localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify([]));
         }
     }
 
@@ -89,58 +20,46 @@ class ContractService {
      */
     private updateContractStatuses(contracts: Contract[]): Contract[] {
         const today = new Date().toISOString().split('T')[0];
-        let hasChanges = false;
 
-        const updatedContracts = contracts.map(contract => {
-            let newStatus = contract.status;
-
-            // 1. Signed -> Active (if start date reached)
-            if (contract.status === 'signed' && contract.startDate && contract.startDate <= today) {
-                newStatus = 'active';
+        return contracts.map(c => {
+            // Only run logic on these final states
+            if (![ContractStatus.SIGNED, ContractStatus.ACTIVE, ContractStatus.EXPIRING].includes(c.status)) {
+                return c;
             }
 
-            // 2. Active -> Expiring (if within 30 days of end date)
-            if (contract.status === 'active' && contract.endDate) {
-                const endDate = new Date(contract.endDate);
+            let newStatus = c.status;
+
+            // 1. Signed -> Active (Start Date Passed)
+            if (c.status === ContractStatus.SIGNED) {
+                if (c.startDate && c.startDate <= today) newStatus = ContractStatus.ACTIVE;
+            }
+
+            // 2. Active -> Expiring (7 Days Rule)
+            if (newStatus === ContractStatus.ACTIVE && c.endDate) {
+                const endDate = new Date(c.endDate);
                 const warningDate = new Date(endDate);
-                warningDate.setDate(endDate.getDate() - 30);
-                const warningDateString = warningDate.toISOString().split('T')[0];
+                warningDate.setDate(endDate.getDate() - 7); // 7 DAYS WARNING
+                const warningStr = warningDate.toISOString().split('T')[0];
 
-                if (today >= warningDateString && today <= contract.endDate) {
-                    newStatus = 'expiring';
-                }
+                if (today >= warningStr) newStatus = ContractStatus.EXPIRING;
             }
 
-            // 3. active/expiring/signed -> Expired (if end date passed)
-            if ((contract.status === 'active' || contract.status === 'expiring' || contract.status === 'signed') && contract.endDate) {
-                if (today > contract.endDate) {
-                    newStatus = 'expired';
-                }
-            }
+            // 3. Any -> Expired
+            if (c.endDate && today > c.endDate) newStatus = ContractStatus.EXPIRED;
 
-            if (newStatus !== contract.status) {
-                hasChanges = true;
-                return { ...contract, status: newStatus };
-            }
-            return contract;
+            return newStatus !== c.status ? { ...c, status: newStatus } : c;
         });
-
-        if (hasChanges && typeof window !== 'undefined') {
-            localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(updatedContracts));
-        }
-
-        return updatedContracts;
     }
 
     /**
      * Get all contracts from localStorage
      */
     getAllContracts(): Contract[] {
-        if (typeof window === 'undefined') return DEFAULT_CONTRACTS;
+        if (typeof window === 'undefined') return [];
 
         this.initializeContracts();
         const contractsData = localStorage.getItem(CONTRACTS_STORAGE_KEY);
-        let contracts = contractsData ? JSON.parse(contractsData) : DEFAULT_CONTRACTS;
+        let contracts = contractsData ? JSON.parse(contractsData) : [];
 
         // Run status updates logic
         contracts = this.updateContractStatuses(contracts);
@@ -186,6 +105,7 @@ class ContractService {
         try {
             const newContract: Contract = {
                 ...data,
+                status: ContractStatus.DRAFT,
                 id: this.generateContractId(),
                 createdAt: new Date().toISOString(),
             };
@@ -350,7 +270,7 @@ class ContractService {
         // Update contract with review/approval tracking
         const updatedContract: Contract = {
             ...contracts[index],
-            status: 'review_approval' as const,
+            status: ContractStatus.REVIEW_APPROVAL,
             reviewers: reviewerInfo.length > 0 ? reviewerInfo : undefined,
             approver: approverInfo,
             reviewStatus: reviewers.length > 0 ? 'pending' : undefined,
@@ -422,6 +342,7 @@ class ContractService {
         const updatedContract: Contract = {
             ...contract,
             reviewers: updatedReviewers,
+            status: allReviewed ? ContractStatus.REVIEWED : contract.status, 
             reviewStatus: allReviewed ? 'reviewed' : 'in_review',
             updatedAt: new Date().toISOString(),
         };
@@ -476,7 +397,7 @@ class ContractService {
         // Update contract status and add modification request
         const updatedContract: Contract = {
             ...contract,
-            status: 'draft', // Return to draft
+            status: ContractStatus.DRAFT, // Return to draft
             reviewStatus: 'changes_requested',
             // Add to existing requests or create new array
             modificationRequests: [
@@ -550,7 +471,7 @@ class ContractService {
         // Update contract to waiting_for_signature status
         const updatedContract: Contract = {
             ...contract,
-            status: 'waiting_for_signature' as const,
+            status: ContractStatus.APPROVED,
             approver: updatedApprover,
             approvalStatus: 'approved',
             updatedAt: new Date().toISOString(),
@@ -631,14 +552,15 @@ class ContractService {
         const allContracts = this.getAllContracts();
 
         return allContracts.filter(contract => {
-            // Check if user is a reviewer
             const isReviewer = contract.reviewers?.some(r => r.email === userEmail);
-
-            // Check if user is the approver
             const isApprover = contract.approver?.email === userEmail;
-
-            // Return contracts where user is involved and status is review_approval
-            return (isReviewer || isApprover) && contract.status === 'review_approval';
+            // ALLOW BOTH 'REVIEW_APPROVAL' AND 'REVIEWED'
+            // Reviewers work on 'REVIEW_APPROVAL'
+            // Approvers need to see 'REVIEWED' (Ready for Approval)
+            const isValidStatus = 
+                contract.status === ContractStatus.REVIEW_APPROVAL || 
+                contract.status === ContractStatus.REVIEWED;
+            return (isReviewer || isApprover) && isValidStatus;
         });
     }
 
@@ -651,38 +573,42 @@ class ContractService {
     }
     /**
      * Submit contract for signature
+     * STAGE: Approved -> Waiting for Signature
      */
     async submitForSignature(
         contractId: string,
         signerEmail: string
     ): Promise<{ success: boolean; message: string; contract?: Contract }> {
         await new Promise(resolve => setTimeout(resolve, 500));
-
         const contracts = this.getAllContracts();
         const index = contracts.findIndex(c => c.id === contractId);
-
         if (index === -1) {
             return {
                 success: false,
                 message: 'Contract not found',
             };
         }
-
         const contract = contracts[index];
-
+        // --- STRICT CHECK START ---
+        // Only allow sending if the contract is fully APPROVED.
+        if (contract.status !== ContractStatus.APPROVED) {
+            return {
+                success: false,
+                message: `Cannot send for signature. Contract status is '${contract.status}', but must be '${ContractStatus.APPROVED}'.`,
+            };
+        }
+        // --- STRICT CHECK END ---
         const updatedContract: Contract = {
             ...contract,
-            status: 'waiting_for_signature',
+            status: ContractStatus.WAITING_FOR_SIGNATURE, // Explicit Transition
             signer: {
                 email: signerEmail,
                 status: 'pending',
             },
             updatedAt: new Date().toISOString(),
         };
-
         contracts[index] = updatedContract;
         this.saveContracts(contracts);
-
         return {
             success: true,
             message: 'Contract submitted for signature',
@@ -696,7 +622,7 @@ class ContractService {
     getContractsForSignature(userEmail: string): Contract[] {
         const allContracts = this.getAllContracts();
         return allContracts.filter(c =>
-            c.status === 'waiting_for_signature' &&
+            c.status === ContractStatus.WAITING_FOR_SIGNATURE &&
             c.signer?.email === userEmail &&
             c.signer?.status === 'pending'
         );
@@ -733,7 +659,7 @@ class ContractService {
 
         const updatedContract: Contract = {
             ...contract,
-            status: 'signed', // or 'active' depending on final workflow
+            status: ContractStatus.SIGNED, // or 'active' depending on final workflow
             signer: {
                 ...contract.signer,
                 status: 'signed',

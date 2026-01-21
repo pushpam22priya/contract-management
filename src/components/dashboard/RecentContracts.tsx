@@ -5,14 +5,14 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { contractService } from '@/services/contractService';
 import { authService } from '@/services/authService';
-import { Contract } from '@/types/contract';
+import { Contract, ContractStatus } from '@/types/contract';
 import dayjs from 'dayjs';
 
 interface RecentContractDisplay {
     id: string;
     title: string;
     company: string;
-    status: 'active' | 'expiring' | 'draft' | 'pending' | 'review_approval' | string;
+    status: ContractStatus;
     daysLeft: number;
     totalDays: number;
     value: string;
@@ -57,7 +57,7 @@ export default function RecentContracts() {
 
                 // Navigate to draft page if review_approval, otherwise contracts page
                 // Add search parameter to filter by contract title
-                const basePath = c.status === 'review_approval' ? `/draft` : `/contracts`;
+                const basePath = c.status === ContractStatus.REVIEW_APPROVAL ? `/draft` : `/contracts`;
                 const params = new URLSearchParams();
                 params.set('search', c.title);
                 const path = `${basePath}?${params.toString()}`;
@@ -267,7 +267,10 @@ export default function RecentContracts() {
                                                     {contract.title}
                                                 </Typography>
                                                 <Chip
-                                                    label={contract.status.replace('_', ' ')}
+                                                    label={contract.status
+                                                        .split('_')
+                                                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                                        .join(' ')}
                                                     size="small"
                                                     sx={{
                                                         bgcolor: statusColors.bg,
@@ -275,7 +278,6 @@ export default function RecentContracts() {
                                                         fontWeight: 600,
                                                         fontSize: '0.75rem',
                                                         height: 24,
-                                                        textTransform: 'lowercase',
                                                         '& .MuiChip-label': {
                                                             px: 1.5,
                                                         },

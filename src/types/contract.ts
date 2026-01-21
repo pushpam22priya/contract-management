@@ -7,6 +7,19 @@ export interface SignerInfo {
     signedAt?: string;
     signatureImage?: string; // Base64 data URL of the signature
 }
+
+export enum ContractStatus {
+    DRAFT = 'draft',
+    REVIEW_APPROVAL = 'review_approval',
+    REVIEWED = 'reviewed',       // Reviews done, waiting for approval
+    APPROVED = 'approved',       // Gate: Approved, ready for signature
+    WAITING_FOR_SIGNATURE = 'waiting_for_signature',
+    SIGNED = 'signed',           // Signed (future start date)
+    ACTIVE = 'active',           // Signed + Started
+    EXPIRING = 'expiring',       // Active + fading
+    EXPIRED = 'expired',
+    REJECTED = 'rejected'
+}
  
 export interface Contract {
     // Card display fields (from Step 2 - Basic Information)
@@ -17,8 +30,7 @@ export interface Contract {
     value: string;
     category: string;
     expiresInDays: number;
-    status: 'active' | 'expiring' | 'expired' | 'review_approval' | 'waiting_for_signature' | 'draft' | 'signed'; // Added 'signed'
- 
+    status: ContractStatus;
     // Review & Approval Workflow tracking
     reviewers?: ReviewerInfo[];      // Multiple reviewers can be assigned
     approver?: ApproverInfo;         // Single approver

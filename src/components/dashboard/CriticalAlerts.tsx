@@ -8,7 +8,7 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { contractService } from '@/services/contractService';
-import { Contract } from '@/types/contract';
+import { Contract, ContractStatus } from '@/types/contract';
 import { authService } from '@/services/authService';
 
 interface Alert {
@@ -41,7 +41,7 @@ export default function CriticalAlerts() {
         // 2. Status must be 'expiring'
         const expiringContracts = allContracts.filter(c => {
             const isRelevant = c.createdBy === currentUser.email || c.signer?.email === currentUser.email;
-            return isRelevant && c.status === 'expiring';
+             return isRelevant && c.status === ContractStatus.EXPIRING;
         });
 
         // Map to alerts
@@ -71,7 +71,7 @@ export default function CriticalAlerts() {
         // Navigate with search params to filter for this specific contract
         // We use the contract title for search to narrow it down
         const params = new URLSearchParams();
-        params.set('status', 'expiring');
+        params.set('status', ContractStatus.EXPIRING);
         params.set('search', alert.contractTitle);
         router.push(`/contracts?${params.toString()}`);
     };

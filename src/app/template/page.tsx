@@ -5,11 +5,9 @@ import { useState, useEffect } from 'react';
 import { Box, Typography, Button, Tooltip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import UploadIcon from '@mui/icons-material/Upload';
-import AddIcon from '@mui/icons-material/Add';
 import TemplateCard from '@/components/template/TemplateCard';
 import UploadTemplateDialog from '@/components/template/UploadTemplateDialog';
 import EditTemplateDialog from '@/components/template/EditTemplateDialog';
-import CreateContractWizard from '@/components/contracts/CreateContractWizard';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
@@ -280,13 +278,6 @@ export default function TemplatePage() {
                     open={uploadDialogOpen}
                     onClose={() => setUploadDialogOpen(false)}
                     onSuccess={handleUploadSuccess}
-                />
-
-                {/* Create Contract Wizard */}
-                <CreateContractWizard
-                    open={wizardOpen}
-                    onClose={handleCloseWizard}
-                    initialTemplate={selectedTemplateForUse}
                 />
 
                 {/* Document Viewer Dialog */}

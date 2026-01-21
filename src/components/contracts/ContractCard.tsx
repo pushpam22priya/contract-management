@@ -1,6 +1,6 @@
 import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
 import { Visibility, FileDownload, Share } from '@mui/icons-material';
-import { Contract } from '@/types/contract';
+import { Contract, ContractStatus } from '@/types/contract';
 
 interface ContractCardProps {
     contract: Contract;
@@ -15,18 +15,24 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
      */
     const getStatusLabel = (status: Contract['status']): string => {
         switch (status) {
-            case 'active':
+            case ContractStatus.ACTIVE:
                 return 'Active';
-            case 'expiring':
+            case ContractStatus.EXPIRING:
                 return 'Expiring';
-            case 'expired':
+            case ContractStatus.EXPIRED:
                 return 'Expired';
-            case 'review_approval':
+            case ContractStatus.REVIEW_APPROVAL:
                 return 'Review and Approval';
-            case 'waiting_for_signature':
+            case ContractStatus.REVIEWED:
+                return 'Reviewed';
+            case ContractStatus.APPROVED:
+                return 'Approved';
+            case ContractStatus.WAITING_FOR_SIGNATURE:
                 return 'Waiting for Signature';
-            case 'draft':
+            case ContractStatus.DRAFT:
                 return 'Draft';
+            case ContractStatus.SIGNED:
+                return 'Signed';
             default:
                 return status;
         }
@@ -34,18 +40,22 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
 
     const getStatusColor = (status: Contract['status']) => {
         switch (status) {
-            case 'active':
+            case ContractStatus.ACTIVE:
+            case ContractStatus.SIGNED:
                 return { bg: '#dcfce7', color: '#166534', border: '#86efac' };
-            case 'expiring':
+            case ContractStatus.EXPIRING:
                 return { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' };
-            case 'expired':
+            case ContractStatus.EXPIRED:
+            case ContractStatus.REJECTED:
                 return { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' };
-            case 'review_approval':
-                return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' };
-            case 'waiting_for_signature':
+            case ContractStatus.REVIEW_APPROVAL:
+            case ContractStatus.REVIEWED:
+                return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' }; // Blueish
+            case ContractStatus.APPROVED:
+                return { bg: '#d1fae5', color: '#065f46', border: '#34d399' }; // Greenish (Ready to sign)
+            case ContractStatus.WAITING_FOR_SIGNATURE:
                 return { bg: '#fff9c4', color: '#f57f17', border: '#fff176' };
-            case 'draft':
-                return { bg: '#f3f4f6', color: '#374151', border: '#d1d5db' };
+            case ContractStatus.DRAFT:
             default:
                 return { bg: '#f3f4f6', color: '#374151', border: '#d1d5db' };
         }
@@ -125,7 +135,6 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                         border: `1px solid ${statusColors.border}`,
                         fontWeight: 600,
                         fontSize: '0.75rem',
-                        textTransform: 'lowercase',
                         height: '24px',
                         minWidth: '70px',
                         '& .MuiChip-label': {
@@ -320,7 +329,7 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                 </Tooltip> */}
 
                 {/* Share Icon Button (For Draft, Review, or Waiting for Signature) */}
-                {!['signed', 'active', 'expiring', 'expired'].includes(contract.status) && onShare && (
+                {(contract.status === ContractStatus.APPROVED || contract.status === ContractStatus.WAITING_FOR_SIGNATURE) && onShare && (
                     <Tooltip title="Share for signature" arrow>
                         <IconButton
                             size="small"

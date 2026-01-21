@@ -7,7 +7,7 @@ import DraftCard from '@/components/contracts/DraftCard';
 import { useEffect, useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
-import { Contract } from '@/types/contract';
+import { Contract, ContractStatus } from '@/types/contract';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import RequestReviewDialog from '@/components/contracts/RequestReviewDialog';
 import { authService } from '@/services/authService';
@@ -83,8 +83,12 @@ export default function DraftPage() {
         // Get contracts created by user
         const userContracts = contractService.getContractsCreatedByUser(currentUser.email);
 
-        // Filter for drafts and review_approval
-        const drafts = userContracts.filter(c => c.status === 'draft' || c.status === 'review_approval');
+        // Show Drafts AND Reviewed (Waiting for Approval)
+        const drafts = userContracts.filter(c =>
+            c.status === ContractStatus.DRAFT ||
+            c.status === ContractStatus.REVIEW_APPROVAL ||
+            c.status === ContractStatus.REVIEWED
+        );
         setDraftContracts(drafts);
         setLoading(false);
     };
@@ -169,10 +173,10 @@ export default function DraftPage() {
 
     // Filter states
     const statusOptions = [
-        { label: 'All Status', value: 'all' },
-        { label: 'Draft', value: 'draft' },
-        { label: 'Review and Approve', value: 'review_approval' },
-    ];
+    { label: 'All Status', value: 'all' },
+    { label: 'Draft', value: ContractStatus.DRAFT },
+    { label: 'Review and Approve', value: ContractStatus.REVIEW_APPROVAL },
+];
 
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState(statusOptions[0]);

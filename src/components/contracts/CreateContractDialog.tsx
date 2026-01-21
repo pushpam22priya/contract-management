@@ -21,6 +21,7 @@ import { contractService } from '@/services/contractService';
 import { authService } from '@/services/authService';
 import { Template } from '@/types/template';
 import dayjs from 'dayjs';
+import { ContractStatus } from '@/types/contract';
 
 interface CreateContractDialogProps {
     open: boolean;
@@ -170,7 +171,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                 value: contractValue || 'N/A',
                 category: selectedTemplate.category,
                 expiresInDays: expiresInDays,
-                status: 'draft',
+                status: ContractStatus.DRAFT,
                 templateId: selectedTemplate.id,
                 templateName: selectedTemplate.name,
                 content: selectedTemplate.content || '',

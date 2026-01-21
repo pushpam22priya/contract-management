@@ -11,7 +11,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import ContractCard from '@/components/contracts/ContractCard';
 import CreateContractDialog from '@/components/contracts/CreateContractDialog';
 import { contractService } from '@/services/contractService';
-import { Contract } from '@/types/contract';
+import { Contract, ContractStatus } from '@/types/contract';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { authService } from '@/services/authService';
 import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
@@ -23,11 +23,11 @@ import ReusableFilter from '@/components/common/ReusableFilter';
 
 const statusOptions = [
     { label: 'All Status', value: 'all' },
-    { label: 'Active', value: 'active' },
-    { label: 'Expiring', value: 'expiring' },
-    { label: 'Waiting for Signature', value: 'waiting_for_signature' },
-    { label: 'Signed', value: 'signed' },
-    { label: 'Expired', value: 'expired' },
+    { label: 'Active', value: ContractStatus.ACTIVE },
+    { label: 'Expiring', value: ContractStatus.EXPIRING },
+    { label: 'Waiting for Signature', value: ContractStatus.WAITING_FOR_SIGNATURE },
+    { label: 'Signed', value: ContractStatus.SIGNED },
+    { label: 'Expired', value: ContractStatus.EXPIRED },
 ];
 
 export default function ContractsPage() {
@@ -121,7 +121,14 @@ export default function ContractsPage() {
             const isSignerAndVisible = isSigner && isValidSignerStatus;
 
             if (isCreator) {
-                return ['active', 'expiring', 'expired', 'waiting_for_signature', 'signed'].includes(c.status);
+                return [
+                    ContractStatus.APPROVED,
+                    ContractStatus.WAITING_FOR_SIGNATURE,
+                    ContractStatus.SIGNED,
+                    ContractStatus.ACTIVE,
+                    ContractStatus.EXPIRING,
+                    ContractStatus.EXPIRED
+                ].includes(c.status);
             }
 
             return isSignerAndVisible;
