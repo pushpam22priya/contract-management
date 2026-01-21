@@ -146,6 +146,15 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                 console.log('Full XFDF:', xfdf);
             }
 
+            // CRITICAL: Also export formFields to capture ReadOnly and other flags
+            // These are stored with the contract so flags persist when reopening
+            const exportedFormFields = await pdfViewerRef.current?.exportFormFields();
+            console.log('📋 FormFields Export Result:');
+            console.log('  - Fields exported:', exportedFormFields?.length || 0);
+            if (exportedFormFields && exportedFormFields.length > 0) {
+                console.log('  - ReadOnly flags:', exportedFormFields.filter((f: any) => f.readOnly).map((f: any) => f.name));
+            }
+
             // Calculate dates if not provided
             const finalStartDate = startDate || dayjs().format('YYYY-MM-DD');
             const finalEndDate = endDate || dayjs().add(1, 'year').format('YYYY-MM-DD');
@@ -153,7 +162,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
 
             console.log('💾 Creating contract with XFDF data...');
 
-            // Create contract with XFDF data
+            // Create contract with XFDF data AND formFields (with ReadOnly flags)
             const result = await contractService.createContract({
                 title: contractTitle,
                 client: clientName,
@@ -165,13 +174,14 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                 templateId: selectedTemplate.id,
                 templateName: selectedTemplate.name,
                 content: selectedTemplate.content || '',
-                fieldValues: filledFieldValues,  // Save filled values (e.g., {\"client_name\": \"ABC Corp\"})
+                fieldValues: filledFieldValues,  // Save filled values (e.g., {"client_name": "ABC Corp"})
                 startDate: finalStartDate,
                 endDate: finalEndDate,
                 createdBy: currentUser.email,
                 templateDocxBase64: selectedTemplate.docxBase64,
                 templateFileName: selectedTemplate.fileName,
                 xfdfString: xfdf,
+                formFields: exportedFormFields, // Save field definitions with ReadOnly flags
             });
 
             console.log('Contract creation result:', result);
@@ -546,6 +556,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                                     // created when template was uploaded. PDFViewer recreates these fields.
                                     formFields={selectedTemplate?.formFields}
                                     readOnly={false}
+                                    currentUserRole="contractor"
                                     // Callback when user fills any field  
                                     // Explanation: Fires when user types/checks a field, stores value
                                     onFieldChange={handleFieldChange}

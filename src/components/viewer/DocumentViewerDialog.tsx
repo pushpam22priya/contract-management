@@ -173,10 +173,7 @@
 //         </BaseDialog>
 //     );
 // }
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+////////////////////////////////////////////////////////////////
 'use client';
  
 import { Box, Button } from '@mui/material';
@@ -242,6 +239,7 @@ interface DocumentViewerDialogProps {
     clientSigningMode?: boolean; // NEW: Client can only fill empty, non-readOnly fields
     templateFormFields?: any[]; // NEW: Template's form field definitions (for readOnly flags)
     formFields?: any[]; // NEW: Form field definitions for template viewing
+    currentUserRole?: 'contractor' | 'client'; // Who is viewing - for field-level locking
 }
  
 export default function DocumentViewerDialog({
@@ -261,7 +259,8 @@ export default function DocumentViewerDialog({
     commentsOnly = false, // NEW: Default to false
     clientSigningMode = false, // NEW: Default to false
     templateFormFields, // NEW
-    formFields // NEW
+    formFields, // NEW
+    currentUserRole // For field-level locking
 }: DocumentViewerDialogProps) {
  
  
@@ -358,6 +357,7 @@ export default function DocumentViewerDialog({
                             clientSigningMode={clientSigningMode}
                             templateFormFields={templateFormFields}
                             formFields={formFields}
+                            currentUserRole={currentUserRole}
                             onFieldChange={handleFieldChange}
                         />
                     );

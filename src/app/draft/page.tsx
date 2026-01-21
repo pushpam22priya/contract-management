@@ -371,6 +371,15 @@ export default function DraftPage() {
                     xfdfString={selectedContract.xfdfString}
                     contractId={selectedContract.id}
                     onSave={handleSaveChanges}
+                    currentUserRole="contractor"
+                    // Use contract's formFields (with saved ReadOnly flags) if available,
+                    // otherwise fall back to template's formFields
+                    formFields={
+                        selectedContract.formFields ||
+                        (selectedContract.templateId
+                            ? templateService.getTemplateById(selectedContract.templateId)?.formFields
+                            : undefined)
+                    }
                 />
             )}
 

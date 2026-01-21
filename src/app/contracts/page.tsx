@@ -348,6 +348,7 @@ export default function ContractsPage() {
                         fieldValues={selectedContract.fieldValues}
                         signatureImage={selectedContract.signer?.signatureImage}
                         xfdfString={selectedContract.xfdfString}
+                        currentUserRole="contractor"
                     />
                 )}
 

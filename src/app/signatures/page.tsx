@@ -232,10 +232,14 @@ export default function SignaturesPage() {
                         contractId={selectedContract.id}
                         onSave={handleSaveSignature}
                         clientSigningMode={true}
-                        templateFormFields={
-                            selectedContract.templateId
+                        currentUserRole="client"
+                        // Use contract's formFields (with saved ReadOnly flags) if available,
+                        // otherwise fall back to template's formFields
+                        formFields={
+                            selectedContract.formFields ||
+                            (selectedContract.templateId
                                 ? templateService.getTemplateById(selectedContract.templateId)?.formFields
-                                : undefined
+                                : undefined)
                         }
                     />
                 )}

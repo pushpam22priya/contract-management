@@ -1,7 +1,7 @@
 /**
- * PDF Form Field Definition
- * Stores metadata about form fields created in the template form builder
- */
+* PDF Form Field Definition
+* Stores metadata about form fields created in the template form builder
+*/
 export interface FormFieldDefinition {
     name: string;              // Field identifier (e.g., "client_name", "contract_date")
     type: 'text' | 'signature' | 'checkbox' | 'radio' | 'dropdown' | 'date';
@@ -11,30 +11,31 @@ export interface FormFieldDefinition {
     height: number;            // Field height
     pageNumber: number;        // Which page the field is on (1-indexed)
     annotationId?: string;     // Unique annotation ID for tracking updates
-
+ 
     // Widget Flags (Apryse standard properties)
     required: boolean;         // Is this field required to fill?
     readOnly?: boolean;        // Field cannot be edited
+    lockedBy?: 'contractor' | 'client';  // Who locked this field (for field-level locking)
     multiline?: boolean;       // Text field allows multiple lines (text fields only)
     doNotScroll?: boolean;     // Do not scroll text (text fields only)
     doNotSpellCheck?: boolean; // Disable spell check (text fields only)
-
+ 
     // Value properties (Phase 2)
     defaultValue?: string;     // Default value to pre-fill field
     placeholder?: string;      // Placeholder text for text fields
-
+ 
     // Appearance properties (Phase 2)
     appearance?: string;       // Base64 image for signature placeholder
-
+ 
     // Other properties
     options?: string[];        // Options for dropdown/radio fields
     label?: string;            // Human-readable label
 }
-
+ 
 /**
- * PDF Form Field Flags
- * Additional properties for form fields
- */
+* PDF Form Field Flags
+* Additional properties for form fields
+*/
 export interface FormFieldFlags {
     readOnly?: boolean;        // Field cannot be edited
     multiline?: boolean;       // Text field allows multiple lines
@@ -43,7 +44,7 @@ export interface FormFieldFlags {
     doNotSpellCheck?: boolean; // Disable spell check
     comb?: boolean;            // Text field with character combs
 }
-
+ 
 export interface Template {
     id: string;
     name: string;
@@ -61,21 +62,21 @@ export interface Template {
     formFields?: FormFieldDefinition[]; // PDF form fields created in form builder
     hasFormFields?: boolean;   // Quick check if template has form fields
 }
-
+ 
 export interface Category {
     id: string;
     name: string;
     createdAt: string;
     createdBy: string;
 }
-
+ 
 export interface UploadTemplateData {
     name: string;
     description?: string;
     category: string;
     file: File;
 }
-
+ 
 export interface CreateCategoryData {
     name: string;
 }
