@@ -178,11 +178,6 @@ export default function ContractsPage() {
         setContractViewerOpen(true);
     };
 
-    const handleExportContract = (id: string) => {
-        console.log('Export contract:', id);
-        // TODO: Implement export functionality
-    };
-
     const handleShareContract = (id: string) => {
         const contract = contracts.find(c => c.id === id);
         if (!contract) return;
@@ -319,7 +314,6 @@ export default function ContractsPage() {
                                 key={contract.id}
                                 contract={contract}
                                 onView={handleViewContract}
-                                onExport={handleExportContract}
                                 onShare={handleShareContract}
                             />
                         ))}

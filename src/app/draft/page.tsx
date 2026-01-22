@@ -3,7 +3,7 @@
 import { Box, Typography, Tooltip, IconButton } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import AddIcon from '@mui/icons-material/Add';
-import DraftCard from '@/components/contracts/DraftCard';
+import ContractCard from '@/components/contracts/ContractCard';
 import { useEffect, useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
@@ -111,10 +111,6 @@ export default function DraftPage() {
         } else {
             showNotification('Failed to reject contract: ' + result.message, 'error');
         }
-    };
-    const handleDownload = (id: string) => {
-        console.log('Download draft:', id);
-        // TODO: Implement download functionality
     };
     const handleShare = (id: string) => {
         const contract = draftContracts.find(c => c.id === id);
@@ -337,11 +333,10 @@ export default function DraftPage() {
                     }}
                 >
                     {filteredDrafts.map((contract) => (
-                        <DraftCard
+                        <ContractCard variant="draft"
                             key={contract.id}
                             contract={contract}
                             onView={handleView}
-                            onDownload={handleDownload}
                             onShare={handleShare}
                         />
                     ))}

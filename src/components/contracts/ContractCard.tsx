@@ -1,19 +1,39 @@
 import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
-import { Visibility, FileDownload, Share } from '@mui/icons-material';
+import { Visibility, Share } from '@mui/icons-material';
 import { Contract, ContractStatus } from '@/types/contract';
+
+/**
+ * Unified ContractCard component that handles both draft and contract views.
+ * Use `variant="draft"` for draft contracts and `variant="contract"` (default) for active contracts.
+ */
 
 interface ContractCardProps {
     contract: Contract;
     onView?: (id: string) => void;
-    onExport?: (id: string) => void;
     onShare?: (id: string) => void;
+    /**
+     * Variant determines the card behavior:
+     * - 'draft': Shows share button always (for review submission), handles "changes_requested" status
+     * - 'contract': Shows share button only for APPROVED/WAITING_FOR_SIGNATURE (for signature requests)
+     */
+    variant?: 'draft' | 'contract';
 }
 
-const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps) => {
+const ContractCard = ({
+    contract,
+    onView,
+    onShare,
+    variant = 'contract'
+}: ContractCardProps) => {
     /**
      * Format status for display
      */
     const getStatusLabel = (status: Contract['status']): string => {
+        // Handle special case for draft variant with changes_requested
+        if (variant === 'draft' && status === ContractStatus.DRAFT && contract.reviewStatus === 'changes_requested') {
+            return 'Returned for Modification';
+        }
+
         switch (status) {
             case ContractStatus.ACTIVE:
                 return 'Active';
@@ -39,6 +59,11 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
     };
 
     const getStatusColor = (status: Contract['status']) => {
+        // Handle special case for draft variant with changes_requested
+        if (variant === 'draft' && status === ContractStatus.DRAFT && contract.reviewStatus === 'changes_requested') {
+            return { bg: '#fff7ed', color: '#c2410c', border: '#fdba74' };
+        }
+
         switch (status) {
             case ContractStatus.ACTIVE:
             case ContractStatus.SIGNED:
@@ -50,9 +75,9 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                 return { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' };
             case ContractStatus.REVIEW_APPROVAL:
             case ContractStatus.REVIEWED:
-                return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' }; // Blueish
+                return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' };
             case ContractStatus.APPROVED:
-                return { bg: '#d1fae5', color: '#065f46', border: '#34d399' }; // Greenish (Ready to sign)
+                return { bg: '#d1fae5', color: '#065f46', border: '#34d399' };
             case ContractStatus.WAITING_FOR_SIGNATURE:
                 return { bg: '#fff9c4', color: '#f57f17', border: '#fff176' };
             case ContractStatus.DRAFT:
@@ -71,6 +96,31 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
     const truncateText = (text: string, maxLength: number) => {
         if (text.length <= maxLength) return text;
         return `${text.substring(0, maxLength)}...`;
+    };
+
+    /**
+     * Determine if share button should be visible based on variant
+     */
+    const shouldShowShareButton = (): boolean => {
+        if (!onShare) return false;
+
+        if (variant === 'draft') {
+            // Draft variant: always show share button (for review submission)
+            return true;
+        }
+
+        // Contract variant: only show for APPROVED or WAITING_FOR_SIGNATURE (for signature requests)
+        return contract.status === ContractStatus.APPROVED ||
+               contract.status === ContractStatus.WAITING_FOR_SIGNATURE;
+    };
+
+    /**
+     * Get tooltip text for share button based on variant
+     */
+    const getShareTooltip = (): string => {
+        return variant === 'draft'
+            ? 'Submit for review or approval....'
+            : 'Submit for signature....';
     };
 
     const statusColors = getStatusColor(contract.status);
@@ -119,7 +169,6 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                         fontWeight: 500,
                         fontSize: { xs: '1rem', sm: '1rem' },
                         color: 'text.primary',
-                        // lineHeight: 1.3,
                         flex: 1,
                     }}
                 >
@@ -151,7 +200,6 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                     color: 'text.secondary',
                     mb: 1.5,
                     fontSize: '0.8rem',
-                    // lineHeight: 1.5,
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
@@ -275,7 +323,7 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                 }}
             >
                 {/* View Icon Button */}
-                <Tooltip title="View Contract" arrow>
+                <Tooltip title={variant === 'draft' ? 'View' : 'View Contract'} arrow>
                     <IconButton
                         size="small"
                         onClick={() => onView?.(contract.id)}
@@ -301,11 +349,11 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                     </IconButton>
                 </Tooltip>
 
-                {/* Export Icon Button */}
+                {/* Download Icon Button - Currently commented out in both original components */}
                 {/* <Tooltip title="Download" arrow>
                     <IconButton
                         size="small"
-                        onClick={() => onExport?.(contract.id)}
+                        onClick={() => onDownload?.(contract.id)}
                         sx={{
                             bgcolor: 'transparent',
                             border: '1px solid',
@@ -328,9 +376,9 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                     </IconButton>
                 </Tooltip> */}
 
-                {/* Share Icon Button (For Draft, Review, or Waiting for Signature) */}
-                {(contract.status === ContractStatus.APPROVED || contract.status === ContractStatus.WAITING_FOR_SIGNATURE) && onShare && (
-                    <Tooltip title="Share for signature" arrow>
+                {/* Share Icon Button */}
+                {shouldShowShareButton() && (
+                    <Tooltip title={getShareTooltip()} arrow>
                         <IconButton
                             size="small"
                             onClick={() => onShare?.(contract.id)}
@@ -348,7 +396,7 @@ const ContractCard = ({ contract, onView, onExport, onShare }: ContractCardProps
                                     borderColor: 'primary.main',
                                     color: 'white',
                                     transform: 'translateY(-2px)',
-                                    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.15)',
+                                    boxShadow: '0 4px 8px rgba(15, 118, 110, 0.2)',
                                 },
                             }}
                         >
