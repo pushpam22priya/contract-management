@@ -1,7 +1,7 @@
 'use client';
 
 import { Box, Typography, Tooltip, IconButton, Button } from '@mui/material';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import AppLayout from '@/components/layout/AppLayout';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -20,6 +20,8 @@ import { AlertColor } from '@mui/material';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import ReusableFilter from '@/components/common/ReusableFilter';
+import { useSignaturePolling } from '@/hooks/useSignaturePolling';
+
 
 const statusOptions = [
     { label: 'All Status', value: 'all' },
@@ -62,6 +64,26 @@ export default function ContractsPage() {
     const showNotification = (message: string, severity: AlertColor = 'success') => {
         setSnackbar({ open: true, message, severity });
     };
+
+    // Get contracts waiting for signature (for polling)
+    const waitingForSignatureIds = contracts
+        .filter(c => c.status === ContractStatus.WAITING_FOR_SIGNATURE && c.externalSigningBinId)
+        .map(c => c.id);
+
+    // Callback when signature is detected
+    const handleSignatureComplete = useCallback((contractId: string) => {
+        console.log('🎉 [ContractsPage] Signature completed for contract:', contractId);
+        const contract = contracts.find(c => c.id === contractId);
+        showNotification(`Contract "${contract?.title || contractId}" has been signed!`, 'success');
+        loadContracts();
+    }, [contracts]);
+
+    // Start polling for signature updates
+    useSignaturePolling(
+        waitingForSignatureIds,
+        handleSignatureComplete,
+        waitingForSignatureIds.length > 0
+    );
 
     const searchParams = useSearchParams();
 
@@ -186,18 +208,42 @@ export default function ContractsPage() {
         setSignatureDialogOpen(true);
     };
 
-    const handleSignatureSubmit = async (signerEmail: string) => {
-        if (!contractForSignature) return;
 
-        const result = await contractService.submitForSignature(contractForSignature.id, signerEmail);
+    const handleSignatureSubmit = async (signerEmail: string): Promise<{ success: boolean; signingUrl?: string }> => {
+        console.log('📝 [ContractsPage] Handling signature submit...');
+        console.log('📝 [ContractsPage] Contract:', contractForSignature?.id);
+        console.log('📝 [ContractsPage] Signer:', signerEmail);
+
+        if (!contractForSignature) {
+            console.error('❌ [ContractsPage] No contract selected for signature');
+            return { success: false };
+        }
+
+        // Get current user for sender name
+        const currentUser = authService.getCurrentUser();
+        const senderName = currentUser?.email || 'Contract System';
+
+        console.log('📝 [ContractsPage] Sender:', senderName);
+
+        // Call the new external signature method
+        const result = await contractService.submitForExternalSignature(
+            contractForSignature.id,
+            signerEmail,
+            senderName
+        );
 
         if (result.success) {
-            showNotification(result.message, 'success');
-            loadContracts();
+            console.log('✅ [ContractsPage] Signature request sent successfully');
+            showNotification('Signature request sent to ' + signerEmail, 'success');
+            loadContracts();  // Reload to show updated status
+            return { success: true, signingUrl: result.signingUrl };
         } else {
+            console.error('❌ [ContractsPage] Failed to send signature request:', result.message);
             showNotification(result.message, 'error');
+            return { success: false };
         }
     };
+
 
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs}>

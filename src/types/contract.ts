@@ -64,6 +64,13 @@ export interface Contract {
     createdAt: string;
     createdBy: string;
     updatedAt?: string;
+
+    // External signature tracking (ADD THESE NEW FIELDS)
+    externalSigningToken?: string;      // Token used in signing URL
+    externalSigningBinId?: string;      // JSONBin ID for this signature request
+    externalSigningUrl?: string;        // Full signing URL sent to client
+    externalSigningSentAt?: string;     // When the signature request was sent
+    
 }
  
 /**

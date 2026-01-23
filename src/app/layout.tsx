@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import theme from '../theme/theme'; 
+import theme from '../theme/theme';
 import "./globals.css";
+import AppInitializer from "@/components/common/AppInitializer";
 
 
 export const metadata: Metadata = {
@@ -17,13 +18,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-     <html lang="en">
+    <html lang="en">
       <body>
         <AppRouterCacheProvider>
           <ThemeProvider theme={theme}>
             {/* CssBaseline kicksstart an elegant, consistent, and simple baseline to build upon. */}
             <CssBaseline />
-            {children}
+            <AppInitializer>
+              {children}
+            </AppInitializer>
+
           </ThemeProvider>
         </AppRouterCacheProvider>
       </body>

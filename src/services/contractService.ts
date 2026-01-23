@@ -1,4 +1,8 @@
 import { Contract, ReviewerInfo, ApproverInfo, ModificationRequest, ContractStatus } from '@/types/contract';
+import {
+    submitForExternalSignature as submitExternal,
+    checkSignatureStatus
+} from './externalSignatureService';
 
 const CONTRACTS_STORAGE_KEY = 'cms_contracts';
 
@@ -677,6 +681,136 @@ class ContractService {
             message: 'Contract successfully signed!',
             contract: updatedContract,
         };
+    }
+
+    /**
+     * Submit contract for external signature via email.
+     * This sends an email to the client with a signing link.
+     * The client can sign without logging into the system.
+     */
+    async submitForExternalSignature(
+        contractId: string,
+        signerEmail: string,
+        senderName: string
+    ): Promise<{ success: boolean; message: string; signingUrl?: string }> {
+        console.log('📝 [ContractService] Submitting for external signature...');
+        console.log('📝 [ContractService] Contract ID:', contractId);
+        console.log('📝 [ContractService] Signer Email:', signerEmail);
+
+        // Get the contract
+        const contract = this.getContractById(contractId);
+
+        if (!contract) {
+            console.error('❌ [ContractService] Contract not found:', contractId);
+            return { success: false, message: 'Contract not found' };
+        }
+
+        // Validate contract status
+        if (contract.status !== ContractStatus.APPROVED) {
+            console.error('❌ [ContractService] Contract not in APPROVED status:', contract.status);
+            return {
+                success: false,
+                message: 'Contract must be approved before requesting signature'
+            };
+        }
+
+        // Submit for external signature using the external signature service
+        const result = await submitExternal(contract, signerEmail, senderName);
+
+        if (!result.success) {
+            console.error('❌ [ContractService] External signature submission failed:', result.error);
+            return { success: false, message: result.error || 'Failed to submit for signature' };
+        }
+
+        // Update contract with external signing info
+        console.log('💾 [ContractService] Updating contract with external signing info...');
+
+        const contracts = this.getAllContracts();
+        const index = contracts.findIndex(c => c.id === contractId);
+
+        if (index !== -1) {
+            contracts[index] = {
+                ...contracts[index],
+                status: ContractStatus.WAITING_FOR_SIGNATURE,
+                signer: {
+                    email: signerEmail,
+                    status: 'pending',
+                },
+                externalSigningToken: result.token,
+                externalSigningBinId: result.binId,
+                externalSigningUrl: result.signingUrl,
+                externalSigningSentAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            };
+
+            this.saveContracts(contracts);
+            console.log('✅ [ContractService] Contract updated successfully');
+        }
+
+        return {
+            success: true,
+            message: 'Signature request sent successfully!',
+            signingUrl: result.signingUrl,
+        };
+    }
+
+    /**
+     * Poll for external signature completion.
+     * Call this periodically to check if client has signed.
+     * When signature is detected, updates the local contract automatically.
+     */
+    async checkExternalSignatureStatus(
+        contractId: string
+    ): Promise<{
+        success: boolean;
+        signed: boolean;
+        signedXfdf?: string;
+        error?: string;
+    }> {
+        console.log('🔄 [ContractService] Checking external signature status...');
+
+        const contract = this.getContractById(contractId);
+
+        if (!contract?.externalSigningBinId) {
+            console.error('❌ [ContractService] No external signing info found');
+            return { success: false, signed: false, error: 'No external signing info' };
+        }
+
+        const result = await checkSignatureStatus(contract.externalSigningBinId);
+
+        if (!result.success) {
+            return { success: false, signed: false, error: result.error };
+        }
+
+        // If signed, update local contract
+        if (result.status === 'signed' && result.signedXfdf) {
+            console.log('🎉 [ContractService] Signature detected! Updating contract...');
+
+            const contracts = this.getAllContracts();
+            const index = contracts.findIndex(c => c.id === contractId);
+
+            if (index !== -1) {
+                contracts[index] = {
+                    ...contracts[index],
+                    status: ContractStatus.SIGNED,
+                    xfdfString: result.signedXfdf,  // Update with signed XFDF
+                    signer: {
+                        ...contracts[index].signer!,
+                        status: 'signed',
+                        signedAt: result.signedAt,
+                    },
+                    updatedAt: new Date().toISOString(),
+                };
+
+                this.saveContracts(contracts);
+                console.log('✅ [ContractService] Contract marked as SIGNED');
+            }
+
+            return { success: true, signed: true, signedXfdf: result.signedXfdf };
+        }
+
+        console.log('⏳ [ContractService] Not yet signed, status:', result.status);
+        return { success: true, signed: false };
     }
 }
 
