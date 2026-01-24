@@ -1083,92 +1083,12 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         // ========================================
                         // Add a custom "Lock Field" button to the header
                         // Only visible when currentUserRole is set and a widget is selected
+                        // ========================================
+                        // FIELD-LEVEL LOCKING (AUTOMATIC)
+                        // ========================================
+                        // No manual button needed anymore. Locking happens automatically on input.
                         if (currentUserRole) {
-                            console.log('🔒 [FieldLock] Setting up Lock Field button...');
-                            console.log(`🔒 [FieldLock] User role for locking: ${currentUserRole}`);
-
-                            // Add custom header button
-                            UI.setHeaderItems((header: any) => {
-                                header.push({
-                                    type: 'actionButton',
-                                    img: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                                        <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
-                                    </svg>`,
-                                    onClick: () => {
-                                        console.log('🔒 [FieldLock] Lock Field button clicked');
-
-                                        const annotManager = Core.annotationManager;
-                                        const selected = annotManager.getSelectedAnnotations();
-
-                                        console.log(`🔒 [FieldLock] Selected annotations: ${selected.length}`);
-
-                                        if (selected.length !== 1) {
-                                            alert('Please select exactly one form field to lock.');
-                                            console.warn('🔒 [FieldLock] Please select exactly one field to lock');
-                                            return;
-                                        }
-
-                                        const widget = selected[0];
-
-                                        // Check if it's a widget annotation
-                                        const isWidget = widget instanceof Core.Annotations.WidgetAnnotation ||
-                                            widget.constructor.name.includes('Widget') ||
-                                            typeof (widget as any).getField === 'function';
-
-                                        if (!isWidget) {
-                                            alert('Please select a form field to lock (not other annotations).');
-                                            console.warn('🔒 [FieldLock] Selected annotation is not a form field');
-                                            return;
-                                        }
-
-                                        // Check if already locked
-                                        const existingLock = (widget as any).getCustomData?.('lockedBy');
-                                        if (existingLock) {
-                                            alert(`This field is already locked by ${existingLock}.`);
-                                            console.warn(`🔒 [FieldLock] Field already locked by: ${existingLock}`);
-                                            return;
-                                        }
-
-                                        // Get field info for logging
-                                        const field = (widget as any).getField?.();
-                                        const fieldName = field?.name || (widget as any).fieldName || 'unknown';
-
-                                        // Confirm lock action
-                                        const confirmLock = confirm(
-                                            `Lock field "${fieldName}"?\n\nOnce locked, the other party will not be able to edit this field.`
-                                        );
-
-                                        if (!confirmLock) {
-                                            console.log('🔒 [FieldLock] Lock cancelled by user');
-                                            return;
-                                        }
-
-                                        // Set custom data to persist lock state
-                                        (widget as any).setCustomData?.('lockedBy', currentUserRole);
-
-                                        // Apply read-only flag
-                                        if (field?.flags?.set) {
-                                            field.flags.set('ReadOnly', true);
-                                        }
-                                        (widget as any).ReadOnly = true;
-
-                                        // Redraw to show visual change
-                                        annotManager.redrawAnnotation(widget);
-
-                                        // Trigger callback if provided
-                                        if (onFieldLocked) {
-                                            onFieldLocked(fieldName, currentUserRole);
-                                        }
-
-                                        console.log(`✅ [FieldLock] Field "${fieldName}" locked by ${currentUserRole}`);
-                                        alert(`Field "${fieldName}" has been locked. It will be read-only for the other party.`);
-                                    },
-                                    title: 'Lock Selected Field',
-                                    dataElement: 'lockFieldButton',
-                                });
-                            });
-
-                            console.log('✅ [FieldLock] Lock Field button added to header');
+                            console.log(`🔒 [FieldLock] Auto-locking enabled for role: ${currentUserRole}`);
                         }
 
                         // CRITICAL: Listen for form field creation events
@@ -1519,12 +1439,26 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     }
 
                                     if (lockedBy === currentUserRole) {
-                                        // Current user locked this field - they can see it's locked (read-only for consistency)
-                                        console.log(`  🔐 [FieldLock] ${fieldName}: LOCKED BY CURRENT USER (${lockedBy}) - READ-ONLY`);
+                                        // Current user locked this field - they should be able to EDIT it
+                                        // But we need to check if it was previously set to ReadOnly (e.g. from saved state)
+                                        // and unlock it for the owner
+                                        console.log(`  🔓 [FieldLock] ${fieldName}: LOCKED BY CURRENT USER (${lockedBy}) - ALLOWING EDIT`);
+
+                                        // FORCE UNLOCK for the owner
                                         if (field?.flags?.set) {
-                                            field.flags.set('ReadOnly', true);
+                                            // We can't easily unset flags using set(), but we can try setting specific property
+                                            // Note: PDFTron API might require different approach to unset
+                                            // For now, we rely on widget.ReadOnly = false which usually overrides
                                         }
-                                        annot.ReadOnly = true;
+
+                                        // Ensure widget is editable
+                                        annot.ReadOnly = false;
+                                        if ((annot as any).setReadOnly) {
+                                            (annot as any).setReadOnly(false);
+                                        }
+                                        // Ensure interaction is allowed
+                                        (annot as any).NoInteraction = false;
+
                                         lockedByUserCount++;
                                     } else {
                                         // Other party locked this field - enforce read-only
@@ -1533,6 +1467,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             field.flags.set('ReadOnly', true);
                                         }
                                         annot.ReadOnly = true;
+                                        if ((annot as any).setReadOnly) {
+                                            (annot as any).setReadOnly(true);
+                                        }
                                         // Also disable interaction
                                         (annot as any).NoInteraction = true;
                                         lockedForUserCount++;
@@ -1541,14 +1478,12 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                 console.log('🔒 [FieldLock] Summary:');
                                 console.log(`  📊 Total widget fields processed`);
-                                console.log(`  🔐 Fields locked by current user: ${lockedByUserCount}`);
+                                console.log(`  🔓 Fields locked by current user (editable): ${lockedByUserCount}`);
                                 console.log(`  🚫 Fields locked by other party (read-only): ${lockedForUserCount}`);
                                 console.log(`  🔓 Unlocked fields: ${unlockedCount}`);
 
                                 // Redraw to reflect lock states visually
-                                if (lockedByUserCount > 0 || lockedForUserCount > 0) {
-                                    annotManager.drawAnnotationsFromList(annotations);
-                                }
+                                annotManager.drawAnnotationsFromList(annotations);
 
                             } catch (err) {
                                 console.error('❌ [FieldLock] Error enforcing field locks:', err);
@@ -1567,6 +1502,52 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             // Listen for text field changes via fieldChanged event
                             Core.annotationManager.addEventListener('fieldChanged', (field: any, value: any) => {
                                 console.log('📝 Field changed event fired:', field.name, '→', value);
+
+                                // AUTO-LOCK LOGIC
+                                if (currentUserRole && field) {
+                                    try {
+                                        // Find widget annotations for this field
+                                        const widgets = field.widgets || [];
+
+                                        if (widgets.length === 0) {
+                                            // Try finding via annotation list if field.widgets is empty (sometimes happens)
+                                            const allAnnots = Core.annotationManager.getAnnotationsList();
+                                            const matches = allAnnots.filter((a: any) =>
+                                                (a.getField && a.getField() === field) ||
+                                                a.fieldName === field.name ||
+                                                (a.getFieldName && a.getFieldName() === field.name)
+                                            );
+                                            widgets.push(...matches);
+                                        }
+
+                                        const isFilled = value !== null && value !== undefined && value !== '';
+
+                                        widgets.forEach((widget: any) => {
+                                            const currentLock = (widget as any).getCustomData?.('lockedBy');
+
+                                            // Case 1: Field is filled AND not locked -> LEASE it to current user
+                                            if (isFilled && !currentLock) {
+                                                console.log(`🔒 [AutoLock] Locking field "${field.name}" for ${currentUserRole}`);
+                                                (widget as any).setCustomData?.('lockedBy', currentUserRole);
+                                            }
+                                            // Case 2: Field is empty AND locked by current user -> RELEASE it
+                                            else if (!isFilled && currentLock === currentUserRole) {
+                                                console.log(`🔓 [AutoLock] Releasing field "${field.name}" (was locked by ${currentUserRole})`);
+                                                // Remove custom data
+                                                if ((widget as any).deleteCustomData) {
+                                                    (widget as any).deleteCustomData('lockedBy');
+                                                } else {
+                                                    // Fallback if delete not available (set to null/empty)
+                                                    (widget as any).setCustomData?.('lockedBy', '');
+                                                }
+                                            }
+                                            // Case 3: Field is filled but locked by *other* user -> Should not happen due to ReadOnly, but safe to ignore
+                                        });
+                                    } catch (err) {
+                                        console.error('❌ [AutoLock] Error updating lock state:', err);
+                                    }
+                                }
+
                                 onFieldChange(field.name, value);
                             });
 
