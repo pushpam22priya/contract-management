@@ -192,12 +192,8 @@ export default function ContractsPage() {
 
     const handleViewContract = (id: string) => {
         console.log('📄 View Contract Clicked:', id);
-        const contract = contracts.find(c => c.id === id);
-
-        if (!contract) return;
-
-        setSelectedContract(contract);
-        setContractViewerOpen(true);
+        // Navigate to the details page
+        router.push(`/contracts/${id}`);
     };
 
     const handleShareContract = (id: string) => {

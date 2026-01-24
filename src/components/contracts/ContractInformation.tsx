@@ -12,6 +12,7 @@ interface ContractInformationProps {
     endDate: string;
     daysRemaining: number;
     progressPercentage: number;
+    description?: string;
 }
 
 const ContractInformation = ({
@@ -23,6 +24,7 @@ const ContractInformation = ({
     endDate,
     daysRemaining,
     progressPercentage,
+    description,
 }: ContractInformationProps) => {
     return (
         <Paper
@@ -254,6 +256,41 @@ const ContractInformation = ({
                     mb: 1,
                 }}
             />
+
+            {/* Description Section */}
+            {description && (
+                <Box sx={{ mb: 1.5 }}>
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            color: 'text.secondary',
+                            display: 'block',
+                            mb: 0.5,
+                            fontSize: '0.875rem',
+                        }}
+                    >
+                        Description
+                    </Typography>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'text.primary',
+                            fontSize: { xs: '0.95rem', sm: '1rem' },
+                            // lineHeight: 1.5,
+                        }}
+                    >
+                        {description}
+                    </Typography>
+                    {/* Divider inside if exists */}
+                    <Box
+                        sx={{
+                            height: '1px',
+                            bgcolor: 'divider',
+                            my: 1,
+                        }}
+                    />
+                </Box>
+            )}
 
             {/* Contract Progress */}
             <Box>

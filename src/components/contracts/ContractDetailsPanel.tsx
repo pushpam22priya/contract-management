@@ -15,11 +15,12 @@ import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 
-interface Document {
+export interface Document {
     id: string;
     name: string;
     size: string;
     uploadDate: string;
+    url?: string;
 }
 
 interface Activity {
@@ -30,17 +31,15 @@ interface Activity {
 }
 
 interface ContractDetailsPanelProps {
-    description: string;
-    keyTerms: string[];
     documents: Document[];
     activities: Activity[];
+    onViewDocument?: (doc: Document) => void;
 }
 
 const ContractDetailsPanel = ({
-    description,
-    keyTerms,
     documents,
     activities,
+    onViewDocument,
 }: ContractDetailsPanelProps) => {
     const [activeTab, setActiveTab] = useState(0);
 
@@ -85,6 +84,9 @@ const ContractDetailsPanel = ({
                             fontWeight: 600,
                             fontSize: { xs: '0.9rem', sm: '1rem' },
                             // minHeight: { xs: 48, sm: 56 },
+                            minHeight: 36, // Reduced height
+                            height: 36,    // Force height
+                            padding: '0 16px',
                             transition: 'all 0.2s',
                             '&.Mui-selected': {
                                 color: '#fff',
@@ -92,12 +94,13 @@ const ContractDetailsPanel = ({
                                 borderRadius: '8px',
                             },
                         },
+                        minHeight: 36,
                         '& .MuiTabs-indicator': {
                             display: 'none',
                         },
                     }}
                 >
-                    <Tab label="Overview" />
+                    {/* <Tab label="Overview" /> */}
                     <Tab label="Documents" />
                     <Tab label="Activity" />
                 </Tabs>
@@ -105,87 +108,14 @@ const ContractDetailsPanel = ({
 
             {/* Tab Content */}
             <Box sx={{ p: { xs: 1, sm: 2 } }}>
-                {/* Overview Tab */}
-                {activeTab === 0 && (
-                    <Box>
-                        {/* Description */}
-                        <Box sx={{ mb: 1.5 }}>
-                            <Typography
-                                variant="h6"
-                                fontWeight={700}
-                                sx={{
-                                    // mb: 1,
-                                    color: 'text.primary',
-                                    fontSize: { xs: '1.1rem', sm: '1.1rem' },
-                                }}
-                            >
-                                Description
-                            </Typography>
-                            <Typography
-                                variant="body1"
-                                sx={{
-                                    color: 'text.secondary',
-                                    // lineHeight: 1.6,
-                                    fontSize: { xs: '0.95rem', sm: '1rem' },
-                                }}
-                            >
-                                {description}
-                            </Typography>
-                        </Box>
-
-                        {/* Key Terms */}
-                        <Box>
-                            <Typography
-                                variant="h6"
-                                fontWeight={700}
-                                sx={{
-                                    // mb: 1,
-                                    color: 'text.primary',
-                                    fontSize: { xs: '1.1rem', sm: '1.1rem' },
-                                }}
-                            >
-                                Key Terms
-                            </Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                {keyTerms.map((term, index) => (
-                                    <Box
-                                        key={index}
-                                        sx={{
-                                            display: 'flex',
-                                            alignItems: 'flex-start',
-                                            gap: 1,
-                                        }}
-                                    >
-                                        <CheckCircleIcon
-                                            sx={{
-                                                color: '#10b981',
-                                                fontSize: '1.5rem',
-                                                mt: 0.2,
-                                                flexShrink: 0,
-                                            }}
-                                        />
-                                        <Typography
-                                            variant="body1"
-                                            sx={{
-                                                color: 'text.secondary',
-                                                fontSize: { xs: '0.95rem', sm: '1rem' },
-                                            }}
-                                        >
-                                            {term}
-                                        </Typography>
-                                    </Box>
-                                ))}
-                            </Box>
-                        </Box>
-                    </Box>
-                )}
-
                 {/* Documents Tab */}
-                {activeTab === 1 && (
+                {/* Documents Tab */}
+                {activeTab === 0 && (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {documents.map((doc) => (
                             <Box
                                 key={doc.id}
+                                onClick={() => onViewDocument?.(doc)}
                                 sx={{
                                     display: 'flex',
                                     alignItems: 'center',
@@ -196,9 +126,11 @@ const ContractDetailsPanel = ({
                                     border: '1px solid',
                                     borderColor: 'divider',
                                     transition: 'all 0.2s',
+                                    cursor: onViewDocument ? 'pointer' : 'default',
                                     '&:hover': {
                                         bgcolor: '#f9fafb',
                                         borderColor: 'primary.main',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
                                     },
                                 }}
                             >
@@ -239,7 +171,7 @@ const ContractDetailsPanel = ({
                                         </Typography>
                                     </Box>
                                 </Box>
-                                <Button
+                                {/* <Button
                                     variant="text"
                                     startIcon={<FileDownloadOutlinedIcon />}
                                     onClick={() => handleDownload(doc.id)}
@@ -254,64 +186,67 @@ const ContractDetailsPanel = ({
                                     }}
                                 >
                                     <Box sx={{ display: { xs: 'none', sm: 'block' } }}>Download</Box>
-                                </Button>
+                                </Button> */}
                             </Box>
                         ))}
                     </Box>
-                )}
+                )
+                }
 
                 {/* Activity Tab */}
-                {activeTab === 2 && (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        {activities.map((activity, index) => (
-                            <Box
-                                key={activity.id}
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    gap: 2,
-                                    position: 'relative',
-                                    ...(index !== activities.length - 1 && {
-                                        pb: 3,
-                                    }),
-                                }}
-                            >
-                                <FiberManualRecordIcon
+                {
+                    activeTab === 1 && (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {activities.map((activity, index) => (
+                                <Box
+                                    key={activity.id}
                                     sx={{
-                                        color: '#4f46e5',
-                                        fontSize: '0.75rem',
-                                        mt: 0.5,
-                                        flexShrink: 0,
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: 2,
+                                        position: 'relative',
+                                        ...(index !== activities.length - 1 && {
+                                            // pb: 3,
+                                        }),
                                     }}
-                                />
-                                <Box sx={{ flex: 1 }}>
-                                    <Typography
-                                        variant="body1"
-                                        fontWeight={600}
+                                >
+                                    <FiberManualRecordIcon
                                         sx={{
-                                            color: 'text.primary',
-                                            mb: 0.5,
-                                            fontSize: { xs: '0.95rem', sm: '1rem' },
+                                            color: '#4f46e5',
+                                            fontSize: '0.75rem',
+                                            mt: 0.5,
+                                            flexShrink: 0,
                                         }}
-                                    >
-                                        {activity.title}
-                                    </Typography>
-                                    <Typography
-                                        variant="body2"
-                                        sx={{
-                                            color: 'text.secondary',
-                                            fontSize: { xs: '0.8rem', sm: '0.875rem' },
-                                        }}
-                                    >
-                                        {activity.user} • {activity.date}
-                                    </Typography>
+                                    />
+                                    <Box sx={{ flex: 1 }}>
+                                        <Typography
+                                            variant="body1"
+                                            fontWeight={600}
+                                            sx={{
+                                                color: 'text.primary',
+                                                // mb: 0.5,
+                                                fontSize: { xs: '0.95rem', sm: '1rem' },
+                                            }}
+                                        >
+                                            {activity.title}
+                                        </Typography>
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
+                                                color: 'text.secondary',
+                                                fontSize: { xs: '0.8rem', sm: '0.875rem' },
+                                            }}
+                                        >
+                                            {activity.user} • {activity.date}
+                                        </Typography>
+                                    </Box>
                                 </Box>
-                            </Box>
-                        ))}
-                    </Box>
-                )}
-            </Box>
-        </Paper>
+                            ))}
+                        </Box>
+                    )
+                }
+            </Box >
+        </Paper >
     );
 };
 

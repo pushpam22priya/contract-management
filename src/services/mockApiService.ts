@@ -180,6 +180,86 @@ class MockApiService {
             throw error;
         }
     }
+
+    /**
+* Get extended contract details (mock)
+*/
+    async getContractDetails(id: string): Promise<{
+        success: boolean;
+        details?: {
+            description: string;
+            keyTerms: string[];
+            documents: any[];
+            activities: any[];
+        };
+        message?: string;
+    }> {
+        console.log('📥 MockAPI: getContractDetails called', id);
+        await this.simulateDelay(500);
+
+        try {
+            // Try to find the contract in localStorage to get real title/client
+            const storedContracts = localStorage.getItem('cms_contracts');
+            const contracts = storedContracts ? JSON.parse(storedContracts) : [];
+            const contract = contracts.find((c: any) => c.id === id);
+
+            if (!contract) {
+                return { success: false, message: 'Contract not found' };
+            }
+
+            // Generate mock details based on the contract
+            const details = {
+                description: contract.description || 'This is a standard service agreement outlining the terms of engagement, scope of work, and payment deliverables.',
+                keyTerms: [
+                    'Payment Terms: Net 30',
+                    'Jurisdiction: Delhi',
+                    'Confidentiality: 2 Years',
+                    'Liability Cap: 1x Fees'
+                ],
+                documents: [
+                    {
+                        id: contract.id, // Main contract file
+                        name: `${contract.title}.pdf`,
+                        size: '2.4 MB',
+                        uploadDate: new Date(contract.createdAt).toLocaleDateString(),
+                        // Use the fileUrl if available, otherwise try to construct from base64
+                        url: contract.fileUrl || (contract.templateDocxBase64 ? `data:application/pdf;base64,${contract.templateDocxBase64}` : null)
+                    }
+                ],
+                activities: [
+                    {
+                        id: 'act_1',
+                        title: 'Contract Created',
+                        user: contract.createdBy || 'Admin User',
+                        date: new Date(contract.createdAt).toLocaleString()
+                    },
+                    {
+                        id: 'act_2',
+                        title: 'Sent for Review',
+                        user: contract.createdBy || 'Admin User',
+                        date: new Date(Date.now() - 86400000).toLocaleString()
+                    },
+                    {
+                        id: 'act_3',
+                        title: 'Viewed by Client',
+                        user: contract.client,
+                        date: new Date().toLocaleString()
+                    }
+                ]
+            };
+
+            return {
+                success: true,
+                details
+            };
+        } catch (error) {
+            console.error('Error fetching contract details:', error);
+            return {
+                success: false,
+                message: 'Failed to fetch details'
+            };
+        }
+    }
 }
 
 // Export singleton instance
