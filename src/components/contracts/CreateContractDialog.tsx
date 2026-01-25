@@ -477,7 +477,14 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                             label="Start Date"
                             type="date"
                             value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
+                            onChange={(e) => {
+                                const newStartDate = e.target.value;
+                                setStartDate(newStartDate);
+                                if (newStartDate) {
+                                    // Auto-set End Date to 1 year from Start Date
+                                    setEndDate(dayjs(newStartDate).add(1, 'year').format('YYYY-MM-DD'));
+                                }
+                            }}
                             InputLabelProps={{ shrink: true }}
                             sx={{
                                 '& .MuiInputBase-input': {

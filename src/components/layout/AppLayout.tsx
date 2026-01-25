@@ -55,7 +55,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     flexGrow: 1,
                     p: 1.5,
                     width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
-                    mt: '30px',
+                    mt: '10vh',
                     transition: theme.transitions.create(['margin', 'width'], {
                         easing: theme.transitions.easing.sharp,
                         duration: theme.transitions.duration.enteringScreen,

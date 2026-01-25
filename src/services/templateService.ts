@@ -377,12 +377,18 @@ class TemplateService {
      */
     async updateTemplate(
         id: string,
-        data: { name: string; description?: string; category: string; file?: File },
+        data: {
+            name: string;
+            description?: string;
+            category: string;
+            file?: File;
+            formFields?: any[];
+        },
         userEmail: string
     ): Promise<{ success: boolean; message: string; template?: Template }> {
         // Simulate API delay
         await new Promise(resolve => setTimeout(resolve, 500));
-
+ 
         // Validation
         if (!data.name || data.name.trim().length === 0) {
             return {
@@ -390,32 +396,32 @@ class TemplateService {
                 message: 'Template name is required',
             };
         }
-
+ 
         if (!data.category || data.category.trim().length === 0) {
             return {
                 success: false,
                 message: 'Category is required',
             };
         }
-
+ 
         const templates = this.getAllTemplates();
         const templateIndex = templates.findIndex(template => template.id === id);
-
+ 
         if (templateIndex === -1) {
             return {
                 success: false,
                 message: 'Template not found',
             };
         }
-
+ 
         try {
             const existingTemplate = templates[templateIndex];
-
+ 
             // If new file is provided, validate and convert it
             let fileUrl = existingTemplate.fileUrl;
             let fileName = existingTemplate.fileName;
             let fileType = existingTemplate.fileType;
-
+ 
             if (data.file) {
                 // Validate file type
                 const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
@@ -425,7 +431,7 @@ class TemplateService {
                         message: 'Only PDF, DOCX, and DOC files are allowed',
                     };
                 }
-
+ 
                 // Validate file size (max 10MB)
                 const maxSize = 10 * 1024 * 1024;
                 if (data.file.size > maxSize) {
@@ -434,12 +440,12 @@ class TemplateService {
                         message: 'File size must be less than 10MB',
                     };
                 }
-
+ 
                 fileUrl = await this.fileToBase64(data.file);
                 fileName = data.file.name;
                 fileType = this.getFileType(data.file.name);
             }
-
+ 
             const updatedTemplate: Template = {
                 ...existingTemplate,
                 name: data.name.trim(),
@@ -450,11 +456,16 @@ class TemplateService {
                 fileType,
                 uploadedBy: userEmail,
                 uploadedAt: new Date().toISOString(),
+                // Update form fields if provided
+                ...(data.formFields ? {
+                    formFields: data.formFields,
+                    hasFormFields: data.formFields.length > 0
+                } : {})
             };
-
+ 
             templates[templateIndex] = updatedTemplate;
             this.saveTemplates(templates);
-
+ 
             return {
                 success: true,
                 message: 'Template updated successfully',
