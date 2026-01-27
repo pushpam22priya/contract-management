@@ -228,7 +228,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 alignSelf: { xs: 'flex-end', md: 'center' },
                             }}
                         >
-                            <Tooltip title="Edit" arrow>
+                            {/* <Tooltip title="Edit" arrow>
                                 <IconButton
                                     onClick={handleEdit}
                                     sx={{
@@ -250,7 +250,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 >
                                     <EditOutlinedIcon fontSize="small" />
                                 </IconButton>
-                            </Tooltip>
+                            </Tooltip> */}
 {/* 
                             <Tooltip title="Download" arrow>
                                 <IconButton
@@ -276,7 +276,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 </IconButton>
                             </Tooltip> */}
 
-                            <Tooltip title="Delete" arrow>
+                            {/* <Tooltip title="Delete" arrow>
                                 <IconButton
                                     onClick={handleDelete}
                                     sx={{
@@ -298,7 +298,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 >
                                     <DeleteOutlineIcon fontSize="small" />
                                 </IconButton>
-                            </Tooltip>
+                            </Tooltip> */}
                         </Box>
                     </Box>
 

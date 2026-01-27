@@ -226,26 +226,79 @@ class MockApiService {
                         url: contract.fileUrl || (contract.templateDocxBase64 ? `data:application/pdf;base64,${contract.templateDocxBase64}` : null)
                     }
                 ],
-                activities: [
-                    {
-                        id: 'act_1',
+                // Generate activities dynamically based on contract workflow
+                activities: (() => {
+                    const activityList: { id: string; title: string; user: string; date: string }[] = [];
+                    let activityId = 1;
+
+                    // 1. Contract Created (always present)
+                    activityList.push({
+                        id: `act_${activityId++}`,
                         title: 'Contract Created',
-                        user: contract.createdBy || 'Admin User',
+                        user: contract.createdBy || 'Unknown',
                         date: new Date(contract.createdAt).toLocaleString()
-                    },
-                    {
-                        id: 'act_2',
-                        title: 'Sent for Review',
-                        user: contract.createdBy || 'Admin User',
-                        date: new Date(Date.now() - 86400000).toLocaleString()
-                    },
-                    {
-                        id: 'act_3',
-                        title: 'Viewed by Client',
-                        user: contract.client,
-                        date: new Date().toLocaleString()
+                    });
+
+                    // 2. Sent for Review and Approve (if reviewers or approver assigned)
+                    if (contract.reviewers?.length > 0 || contract.approver) {
+                        const assigneeParts: string[] = [];
+
+                        // Add reviewer emails with label
+                        if (contract.reviewers?.length > 0) {
+                            const reviewerEmails = contract.reviewers.map((r: any) => r.email).join(', ');
+                            assigneeParts.push(`Reviewer: ${reviewerEmails}`);
+                        }
+
+                        // Add approver email with label
+                        if (contract.approver?.email) {
+                            assigneeParts.push(`Approver: ${contract.approver.email}`);
+                        }
+
+                        activityList.push({
+                            id: `act_${activityId++}`,
+                            title: 'Sent for Review and Approve',
+                            user: assigneeParts.join(' | '),
+                            date: new Date(contract.updatedAt || contract.createdAt).toLocaleString()
+                        });
                     }
-                ]
+
+                    // 3. Reviewed (for each reviewer who completed review)
+                    if (contract.reviewers?.length > 0) {
+                        contract.reviewers.forEach((reviewer: any) => {
+                            if (reviewer.status === 'reviewed' && reviewer.reviewedAt) {
+                                activityList.push({
+                                    id: `act_${activityId++}`,
+                                    title: 'Reviewed',
+                                    user: reviewer.email,
+                                    date: new Date(reviewer.reviewedAt).toLocaleString()
+                                });
+                            }
+                        });
+                    }
+
+                    // 4. Approved (if approver approved)
+                    if (contract.approver?.status === 'approved' && contract.approver?.approvedAt) {
+                        activityList.push({
+                            id: `act_${activityId++}`,
+                            title: 'Approved',
+                            user: contract.approver.email,
+                            date: new Date(contract.approver.approvedAt).toLocaleString()
+                        });
+                    }
+
+                    // 5. Signed (if signer signed)
+                    if (contract.signer?.status === 'signed' && contract.signer?.signedAt) {
+                        activityList.push({
+                            id: `act_${activityId++}`,
+                            title: 'Signed',
+                            user: contract.signer.email,
+                            date: new Date(contract.signer.signedAt).toLocaleString()
+                        });
+                    }
+
+                    return activityList;
+                })()
+
             };
 
             return {

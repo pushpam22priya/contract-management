@@ -107,7 +107,7 @@ const ContractDetailsPanel = ({
             </Box>
 
             {/* Tab Content */}
-            <Box sx={{ p: { xs: 1, sm: 2 } }}>
+            <Box sx={{ p: { xs: 1, sm: 2 }, maxHeight: 350, overflowY: 'auto' }}>
                 {/* Documents Tab */}
                 {/* Documents Tab */}
                 {activeTab === 0 && (
