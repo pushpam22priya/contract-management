@@ -280,8 +280,8 @@ export default function PublicSigningPage() {
                 sx={{
                     bgcolor: 'primary.main',
                     color: 'white',
-                    py: 2,
-                    px: 3,
+                    // py: 1,
+                    // px: 1,
                     boxShadow: 2,
                 }}
             >
@@ -317,12 +317,12 @@ export default function PublicSigningPage() {
             </Box>
 
             {/* Expiry Warning */}
-            {signatureRequest && (
-                <Container maxWidth="lg" sx={{ mt: 2 }}>
+            {/* {signatureRequest && (
+                <Container maxWidth="lg">
                     <Alert
                         severity="info"
                         icon={<AccessTime />}
-                        sx={{ mb: 2 }}
+                        // sx={{ mb: 2 }}
                     >
                         This link expires on {new Date(signatureRequest.expiresAt).toLocaleDateString('en-US', {
                             weekday: 'long',
@@ -332,11 +332,11 @@ export default function PublicSigningPage() {
                         })}
                     </Alert>
                 </Container>
-            )}
+            )} */}
 
             {/* PDF Viewer */}
             <Container maxWidth="lg" sx={{ py: 2 }}>
-                <Paper sx={{ height: 'calc(100vh - 220px)', overflow: 'hidden' }}>
+                <Paper sx={{ height: 'calc(100vh - 90px)', overflow: 'hidden' }}>
                     {signatureRequest && (
                         <PDFViewerContainer
                             ref={pdfViewerRef}

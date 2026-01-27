@@ -781,8 +781,9 @@ export default function EditTemplateDialog({
                                     toolbarMode="forms"
                                     onDocumentLoaded={() => setDocumentLoaded(true)}
                                     onError={(err) => setError(err)}
-                                    // Pass existing form fields if available (to restore flags)
-                                    formFields={template.formFields}
+                                    // Pass existing form fields ONLY if we are using the existing file
+                                    // If a new file is selected (selectedFile is not null), we start fresh
+                                    formFields={selectedFile ? undefined : template.formFields}
                                 />
                             </Box>
                         ) : (

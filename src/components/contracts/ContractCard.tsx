@@ -111,7 +111,7 @@ const ContractCard = ({
 
         // Contract variant: only show for APPROVED or WAITING_FOR_SIGNATURE (for signature requests)
         return contract.status === ContractStatus.APPROVED ||
-               contract.status === ContractStatus.WAITING_FOR_SIGNATURE;
+            contract.status === ContractStatus.WAITING_FOR_SIGNATURE;
     };
 
     /**
@@ -142,7 +142,6 @@ const ContractCard = ({
                     borderColor: 'primary.main',
                     '& .action-buttons': {
                         opacity: 1,
-                        transform: 'translateY(0)',
                     },
                 },
                 '&::before': {
@@ -163,17 +162,19 @@ const ContractCard = ({
         >
             {/* Header with Title and Status */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
-                <Typography
-                    variant="h6"
-                    sx={{
-                        fontWeight: 500,
-                        fontSize: { xs: '1rem', sm: '1rem' },
-                        color: 'text.primary',
-                        flex: 1,
-                    }}
-                >
-                    {truncateText(contract.title, 25)}
-                </Typography>
+                <Tooltip title={contract.title} arrow placement="top">
+                    <Typography
+                        variant="h6"
+                        sx={{
+                            fontWeight: 500,
+                            fontSize: { xs: '1rem', sm: '1rem' },
+                            color: 'text.primary',
+                            flex: 1,
+                        }}
+                    >
+                        {truncateText(contract.title, 25)}
+                    </Typography>
+                </Tooltip>
 
                 <Chip
                     label={getStatusLabel(contract.status)}
@@ -194,20 +195,22 @@ const ContractCard = ({
             </Box>
 
             {/* Description */}
-            <Typography
-                variant="body2"
-                sx={{
-                    color: 'text.secondary',
-                    mb: 1.5,
-                    fontSize: '0.8rem',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                }}
-            >
-                {truncateText(contract.description, 35)}
-            </Typography>
+            <Tooltip title={contract.description || ''} arrow placement="top">
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: 'text.secondary',
+                        mb: 1.5,
+                        fontSize: '0.8rem',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                    }}
+                >
+                    {truncateText(contract.description || '', 35)}
+                </Typography>
+            </Tooltip>
 
             {/* Contract Details Grid */}
             <Box
@@ -314,96 +317,56 @@ const ContractCard = ({
                     display: 'flex',
                     gap: 1,
                     p: 0.5,
-                    background: 'linear-gradient(to top, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 70%, rgba(255,255,255,0) 100%)',
-                    backdropFilter: 'blur(8px)',
+                    background: '#fff',
                     borderRadius: '0 0 12px 12px',
                     opacity: { xs: 1, md: 0 },
-                    transform: { xs: 'translateY(0)', md: 'translateY(100%)' },
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    transition: 'opacity 0.2s ease-in-out',
                 }}
             >
-                {/* View Icon Button */}
-                <Tooltip title={variant === 'draft' ? 'View' : 'View Contract'} arrow>
-                    <IconButton
-                        size="small"
-                        onClick={() => onView?.(contract.id)}
-                        sx={{
-                            bgcolor: 'transparent',
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            borderRadius: 1.5,
-                            width: 36,
-                            height: 36,
-                            color: 'text.primary',
-                            transition: 'all 0.2s ease',
-                            '&:hover': {
-                                bgcolor: 'primary.main',
-                                borderColor: 'primary.main',
-                                color: 'white',
-                                transform: 'translateY(-2px)',
-                                boxShadow: '0 4px 8px rgba(15, 118, 110, 0.2)',
-                            },
-                        }}
-                    >
-                        <Visibility sx={{ fontSize: '1.1rem' }} />
-                    </IconButton>
-                </Tooltip>
-
-                {/* Download Icon Button - Currently commented out in both original components */}
-                {/* <Tooltip title="Download" arrow>
-                    <IconButton
-                        size="small"
-                        onClick={() => onDownload?.(contract.id)}
-                        sx={{
-                            bgcolor: 'transparent',
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            borderRadius: 1.5,
-                            width: 36,
-                            height: 36,
-                            color: 'text.primary',
-                            transition: 'all 0.2s ease',
-                            '&:hover': {
-                                bgcolor: 'primary.main',
-                                borderColor: 'primary.main',
-                                color: 'white',
-                                transform: 'translateY(-2px)',
-                                boxShadow: '0 4px 8px rgba(33, 150, 243, 0.2)',
-                            },
-                        }}
-                    >
-                        <FileDownload sx={{ fontSize: '1.1rem' }} />
-                    </IconButton>
-                </Tooltip> */}
-
-                {/* Share Icon Button */}
-                {shouldShowShareButton() && (
-                    <Tooltip title={getShareTooltip()} arrow>
-                        <IconButton
-                            size="small"
-                            onClick={() => onShare?.(contract.id)}
-                            sx={{
-                                bgcolor: 'transparent',
-                                border: '1px solid',
-                                borderColor: 'divider',
-                                borderRadius: 1.5,
-                                width: 36,
-                                height: 36,
-                                color: 'text.primary',
-                                transition: 'all 0.2s ease',
-                                '&:hover': {
-                                    bgcolor: 'primary.main',
-                                    borderColor: 'primary.main',
-                                    color: 'white',
-                                    transform: 'translateY(-2px)',
-                                    boxShadow: '0 4px 8px rgba(15, 118, 110, 0.2)',
-                                },
-                            }}
-                        >
-                            <Share sx={{ fontSize: '1.1rem' }} />
-                        </IconButton>
-                    </Tooltip>
-                )}
+                {[
+                    {
+                        title: variant === 'draft' ? 'View' : 'View Contract',
+                        icon: <Visibility sx={{ fontSize: '1.1rem' }} />,
+                        onClick: () => onView?.(contract.id),
+                        color: 'primary.main',
+                        shadow: 'rgba(15, 118, 110, 0.2)',
+                        show: true
+                    },
+                    {
+                        title: getShareTooltip(),
+                        icon: <Share sx={{ fontSize: '1.1rem' }} />,
+                        onClick: () => onShare?.(contract.id),
+                        color: 'primary.main',
+                        shadow: 'rgba(15, 118, 110, 0.2)',
+                        show: shouldShowShareButton()
+                    }
+                ].map((action, idx) => (
+                    action.show && (
+                        <Tooltip key={idx} title={action.title} arrow>
+                            <IconButton
+                                size="small"
+                                onClick={action.onClick}
+                                sx={{
+                                    bgcolor: 'transparent',
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    borderRadius: 1.5,
+                                    color: 'text.primary',
+                                    transition: 'all 0.2s ease',
+                                    '&:hover': {
+                                        bgcolor: action.color,
+                                        borderColor: action.color,
+                                        color: 'white',
+                                        transform: 'translateY(-2px)',
+                                        boxShadow: `0 4px 8px ${action.shadow}`,
+                                    },
+                                }}
+                            >
+                                {action.icon}
+                            </IconButton>
+                        </Tooltip>
+                    )
+                ))}
             </Box>
         </Box>
     );

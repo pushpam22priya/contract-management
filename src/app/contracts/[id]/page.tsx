@@ -158,7 +158,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                             justifyContent: 'space-between',
                             flexDirection: { xs: 'column', md: 'row' },
                             gap: 2,
-                            pb: 1,
+                            // pb: 1,
                             borderBottom: '1px solid',
                             borderColor: 'divider',
                         }}
