@@ -416,12 +416,12 @@ export default function UploadTemplateDialog({
                                         fontSize: '0.875rem',
                                     }}
                                 >
-                                    Supported formats: PDF, DOCX, DOC
+                                    Supported formats: PDF
                                 </Typography>
                                 <input
                                     id="file-upload-input"
                                     type="file"
-                                    accept=".pdf,.doc,.docx"
+                                    accept=".pdf"
                                     onChange={handleFileChange}
                                     style={{ display: 'none' }}
                                 />
@@ -624,8 +624,6 @@ export default function UploadTemplateDialog({
                                     sx={{
                                         textTransform: 'none',
                                         fontWeight: 600,
-                                        // px: 2,
-                                        // py: 1.75,
                                         borderRadius: 2,
                                         whiteSpace: 'nowrap',
                                         borderColor: 'rgba(0, 0, 0, 0.23)',
@@ -729,7 +727,7 @@ export default function UploadTemplateDialog({
                                 border: '1px solid',
                                 borderColor: 'divider',
                                 borderRadius: 2,
-                                overflow: 'hidden'
+                                // overflow: 'hidden'
                             }}>
                                 <PDFViewerContainer
                                     ref={pdfViewerRef}
