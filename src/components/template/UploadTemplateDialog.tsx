@@ -196,43 +196,70 @@ export default function UploadTemplateDialog({
         setUploading(true);
 
         try {
-            console.log('📤 Starting template upload...');
+            console.log('📤 Starting template upload with new architecture...');
 
-            // Extract form fields if in Step 2 (PDF with forms)
+            let fileData: string = '';
+            let xfdfData: string = '';
             let formFields: any[] = [];
+
             if (currentStep === 2 && pdfViewerRef.current) {
-                console.log('📦 Extracting form fields from PDF...');
+                // Use new save() method to get both fileData and xfdfData
+                console.log('📦 Using new save() method to export PDF and XFDF...');
+                const saveResult = await pdfViewerRef.current.save();
+
+                if (saveResult) {
+                    fileData = saveResult.fileData;
+                    xfdfData = saveResult.xfdfData;
+                    console.log(`  ✓ fileData: ${fileData.length} chars`);
+                    console.log(`  ✓ xfdfData: ${xfdfData.length} chars`);
+                } else {
+                    console.warn('  ⚠️ save() returned null, falling back to file conversion');
+                }
+
+                // Also export form fields for backward compatibility
                 formFields = await pdfViewerRef.current.exportFormFields();
                 console.log(`  - Extracted ${formFields.length} form fields`);
             }
 
-            // Import MockAPI service
-            const { mockApiService } = await import('@/services/mockApiService');
+            // If save() didn't work or we're on step 1, convert file to base64
+            if (!fileData && selectedFile) {
+                console.log('📄 Converting original file to base64...');
+                fileData = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(selectedFile);
+                });
+                console.log(`  ✓ File converted: ${fileData.length} chars`);
+            }
 
-            // Upload via MockAPI
-            console.log('🚀 Uploading template via MockAPI...');
-            const result = await mockApiService.uploadTemplate({
+            // Save using new templateService.saveTemplate() method
+            console.log('💾 Saving template with new architecture...');
+            const savedTemplate = templateService.saveTemplate({
                 name: templateName.trim(),
                 description: description.trim(),
                 category: selectedCategory,
-                file: selectedFile,
+                fileName: selectedFile.name,
+                fileUrl: fileData, // For backward compatibility
+                fileData: fileData, // New field
+                xfdfData: xfdfData, // New field
+                fileType: selectedFile.type.includes('pdf') ? 'pdf' : 'docx',
                 uploadedBy: currentUser.email,
                 formFields: formFields,
+                hasFormFields: formFields.length > 0,
             });
 
-            if (result.success) {
-                console.log('✅ Template uploaded successfully!');
-                console.log('  - Template ID:', result.template?.id);
-                console.log('  - Form fields saved:', result.template?.formFields?.length || 0);
+            console.log('✅ Template saved successfully!');
+            console.log('  - Template ID:', savedTemplate.id);
+            console.log('  - fileData length:', savedTemplate.fileData?.length || 0);
+            console.log('  - xfdfData length:', savedTemplate.xfdfData?.length || 0);
+            console.log('  - Form fields:', savedTemplate.formFields?.length || 0);
 
-                setSuccess('Template uploaded successfully!');
-                setTimeout(() => {
-                    handleClose();
-                    onSuccess?.();
-                }, 1500);
-            } else {
-                setError(result.message);
-            }
+            setSuccess('Template uploaded successfully!');
+            setTimeout(() => {
+                handleClose();
+                onSuccess?.();
+            }, 1500);
         } catch (err) {
             console.error('❌ Error uploading template:', err);
             setError('Failed to upload template. Please try again.');
@@ -416,12 +443,12 @@ export default function UploadTemplateDialog({
                                         fontSize: '0.875rem',
                                     }}
                                 >
-                                    Supported formats: PDF
+                                    Supported formats: PDF, DOCX, DOC
                                 </Typography>
                                 <input
                                     id="file-upload-input"
                                     type="file"
-                                    accept=".pdf"
+                                    accept=".pdf,.doc,.docx"
                                     onChange={handleFileChange}
                                     style={{ display: 'none' }}
                                 />
@@ -624,6 +651,8 @@ export default function UploadTemplateDialog({
                                     sx={{
                                         textTransform: 'none',
                                         fontWeight: 600,
+                                        // px: 2,
+                                        // py: 1.75,
                                         borderRadius: 2,
                                         whiteSpace: 'nowrap',
                                         borderColor: 'rgba(0, 0, 0, 0.23)',
@@ -727,7 +756,7 @@ export default function UploadTemplateDialog({
                                 border: '1px solid',
                                 borderColor: 'divider',
                                 borderRadius: 2,
-                                // overflow: 'hidden'
+                                overflow: 'hidden'
                             }}>
                                 <PDFViewerContainer
                                     ref={pdfViewerRef}

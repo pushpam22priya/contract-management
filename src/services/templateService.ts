@@ -1,6 +1,6 @@
 import { Template, UploadTemplateData } from '@/types/template';
 
-const TEMPLATES_STORAGE_KEY = 'cms_templates';
+const TEMPLATES_STORAGE_KEY = 'mock_templates';
 
 // Default templates for demo
 const DEFAULT_TEMPLATES: Template[] = [
@@ -172,12 +172,57 @@ class TemplateService {
     }
 
     /**
+     * Get all templates from localStorage (alias for getAllTemplates)
+     */
+    getTemplates(): Template[] {
+        if (typeof window === 'undefined') return [];
+        const stored = localStorage.getItem(TEMPLATES_STORAGE_KEY);
+        return stored ? JSON.parse(stored) : [];
+    }
+
+    /**
      * Save all templates to localStorage
      */
     private saveTemplates(templates: Template[]): void {
         if (typeof window === 'undefined') return;
 
         localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+    }
+
+    /**
+     * Save a new template to localStorage
+     * Returns the saved template with generated ID
+     */
+    saveTemplate(template: Partial<Template>): Template {
+        if (typeof window === 'undefined') return template as Template;
+
+        const templates = this.getTemplates();
+        const now = new Date().toISOString();
+
+        const newTemplate: Template = {
+            id: template.id || Date.now().toString(),
+            name: template.name || 'Untitled Template',
+            createdAt: template.createdAt || now,
+            fileData: template.fileData,
+            xfdfData: template.xfdfData,
+            description: template.description || '',
+            category: template.category || 'Uncategorized',
+            fileName: template.fileName || 'document.pdf',
+            fileUrl: template.fileUrl || template.fileData || '',
+            fileType: template.fileType || 'pdf',
+            timesUsed: template.timesUsed || 0,
+            lastUsed: template.lastUsed || 'Never',
+            uploadedBy: template.uploadedBy || '',
+            uploadedAt: template.uploadedAt || now,
+            content: template.content,
+            docxBase64: template.docxBase64,
+            formFields: template.formFields,
+            hasFormFields: template.hasFormFields || (template.formFields && template.formFields.length > 0) || false,
+        };
+
+        templates.push(newTemplate);
+        localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+        return newTemplate;
     }
 
     /**
@@ -312,6 +357,7 @@ class TemplateService {
             const newTemplate: Template = {
                 id: this.generateTemplateId(),
                 name: data.name.trim(),
+                createdAt: new Date().toISOString(),
                 description: data.description?.trim() || '',
                 category: data.category,
                 fileName: data.file.name,
@@ -388,7 +434,7 @@ class TemplateService {
     ): Promise<{ success: boolean; message: string; template?: Template }> {
         // Simulate API delay
         await new Promise(resolve => setTimeout(resolve, 500));
- 
+
         // Validation
         if (!data.name || data.name.trim().length === 0) {
             return {
@@ -396,32 +442,32 @@ class TemplateService {
                 message: 'Template name is required',
             };
         }
- 
+
         if (!data.category || data.category.trim().length === 0) {
             return {
                 success: false,
                 message: 'Category is required',
             };
         }
- 
+
         const templates = this.getAllTemplates();
         const templateIndex = templates.findIndex(template => template.id === id);
- 
+
         if (templateIndex === -1) {
             return {
                 success: false,
                 message: 'Template not found',
             };
         }
- 
+
         try {
             const existingTemplate = templates[templateIndex];
- 
+
             // If new file is provided, validate and convert it
             let fileUrl = existingTemplate.fileUrl;
             let fileName = existingTemplate.fileName;
             let fileType = existingTemplate.fileType;
- 
+
             if (data.file) {
                 // Validate file type
                 const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
@@ -431,7 +477,7 @@ class TemplateService {
                         message: 'Only PDF, DOCX, and DOC files are allowed',
                     };
                 }
- 
+
                 // Validate file size (max 10MB)
                 const maxSize = 10 * 1024 * 1024;
                 if (data.file.size > maxSize) {
@@ -440,32 +486,39 @@ class TemplateService {
                         message: 'File size must be less than 10MB',
                     };
                 }
- 
+
                 fileUrl = await this.fileToBase64(data.file);
                 fileName = data.file.name;
                 fileType = this.getFileType(data.file.name);
             }
- 
+
             const updatedTemplate: Template = {
                 ...existingTemplate,
                 name: data.name.trim(),
                 description: data.description?.trim() || '',
                 category: data.category,
-                fileName,
-                fileUrl,
-                fileType,
+                fileName: (data as any).fileName || fileName,
+                fileUrl: (data as any).fileUrl || fileUrl,
+                fileType: (data as any).fileType || fileType,
+                // New fields for the updated architecture
+                fileData: (data as any).fileData || existingTemplate.fileData,
+                xfdfData: (data as any).xfdfData || existingTemplate.xfdfData,
                 uploadedBy: userEmail,
                 uploadedAt: new Date().toISOString(),
                 // Update form fields if provided
                 ...(data.formFields ? {
                     formFields: data.formFields,
                     hasFormFields: data.formFields.length > 0
+                } : {}),
+                // Handle hasFormFields from data if provided explicitly
+                ...((data as any).hasFormFields !== undefined ? {
+                    hasFormFields: (data as any).hasFormFields
                 } : {})
             };
- 
+
             templates[templateIndex] = updatedTemplate;
             this.saveTemplates(templates);
- 
+
             return {
                 success: true,
                 message: 'Template updated successfully',

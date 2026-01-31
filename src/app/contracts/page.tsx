@@ -373,24 +373,27 @@ export default function ContractsPage() {
                             setSelectedContract(null);
                         }}
                         fileUrl={(() => {
-                            // Get template fileUrl if XFDF data exists
-                            if (selectedContract.xfdfString && selectedContract.templateId) {
+                            // ✅ Priority 1: Use signedPdfBase64 if available (contains embedded form fields)
+                            if (selectedContract.signedPdfBase64) {
+                                console.log('📄 Using signedPdfBase64 (preserves form fields)');
+                                return `data:application/pdf;base64,${selectedContract.signedPdfBase64}`;
+                            }
+                            // Priority 2: Fall back to template URL
+                            if (selectedContract.templateId) {
                                 const template = templateService.getTemplateById(selectedContract.templateId);
                                 console.log('📄 Template for viewing:', template);
-                                // Use the template's fileUrl which contains base64 data
                                 const url = template?.fileUrl || "";
-                                console.log('📄 Using fileUrl:', url.substring(0, 50));
+                                console.log('📄 Using template fileUrl:', url.substring(0, 50));
                                 return url;
                             }
                             return "";
                         })()}
-                        fileName={`${selectedContract.title}.${selectedContract.xfdfString ? 'pdf' : 'txt'}`}
+                        fileName={`${selectedContract.title}.pdf`}
                         title={selectedContract.title}
-                        content={selectedContract.xfdfString ? undefined : selectedContract.content}
+                        content={selectedContract.signedPdfBase64 ? undefined : selectedContract.content}
                         templateDocxBase64={selectedContract.templateDocxBase64}
                         fieldValues={selectedContract.fieldValues}
                         signatureImage={selectedContract.signer?.signatureImage}
-                        xfdfString={selectedContract.xfdfString}
                         currentUserRole="contractor"
                     />
                 )}

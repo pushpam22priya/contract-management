@@ -325,21 +325,26 @@ export default function ReviewApprovalPage() {
                             setSelectedContract(null);
                         }}
                         fileUrl={(() => {
-                            if (selectedContract.xfdfString && selectedContract.templateId) {
+                            // ✅ Priority 1: Use signedPdfBase64 if available
+                            if (selectedContract.signedPdfBase64) {
+                                console.log('📄 Using signedPdfBase64 (preserves form fields)');
+                                return `data:application/pdf;base64,${selectedContract.signedPdfBase64}`;
+                            }
+                            // Priority 2: Fall back to template URL
+                            if (selectedContract.templateId) {
                                 const template = templateService.getTemplateById(selectedContract.templateId);
                                 console.log('📄 Template for review viewing:', template);
                                 const url = template?.fileUrl || "";
-                                console.log('📄 Using fileUrl:', url.substring(0, 50));
+                                console.log('📄 Using template fileUrl:', url.substring(0, 50));
                                 return url;
                             }
                             return "";
                         })()}
                         fileName={selectedContract.title}
                         title={selectedContract.title}
-                        content={selectedContract.xfdfString ? undefined : selectedContract.content}
+                        content={selectedContract.signedPdfBase64 ? undefined : selectedContract.content}
                         templateDocxBase64={selectedContract.templateDocxBase64}
                         fieldValues={selectedContract.fieldValues}
-                        xfdfString={selectedContract.xfdfString}
                         readOnly={true}
                     />
                 )}

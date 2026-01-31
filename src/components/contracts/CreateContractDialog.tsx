@@ -22,6 +22,8 @@ import { authService } from '@/services/authService';
 import { Template } from '@/types/template';
 import dayjs from 'dayjs';
 import { ContractStatus } from '@/types/contract';
+import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
+// import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
 
 interface CreateContractDialogProps {
     open: boolean;
@@ -121,31 +123,40 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                 return;
             }
 
-            console.log('🔍 Starting XFDF export...');
+            console.log('🔍 Starting PDF export...');
             console.log('📄 PDF Viewer Ref exists:', !!pdfViewerRef.current);
             console.log('📝 Field values to export:', filledFieldValues);
 
-            // Export XFDF data from PDF
-            // CRITICAL: Pass filledFieldValues so PDFViewer can set them before export
-            // Explanation: Per Apryse docs, we must use fieldManager.getField().setValue()
-            // to properly set field values before export
-            const xfdf = await pdfViewerRef.current?.exportAnnotations(filledFieldValues);
+            // Export PDF Blob and XFDF from PDF viewer
+            // CRITICAL: exportAnnotations now returns { blob, xfdfString }
+            // ✅ FIX: Do NOT pass filledFieldValues to exportAnnotations. 
+            // The values are already in the PDF (typed by user). Passing them causes redundant setValue calls which invalidate signatures.
+            const exportResult = await pdfViewerRef.current?.exportAnnotations({});
 
-            console.log('📋 XFDF Export Result:');
-            console.log('  - XFDF exists:', !!xfdf);
-            console.log('  - XFDF length:', xfdf?.length || 0);
-            console.log('  - XFDF preview:', xfdf?.substring(0, 200));
+            console.log('📋 PDF Export Result:');
+            console.log('  - Export result exists:', !!exportResult);
+            console.log('  - PDF Blob size:', exportResult?.blob?.size || 0, 'bytes');
+            console.log('  - PDF Blob type:', exportResult?.blob?.type);
+            console.log('  - XFDF length:', exportResult?.xfdfString?.length || 0, 'chars');
 
-            if (!xfdf) {
-                console.error('❌ XFDF export returned empty or null');
+            if (!exportResult || !exportResult.blob) {
+                console.error('❌ PDF export returned empty or null');
                 setError('Failed to export PDF data. Please try again.');
                 return;
             }
 
-            if (xfdf.length < 50) {
-                console.warn('⚠️ XFDF seems too short - might be empty annotations');
-                console.log('Full XFDF:', xfdf);
+            const { blob: pdfBlob, xfdfString } = exportResult;
+
+            // Convert Blob to base64
+            console.log('📄 Converting PDF Blob to base64...');
+            const pdfBase64 = await blobToBase64(pdfBlob);
+
+            if (!verifyPdfBase64(pdfBase64)) {
+                console.error('❌ Invalid PDF: does not start with %PDF-');
+                setError('Failed to export PDF: Invalid PDF data');
+                return;
             }
+            console.log(`  - Base64 length: ${pdfBase64.length} chars`);
 
             // CRITICAL: Also export formFields to capture ReadOnly and other flags
             // These are stored with the contract so flags persist when reopening
@@ -161,10 +172,11 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
             const finalEndDate = endDate || dayjs().add(1, 'year').format('YYYY-MM-DD');
             const expiresInDays = dayjs(finalEndDate).diff(dayjs(), 'day');
 
-            console.log('💾 Creating contract with XFDF data...');
+            console.log('💾 Creating contract with PDF data...');
 
-            // Create contract with XFDF data AND formFields (with ReadOnly flags)
+            // Create contract with PDF base64 data AND formFields (with ReadOnly flags)
             const result = await contractService.createContract({
+                name: contractTitle,       // New required field
                 title: contractTitle,
                 client: clientName,
                 description: description || `Contract based on ${selectedTemplate.name}`,
@@ -181,16 +193,17 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                 createdBy: currentUser.email,
                 templateDocxBase64: selectedTemplate.docxBase64,
                 templateFileName: selectedTemplate.fileName,
-                xfdfString: xfdf,
+                signedPdfBase64: pdfBase64,  // Save complete PDF with form fields
+                xfdfData: xfdfString,        // ✅ CRITICAL: Save XFDF for signature restoration
                 formFields: exportedFormFields, // Save field definitions with ReadOnly flags
             });
 
             console.log('Contract creation result:', result);
 
             if (result.success) {
-                console.log('Contract created successfully with XFDF!');
+                console.log('Contract created successfully with PDF!');
                 console.log('Contract ID:', result.contract?.id);
-                console.log('XFDF stored length:', result.contract?.xfdfString?.length);
+                console.log('PDF Base64 stored length:', result.contract?.signedPdfBase64?.length);
                 console.log('Waiting 2 seconds before navigation so you can see logs...');
 
                 // Wait 2 seconds so logs are visible before navigation
@@ -276,21 +289,66 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
         </>
     );
 
+    const handleStartFilling = () => {
+        pdfViewerRef.current?.scrollToFirstField();
+    };
+
     // Step 2: PDF Editing Actions
     const step2Actions = (
         <>
-            <Button
-                onClick={() => setCurrentStep(1)}
-                startIcon={<ArrowBack />}
-                variant="outlined"
-                sx={{
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    borderRadius: 2,
-                }}
-            >
-                Back to Details
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1.5, mr: 'auto' }}>
+                <Button
+                    onClick={() => setCurrentStep(1)}
+                    startIcon={<ArrowBack />}
+                    variant="outlined"
+                    sx={{
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        borderRadius: 2,
+                    }}
+                >
+                    Back to Details
+                </Button>
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                        onClick={() => pdfViewerRef.current?.scrollToPrevField()}
+                        startIcon={<ArrowBack />}
+                        variant="outlined"
+                        sx={{
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            borderRadius: 2,
+                            borderColor: 'divider',
+                            color: 'text.secondary',
+                            '&:hover': {
+                                borderColor: 'primary.main',
+                                color: 'primary.main',
+                                bgcolor: 'transparent'
+                            }
+                        }}
+                    >
+                        Previous
+                    </Button>
+                    <Button
+                        onClick={() => pdfViewerRef.current?.scrollToNextField()}
+                        endIcon={<ArrowForward />}
+                        variant="outlined"
+                        sx={{
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            borderRadius: 2,
+                            borderColor: 'primary.main',
+                            color: 'primary.main',
+                            '&:hover': {
+                                bgcolor: alpha('#0f766e', 0.05),
+                            }
+                        }}
+                    >
+                        Next Field
+                    </Button>
+                </Box>
+            </Box>
 
             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
                 {/* {documentLoaded && (
@@ -558,11 +616,16 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                             }}>
                                 <PDFViewerContainer
                                     ref={pdfViewerRef}
-                                    documentUrl={selectedTemplate.fileUrl}
+                                    documentUrl={selectedTemplate.fileData || selectedTemplate.fileUrl}
+                                    // Pass form fields from template so PDF can recreate them
                                     // Pass form fields from template so PDF can recreate them
                                     // Explanation: selectedTemplate.formFields contains field definitions
                                     // created when template was uploaded. PDFViewer recreates these fields.
-                                    formFields={selectedTemplate?.formFields}
+                                    // ✅ CRITICAL FIX: Don't pass formFields if fileData (baked PDF) is used
+                                    formFields={selectedTemplate?.fileData ? undefined : selectedTemplate?.formFields}
+                                    // ✅ NEW: Restore annotations from template XFDF
+                                    // ✅ CRITICAL FIX: Don't import XFDF if fileData (baked PDF) is used
+                                    initialXfdf={selectedTemplate?.fileData ? undefined : selectedTemplate?.xfdfData}
                                     readOnly={false}
                                     currentUserRole="contractor"
                                     // Callback when user fills any field  

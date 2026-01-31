@@ -4,7 +4,7 @@ import {
     checkSignatureStatus
 } from './externalSignatureService';
 
-const CONTRACTS_STORAGE_KEY = 'cms_contracts';
+const CONTRACTS_STORAGE_KEY = 'mock_contracts';
 
 class ContractService {
     /**
@@ -72,6 +72,15 @@ class ContractService {
     }
 
     /**
+     * Get all contracts from localStorage (alias for getAllContracts)
+     */
+    getContracts(): Contract[] {
+        if (typeof window === 'undefined') return [];
+        const stored = localStorage.getItem(CONTRACTS_STORAGE_KEY);
+        return stored ? JSON.parse(stored) : [];
+    }
+
+    /**
      * Get contracts created by specific user
      */
     getContractsCreatedByUser(email: string): Contract[] {
@@ -86,6 +95,49 @@ class ContractService {
         if (typeof window === 'undefined') return;
 
         localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(contracts));
+    }
+
+    /**
+     * Save a new contract to localStorage
+     * Returns the saved contract with generated ID
+     */
+    saveContract(contract: Partial<Contract>): Contract {
+        if (typeof window === 'undefined') return contract as Contract;
+
+        const contracts = this.getContracts();
+        const now = new Date().toISOString();
+
+        const newContract: Contract = {
+            id: contract.id || Date.now().toString(),
+            name: contract.name || contract.title || 'Untitled Contract',
+            title: contract.title || contract.name || 'Untitled Contract',
+            templateId: contract.templateId || '',
+            templateName: contract.templateName || '',
+            createdAt: contract.createdAt || now,
+            status: contract.status || ContractStatus.DRAFT,
+            fileData: contract.fileData,
+            xfdfData: contract.xfdfData,
+            description: contract.description || '',
+            client: contract.client || '',
+            value: contract.value || '',
+            category: contract.category || '',
+            expiresInDays: contract.expiresInDays || 0,
+            content: contract.content || '',
+            fieldValues: contract.fieldValues || {},
+            createdBy: contract.createdBy || '',
+            // Optional fields
+            startDate: contract.startDate,
+            endDate: contract.endDate,
+            reviewers: contract.reviewers,
+            approver: contract.approver,
+            signer: contract.signer,
+            formFields: contract.formFields,
+            signedPdfBase64: contract.signedPdfBase64,
+        };
+
+        contracts.push(newContract);
+        localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(contracts));
+        return newContract;
     }
 
     /**
@@ -207,6 +259,51 @@ class ContractService {
         return {
             success: true,
             message: 'Signature saved successfully',
+            contract: updatedContract,
+        };
+    }
+
+    /**
+     * Update contract with signed PDF data (base64) and XFDF
+     * This stores the complete PDF with embedded signatures and form fields
+     * XFDF is also stored separately for restoring annotations on reload
+     */
+    async updateContractSignedPdf(id: string, pdfBase64: string, xfdfData?: string): Promise<{
+        success: boolean;
+        message: string;
+        contract?: Contract;
+    }> {
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        const contracts = this.getAllContracts();
+        const index = contracts.findIndex(c => c.id === id);
+
+        if (index === -1) {
+            return {
+                success: false,
+                message: 'Contract not found',
+            };
+        }
+
+        console.log(`📄 [ContractService] Saving signed PDF for contract ${id}`);
+        console.log(`   - PDF Base64 length: ${pdfBase64.length} chars`);
+        console.log(`   - XFDF length: ${xfdfData?.length || 0} chars`);
+
+        const updatedContract = {
+            ...contracts[index],
+            signedPdfBase64: pdfBase64, // Store complete signed PDF
+            xfdfData: xfdfData,          // Store XFDF for annotation restoration
+            updatedAt: new Date().toISOString(),
+        };
+
+        contracts[index] = updatedContract;
+        this.saveContracts(contracts);
+
+        console.log(`✅ [ContractService] Signed PDF and XFDF saved successfully`);
+
+        return {
+            success: true,
+            message: 'PDF saved successfully',
             contract: updatedContract,
         };
     }
@@ -346,7 +443,7 @@ class ContractService {
         const updatedContract: Contract = {
             ...contract,
             reviewers: updatedReviewers,
-            status: allReviewed ? ContractStatus.REVIEWED : contract.status, 
+            status: allReviewed ? ContractStatus.REVIEWED : contract.status,
             reviewStatus: allReviewed ? 'reviewed' : 'in_review',
             updatedAt: new Date().toISOString(),
         };
@@ -561,8 +658,8 @@ class ContractService {
             // ALLOW BOTH 'REVIEW_APPROVAL' AND 'REVIEWED'
             // Reviewers work on 'REVIEW_APPROVAL'
             // Approvers need to see 'REVIEWED' (Ready for Approval)
-            const isValidStatus = 
-                contract.status === ContractStatus.REVIEW_APPROVAL || 
+            const isValidStatus =
+                contract.status === ContractStatus.REVIEW_APPROVAL ||
                 contract.status === ContractStatus.REVIEWED;
             return (isReviewer || isApprover) && isValidStatus;
         });
@@ -764,7 +861,7 @@ class ContractService {
     ): Promise<{
         success: boolean;
         signed: boolean;
-        signedXfdf?: string;
+        signedPdfBase64?: string;
         error?: string;
     }> {
         console.log('🔄 [ContractService] Checking external signature status...');
@@ -782,8 +879,8 @@ class ContractService {
             return { success: false, signed: false, error: result.error };
         }
 
-        // If signed, update local contract
-        if (result.status === 'signed' && result.signedXfdf) {
+        // If signed, update local contract with PDF base64
+        if (result.status === 'signed' && result.signedPdfBase64) {
             console.log('🎉 [ContractService] Signature detected! Updating contract...');
 
             const contracts = this.getAllContracts();
@@ -793,7 +890,7 @@ class ContractService {
                 contracts[index] = {
                     ...contracts[index],
                     status: ContractStatus.SIGNED,
-                    xfdfString: result.signedXfdf,  // Update with signed XFDF
+                    signedPdfBase64: result.signedPdfBase64,  // ✅ Store full PDF base64
                     signer: {
                         ...contracts[index].signer!,
                         status: 'signed',
@@ -806,7 +903,7 @@ class ContractService {
                 console.log('✅ [ContractService] Contract marked as SIGNED');
             }
 
-            return { success: true, signed: true, signedXfdf: result.signedXfdf };
+            return { success: true, signed: true, signedPdfBase64: result.signedPdfBase64 };
         }
 
         console.log('⏳ [ContractService] Not yet signed, status:', result.status);

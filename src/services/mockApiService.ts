@@ -1,6 +1,6 @@
 import { Template, UploadTemplateData, FormFieldDefinition } from '@/types/template';
 
-const TEMPLATES_STORAGE_KEY = 'cms_templates';
+const TEMPLATES_STORAGE_KEY = 'mock_templates';
 
 /**
  * MockApiService for Template Management
@@ -61,6 +61,7 @@ class MockApiService {
             const newTemplate: Template = {
                 id: `temp_${Date.now()}`,
                 name: data.name,
+                createdAt: new Date().toISOString(),
                 description: data.description,
                 category: data.category,
                 fileName: data.file.name,
@@ -199,7 +200,7 @@ class MockApiService {
 
         try {
             // Try to find the contract in localStorage to get real title/client
-            const storedContracts = localStorage.getItem('cms_contracts');
+            const storedContracts = localStorage.getItem('mock_contracts');
             const contracts = storedContracts ? JSON.parse(storedContracts) : [];
             const contract = contracts.find((c: any) => c.id === id);
 

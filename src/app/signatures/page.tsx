@@ -12,6 +12,7 @@ import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import ContractCard from '@/components/contracts/ContractCard';
 import DrawIcon from '@mui/icons-material/Draw';
 import SignaturePadDialog from '@/components/contracts/SignaturePadDialog';
+import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
 
 /**
  * Signatures Page
@@ -89,16 +90,27 @@ export default function SignaturesPage() {
      * Handle saving client signature (from PDF viewer)
      * This also marks the contract as signed automatically
      */
-    const handleSaveSignature = async (xfdfString: string) => {
+    const handleSaveSignature = async (pdfBlob: Blob) => {
         const currentUser = authService.getCurrentUser();
         if (!currentUser || !selectedContract) return;
 
         console.log('💾 Saving client signature to contract:', selectedContract.id);
-        console.log('📋 Updated XFDF length:', xfdfString.length);
+        console.log(`📄 PDF Blob size: ${pdfBlob.size} bytes`);
 
         try {
-            // First, update the XFDF data
-            const updateResult = await contractService.updateContractXfdf(selectedContract.id, xfdfString);
+            // Convert Blob to base64
+            console.log('📄 [SignaturesPage] Converting PDF Blob to base64...');
+            const pdfBase64 = await blobToBase64(pdfBlob);
+
+            if (!verifyPdfBase64(pdfBase64)) {
+                console.error('❌ Invalid PDF: does not start with %PDF-');
+                showNotification('Failed to save: Invalid PDF data', 'error');
+                return;
+            }
+            console.log(`   - Base64 length: ${pdfBase64.length} chars`);
+
+            // First, save the signed PDF
+            const updateResult = await contractService.updateContractSignedPdf(selectedContract.id, pdfBase64);
 
             if (!updateResult.success) {
                 showNotification(updateResult.message || 'Failed to save signature', 'error');
@@ -109,7 +121,7 @@ export default function SignaturesPage() {
             const signResult = await contractService.signContract(
                 selectedContract.id,
                 currentUser.email,
-                '' // No separate signature image needed since it's in the XFDF
+                '' // No separate signature image needed since it's in the PDF
             );
 
             if (signResult.success) {
@@ -119,7 +131,7 @@ export default function SignaturesPage() {
                 loadContracts(); // Reload to remove from signatures list
             } else {
                 showNotification(signResult.message || 'Signature saved but failed to update status', 'warning');
-                loadContracts(); // Still reload to show updated XFDF
+                loadContracts(); // Still reload to show updated PDF
             }
         } catch (error) {
             console.error('Error saving signature:', error);
@@ -214,21 +226,26 @@ export default function SignaturesPage() {
                             setSelectedContract(null);
                         }}
                         fileUrl={(() => {
-                            if (selectedContract.xfdfString && selectedContract.templateId) {
+                            // ✅ Priority 1: Use signedPdfBase64 if available (contains embedded signatures)
+                            if (selectedContract.signedPdfBase64) {
+                                console.log('📄 Using signedPdfBase64 (preserves form fields and signatures)');
+                                return `data:application/pdf;base64,${selectedContract.signedPdfBase64}`;
+                            }
+                            // Priority 2: Fall back to template URL for unsigned documents
+                            if (selectedContract.templateId) {
                                 const template = templateService.getTemplateById(selectedContract.templateId);
                                 console.log('📄 Template for signature viewing:', template);
                                 const url = template?.fileUrl || "";
-                                console.log('📄 Using fileUrl:', url.substring(0, 50));
+                                console.log('📄 Using template fileUrl:', url.substring(0, 50));
                                 return url;
                             }
                             return "";
                         })()}
                         fileName={`${selectedContract.title}.pdf`}
                         title={selectedContract.title}
-                        content={selectedContract.xfdfString ? undefined : selectedContract.content}
+                        content={selectedContract.signedPdfBase64 ? undefined : selectedContract.content}
                         templateDocxBase64={selectedContract.templateDocxBase64}
                         fieldValues={selectedContract.fieldValues}
-                        xfdfString={selectedContract.xfdfString}
                         contractId={selectedContract.id}
                         onSave={handleSaveSignature}
                         clientSigningMode={true}

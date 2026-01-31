@@ -20,10 +20,11 @@ export enum ContractStatus {
     EXPIRED = 'expired',
     REJECTED = 'rejected'
 }
- 
+
 export interface Contract {
     // Card display fields (from Step 2 - Basic Information)
     id: string;
+    name: string;                // Contract name (alias for title)
     title: string;
     description: string;
     client: string;
@@ -31,6 +32,8 @@ export interface Contract {
     category: string;
     expiresInDays: number;
     status: ContractStatus;
+    fileData?: string;           // Base64-encoded PDF with filled values
+    xfdfData?: string;           // XFDF annotation data with field values
     // Review & Approval Workflow tracking
     reviewers?: ReviewerInfo[];      // Multiple reviewers can be assigned
     approver?: ApproverInfo;         // Single approver
@@ -39,27 +42,28 @@ export interface Contract {
     approvalStatus?: 'pending' | 'approved' | 'rejected';
     modificationComments?: string;   // Comments when changes are requested (legacy)
     modificationRequests?: ModificationRequest[];  // NEW: Detailed modification requests
- 
+
     // Template info
     templateId: string;
     templateName: string;
- 
+
     // Template DOCX for regeneration
     templateDocxBase64?: string;
     templateFileName?: string;
- 
+
     // Contract content (for PDF viewer - includes Step 3 dynamic fields)
     content: string;              // Populated template content
     fieldValues: Record<string, string>;  // The values user filled in Step 3
- 
+
     // PDFTron WebViewer data
-    xfdfString?: string;          // XFDF annotations and form data from PDFTron
+    xfdfString?: string;          // XFDF annotations and form data from PDFTron (legacy)
     formFields?: any[];           // Form field definitions with flags (readOnly, required, lockedBy etc.)
- 
+    signedPdfBase64?: string;     // Full signed PDF with embedded signatures (base64) - preserves form fields
+
     // Dates
     startDate?: string;
     endDate?: string;
- 
+
     // Metadata
     createdAt: string;
     createdBy: string;
@@ -70,9 +74,9 @@ export interface Contract {
     externalSigningBinId?: string;      // JSONBin ID for this signature request
     externalSigningUrl?: string;        // Full signing URL sent to client
     externalSigningSentAt?: string;     // When the signature request was sent
-    
+
 }
- 
+
 /**
 * Information about a modification request
 */
@@ -82,7 +86,7 @@ export interface ModificationRequest {
     comments: string;                       // Modification comments
     requestedAt: string;                    // Timestamp
 }
- 
+
 /**
 * Information about a reviewer assigned to a contract
 */
@@ -92,7 +96,7 @@ export interface ReviewerInfo {
     reviewedAt?: string;                                         // Timestamp when reviewed
     comments?: string;                                           // Comments from reviewer
 }
- 
+
 /**
 * Information about the approver assigned to a contract
 */

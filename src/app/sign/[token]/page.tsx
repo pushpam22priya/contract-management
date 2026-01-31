@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import {
     Box,
@@ -11,7 +11,7 @@ import {
     Paper,
     Container,
 } from '@mui/material';
-import { CheckCircle, Error, AccessTime, Save } from '@mui/icons-material';
+import { CheckCircle, Error, Save } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
 import { SignatureRequest } from '@/types/signature';
 import {
@@ -19,21 +19,13 @@ import {
     completeExternalSignature
 } from '@/services/externalSignatureService';
 
-// Dynamically import PDFViewerContainer (same pattern as DocumentViewerDialog)
+// Dynamically import PDFViewerContainer
 const PDFViewerContainer = dynamic(
     () => import('@/components/viewer/PDFViewerContainer'),
     {
         ssr: false,
         loading: () => (
-            <Box
-                sx={{
-                    width: '100%',
-                    height: '600px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                }}
-            >
+            <Box sx={{ width: '100%', height: '600px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 Loading PDF viewer...
             </Box>
         ),
@@ -41,13 +33,23 @@ const PDFViewerContainer = dynamic(
 );
 
 /**
- * Public Signing Page
- *
- * This page is accessible WITHOUT login. Clients receive a link to this
- * page via email and can sign the contract directly.
- *
- * URL format: /sign/[token]?bin=[binId]
+ * Helper function to convert Blob to base64 string
+ * ✅ CRITICAL: This is required to store PDFs properly
  */
+function blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64 = reader.result as string;
+            // Remove data URL prefix (data:application/pdf;base64,)
+            const base64Data = base64.split(',')[1];
+            resolve(base64Data);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
 export default function PublicSigningPage() {
     const params = useParams();
     const searchParams = useSearchParams();
@@ -55,9 +57,7 @@ export default function PublicSigningPage() {
     const token = params.token as string;
     const binId = searchParams.get('bin');
 
-    console.log('🖥️ [PublicSigningPage] Rendered');
-    console.log('🖥️ [PublicSigningPage] Token:', token);
-    console.log('🖥️ [PublicSigningPage] Bin ID:', binId);
+    console.log('🖥️ [PublicSigningPage] Rendered - Token:', token, 'Bin:', binId);
 
     // State
     const [loading, setLoading] = useState(true);
@@ -66,15 +66,12 @@ export default function PublicSigningPage() {
     const [submitting, setSubmitting] = useState(false);
     const [completed, setCompleted] = useState(false);
 
-    // Ref for PDF viewer to export annotations
+    // Ref for PDF viewer
     const pdfViewerRef = useRef<any>(null);
 
-    // Track field changes during signing
+    // Track field changes
     const [filledFieldValues, setFilledFieldValues] = useState<Record<string, string>>({});
 
-    /**
-     * Handle form field changes from PDF viewer
-     */
     const handleFieldChange = (fieldName: string, value: any) => {
         console.log(`📝 [PublicSigningPage] Field changed: ${fieldName} = ${value}`);
         setFilledFieldValues(prev => ({
@@ -84,14 +81,13 @@ export default function PublicSigningPage() {
     };
 
     /**
-     * Load signature request data on mount
+     * Load signature request data
      */
     useEffect(() => {
         const loadData = async () => {
-            console.log('📥 [PublicSigningPage] Loading signature request data...');
+            console.log('📥 [PublicSigningPage] Loading signature request...');
 
             if (!binId) {
-                console.error('❌ [PublicSigningPage] No bin ID in URL');
                 setError('Invalid signing link. Please contact the sender.');
                 setLoading(false);
                 return;
@@ -101,44 +97,35 @@ export default function PublicSigningPage() {
                 const result = await getSignatureRequestData(binId);
 
                 if (!result.success || !result.data) {
-                    console.error('❌ [PublicSigningPage] Failed to load data:', result.error);
                     setError('Unable to load document. The link may be invalid or expired.');
                     setLoading(false);
                     return;
                 }
 
                 const data = result.data;
-                console.log('✅ [PublicSigningPage] Data loaded successfully');
-                console.log('✅ [PublicSigningPage] Contract:', data.contractTitle);
-                console.log('✅ [PublicSigningPage] Status:', data.status);
+                console.log('✅ [PublicSigningPage] Data loaded - Contract:', data.contractTitle);
 
-                // Validate token matches
                 if (data.token !== token) {
-                    console.error('❌ [PublicSigningPage] Token mismatch');
                     setError('Invalid signing link. Please contact the sender.');
                     setLoading(false);
                     return;
                 }
 
-                // Check if expired
                 if (new Date(data.expiresAt) < new Date()) {
-                    console.error('❌ [PublicSigningPage] Link expired');
                     setError('This signing link has expired. Please request a new one.');
                     setLoading(false);
                     return;
                 }
 
-                // Check if already signed
                 if (data.status === 'signed') {
-                    console.log('ℹ️ [PublicSigningPage] Already signed');
                     setCompleted(true);
                 }
 
                 setSignatureRequest(data);
                 setLoading(false);
 
-            } catch (err: any) {
-                console.error('❌ [PublicSigningPage] Error loading data:', err);
+            } catch (err) {
+                console.error('❌ [PublicSigningPage] Error:', err);
                 setError('An error occurred. Please try again later.');
                 setLoading(false);
             }
@@ -149,45 +136,55 @@ export default function PublicSigningPage() {
 
     /**
      * Handle signature submission
+     * ✅ CRITICAL FIX: Properly convert Blob to base64
      */
     const handleSubmitSignature = async () => {
-        console.log('✍️ [PublicSigningPage] Submit signature clicked');
+        console.log('✍️ [PublicSigningPage] Submit clicked');
 
         if (!pdfViewerRef.current || !binId) {
-            console.error('❌ [PublicSigningPage] Missing ref or binId');
+            console.error('❌ Missing ref or binId');
             return;
         }
 
         setSubmitting(true);
 
         try {
-            // Export annotations from PDF viewer (same pattern as DocumentViewerDialog)
-            console.log('📝 [PublicSigningPage] Exporting annotations with field values:', filledFieldValues);
-            const signedXfdf = await pdfViewerRef.current.exportAnnotations(filledFieldValues);
+            // ✅ STEP 1: Export PDF Blob and XFDF from PDF viewer
+            // CRITICAL: exportAnnotations now returns { blob, xfdfString }
+            console.log('📝 [PublicSigningPage] Exporting PDF and XFDF with field values:', filledFieldValues);
+            const exportResult = await pdfViewerRef.current?.exportAnnotations(filledFieldValues);
 
-            if (!signedXfdf) {
-                console.error('❌ [PublicSigningPage] Failed to export annotations');
+            if (!exportResult || !exportResult.blob) {
+                console.error('❌ Export failed - received null or empty data');
                 setError('Failed to capture signature. Please try again.');
                 setSubmitting(false);
                 return;
             }
 
-            console.log('✅ [PublicSigningPage] Annotations exported, submitting to server...');
+            const { blob: pdfBlob, xfdfString } = exportResult;
+            console.log('✅ PDF Blob exported:', pdfBlob.size, 'bytes');
+            console.log('✅ XFDF exported:', xfdfString.length, 'chars');
 
-            // Submit to JSONBin
+            // ✅ STEP 2: Convert Blob to base64
+            const base64Pdf = await blobToBase64(pdfBlob);
+            console.log('✅ Converted to base64:', base64Pdf.length, 'characters');
+
+            // ✅ STEP 3: Submit to JSONBin
+            console.log('📤 Submitting to server...');
             const result = await completeExternalSignature(binId, {
-                signedXfdf,
+                signedPdfBase64: base64Pdf,
+                signedXfdf: xfdfString,     // ✅ Pass XFDF too
             });
 
             if (result.success) {
-                console.log('✅ [PublicSigningPage] Signature submitted successfully');
+                console.log('✅ Signature submitted successfully!');
                 setCompleted(true);
             } else {
-                console.error('❌ [PublicSigningPage] Failed to submit:', result.error);
+                console.error('❌ Submit failed:', result.error);
                 setError('Failed to submit signature. Please try again.');
             }
-        } catch (err: any) {
-            console.error('❌ [PublicSigningPage] Error submitting:', err);
+        } catch (err) {
+            console.error('❌ Error during submission:', err);
             setError('An error occurred while submitting. Please try again.');
         } finally {
             setSubmitting(false);
@@ -197,20 +194,10 @@ export default function PublicSigningPage() {
     // Loading state
     if (loading) {
         return (
-            <Box
-                sx={{
-                    minHeight: '100vh',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    bgcolor: 'grey.50',
-                }}
-            >
+            <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50' }}>
                 <Box sx={{ textAlign: 'center' }}>
                     <CircularProgress size={48} />
-                    <Typography sx={{ mt: 2 }} color="text.secondary">
-                        Loading document...
-                    </Typography>
+                    <Typography sx={{ mt: 2 }} color="text.secondary">Loading document...</Typography>
                 </Box>
             </Box>
         );
@@ -219,24 +206,11 @@ export default function PublicSigningPage() {
     // Error state
     if (error) {
         return (
-            <Box
-                sx={{
-                    minHeight: '100vh',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    bgcolor: 'grey.50',
-                    p: 3,
-                }}
-            >
+            <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50', p: 3 }}>
                 <Paper sx={{ p: 4, maxWidth: 500, textAlign: 'center' }}>
                     <Error sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
-                    <Typography variant="h5" gutterBottom>
-                        Unable to Load Document
-                    </Typography>
-                    <Alert severity="error" sx={{ mt: 2 }}>
-                        {error}
-                    </Alert>
+                    <Typography variant="h5" gutterBottom>Unable to Load Document</Typography>
+                    <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
                 </Paper>
             </Box>
         );
@@ -245,70 +219,38 @@ export default function PublicSigningPage() {
     // Completed state
     if (completed) {
         return (
-            <Box
-                sx={{
-                    minHeight: '100vh',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    bgcolor: 'grey.50',
-                    p: 3,
-                }}
-            >
+            <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50', p: 3 }}>
                 <Paper sx={{ p: 4, maxWidth: 500, textAlign: 'center' }}>
                     <CheckCircle sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
-                    <Typography variant="h5" gutterBottom>
-                        Document Signed Successfully!
-                    </Typography>
+                    <Typography variant="h5" gutterBottom>Document Signed Successfully!</Typography>
                     <Typography color="text.secondary" sx={{ mb: 3 }}>
-                        Thank you for signing "{signatureRequest?.contractTitle}".
-                        The sender has been notified.
+                        Thank you for signing "{signatureRequest?.contractTitle}". The sender has been notified.
                     </Typography>
-                    <Alert severity="success">
-                        You can close this window now.
-                    </Alert>
+                    <Alert severity="success">You can close this window now.</Alert>
                 </Paper>
             </Box>
         );
     }
 
-    // Signing state - show PDF viewer
+    // Signing state
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: 'grey.100' }}>
-            {/* Header */}
-            <Box
-                sx={{
-                    bgcolor: 'primary.main',
-                    color: 'white',
-                    // py: 1,
-                    // px: 1,
-                    boxShadow: 2,
-                }}
-            >
+            <Box sx={{ bgcolor: 'primary.main', color: 'white', boxShadow: 2 }}>
                 <Container maxWidth="lg">
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 2 }}>
                         <Box>
-                            <Typography variant="h6">
-                                {signatureRequest?.contractTitle}
-                            </Typography>
+                            <Typography variant="h6">{signatureRequest?.contractTitle}</Typography>
                             <Typography variant="body2" sx={{ opacity: 0.9 }}>
                                 Requested by: {signatureRequest?.createdByName || signatureRequest?.createdBy}
                             </Typography>
                         </Box>
-                        {/* Submit Button in Header */}
                         <Button
                             variant="contained"
                             color="secondary"
                             startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : <Save />}
                             onClick={handleSubmitSignature}
                             disabled={submitting}
-                            sx={{
-                                bgcolor: 'white',
-                                color: 'primary.main',
-                                '&:hover': {
-                                    bgcolor: 'grey.100',
-                                },
-                            }}
+                            sx={{ bgcolor: 'white', color: 'primary.main', '&:hover': { bgcolor: 'grey.100' } }}
                         >
                             {submitting ? 'Submitting...' : 'Submit Signature'}
                         </Button>
@@ -316,32 +258,16 @@ export default function PublicSigningPage() {
                 </Container>
             </Box>
 
-            {/* Expiry Warning */}
-            {/* {signatureRequest && (
-                <Container maxWidth="lg">
-                    <Alert
-                        severity="info"
-                        icon={<AccessTime />}
-                        // sx={{ mb: 2 }}
-                    >
-                        This link expires on {new Date(signatureRequest.expiresAt).toLocaleDateString('en-US', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                        })}
-                    </Alert>
-                </Container>
-            )} */}
-
-            {/* PDF Viewer */}
             <Container maxWidth="lg" sx={{ py: 2 }}>
-                <Paper sx={{ height: 'calc(100vh - 90px)', overflow: 'hidden' }}>
+                <Paper sx={{ height: 'calc(100vh - 140px)', overflow: 'hidden' }}>
                     {signatureRequest && (
                         <PDFViewerContainer
                             ref={pdfViewerRef}
-                            documentUrl={signatureRequest.templateFileUrl}
-                            xfdfString={signatureRequest.xfdfString}
+                            documentUrl={
+                                signatureRequest.signedPdfBase64
+                                    ? `data:application/pdf;base64,${signatureRequest.signedPdfBase64}`
+                                    : signatureRequest.templateFileUrl
+                            }
                             formFields={signatureRequest.formFields}
                             clientSigningMode={true}
                             readOnly={false}

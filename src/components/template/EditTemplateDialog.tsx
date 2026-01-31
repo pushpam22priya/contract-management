@@ -166,8 +166,10 @@ export default function EditTemplateDialog({
             }
         } else {
             // No new file, use existing template file
-            if (template.fileType === 'pdf' && template.fileUrl) {
-                setDocumentUrl(template.fileUrl);
+            // Prefer fileData (new architecture) over fileUrl (legacy)
+            const existingFileUrl = template.fileData || template.fileUrl;
+            if (template.fileType === 'pdf' && existingFileUrl) {
+                setDocumentUrl(existingFileUrl);
                 setCurrentStep(2);
                 setError('');
             } else {
@@ -215,27 +217,82 @@ export default function EditTemplateDialog({
         setUpdating(true);
 
         try {
-            // Extract form fields if in Step 2
+            console.log('📤 Starting template update with new architecture...');
+
+            let fileData: string = '';
+            let xfdfData: string = '';
             let formFields: any[] = [];
+
             if (currentStep === 2 && pdfViewerRef.current) {
-                console.log('📦 Extracting form fields from PDF...');
+                // Use new save() method to get both fileData and xfdfData
+                console.log('📦 Using new save() method to export PDF and XFDF...');
+                const saveResult = await pdfViewerRef.current.save();
+
+                if (saveResult) {
+                    fileData = saveResult.fileData;
+                    xfdfData = saveResult.xfdfData;
+                    console.log(`  ✓ fileData: ${fileData.length} chars`);
+                    console.log(`  ✓ xfdfData: ${xfdfData.length} chars`);
+                } else {
+                    console.warn('  ⚠️ save() returned null, falling back to existing data');
+                }
+
+                // Also export form fields for backward compatibility
                 formFields = await pdfViewerRef.current.exportFormFields();
                 console.log(`  - Extracted ${formFields.length} form fields`);
             }
 
+            // If save() didn't work and we have a new file, convert it to base64
+            if (!fileData && selectedFile) {
+                console.log('📄 Converting new file to base64...');
+                fileData = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(selectedFile);
+                });
+                console.log(`  ✓ File converted: ${fileData.length} chars`);
+            }
+
+            // Update template using templateService.updateTemplate
+            console.log('💾 Updating template with new architecture...');
+
+            // Build update data
+            const updateData: any = {
+                name: templateName.trim(),
+                description: description.trim(),
+                category: selectedCategory,
+            };
+
+            // Add file-related updates if we have new data
+            if (fileData) {
+                updateData.fileUrl = fileData;
+                updateData.fileData = fileData;
+            }
+            if (xfdfData) {
+                updateData.xfdfData = xfdfData;
+            }
+            if (formFields.length > 0) {
+                updateData.formFields = formFields;
+                updateData.hasFormFields = true;
+            }
+            if (selectedFile) {
+                updateData.fileName = selectedFile.name;
+                updateData.fileType = selectedFile.type.includes('pdf') ? 'pdf' : 'docx';
+            }
+
             const result = await templateService.updateTemplate(
                 template.id,
-                {
-                    name: templateName.trim(),
-                    description: description.trim(),
-                    category: selectedCategory,
-                    file: selectedFile || undefined,
-                    formFields: formFields.length > 0 ? formFields : undefined,
-                },
+                updateData,
                 currentUser.email
             );
 
             if (result.success) {
+                console.log('✅ Template updated successfully!');
+                console.log('  - Template ID:', result.template?.id);
+                console.log('  - fileData length:', result.template?.fileData?.length || 0);
+                console.log('  - xfdfData length:', result.template?.xfdfData?.length || 0);
+
                 setSuccess(result.message);
                 setTimeout(() => {
                     handleClose();
@@ -245,6 +302,7 @@ export default function EditTemplateDialog({
                 setError(result.message);
             }
         } catch (err) {
+            console.error('❌ Error updating template:', err);
             setError('Failed to update template. Please try again.');
         } finally {
             setUpdating(false);
@@ -781,9 +839,12 @@ export default function EditTemplateDialog({
                                     toolbarMode="forms"
                                     onDocumentLoaded={() => setDocumentLoaded(true)}
                                     onError={(err) => setError(err)}
+                                    // Pass existing XFDF data to restore annotations (only if using existing file)
+                                    // ✅ CRITICAL FIX: Don't import XFDF if fileData (baked PDF) is used
+                                    initialXfdf={selectedFile ? undefined : (template.fileData ? undefined : template.xfdfData)}
                                     // Pass existing form fields ONLY if we are using the existing file
                                     // If a new file is selected (selectedFile is not null), we start fresh
-                                    formFields={selectedFile ? undefined : template.formFields}
+                                    formFields={selectedFile ? undefined : (template.fileData ? undefined : template.formFields)}
                                 />
                             </Box>
                         ) : (

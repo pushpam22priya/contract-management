@@ -18,6 +18,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import ContractInformation from '@/components/contracts/ContractInformation';
 import ContractDetailsPanel from '@/components/contracts/ContractDetailsPanel';
 import { contractService } from '@/services/contractService';
+import { templateService } from '@/services/templateService';
 import { mockApiService } from '@/services/mockApiService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { Document } from '@/components/contracts/ContractDetailsPanel';
@@ -51,7 +52,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
             try {
                 // 1. Try to find contract in LocalStorage directly (Most reliable source)
                 let found = null;
-                const localData = localStorage.getItem('cms_contracts');
+                const localData = localStorage.getItem('mock_contracts');
                 if (localData) {
                     const parsed = JSON.parse(localData);
                     found = parsed.find((c: any) => c.id === id);
@@ -251,7 +252,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                     <EditOutlinedIcon fontSize="small" />
                                 </IconButton>
                             </Tooltip> */}
-{/* 
+                            {/* 
                             <Tooltip title="Download" arrow>
                                 <IconButton
                                     onClick={handleDownload}
@@ -338,17 +339,49 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 </Box>
             </Fade>
 
-            {/* Document Viewer Dialog */}
+            {/* Debug: Log what's being passed to viewer */}
+            {viewerOpen && (() => {
+                console.log('🔍 [ContractViewPage] Opening DocumentViewer with:', {
+                    hasSignedPdfBase64: !!contract.signedPdfBase64,
+                    signedPdfBase64Length: contract.signedPdfBase64?.length || 0,
+                    hasXfdfData: !!contract.xfdfData,
+                    xfdfDataLength: contract.xfdfData?.length || 0,
+                    xfdfDataPreview: contract.xfdfData?.substring(0, 100) || 'none',
+                    formFieldsCount: contract.formFields?.length || 0,
+                    templateId: contract.templateId,
+                });
+                return null;
+            })()}
             <DocumentViewerDialog
                 open={viewerOpen}
                 onClose={() => setViewerOpen(false)}
-                // Priority: URL from selected doc -> Template URL -> Empty string
-                fileUrl={selectedDoc?.url || contract.fileUrl || ''}
-                // Priority: Name from selected doc -> Contract Title
+                fileUrl={(() => {
+                    // ✅ CRITICAL FIX: Prioritize signedPdfBase64 (has baked signatures)
+                    // The XFDF only contains appearance REFERENCES, actual graphics are in the PDF
+                    if (contract.signedPdfBase64) {
+                        console.log('📄 [ContractViewPage] Using signedPdfBase64 for PDF source');
+                        return `data:application/pdf;base64,${contract.signedPdfBase64}`;
+                    }
+
+                    // Fallback to template PDF if no saved signed PDF yet
+                    if (contract.templateId) {
+                        console.log('📄 [ContractViewPage] Falling back to template PDF');
+                        const template = templateService.getTemplateById(contract.templateId);
+                        const url = template?.fileData || template?.fileUrl || "";
+                        if (url) return url;
+                    }
+
+                    return selectedDoc?.url || contract.fileUrl || '';
+                })()}
                 fileName={selectedDoc?.name || contract.title}
                 title={selectedDoc?.name || contract.title}
                 contractId={contract.id}
-                xfdfString={contract.xfdfString}
+                // ✅ CRITICAL FIX: Only import XFDF if NOT using signedPdfBase64
+                // When signedPdfBase64 exists, form fields are ALREADY in the PDF
+                // Importing XFDF creates duplicate fields with broken appearance references
+                initialXfdf={contract.signedPdfBase64 ? undefined : contract.xfdfData}
+                formFields={contract.signedPdfBase64 ? undefined : contract.formFields}
+                currentUserRole="contractor"
             />
         </AppLayout>
     );

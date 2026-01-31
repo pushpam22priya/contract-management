@@ -285,11 +285,14 @@ export default function TemplatePage() {
                     <DocumentViewerDialog
                         open={viewerOpen}
                         onClose={handleCloseViewer}
-                        fileUrl={templateToView.fileUrl}
+                        fileUrl={templateToView.fileData || templateToView.fileUrl}
                         fileName={templateToView.fileName}
                         title={templateToView.name}
                         readOnly={true}
                         formFields={templateToView.formFields}
+                        // ✅ CRITICAL FIX: Only import XFDF if using legacy fileUrl (not fileData)
+                        // fileData (from new save process) already has fields baked in
+                        initialXfdf={templateToView.fileData ? undefined : templateToView.xfdfData}
                     />
                 )}
 

@@ -152,27 +152,60 @@ export default function DraftPage() {
 
     /**
      * Save contract changes from PDF viewer
+     * Now accepts both pdfBlob and xfdfString for proper signature persistence
      */
-    const handleSaveChanges = async (xfdfString: string) => {
+    const handleSaveChanges = async (pdfBlob: Blob, xfdfString: string) => {
         if (!selectedContract) return;
 
-        const result = await contractService.updateContractXfdf(selectedContract.id, xfdfString);
+        try {
+            // Convert Blob to base64
+            console.log('📄 [DraftPage] Converting PDF Blob to base64...');
+            console.log(`   - Blob size: ${pdfBlob.size} bytes`);
+            console.log(`   - Blob type: ${pdfBlob.type}`);
+            console.log(`   - XFDF length: ${xfdfString.length} chars`);
 
-        if (result.success) {
-            showNotification('Changes saved successfully!', 'success');
-            loadDrafts(); // Reload to get updated contract
-        } else {
-            showNotification('Failed to save changes: ' + result.message, 'error');
-            throw new Error(result.message);
+            const arrayBuffer = await pdfBlob.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
+
+            // Verify PDF header
+            const header = String.fromCharCode(...bytes.slice(0, 5));
+            if (!header.startsWith('%PDF-')) {
+                console.error('❌ Invalid PDF: does not start with %PDF-');
+                showNotification('Failed to save: Invalid PDF data', 'error');
+                return;
+            }
+            console.log('   - PDF header verified: ' + header);
+
+            // Convert to base64
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            const pdfBase64 = btoa(binary);
+            console.log(`   - Base64 length: ${pdfBase64.length} chars`);
+
+            // ✅ CRITICAL: Pass both pdfBase64 AND xfdfString to contract service
+            const result = await contractService.updateContractSignedPdf(selectedContract.id, pdfBase64, xfdfString);
+
+            if (result.success) {
+                showNotification('Changes saved successfully!', 'success');
+                loadDrafts(); // Reload to get updated contract
+            } else {
+                showNotification('Failed to save changes: ' + result.message, 'error');
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            console.error('❌ Error saving PDF:', error);
+            showNotification('Failed to save changes', 'error');
         }
     };
 
     // Filter states
     const statusOptions = [
-    { label: 'All Status', value: 'all' },
-    { label: 'Draft', value: ContractStatus.DRAFT },
-    { label: 'Review and Approve', value: ContractStatus.REVIEW_APPROVAL },
-];
+        { label: 'All Status', value: 'all' },
+        { label: 'Draft', value: ContractStatus.DRAFT },
+        { label: 'Review and Approve', value: ContractStatus.REVIEW_APPROVAL },
+    ];
 
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState(statusOptions[0]);
@@ -351,33 +384,56 @@ export default function DraftPage() {
                         setSelectedContract(null);
                     }}
                     fileUrl={(() => {
-                        // Get template fileUrl if XFDF data exists
-                        if (selectedContract.xfdfString && selectedContract.templateId) {
-                            const template = templateService.getTemplateById(selectedContract.templateId);
-                            console.log('📄 Template for viewing:', template);
-                            const url = template?.fileUrl || "";
-                            console.log('📄 Using fileUrl:', url.substring(0, 50));
-                            return url;
+                        // ✅ CRITICAL FIX: Use signedPdfBase64 which has signatures BAKED IN
+                        // This matches how templates work - the saved PDF contains appearance streams
+                        // XFDF import then refreshes/updates the annotation state
+
+                        // Priority 1: Use signedPdfBase64 (has baked signatures from getFileData)
+                        if (selectedContract.signedPdfBase64) {
+                            console.log('📄 [DraftPage] Using signedPdfBase64 (baked signatures)');
+                            console.log('   - PDF length:', selectedContract.signedPdfBase64.length);
+                            console.log('   - XFDF length:', selectedContract.xfdfData?.length || 0);
+                            return `data:application/pdf;base64,${selectedContract.signedPdfBase64}`;
                         }
+
+                        // Priority 2: Fallback to template PDF for brand-new contracts without saves
+                        if (selectedContract.templateId) {
+                            const template = templateService.getTemplateById(selectedContract.templateId);
+                            console.log('📄 [DraftPage] Fallback: Using template PDF (no signedPdfBase64 yet)');
+                            console.log('   - Template:', template?.name);
+                            return template?.fileData || template?.fileUrl || "";
+                        }
+
                         return "";
                     })()}
-                    fileName={`${selectedContract.title}.${selectedContract.xfdfString ? 'pdf' : 'txt'}`}
+                    fileName={`${selectedContract.title}.pdf`}
                     title={selectedContract.title}
-                    content={selectedContract.xfdfString ? undefined : selectedContract.content}
+                    content={selectedContract.content}
                     templateDocxBase64={selectedContract.templateDocxBase64}
                     fieldValues={selectedContract.fieldValues}
                     signatureImage={selectedContract.signer?.signatureImage}
-                    xfdfString={selectedContract.xfdfString}
                     contractId={selectedContract.id}
                     onSave={handleSaveChanges}
                     currentUserRole="contractor"
-                    // Use contract's formFields (with saved ReadOnly flags) if available,
-                    // otherwise fall back to template's formFields
+                    // ✅ CRITICAL FIX: Only import XFDF if using template PDF (not signedPdfBase64)
+                    // When signedPdfBase64 exists, the form fields are ALREADY BAKED into the PDF
+                    // Importing XFDF on top creates duplicate fields with broken appearance references
+                    initialXfdf={
+                        selectedContract.signedPdfBase64
+                            ? undefined  // Don't import XFDF - fields already in PDF
+                            : (selectedContract.xfdfData ||
+                                (selectedContract.templateId
+                                    ? templateService.getTemplateById(selectedContract.templateId)?.xfdfData
+                                    : undefined))
+                    }
+                    // Same logic for formFields - only needed when loading from template
                     formFields={
-                        selectedContract.formFields ||
-                        (selectedContract.templateId
-                            ? templateService.getTemplateById(selectedContract.templateId)?.formFields
-                            : undefined)
+                        selectedContract.signedPdfBase64
+                            ? undefined  // Don't pass - fields already in PDF
+                            : (selectedContract.formFields ||
+                                (selectedContract.templateId
+                                    ? templateService.getTemplateById(selectedContract.templateId)?.formFields
+                                    : undefined))
                     }
                 />
             )}

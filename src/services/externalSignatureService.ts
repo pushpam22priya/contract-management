@@ -10,7 +10,7 @@
 
 import { Contract } from '@/types/contract';
 import { SignatureRequest, SignatureCompletionData } from '@/types/signature';
-import { 
+import {
     createSignatureRequest as createBin,
     getSignatureRequest as getBin,
     completeSignature as completeBinSignature,
@@ -28,9 +28,9 @@ const generateToken = (): string => {
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 15);
     const token = `sig_${timestamp}_${random}`;
-    
+
     console.log('🔑 [ExternalSignature] Generated token:', token);
-    
+
     return token;
 };
 
@@ -41,9 +41,9 @@ const generateSigningUrl = (token: string, binId: string): string => {
     const baseUrl = externalSignatureConfig.app.baseUrl;
     const path = externalSignatureConfig.app.signingPagePath;
     const url = `${baseUrl}${path}/${token}?bin=${binId}`;
-    
+
     console.log('🔗 [ExternalSignature] Generated signing URL:', url);
-    
+
     return url;
 };
 
@@ -54,9 +54,9 @@ const calculateExpiryDate = (): string => {
     const days = externalSignatureConfig.settings.expiryDays;
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + days);
-    
+
     console.log('📅 [ExternalSignature] Expiry date:', expiryDate.toISOString());
-    
+
     return expiryDate.toISOString();
 };
 
@@ -98,24 +98,24 @@ export const submitForExternalSignature = async (
     console.log('🚀 [ExternalSignature] Contract Title:', contract.title);
     console.log('🚀 [ExternalSignature] Signer Email:', signerEmail);
     console.log('🚀 [ExternalSignature] Sender:', senderName);
-    
+
     try {
         // Step 1: Generate unique token
         const token = generateToken();
-        
+
         // Step 2: Get template file URL (base64 PDF)
         console.log('📄 [ExternalSignature] Fetching template data...');
         const template = templateService.getTemplateById(contract.templateId);
-        
+
         if (!template?.fileUrl) {
             console.error('❌ [ExternalSignature] Template not found or has no fileUrl');
             return { success: false, error: 'Contract template not found' };
         }
         console.log('✅ [ExternalSignature] Template found:', template.name);
-        
+
         // Step 3: Calculate expiry
         const expiresAt = calculateExpiryDate();
-        
+
         // Step 4: Create signature request data
         const signatureRequest: SignatureRequest = {
             token,
@@ -130,28 +130,28 @@ export const submitForExternalSignature = async (
             status: 'pending',
             templateId: contract.templateId,
             templateFileUrl: template.fileUrl,
-            xfdfString: contract.xfdfString || '',
+            xfdfString: contract.xfdfData || contract.xfdfString || '', // Use xfdfData as priority
             formFields: contract.formFields || template.formFields || [],
             fieldValues: contract.fieldValues || {},
         };
-        
+
         console.log('📦 [ExternalSignature] Signature request data prepared');
-        
+
         // Step 5: Store in JSONBin
         console.log('☁️ [ExternalSignature] Uploading to JSONBin...');
         const binResult = await createBin(signatureRequest);
-        
+
         if (!binResult.success || !binResult.binId) {
             console.error('❌ [ExternalSignature] Failed to create JSONBin:', binResult.error);
             return { success: false, error: binResult.error || 'Failed to store signature request' };
         }
-        
+
         const binId = binResult.binId;
         console.log('✅ [ExternalSignature] Stored in JSONBin, ID:', binId);
-        
+
         // Step 6: Generate signing URL
         const signingUrl = generateSigningUrl(token, binId);
-        
+
         // Step 7: Send email
         console.log('📧 [ExternalSignature] Sending email to signer...');
         const emailResult = await sendSignatureRequestEmail({
@@ -162,7 +162,7 @@ export const submitForExternalSignature = async (
             expiry_date: formatDateForEmail(expiresAt),
             signing_url: signingUrl,
         });
-        
+
         if (!emailResult.success) {
             console.error('❌ [ExternalSignature] Failed to send email:', emailResult.error);
             // Note: We don't fail the whole operation if email fails
@@ -171,20 +171,20 @@ export const submitForExternalSignature = async (
         } else {
             console.log('✅ [ExternalSignature] Email sent successfully');
         }
-        
+
         // Step 8: Return success with all tracking info
         console.log('🎉 [ExternalSignature] Submission completed successfully!');
         console.log('🎉 [ExternalSignature] Token:', token);
         console.log('🎉 [ExternalSignature] Bin ID:', binId);
         console.log('🎉 [ExternalSignature] Signing URL:', signingUrl);
-        
+
         return {
             success: true,
             token,
             binId,
             signingUrl,
         };
-        
+
     } catch (error: any) {
         console.error('❌ [ExternalSignature] Unexpected error:', error);
         return { success: false, error: error.message || 'Unexpected error occurred' };
@@ -201,30 +201,35 @@ export const checkSignatureStatus = async (
     success: boolean;
     status?: SignatureRequest['status'];
     signedXfdf?: string;
+    signedPdfBase64?: string;
     signedAt?: string;
     error?: string;
 }> => {
     console.log('🔍 [ExternalSignature] Checking signature status...');
     console.log('🔍 [ExternalSignature] Bin ID:', binId);
-    
+
     const result = await getBin(binId);
-    
+
     if (!result.success || !result.data) {
         console.error('❌ [ExternalSignature] Failed to fetch status:', result.error);
         return { success: false, error: result.error };
     }
-    
-    const { status, signedXfdf, signedAt } = result.data;
-    
+
+    const { status, signedXfdf, signedPdfBase64, signedAt } = result.data;
+
     console.log('✅ [ExternalSignature] Status:', status);
     if (status === 'signed') {
         console.log('✅ [ExternalSignature] Signed at:', signedAt);
+        if (signedPdfBase64) {
+            console.log('✅ [ExternalSignature] Signed PDF Blob available:', signedPdfBase64.length, 'chars');
+        }
     }
-    
+
     return {
         success: true,
         status,
         signedXfdf,
+        signedPdfBase64,
         signedAt,
     };
 };
@@ -241,9 +246,9 @@ export const getSignatureRequestData = async (
     error?: string;
 }> => {
     console.log('📥 [ExternalSignature] Fetching signature request data...');
-    
+
     const result = await getBin(binId);
-    
+
     if (result.success && result.data) {
         // Mark as viewed if still pending
         if (result.data.status === 'pending') {
@@ -251,7 +256,7 @@ export const getSignatureRequestData = async (
             await markAsViewed(binId);
         }
     }
-    
+
     return result;
 };
 
@@ -263,6 +268,8 @@ export const completeExternalSignature = async (
     signatureData: SignatureCompletionData
 ): Promise<{ success: boolean; error?: string }> => {
     console.log('✍️ [ExternalSignature] Completing external signature...');
-    
+    console.log(`✍️ [ExternalSignature] Signature Data - PDF: ${signatureData.signedPdfBase64?.length || 0} chars, XFDF: ${signatureData.signedXfdf?.length || 0} chars`);
+
     return completeBinSignature(binId, signatureData);
 };
+
