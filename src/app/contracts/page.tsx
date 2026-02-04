@@ -242,9 +242,10 @@ export default function ContractsPage() {
 
         if (result.success) {
             console.log('✅ [ContractsPage] Signature request sent successfully');
+            console.log('✅ [ContractsPage] Signing URL:', result.signingUrl);
             showNotification('Signature request sent to ' + signerEmail, 'success');
             loadContracts();  // Reload to show updated status
-            return { success: true };
+            return { success: true, signingUrl: result.signingUrl };
         } else {
             console.error('❌ [ContractsPage] Failed to send signature request:', result.message);
             showNotification(result.message, 'error');

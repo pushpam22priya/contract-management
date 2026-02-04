@@ -21,6 +21,7 @@ interface PDFViewerContainerProps {
     clientSigningMode?: boolean;
     templateFormFields?: any[];
     toolbarMode?: 'annotate' | 'forms';
+    defaultToolbar?: 'view' | 'forms' | 'annotate';  // Explicit default toolbar selection
     formFields?: any[];
     currentUserRole?: 'contractor' | 'client';
     onDocumentLoaded?: () => void;
@@ -203,7 +204,7 @@ function focusField(Core: any, field: any) {
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly = false, isReadOnly, commentsOnly = false, clientSigningMode = false, templateFormFields, toolbarMode = 'annotate', formFields, currentUserRole, onDocumentLoaded, onError, onFieldChange, onFieldLocked, onSave, onDocumentModified, showFieldNavigation = false, actionButtons, canAddFormFields = false, editableFieldMode = 'all' }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly = false, isReadOnly, commentsOnly = false, clientSigningMode = false, templateFormFields, toolbarMode = 'annotate', defaultToolbar, formFields, currentUserRole, onDocumentLoaded, onError, onFieldChange, onFieldLocked, onSave, onDocumentModified, showFieldNavigation = false, actionButtons, canAddFormFields = false, editableFieldMode = 'all' }, ref) => {
 
         // Use isReadOnly if provided, otherwise fall back to readOnly
         const effectiveReadOnly = isReadOnly ?? readOnly;
@@ -1036,8 +1037,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     } else if (commentsOnly) {
                         UI.setToolbarGroup('toolbarGroup-View');
                     } else if (toolbarMode === 'forms' && canAddFormFields) {
-                        // ✅ Show View toolbar by default, user can switch to Forms if needed
-                        UI.setToolbarGroup('toolbarGroup-View');
+                        // Use explicit defaultToolbar if provided, otherwise default to Forms
+                        const toolbar = defaultToolbar === 'view' ? 'toolbarGroup-View' :
+                                       defaultToolbar === 'annotate' ? 'toolbarGroup-Annotate' :
+                                       'toolbarGroup-Forms';
+                        UI.setToolbarGroup(toolbar);
                     } else if (toolbarMode === 'forms' && !canAddFormFields) {
                         // ✅ NEW: Forms mode but can't add fields - use Annotate toolbar
                         // User can still fill existing fields but can't create new ones

@@ -666,6 +666,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                                     // ✅ NEW: Enable form field creation during contract creation ONLY
                                     canAddFormFields={true}
                                     toolbarMode="forms"
+                                    defaultToolbar="view"
                                     // Callback when user fills any field
                                     // Explanation: Fires when user types/checks a field, stores value
                                     onFieldChange={handleFieldChange}
