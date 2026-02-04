@@ -9,6 +9,7 @@ import TemplateCard from '@/components/template/TemplateCard';
 import UploadTemplateDialog from '@/components/template/UploadTemplateDialog';
 import EditTemplateDialog from '@/components/template/EditTemplateDialog';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
+import CreateContractDialog from '@/components/contracts/CreateContractDialog';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import { authService } from '@/services/authService';
@@ -41,8 +42,8 @@ export default function TemplatePage() {
         checkAdminStatus();
     }, []);
 
-    const loadTemplates = () => {
-        const allTemplates = templateService.getAllTemplates();
+    const loadTemplates = async () => {
+        const allTemplates = await templateService.getAllTemplates();
         setTemplates(allTemplates);
     };
 
@@ -74,16 +75,19 @@ export default function TemplatePage() {
     const handleViewTemplate = async (templateId: string) => {
         console.log('👁️  Viewing template:', templateId);
 
-        // Import and call MockAPI
-        const { mockApiService } = await import('@/services/mockApiService');
-        const result = await mockApiService.getTemplateById(templateId);
+        try {
+            // Use real service instead of mock
+            const fetchedTemplate = await templateService.getTemplateById(templateId);
 
-        if (result.success && result.template) {
-            console.log('✅ Template fetched via MockAPI');
-            setTemplateToView(result.template);
-            setViewerOpen(true);
-        } else {
-            console.error('❌ Failed to fetch template');
+            if (fetchedTemplate) {
+                console.log('✅ Template fetched via templateService');
+                setTemplateToView(fetchedTemplate);
+                setViewerOpen(true);
+            } else {
+                console.error('❌ Failed to fetch template');
+            }
+        } catch (error) {
+            console.error('❌ Error fetching template:', error);
         }
     };
 
@@ -113,7 +117,7 @@ export default function TemplatePage() {
 
         setDeleting(true);
         try {
-            // Call the service to delete from localStorage
+            // Call the service to delete
             const result = await templateService.deleteTemplate(templateToDelete.id);
 
             if (result.success) {
@@ -290,9 +294,10 @@ export default function TemplatePage() {
                         title={templateToView.name}
                         readOnly={true}
                         formFields={templateToView.formFields}
-                        // ✅ CRITICAL FIX: Only import XFDF if using legacy fileUrl (not fileData)
-                        // fileData (from new save process) already has fields baked in
-                        initialXfdf={templateToView.fileData ? undefined : templateToView.xfdfData}
+                        // ✅ CRITICAL FIX: ALWAYS import XFDF for templates
+                        // Templates are saved with flatten=false, so form fields exist ONLY in XFDF
+                        // Unlike signed contracts (which are flattened), templates need XFDF to show fields
+                        initialXfdf={templateToView.xfdfData}
                     />
                 )}
 
@@ -354,6 +359,13 @@ export default function TemplatePage() {
                         </Button>
                     </DialogActions>
                 </Dialog>
+
+                {/* Create Contract Wizard */}
+                <CreateContractDialog
+                    open={wizardOpen}
+                    onClose={handleCloseWizard}
+                    initialTemplateName={selectedTemplateForUse}
+                />
             </Box>
         </AppLayout>
     );

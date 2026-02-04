@@ -60,14 +60,17 @@ interface DocumentViewerDialogProps {
     // ✅ NEW: XFDF data to restore annotations on load
     initialXfdf?: string;
     contractId?: string;
-    // ✅ CRITICAL: onSave now receives PDF Blob AND XFDF string for signature persistence
-    onSave?: (pdfBlob: Blob, xfdfString: string) => Promise<void>;
+    // ✅ CRITICAL: onSave now receives PDF Blob, XFDF string, fieldValues, and formFields for full persistence
+    onSave?: (pdfBlob: Blob, xfdfString: string, fieldValues?: Record<string, string>, formFields?: any[]) => Promise<void>;
     readOnly?: boolean;
     commentsOnly?: boolean;
     clientSigningMode?: boolean;
     templateFormFields?: any[];
     formFields?: any[];
     currentUserRole?: 'contractor' | 'client';
+    // ✅ NEW: Permission control props for field lifecycle
+    canAddFormFields?: boolean;
+    editableFieldMode?: 'all' | 'empty-only' | 'none';
 }
 
 export default function DocumentViewerDialog({
@@ -88,7 +91,9 @@ export default function DocumentViewerDialog({
     clientSigningMode = false,
     templateFormFields,
     formFields,
-    currentUserRole
+    currentUserRole,
+    canAddFormFields = false,
+    editableFieldMode = 'all'
 }: DocumentViewerDialogProps) {
 
 
@@ -123,7 +128,8 @@ export default function DocumentViewerDialog({
         console.log('📋 DocumentViewerDialog: Received form fields:', formFields.length);
     }
 
-    // ✅ CRITICAL FIX: Handle save button click - now exports PDF Blob + XFDF
+    // ✅ CRITICAL FIX: Handle save button click - now exports PDF Blob + XFDF + fieldValues + formFields
+    // This matches the contract creation flow in CreateContractDialog
     const handleSaveClick = async () => {
         if (!pdfViewerRef.current) {
             console.error('PDF viewer ref not available');
@@ -131,12 +137,17 @@ export default function DocumentViewerDialog({
         }
 
         setSaving(true);
+
         try {
-            console.log('📝 [DocumentViewerDialog] Starting export with field values:', filledFieldValues);
+            console.log('📝 [DocumentViewerDialog] Starting export from DRAFT with field values:', filledFieldValues);
+            console.log('📝 [DocumentViewerDialog] Initial XFDF length:', initialXfdf?.length || 0);
 
             // ✅ CRITICAL: exportAnnotations now returns { blob, xfdfString }
             // Both are needed to persist signatures properly
-            const exportResult = await pdfViewerRef.current.exportAnnotations(filledFieldValues);
+            // ✅ FIX: Pass empty {} matching contract creation flow.
+            // Values are already in the PDF. Passing filledFieldValues causes
+            // redundant setValue calls which can invalidate signature appearances.
+            const exportResult = await pdfViewerRef.current.exportAnnotations({}, { flatten: false });
 
             if (!exportResult) {
                 console.error('Failed to export PDF - received null');
@@ -145,39 +156,86 @@ export default function DocumentViewerDialog({
 
             const { blob, xfdfString } = exportResult;
 
-            console.log(`✅ PDF exported successfully: ${blob.size} bytes`);
-            console.log(`✅ XFDF exported successfully: ${xfdfString.length} chars`);
+            console.log(`✅ PDF exported from DRAFT: ${blob.size} bytes`);
+            console.log(`✅ XFDF exported from DRAFT: ${xfdfString.length} chars`);
+            console.log(`📊 XFDF size comparison: Initial=${initialXfdf?.length || 0}, Exported=${xfdfString.length}`);
+
+            // ✅ CRITICAL FIX: Also export formFields (same as CreateContractDialog)
+            // This ensures field definitions, readOnly flags, and locked states persist
+            let exportedFormFields: any[] | undefined;
+            try {
+                exportedFormFields = await pdfViewerRef.current.exportFormFields();
+                // Sync values from filledFieldValues into exportedFormFields
+                if (exportedFormFields) {
+                    exportedFormFields = exportedFormFields.map((field: any) => ({
+                        ...field,
+                        value: filledFieldValues[field.name] || field.value || ''
+                    }));
+                }
+                console.log(`✅ FormFields exported: ${exportedFormFields?.length || 0} fields`);
+            } catch (e) {
+                console.warn('⚠️ Could not export form fields:', e);
+            }
 
             if (onSave) {
-                // Pass both PDF Blob and XFDF to the save callback
-                console.log(`📤 [DocumentViewerDialog] Triggering onSave with ${blob.size} byte Blob + XFDF`);
-                await onSave(blob, xfdfString);
-                console.log('✅ Changes saved successfully!');
+                // ✅ Pass PDF Blob, XFDF, fieldValues, and formFields to the save callback
+                // This matches how CreateContractDialog saves contracts
+                console.log(`📤 [DocumentViewerDialog] Triggering onSave with ${blob.size} byte Blob + XFDF + fieldValues + formFields`);
+                await onSave(blob, xfdfString, filledFieldValues, exportedFormFields);
+                console.log('✅ Changes saved to contract successfully!');
+
+                // ✅ NEW: Clear the SignatureStore after successful save
+                try {
+                    pdfViewerRef.current?.clearSignatureStore?.();
+                    console.log('🧹 [DocumentViewerDialog] Cleared SignatureStore after save');
+                } catch (e) {
+                    console.warn('⚠️ Could not clear signature store:', e);
+                }
 
                 // ✅ Close dialog after successful save
                 onClose();
             }
+
         } catch (error) {
             console.error('❌ Error saving changes:', error);
-            // Optional: Show error notification to user
         } finally {
             setSaving(false);
         }
     };
 
+    // ✅ Start Filling Handler
+    const handleStartFilling = () => {
+        pdfViewerRef.current?.scrollToFirstField();
+    };
+
     // Action buttons for dialog footer
     // ✅ Show save button if onSave callback is provided
     // Note: xfdfString check removed - we now save full PDFs regardless
-    const dialogActions = onSave ? (
-        <Button
-            variant="contained"
-            startIcon={<SaveIcon />}
-            onClick={handleSaveClick}
-            disabled={saving || (clientSigningMode && !signatureCommitted)}
-        >
-            {saving ? 'Saving...' : 'Save Changes'}
-        </Button>
-    ) : undefined;
+    const dialogActions = (
+        <>
+            {/* Start Filling Button - helpful for long documents */}
+            {!readOnly && (
+                <Button
+                    onClick={handleStartFilling}
+                    variant="outlined"
+                    sx={{ mr: 2 }}
+                >
+                    Start Filling
+                </Button>
+            )}
+
+            {onSave && (
+                <Button
+                    variant="contained"
+                    startIcon={<SaveIcon />}
+                    onClick={handleSaveClick}
+                    disabled={saving || (clientSigningMode && !signatureCommitted)}
+                >
+                    {saving ? 'Saving...' : 'Save Changes'}
+                </Button>
+            )}
+        </>
+    );
 
     return (
         <BaseDialog
@@ -218,7 +276,10 @@ export default function DocumentViewerDialog({
                         <PDFViewerContainer
                             ref={pdfViewerRef}
                             documentUrl={fileUrl || ""}
-                            // ✅ NEW: Restore annotations from XFDF on load
+                            // ✅ CRITICAL FIX: ALWAYS pass initialXfdf for both templates AND contracts
+                            // Contracts are saved with flatten=false (CreateContractDialog.tsx:144)
+                            // So we NEED to import XFDF to restore signatures and field values
+                            // Previous logic incorrectly skipped XFDF for contracts, causing signatures to disappear
                             initialXfdf={initialXfdf}
                             readOnly={readOnly}
                             commentsOnly={commentsOnly}
@@ -227,6 +288,9 @@ export default function DocumentViewerDialog({
                             formFields={formFields}
                             currentUserRole={currentUserRole}
                             onFieldChange={handleFieldChange}
+                            // ✅ NEW: Permission control props
+                            canAddFormFields={canAddFormFields}
+                            editableFieldMode={editableFieldMode}
                         />
                     );
 

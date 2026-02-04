@@ -77,8 +77,8 @@ export default function RequestReviewDialog({
     /**
      * Load existing review/approval data from contract
      */
-    const loadExistingReviewData = () => {
-        const contract = contractService.getContractById(contractId);
+    const loadExistingReviewData = async () => {
+        const contract = await contractService.getContractById(contractId);
 
         if (contract) {
             let hasData = false;

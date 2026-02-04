@@ -23,14 +23,14 @@ import { Template } from '@/types/template';
 import dayjs from 'dayjs';
 import { ContractStatus } from '@/types/contract';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
-// import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
 
 interface CreateContractDialogProps {
     open: boolean;
     onClose: () => void;
+    initialTemplateName?: string;
 }
 
-const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
+const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateContractDialogProps) => {
     const router = useRouter();
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
 
@@ -43,6 +43,7 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [documentLoaded, setDocumentLoaded] = useState(false);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState(''); // Add success state
 
     // Contract Information
     const [contractTitle, setContractTitle] = useState('');
@@ -67,11 +68,19 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
         }
     }, [open]);
 
-    const loadTemplates = () => {
+    const loadTemplates = async () => {
         setLoadingTemplates(true);
         try {
-            const allTemplates = templateService.getAllTemplates();
+            const allTemplates = await templateService.getAllTemplates();
             setTemplates(allTemplates);
+
+            // Pre-select template if name provided
+            if (initialTemplateName) {
+                const found = allTemplates.find(t => t.name === initialTemplateName);
+                if (found) {
+                    setSelectedTemplate(found);
+                }
+            }
         } catch (err) {
             setError('Failed to load templates');
             console.error('Error loading templates:', err);
@@ -115,7 +124,6 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
         setSaving(true);
         setError('');
 
-
         try {
             const currentUser = authService.getCurrentUser();
             if (!currentUser) {
@@ -131,7 +139,8 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
             // CRITICAL: exportAnnotations now returns { blob, xfdfString }
             // ✅ FIX: Do NOT pass filledFieldValues to exportAnnotations. 
             // The values are already in the PDF (typed by user). Passing them causes redundant setValue calls which invalidate signatures.
-            const exportResult = await pdfViewerRef.current?.exportAnnotations({});
+            // ✅ CRITICAL FIX: Flatten the contract PDF to burn in signatures and fields
+            const exportResult = await pdfViewerRef.current?.exportAnnotations({}, { flatten: false });
 
             console.log('📋 PDF Export Result:');
             console.log('  - Export result exists:', !!exportResult);
@@ -147,24 +156,28 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
 
             const { blob: pdfBlob, xfdfString } = exportResult;
 
-            // Convert Blob to base64
-            console.log('📄 Converting PDF Blob to base64...');
-            const pdfBase64 = await blobToBase64(pdfBlob);
+            // ✅ CRITICAL FIX: Store both template and contract XFDF
+            // Template XFDF contains signatures from template creation
+            // Contract XFDF contains new annotations from contract creation
+            // We'll merge them on load to preserve both
+            console.log('📋 [Contract Creation] XFDF Comparison:');
+            console.log(`   Template XFDF: ${selectedTemplate?.xfdfData?.length || 0} chars`);
+            console.log(`   Exported XFDF: ${xfdfString.length} chars`);
 
-            if (!verifyPdfBase64(pdfBase64)) {
-                console.error('❌ Invalid PDF: does not start with %PDF-');
-                setError('Failed to export PDF: Invalid PDF data');
-                return;
-            }
-            console.log(`  - Base64 length: ${pdfBase64.length} chars`);
+            // Use the exported XFDF (has new signature) but also store template XFDF for merging on load
+            const finalXfdf = xfdfString;
 
             // CRITICAL: Also export formFields to capture ReadOnly and other flags
             // These are stored with the contract so flags persist when reopening
-            const exportedFormFields = await pdfViewerRef.current?.exportFormFields();
-            console.log('📋 FormFields Export Result:');
-            console.log('  - Fields exported:', exportedFormFields?.length || 0);
-            if (exportedFormFields && exportedFormFields.length > 0) {
-                console.log('  - ReadOnly flags:', exportedFormFields.filter((f: any) => f.readOnly).map((f: any) => f.name));
+            let exportedFormFields = await pdfViewerRef.current?.exportFormFields();
+
+            // ✅ CRITICAL FIX: Sync values from filledFieldValues into exportedFormFields
+            // The exportFormFields() method might return initial/empty values if not fully synced
+            if (exportedFormFields) {
+                exportedFormFields = exportedFormFields.map(field => ({
+                    ...field,
+                    value: filledFieldValues[field.name] || field.value || ''
+                }));
             }
 
             // Calculate dates if not provided
@@ -172,11 +185,11 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
             const finalEndDate = endDate || dayjs().add(1, 'year').format('YYYY-MM-DD');
             const expiresInDays = dayjs(finalEndDate).diff(dayjs(), 'day');
 
-            console.log('💾 Creating contract with PDF data...');
-
-            // Create contract with PDF base64 data AND formFields (with ReadOnly flags)
-            const result = await contractService.createContract({
-                name: contractTitle,       // New required field
+            // Create contract metadata first
+            console.log('📝 Creating contract metadata...');
+            // Exclude signedPdfBase64 from initial creation to avoid JSON overhead/violation
+            const contractData = {
+                name: contractTitle,
                 title: contractTitle,
                 client: clientName,
                 description: description || `Contract based on ${selectedTemplate.name}`,
@@ -187,30 +200,48 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                 templateId: selectedTemplate.id,
                 templateName: selectedTemplate.name,
                 content: selectedTemplate.content || '',
-                fieldValues: filledFieldValues,  // Save filled values (e.g., {"client_name": "ABC Corp"})
+                fieldValues: filledFieldValues,  // Save filled values
                 startDate: finalStartDate,
                 endDate: finalEndDate,
                 createdBy: currentUser.email,
                 templateDocxBase64: selectedTemplate.docxBase64,
                 templateFileName: selectedTemplate.fileName,
-                signedPdfBase64: pdfBase64,  // Save complete PDF with form fields
-                xfdfData: xfdfString,        // ✅ CRITICAL: Save XFDF for signature restoration
-                formFields: exportedFormFields, // Save field definitions with ReadOnly flags
-            });
+                xfdfData: finalXfdf,         // ✅ Use finalXfdf (preserves template signatures)
+                formFields: exportedFormFields, // Save field definitions
+                hasFormFields: (exportedFormFields?.length ?? 0) > 0 || selectedTemplate.hasFormFields || false, // ✅ Use template flag or check fields
+            };
 
-            console.log('Contract creation result:', result);
+            const result = await contractService.createContract(contractData);
 
-            if (result.success) {
+            if (result.success && result.contract) {
+                console.log('✅ Contract metadata created, ID:', result.contract.id);
+
+                // Now upload the PDF binary
+                if (pdfBlob) {
+                    console.log(`📤 Uploading PDF binary (${pdfBlob.size} bytes)...`);
+                    const uploadResult = await contractService.updateContractSignedPdf(
+                        result.contract.id,
+                        pdfBlob, // Pass Blob directly
+                        finalXfdf // ✅ Use finalXfdf (preserves template signatures)
+                    );
+
+                    if (uploadResult.success) {
+                        console.log('✅ PDF binary uploaded successfully');
+                    } else {
+                        console.error('❌ Failed to upload PDF binary');
+                        setError('Contract created but PDF upload failed');
+                        setSaving(false);
+                        return;
+                    }
+                }
+
                 console.log('Contract created successfully with PDF!');
-                console.log('Contract ID:', result.contract?.id);
-                console.log('PDF Base64 stored length:', result.contract?.signedPdfBase64?.length);
-                console.log('Waiting 2 seconds before navigation so you can see logs...');
 
-                // Wait 2 seconds so logs are visible before navigation
-                await new Promise(resolve => setTimeout(resolve, 2000));
-
-                handleClose();
-                router.push('/draft');
+                setSuccess('Contract created successfully!');
+                setTimeout(() => {
+                    handleClose();
+                    router.push('/draft');
+                }, 1500);
             } else {
                 console.error('❌ Contract creation failed:', result.message);
                 setError(result.message);
@@ -406,6 +437,12 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                     {error && (
                         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
                             {error}
+                        </Alert>
+                    )}
+                    {/* Success Alert */}
+                    {success && (
+                        <Alert severity="success" sx={{ mb: 2 }}>
+                            {success}
                         </Alert>
                     )}
 
@@ -617,18 +654,19 @@ const CreateContractDialog = ({ open, onClose }: CreateContractDialogProps) => {
                                 <PDFViewerContainer
                                     ref={pdfViewerRef}
                                     documentUrl={selectedTemplate.fileData || selectedTemplate.fileUrl}
-                                    // Pass form fields from template so PDF can recreate them
-                                    // Pass form fields from template so PDF can recreate them
-                                    // Explanation: selectedTemplate.formFields contains field definitions
-                                    // created when template was uploaded. PDFViewer recreates these fields.
-                                    // ✅ CRITICAL FIX: Don't pass formFields if fileData (baked PDF) is used
-                                    formFields={selectedTemplate?.fileData ? undefined : selectedTemplate?.formFields}
-                                    // ✅ NEW: Restore annotations from template XFDF
-                                    // ✅ CRITICAL FIX: Don't import XFDF if fileData (baked PDF) is used
-                                    initialXfdf={selectedTemplate?.fileData ? undefined : selectedTemplate?.xfdfData}
+                                    // ✅ CRITICAL FIX: DON'T pass initialXfdf for contract creation
+                                    // Template PDF already has annotations embedded (saved with flatten=false)
+                                    // Re-importing XFDF causes conflicts and loses template signatures
+                                    // Just load the PDF - it has everything we need
+                                    formFields={selectedTemplate?.formFields}
+                                    // ❌ DON'T import template XFDF - causes duplicate/conflicting annotations
+                                    // initialXfdf={selectedTemplate?.xfdfData}
                                     readOnly={false}
                                     currentUserRole="contractor"
-                                    // Callback when user fills any field  
+                                    // ✅ NEW: Enable form field creation during contract creation ONLY
+                                    canAddFormFields={true}
+                                    toolbarMode="forms"
+                                    // Callback when user fills any field
                                     // Explanation: Fires when user types/checks a field, stores value
                                     onFieldChange={handleFieldChange}
                                     onDocumentLoaded={() => setDocumentLoaded(true)}

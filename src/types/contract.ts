@@ -33,6 +33,7 @@ export interface Contract {
     expiresInDays: number;
     status: ContractStatus;
     fileData?: string;           // Base64-encoded PDF with filled values
+    fileUrl?: string;            // URL to fetch PDF from API (e.g., /api/file/[id])
     xfdfData?: string;           // XFDF annotation data with field values
     // Review & Approval Workflow tracking
     reviewers?: ReviewerInfo[];      // Multiple reviewers can be assigned
@@ -59,6 +60,7 @@ export interface Contract {
     xfdfString?: string;          // XFDF annotations and form data from PDFTron (legacy)
     formFields?: any[];           // Form field definitions with flags (readOnly, required, lockedBy etc.)
     signedPdfBase64?: string;     // Full signed PDF with embedded signatures (base64) - preserves form fields
+    hasFormFields?: boolean;      // Quick check if contract has form fields
 
     // Dates
     startDate?: string;

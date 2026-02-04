@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import {
     Box,
     Typography,
@@ -32,32 +32,9 @@ const PDFViewerContainer = dynamic(
     }
 );
 
-/**
- * Helper function to convert Blob to base64 string
- * ✅ CRITICAL: This is required to store PDFs properly
- */
-function blobToBase64(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64 = reader.result as string;
-            // Remove data URL prefix (data:application/pdf;base64,)
-            const base64Data = base64.split(',')[1];
-            resolve(base64Data);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
-}
-
 export default function PublicSigningPage() {
     const params = useParams();
-    const searchParams = useSearchParams();
-
     const token = params.token as string;
-    const binId = searchParams.get('bin');
-
-    console.log('🖥️ [PublicSigningPage] Rendered - Token:', token, 'Bin:', binId);
 
     // State
     const [loading, setLoading] = useState(true);
@@ -73,7 +50,6 @@ export default function PublicSigningPage() {
     const [filledFieldValues, setFilledFieldValues] = useState<Record<string, string>>({});
 
     const handleFieldChange = (fieldName: string, value: any) => {
-        console.log(`📝 [PublicSigningPage] Field changed: ${fieldName} = ${value}`);
         setFilledFieldValues(prev => ({
             ...prev,
             [fieldName]: value?.toString() || ''
@@ -85,16 +61,8 @@ export default function PublicSigningPage() {
      */
     useEffect(() => {
         const loadData = async () => {
-            console.log('📥 [PublicSigningPage] Loading signature request...');
-
-            if (!binId) {
-                setError('Invalid signing link. Please contact the sender.');
-                setLoading(false);
-                return;
-            }
-
             try {
-                const result = await getSignatureRequestData(binId);
+                const result = await getSignatureRequestData(token);
 
                 if (!result.success || !result.data) {
                     setError('Unable to load document. The link may be invalid or expired.');
@@ -103,13 +71,6 @@ export default function PublicSigningPage() {
                 }
 
                 const data = result.data;
-                console.log('✅ [PublicSigningPage] Data loaded - Contract:', data.contractTitle);
-
-                if (data.token !== token) {
-                    setError('Invalid signing link. Please contact the sender.');
-                    setLoading(false);
-                    return;
-                }
 
                 if (new Date(data.expiresAt) < new Date()) {
                     setError('This signing link has expired. Please request a new one.');
@@ -125,66 +86,67 @@ export default function PublicSigningPage() {
                 setLoading(false);
 
             } catch (err) {
-                console.error('❌ [PublicSigningPage] Error:', err);
+                console.error('Failed to load signing data:', err);
                 setError('An error occurred. Please try again later.');
                 setLoading(false);
             }
         };
 
-        loadData();
-    }, [token, binId]);
+        if (token) loadData();
+    }, [token]);
 
     /**
      * Handle signature submission
-     * ✅ CRITICAL FIX: Properly convert Blob to base64
+     * Matches contract creation flow: exports PDF, XFDF, fieldValues, and formFields
      */
     const handleSubmitSignature = async () => {
-        console.log('✍️ [PublicSigningPage] Submit clicked');
-
-        if (!pdfViewerRef.current || !binId) {
-            console.error('❌ Missing ref or binId');
-            return;
-        }
+        if (!pdfViewerRef.current) return;
 
         setSubmitting(true);
 
         try {
-            // ✅ STEP 1: Export PDF Blob and XFDF from PDF viewer
-            // CRITICAL: exportAnnotations now returns { blob, xfdfString }
-            console.log('📝 [PublicSigningPage] Exporting PDF and XFDF with field values:', filledFieldValues);
-            const exportResult = await pdfViewerRef.current?.exportAnnotations(filledFieldValues);
+            // ✅ FIX: Pass empty {} to exportAnnotations, matching contract creation flow.
+            // The values are already in the PDF (typed by user). Passing filledFieldValues
+            // causes redundant setValue calls which can invalidate signature appearances.
+            const exportResult = await pdfViewerRef.current?.exportAnnotations({}, { flatten: false });
 
             if (!exportResult || !exportResult.blob) {
-                console.error('❌ Export failed - received null or empty data');
                 setError('Failed to capture signature. Please try again.');
                 setSubmitting(false);
                 return;
             }
 
             const { blob: pdfBlob, xfdfString } = exportResult;
-            console.log('✅ PDF Blob exported:', pdfBlob.size, 'bytes');
-            console.log('✅ XFDF exported:', xfdfString.length, 'chars');
 
-            // ✅ STEP 2: Convert Blob to base64
-            const base64Pdf = await blobToBase64(pdfBlob);
-            console.log('✅ Converted to base64:', base64Pdf.length, 'characters');
+            // ✅ FIX: Also export form fields like contract creation does
+            let exportedFormFields: any[] | undefined;
+            try {
+                exportedFormFields = await pdfViewerRef.current?.exportFormFields();
+                if (exportedFormFields) {
+                    exportedFormFields = exportedFormFields.map((field: any) => ({
+                        ...field,
+                        value: filledFieldValues[field.name] || field.value || ''
+                    }));
+                }
+            } catch (e) {
+                console.warn('Could not export form fields:', e);
+            }
 
-            // ✅ STEP 3: Submit to JSONBin
-            console.log('📤 Submitting to server...');
-            const result = await completeExternalSignature(binId, {
-                signedPdfBase64: base64Pdf,
-                signedXfdf: xfdfString,     // ✅ Pass XFDF too
-            });
+            const result = await completeExternalSignature(
+                token,
+                pdfBlob,
+                xfdfString,
+                filledFieldValues,
+                exportedFormFields
+            );
 
             if (result.success) {
-                console.log('✅ Signature submitted successfully!');
                 setCompleted(true);
             } else {
-                console.error('❌ Submit failed:', result.error);
                 setError('Failed to submit signature. Please try again.');
             }
         } catch (err) {
-            console.error('❌ Error during submission:', err);
+            console.error('Signature submission failed:', err);
             setError('An error occurred while submitting. Please try again.');
         } finally {
             setSubmitting(false);
@@ -224,7 +186,7 @@ export default function PublicSigningPage() {
                     <CheckCircle sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
                     <Typography variant="h5" gutterBottom>Document Signed Successfully!</Typography>
                     <Typography color="text.secondary" sx={{ mb: 3 }}>
-                        Thank you for signing "{signatureRequest?.contractTitle}". The sender has been notified.
+                        Thank you for signing "{signatureRequest?.contractTitle}". The contract has been updated.
                     </Typography>
                     <Alert severity="success">You can close this window now.</Alert>
                 </Paper>
@@ -263,16 +225,19 @@ export default function PublicSigningPage() {
                     {signatureRequest && (
                         <PDFViewerContainer
                             ref={pdfViewerRef}
-                            documentUrl={
-                                signatureRequest.signedPdfBase64
-                                    ? `data:application/pdf;base64,${signatureRequest.signedPdfBase64}`
-                                    : signatureRequest.templateFileUrl
-                            }
+                            documentUrl={`/api/sign-requests/${token}/file`}
+                            // ✅ FIX: Re-enable XFDF import so contractor signatures and filled values
+                            // are visible to the external signer. Without this, signature appearances
+                            // and field values from contract creation are not displayed.
+                            initialXfdf={signatureRequest.xfdfData}
                             formFields={signatureRequest.formFields}
                             clientSigningMode={true}
                             readOnly={false}
                             currentUserRole="client"
+                            showFieldNavigation={true}
                             onFieldChange={handleFieldChange}
+                            // ✅ NEW: External signers can ONLY fill empty fields, NOT modify pre-filled values
+                            editableFieldMode="empty-only"
                         />
                     )}
                 </Paper>

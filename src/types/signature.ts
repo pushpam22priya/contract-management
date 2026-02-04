@@ -39,7 +39,9 @@ export interface SignatureRequest {
     templateId: string;
     templateFileUrl: string;      // Base64 PDF data
     xfdfString?: string;          // Legacy: Current annotations/form data (deprecated)
+    xfdfData?: string;            // ✅ NEW: XFDF data for restoring pre-filled field values and signatures
     signedPdfBase64?: string;     // Full PDF with embedded signals/form fields
+    hasFormFields?: boolean;      // Quick check if contract has form fields
     formFields: any[];            // Form field definitions
     fieldValues: Record<string, string>;
 

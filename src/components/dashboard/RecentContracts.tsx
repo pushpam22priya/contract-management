@@ -26,56 +26,68 @@ export default function RecentContracts() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const loadRecentContracts = () => {
+        const loadRecentContracts = async () => {
             const currentUser = authService.getCurrentUser();
             if (!currentUser) return;
 
-            const allContracts = contractService.getAllContracts();
+            try {
+                const allContracts = await contractService.getAllContracts();
 
-            // Filter relevant contracts (created by or signer)
-            const relevantContracts = allContracts.filter(c =>
-                c.createdBy === currentUser.email || c.signer?.email === currentUser.email
-            );
+                // Ensure array
+                if (!Array.isArray(allContracts)) {
+                    console.error("RecentContracts: getAllContracts returned non-array", allContracts);
+                    setLoading(false);
+                    return;
+                }
 
-            // Sort by creation date (newest first)
-            const sortedContracts = relevantContracts.sort((a, b) => {
-                return dayjs(b.createdAt).diff(dayjs(a.createdAt));
-            });
+                // Filter relevant contracts (created by or signer)
+                const relevantContracts = allContracts.filter(c =>
+                    c.createdBy === currentUser.email || c.signer?.email === currentUser.email
+                );
 
-            // Take top 2
-            const top2 = sortedContracts.slice(0, 2);
+                // Sort by creation date (newest first)
+                const sortedContracts = relevantContracts.sort((a, b) => {
+                    return dayjs(b.createdAt).diff(dayjs(a.createdAt));
+                });
 
-            // Map to display format
-            const displayContracts = top2.map(c => {
-                // Calculate days left
-                const today = dayjs();
-                const end = c.endDate ? dayjs(c.endDate) : today;
-                const start = c.startDate ? dayjs(c.startDate) : today;
+                // Take top 2
+                const top2 = sortedContracts.slice(0, 2);
 
-                const totalDays = Math.max(1, end.diff(start, 'day'));
-                const daysLeft = Math.max(0, end.diff(today, 'day'));
+                // Map to display format
+                const displayContracts = top2.map(c => {
+                    // Calculate days left
+                    const today = dayjs();
+                    const end = c.endDate ? dayjs(c.endDate) : today;
+                    const start = c.startDate ? dayjs(c.startDate) : today;
 
-                // Navigate to draft page if review_approval, otherwise contracts page
-                // Add search parameter to filter by contract title
-                const basePath = c.status === ContractStatus.REVIEW_APPROVAL ? `/draft` : `/contracts`;
-                const params = new URLSearchParams();
-                params.set('search', c.title);
-                const path = `${basePath}?${params.toString()}`;
+                    const totalDays = Math.max(1, end.diff(start, 'day'));
+                    const daysLeft = Math.max(0, end.diff(today, 'day'));
 
-                return {
-                    id: c.id,
-                    title: c.title,
-                    company: c.client || 'Unknown Client', // Fallback
-                    status: c.status,
-                    daysLeft: daysLeft,
-                    totalDays: totalDays,
-                    value: c.value ? `₹${c.value}` : '₹0',
-                    path: path
-                };
-            });
+                    // Navigate to draft page if review_approval, otherwise contracts page
+                    // Add search parameter to filter by contract title
+                    const basePath = c.status === ContractStatus.REVIEW_APPROVAL ? `/draft` : `/contracts`;
+                    const params = new URLSearchParams();
+                    params.set('search', c.title);
+                    const path = `${basePath}?${params.toString()}`;
 
-            setRecentContracts(displayContracts);
-            setLoading(false);
+                    return {
+                        id: c.id,
+                        title: c.title,
+                        company: c.client || 'Unknown Client', // Fallback
+                        status: c.status,
+                        daysLeft: daysLeft,
+                        totalDays: totalDays,
+                        value: c.value ? `₹${c.value}` : '₹0',
+                        path: path
+                    };
+                });
+
+                setRecentContracts(displayContracts);
+            } catch (error) {
+                console.error("RecentContracts: Failed to load contracts", error);
+            } finally {
+                setLoading(false);
+            }
         };
 
         loadRecentContracts();

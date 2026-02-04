@@ -21,9 +21,17 @@ export const externalSignatureConfig = {
     
     // App configuration
     app: {
-        baseUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-        signingPagePath: '/sign',  // Public signing page route
+    baseUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    signingPagePath: '/sign',  // Public signing page route
+    // Helper to get dynamic URL
+    getDynamicBaseUrl: () => {
+        if (typeof window === 'undefined') {
+            return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        }
+        const { protocol, hostname, port } = window.location;
+        return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
     },
+},
     
     // Signature request settings
     settings: {

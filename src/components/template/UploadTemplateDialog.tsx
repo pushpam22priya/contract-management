@@ -168,6 +168,9 @@ export default function UploadTemplateDialog({
     };
 
 
+    // State for modification tracking
+    const [pdfModified, setPdfModified] = useState(false);
+
     // Handle submit
     const handleSubmit = async () => {
         setError('');
@@ -195,74 +198,77 @@ export default function UploadTemplateDialog({
 
         setUploading(true);
 
+
+
         try {
-            console.log('📤 Starting template upload with new architecture...');
 
-            let fileData: string = '';
-            let xfdfData: string = '';
+            let xfdfData = '';
             let formFields: any[] = [];
+            let fileToUpload: File | Blob = selectedFile;
 
+            // IF on step 2 (Designer) and viewer is active
             if (currentStep === 2 && pdfViewerRef.current) {
-                // Use new save() method to get both fileData and xfdfData
-                console.log('📦 Using new save() method to export PDF and XFDF...');
-                const saveResult = await pdfViewerRef.current.save();
+                console.log('📦 Exporting data from Viewer...');
 
-                if (saveResult) {
-                    fileData = saveResult.fileData;
-                    xfdfData = saveResult.xfdfData;
-                    console.log(`  ✓ fileData: ${fileData.length} chars`);
-                    console.log(`  ✓ xfdfData: ${xfdfData.length} chars`);
-                } else {
-                    console.warn('  ⚠️ save() returned null, falling back to file conversion');
+                // 1. Export XFDF (annotations/data)
+                // We use exportAnnotations() which returns both blob and xfdf string.
+                try {
+                    const exportResult = await pdfViewerRef.current.exportAnnotations();
+
+                    if (exportResult) {
+                        xfdfData = exportResult.xfdfString;
+                        console.log(`  ✓ Extracted XFDF (${xfdfData.length} chars)`);
+
+                        // 2. If PDF was modified, use the regenerated Blob
+                        if (pdfModified) {
+                            console.log('  ⚠️ PDF was modified, using regenerated binary Blob...');
+                            fileToUpload = exportResult.blob;
+                            console.log(`  ✓ Switched to binary Blob (${fileToUpload.size} bytes)`);
+                        } else {
+                            console.log('  ✓ PDF not modified, uploading original file.');
+                        }
+                    }
+                } catch (ex) {
+                    console.error('Failed to export annotations:', ex);
+                    throw new Error('Failed to prepare document for upload.');
                 }
 
-                // Also export form fields for backward compatibility
-                formFields = await pdfViewerRef.current.exportFormFields();
-                console.log(`  - Extracted ${formFields.length} form fields`);
+                // 3. Export form field metadata (legacy/helper)
+                try {
+                    formFields = await pdfViewerRef.current.exportFormFields();
+                    console.log(`  ✓ Extracted ${formFields.length} form field definitions`);
+                } catch (e) {
+                    console.warn('Failed to export form fields metadata:', e);
+                }
             }
 
-            // If save() didn't work or we're on step 1, convert file to base64
-            if (!fileData && selectedFile) {
-                console.log('📄 Converting original file to base64...');
-                fileData = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result as string);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(selectedFile);
-                });
-                console.log(`  ✓ File converted: ${fileData.length} chars`);
-            }
+            // At this point:
+            // - fileToUpload is either original File (step 1 or unmodified step 2) OR dynamic Blob (modified step 2)
+            // - xfdfData is populated if step 2 export succeeded
+            // - formFields is populated if step 2 export succeeded
 
-            // Save using new templateService.saveTemplate() method
-            console.log('💾 Saving template with new architecture...');
-            const savedTemplate = templateService.saveTemplate({
+
+            console.log('💾 Saving template via Service...');
+            const savedTemplate = await templateService.saveTemplate({
                 name: templateName.trim(),
                 description: description.trim(),
                 category: selectedCategory,
                 fileName: selectedFile.name,
-                fileUrl: fileData, // For backward compatibility
-                fileData: fileData, // New field
-                xfdfData: xfdfData, // New field
-                fileType: selectedFile.type.includes('pdf') ? 'pdf' : 'docx',
-                uploadedBy: currentUser.email,
+                file: fileToUpload,   // ✅ Pass File/Blob directly
+                xfdfData: xfdfData,   // ✅ Pass XFDF string
                 formFields: formFields,
-                hasFormFields: formFields.length > 0,
-            });
+            }, currentUser.email);
 
-            console.log('✅ Template saved successfully!');
-            console.log('  - Template ID:', savedTemplate.id);
-            console.log('  - fileData length:', savedTemplate.fileData?.length || 0);
-            console.log('  - xfdfData length:', savedTemplate.xfdfData?.length || 0);
-            console.log('  - Form fields:', savedTemplate.formFields?.length || 0);
+            console.log('✅ Template saved successfully!', savedTemplate.template?.id);
 
             setSuccess('Template uploaded successfully!');
             setTimeout(() => {
                 handleClose();
                 onSuccess?.();
             }, 1500);
-        } catch (err) {
+        } catch (err: any) {
             console.error('❌ Error uploading template:', err);
-            setError('Failed to upload template. Please try again.');
+            setError(err.message || 'Failed to upload template. Please try again.');
         } finally {
             setUploading(false);
         }
@@ -281,6 +287,7 @@ export default function UploadTemplateDialog({
             setShowNewCategoryInput(false);
             setError('');
             setSuccess('');
+            setPdfModified(false); // Reset modification state
             if (documentUrl) {
                 URL.revokeObjectURL(documentUrl);
                 setDocumentUrl('');
@@ -763,7 +770,16 @@ export default function UploadTemplateDialog({
                                     documentUrl={documentUrl}
                                     readOnly={false}
                                     toolbarMode="forms"
+                                    // ✅ NEW: Enable form field creation during template creation
+                                    canAddFormFields={true}
                                     onDocumentLoaded={() => setDocumentLoaded(true)}
+                                    // Track modifications
+                                    onDocumentModified={() => {
+                                        if (!pdfModified) {
+                                            console.log('📝 PDF Modified - will upload binary blob instead of original file');
+                                            setPdfModified(true);
+                                        }
+                                    }}
                                     onError={(err) => setError(err)}
                                 />
                             </Box>

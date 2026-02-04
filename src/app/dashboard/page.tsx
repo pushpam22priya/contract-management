@@ -27,45 +27,57 @@ export default function DashboardPage() {
     });
 
     useEffect(() => {
-        const currentUser = authService.getCurrentUser();
-        if (!currentUser) return;
+        const loadStats = async () => {
+            const currentUser = authService.getCurrentUser();
+            if (!currentUser) return;
 
-        const allContracts = contractService.getAllContracts();
+            try {
+                const allContracts = await contractService.getAllContracts();
 
-        // Count logic for all statuses
-        let total = 0;
-        let draft = 0;
-        let underReview = 0;
-        let approved = 0;
-        let active = 0;
-        let expiring = 0;
-        let expired = 0;
+                // Count logic for all statuses
+                let total = 0;
+                let draft = 0;
+                let underReview = 0;
+                let approved = 0;
+                let active = 0;
+                let expiring = 0;
+                let expired = 0;
 
-        allContracts.forEach(c => {
-            const isRelevant = c.createdBy === currentUser.email || c.signer?.email === currentUser.email;
+                if (Array.isArray(allContracts)) {
+                    allContracts.forEach(c => {
+                        const isRelevant = c.createdBy === currentUser.email || c.signer?.email === currentUser.email;
 
-            // Only count if relevant to the user
-            if (!isRelevant) return;
+                        // Only count if relevant to the user
+                        if (!isRelevant) return;
 
-            total++;
+                        total++;
 
-            if (c.status === ContractStatus.DRAFT) draft++;
-            if (c.status === ContractStatus.REVIEW_APPROVAL) underReview++;
-            if (c.status === ContractStatus.WAITING_FOR_SIGNATURE) approved++;
-            if (c.status === ContractStatus.ACTIVE) active++;
-            if (c.status === ContractStatus.EXPIRING) expiring++;
-            if (c.status === ContractStatus.EXPIRED) expired++;
-        });
+                        if (c.status === ContractStatus.DRAFT) draft++;
+                        if (c.status === ContractStatus.REVIEW_APPROVAL) underReview++;
+                        if (c.status === ContractStatus.WAITING_FOR_SIGNATURE) approved++;
+                        if (c.status === ContractStatus.ACTIVE) active++;
+                        if (c.status === ContractStatus.EXPIRING) expiring++;
+                        if (c.status === ContractStatus.EXPIRED) expired++;
+                    });
+                } else {
+                    console.error("DashboardPage: getAllContracts returned non-array", allContracts);
+                }
 
-        setStats({
-            totalCount: total,
-            draftCount: draft,
-            underReviewCount: underReview,
-            approvedCount: approved,
-            activeCount: active,
-            expiringCount: expiring,
-            expiredCount: expired
-        });
+                setStats({
+                    totalCount: total,
+                    draftCount: draft,
+                    underReviewCount: underReview,
+                    approvedCount: approved,
+                    activeCount: active,
+                    expiringCount: expiring,
+                    expiredCount: expired
+                });
+            } catch (error) {
+                console.error("DashboardPage: Failed to load stats", error);
+            }
+        };
+
+        loadStats();
     }, []);
 
     const statsData = [

@@ -19,14 +19,14 @@ export const useSignaturePolling = (
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
     const checkSignatures = useCallback(async () => {
-        console.log('🔄 [SignaturePolling] Checking for signature updates...');
-        console.log('🔄 [SignaturePolling] Checking', contractIds.length, 'contracts');
+        // console.log('🔄 [SignaturePolling] Checking for signature updates...');
+        // console.log('🔄 [SignaturePolling] Checking', contractIds.length, 'contracts');
 
         for (const contractId of contractIds) {
             const result = await contractService.checkExternalSignatureStatus(contractId);
             
             if (result.success && result.signed) {
-                console.log('🎉 [SignaturePolling] Signature detected for:', contractId);
+                // console.log('🎉 [SignaturePolling] Signature detected for:', contractId);
                 onSignatureComplete(contractId);
             }
         }
@@ -38,8 +38,8 @@ export const useSignaturePolling = (
             return;
         }
 
-        console.log('▶️ [SignaturePolling] Starting polling...');
-        console.log('▶️ [SignaturePolling] Interval:', externalSignatureConfig.settings.pollIntervalMs, 'ms');
+        // console.log('▶️ [SignaturePolling] Starting polling...');
+        // console.log('▶️ [SignaturePolling] Interval:', externalSignatureConfig.settings.pollIntervalMs, 'ms');
 
         // Initial check
         checkSignatures();
@@ -52,7 +52,7 @@ export const useSignaturePolling = (
 
         return () => {
             if (intervalRef.current) {
-                console.log('⏹️ [SignaturePolling] Stopping polling');
+                // console.log('⏹️ [SignaturePolling] Stopping polling');
                 clearInterval(intervalRef.current);
             }
         };

@@ -1,7 +1,5 @@
 'use client';
 
-
-
 import { Box, Typography, Button, Paper, Fade, Grow } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
@@ -30,41 +28,51 @@ export default function CriticalAlerts() {
         loadAlerts();
     }, []);
 
-    const loadAlerts = () => {
+    const loadAlerts = async () => {
         const currentUser = authService.getCurrentUser();
         if (!currentUser) return;
 
-        const allContracts = contractService.getAllContracts();
+        try {
+            const allContracts = await contractService.getAllContracts();
 
-        // Filter logic:
-        // 1. Must be relevant to user (creator or signer)
-        // 2. Status must be 'expiring'
-        const expiringContracts = allContracts.filter(c => {
-            const isRelevant = c.createdBy === currentUser.email || c.signer?.email === currentUser.email;
-             return isRelevant && c.status === ContractStatus.EXPIRING;
-        });
+            // Check if result is valid array
+            if (!Array.isArray(allContracts)) {
+                console.error("CriticalAlerts: getAllContracts returned non-array", allContracts);
+                return;
+            }
 
-        // Map to alerts
-        const newAlerts = expiringContracts.map(c => {
-            const endDateStr = c.endDate || new Date().toISOString(); // Fallback to avoid TS error, though logic guarantees existence
-            const endDate = new Date(endDateStr);
-            const today = new Date();
-            const timeDiff = endDate.getTime() - today.getTime();
-            const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+            // Filter logic:
+            // 1. Must be relevant to user (creator or signer)
+            // 2. Status must be 'expiring'
+            const expiringContracts = allContracts.filter(c => {
+                const isRelevant = c.createdBy === currentUser.email || c.signer?.email === currentUser.email;
+                return isRelevant && c.status === ContractStatus.EXPIRING;
+            });
 
-            return {
-                id: c.id,
-                title: 'Contract Expiring Soon',
-                description: `${c.title} - ${c.client} expires in ${daysRemaining} days`,
-                daysRemaining,
-                contractTitle: c.title,
-                clientName: c.client
-            };
-        });
+            // Map to alerts
+            const newAlerts = expiringContracts.map(c => {
+                const endDateStr = c.endDate || new Date().toISOString();
+                const endDate = new Date(endDateStr);
+                const today = new Date();
+                const timeDiff = endDate.getTime() - today.getTime();
+                const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
 
-        setAlerts(newAlerts);
-        // Only show section if we have alerts
-        setVisible(newAlerts.length > 0);
+                return {
+                    id: c.id,
+                    title: 'Contract Expiring Soon',
+                    description: `${c.title} - ${c.client} expires in ${daysRemaining} days`,
+                    daysRemaining,
+                    contractTitle: c.title,
+                    clientName: c.client
+                };
+            });
+
+            setAlerts(newAlerts);
+            // Only show section if we have alerts
+            setVisible(newAlerts.length > 0);
+        } catch (error) {
+            console.error("CriticalAlerts: Failed to load contracts", error);
+        }
     };
 
     const handleView = (alert: Alert) => {

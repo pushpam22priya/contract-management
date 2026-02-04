@@ -17,6 +17,7 @@ import { useSearchParams } from 'next/navigation';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import ReusableFilter from '@/components/common/ReusableFilter';
+import { apiService } from '@/services/apiService';
 
 export default function DraftPage() {
     const [draftContracts, setDraftContracts] = useState<Contract[]>([]);
@@ -63,14 +64,80 @@ export default function DraftPage() {
         setSnackbar({ open: true, message, severity });
     };
 
-    const handleView = (id: string) => {
+    // State for viewer data (preloaded)
+    const [viewerData, setViewerData] = useState<{
+        fileUrl: string;
+        initialXfdf?: string;
+        formFields?: any[];
+    } | null>(null);
+
+    const handleView = async (id: string) => {
         const contract = draftContracts.find(c => c.id === id);
         if (!contract) return;
 
         setSelectedContract(contract);
+
+        // Preload data logic
+        let fileUrl = "";
+        let initialXfdf: string | undefined = undefined;
+        let formFields: any[] | undefined = undefined;
+
+        // Priority 1: Use fileData if available (points to the saved binary)
+        if (contract.fileData) {
+            console.log('📄 [DraftPage] Using contract.fileData');
+            console.log('📄 [DraftPage] XFDF length:', contract.xfdfData?.length || 0);
+            console.log('📄 [DraftPage] FormFields count:', contract.formFields?.length || 0);
+            console.log('📄 [DraftPage] Contract ID:', contract.id);
+            fileUrl = `data:application/pdf;base64,${contract.fileData}`;
+            // ✅ CRITICAL FIX: Always load XFDF/FormFields to ensure signatures/inputs are restored
+            // even if they are baked into the PDF, this ensures interactivity and appearance
+            initialXfdf = contract.xfdfData;
+            formFields = contract.formFields;
+        }
+        // Priority 2: Use fileUrl (from API - points to /api/file/[id])
+        // ✅ CRITICAL FIX: This is the PRIMARY path for contracts saved via updateContractSignedPdf
+        else if (contract.fileUrl) {
+            console.log('📄 [DraftPage] Using contract.fileUrl (fetching from API)');
+            console.log('📄 [DraftPage] File URL:', contract.fileUrl);
+            console.log('📄 [DraftPage] XFDF length:', contract.xfdfData?.length || 0);
+            console.log('📄 [DraftPage] FormFields count:', contract.formFields?.length || 0);
+            fileUrl = contract.fileUrl;
+            // ✅ Load the contract's XFDF and formFields (NOT template's!)
+            initialXfdf = contract.xfdfData;
+            formFields = contract.formFields;
+        }
+        // Priority 3: Use signedPdfBase64 (fallback/legacy)
+        else if (contract.signedPdfBase64) {
+            console.log('📄 [DraftPage] Using signedPdfBase64 (baked signatures)');
+            fileUrl = `data:application/pdf;base64,${contract.signedPdfBase64}`;
+            initialXfdf = contract.xfdfData;
+            formFields = contract.formFields;
+        }
+        // Priority 4: Fallback to template PDF (last resort)
+        else if (contract.templateId) {
+            console.log('📄 [DraftPage] Fallback: Fetching template PDF...');
+            try {
+                const template = await templateService.getTemplateById(contract.templateId);
+                if (template) {
+                    fileUrl = template.fileData || template.fileUrl || "";
+                    initialXfdf = contract.xfdfData || template.xfdfData;
+                    formFields = contract.formFields || template.formFields;
+                }
+            } catch (err) {
+                console.error('Failed to load template:', err);
+                showNotification('Failed to load document template', 'error');
+            }
+        }
+
+        setViewerData({
+            fileUrl,
+            initialXfdf,
+            formFields
+        });
         setViewerOpen(true);
     };
-    const loadDrafts = () => {
+
+    const loadDrafts = async () => {
         setLoading(true);
         const currentUser = authService.getCurrentUser();
 
@@ -81,7 +148,7 @@ export default function DraftPage() {
         }
 
         // Get contracts created by user
-        const userContracts = contractService.getContractsCreatedByUser(currentUser.email);
+        const userContracts = await contractService.getContractsCreatedByUser(currentUser.email);
 
         // Show Drafts AND Reviewed (Waiting for Approval)
         const drafts = userContracts.filter(c =>
@@ -92,8 +159,12 @@ export default function DraftPage() {
         setDraftContracts(drafts);
         setLoading(false);
     };
+
     const handleApprove = async (id: string) => {
-        const result = await contractService.approveContract(id);
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) return;
+
+        const result = await contractService.approveContract(id, currentUser.email);
         if (result.success) {
             showNotification('Contract approved! Moved to Contracts page', 'success');
             loadDrafts(); // Reload drafts
@@ -152,18 +223,14 @@ export default function DraftPage() {
 
     /**
      * Save contract changes from PDF viewer
-     * Now accepts both pdfBlob and xfdfString for proper signature persistence
+     * Now accepts pdfBlob, xfdfString, fieldValues, and formFields - matching contract creation flow
      */
-    const handleSaveChanges = async (pdfBlob: Blob, xfdfString: string) => {
+    const handleSaveChanges = async (pdfBlob: Blob, xfdfString: string, fieldValues?: Record<string, string>, formFields?: any[]) => {
         if (!selectedContract) return;
 
         try {
             // Convert Blob to base64
             console.log('📄 [DraftPage] Converting PDF Blob to base64...');
-            console.log(`   - Blob size: ${pdfBlob.size} bytes`);
-            console.log(`   - Blob type: ${pdfBlob.type}`);
-            console.log(`   - XFDF length: ${xfdfString.length} chars`);
-
             const arrayBuffer = await pdfBlob.arrayBuffer();
             const bytes = new Uint8Array(arrayBuffer);
 
@@ -174,7 +241,6 @@ export default function DraftPage() {
                 showNotification('Failed to save: Invalid PDF data', 'error');
                 return;
             }
-            console.log('   - PDF header verified: ' + header);
 
             // Convert to base64
             let binary = '';
@@ -182,12 +248,36 @@ export default function DraftPage() {
                 binary += String.fromCharCode(bytes[i]);
             }
             const pdfBase64 = btoa(binary);
-            console.log(`   - Base64 length: ${pdfBase64.length} chars`);
 
             // ✅ CRITICAL: Pass both pdfBase64 AND xfdfString to contract service
             const result = await contractService.updateContractSignedPdf(selectedContract.id, pdfBase64, xfdfString);
 
             if (result.success) {
+                // ✅ CRITICAL FIX: Also persist fieldValues and formFields like contract creation does
+                // This ensures field tracking works identically to CreateContractDialog
+                const metadataUpdates: Record<string, any> = {};
+
+                if (fieldValues && Object.keys(fieldValues).length > 0) {
+                    // Merge with existing fieldValues so we don't lose values from contract creation
+                    metadataUpdates.fieldValues = {
+                        ...(selectedContract.fieldValues || {}),
+                        ...fieldValues
+                    };
+                    console.log('📝 [DraftPage] Persisting fieldValues:', metadataUpdates.fieldValues);
+                }
+
+                if (formFields && formFields.length > 0) {
+                    metadataUpdates.formFields = formFields;
+                    metadataUpdates.hasFormFields = formFields.length > 0;
+                    console.log('📝 [DraftPage] Persisting formFields:', formFields.length, 'fields');
+                }
+
+                if (Object.keys(metadataUpdates).length > 0) {
+                    // const { apiService } = await import('@/services/apiService');
+                    await apiService.updateContractMetadata(selectedContract.id, metadataUpdates);
+                    console.log('✅ [DraftPage] Field metadata updated successfully');
+                }
+
                 showNotification('Changes saved successfully!', 'success');
                 loadDrafts(); // Reload to get updated contract
             } else {
@@ -222,7 +312,6 @@ export default function DraftPage() {
     // Filter logic
     const filteredDrafts = draftContracts.filter(contract => {
         // Status Param Filter (from URL)
-        // If ?status=review_approval, only show those.
         const statusParam = searchParams.get('status');
         if (statusParam && contract.status !== statusParam) {
             return false;
@@ -376,36 +465,15 @@ export default function DraftPage() {
                 </Box>
             </Box>
             {/* ← ADD VIEWER DIALOG */}
-            {selectedContract && (
+            {selectedContract && viewerData && (
                 <DocumentViewerDialog
                     open={viewerOpen}
                     onClose={() => {
                         setViewerOpen(false);
                         setSelectedContract(null);
+                        setViewerData(null);
                     }}
-                    fileUrl={(() => {
-                        // ✅ CRITICAL FIX: Use signedPdfBase64 which has signatures BAKED IN
-                        // This matches how templates work - the saved PDF contains appearance streams
-                        // XFDF import then refreshes/updates the annotation state
-
-                        // Priority 1: Use signedPdfBase64 (has baked signatures from getFileData)
-                        if (selectedContract.signedPdfBase64) {
-                            console.log('📄 [DraftPage] Using signedPdfBase64 (baked signatures)');
-                            console.log('   - PDF length:', selectedContract.signedPdfBase64.length);
-                            console.log('   - XFDF length:', selectedContract.xfdfData?.length || 0);
-                            return `data:application/pdf;base64,${selectedContract.signedPdfBase64}`;
-                        }
-
-                        // Priority 2: Fallback to template PDF for brand-new contracts without saves
-                        if (selectedContract.templateId) {
-                            const template = templateService.getTemplateById(selectedContract.templateId);
-                            console.log('📄 [DraftPage] Fallback: Using template PDF (no signedPdfBase64 yet)');
-                            console.log('   - Template:', template?.name);
-                            return template?.fileData || template?.fileUrl || "";
-                        }
-
-                        return "";
-                    })()}
+                    fileUrl={viewerData.fileUrl}
                     fileName={`${selectedContract.title}.pdf`}
                     title={selectedContract.title}
                     content={selectedContract.content}
@@ -415,26 +483,11 @@ export default function DraftPage() {
                     contractId={selectedContract.id}
                     onSave={handleSaveChanges}
                     currentUserRole="contractor"
-                    // ✅ CRITICAL FIX: Only import XFDF if using template PDF (not signedPdfBase64)
-                    // When signedPdfBase64 exists, the form fields are ALREADY BAKED into the PDF
-                    // Importing XFDF on top creates duplicate fields with broken appearance references
-                    initialXfdf={
-                        selectedContract.signedPdfBase64
-                            ? undefined  // Don't import XFDF - fields already in PDF
-                            : (selectedContract.xfdfData ||
-                                (selectedContract.templateId
-                                    ? templateService.getTemplateById(selectedContract.templateId)?.xfdfData
-                                    : undefined))
-                    }
-                    // Same logic for formFields - only needed when loading from template
-                    formFields={
-                        selectedContract.signedPdfBase64
-                            ? undefined  // Don't pass - fields already in PDF
-                            : (selectedContract.formFields ||
-                                (selectedContract.templateId
-                                    ? templateService.getTemplateById(selectedContract.templateId)?.formFields
-                                    : undefined))
-                    }
+                    initialXfdf={viewerData.initialXfdf}
+                    formFields={viewerData.formFields}
+                    // ✅ NEW: Contractors can edit field values but NOT add new form fields in draft mode
+                    canAddFormFields={false}
+                    editableFieldMode="all"
                 />
             )}
 

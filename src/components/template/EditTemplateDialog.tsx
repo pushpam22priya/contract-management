@@ -193,6 +193,9 @@ export default function EditTemplateDialog({
         setDocumentLoaded(false);
     };
 
+    // State for modification tracking
+    const [pdfModified, setPdfModified] = useState(false);
+
     // Handle submit (Update)
     const handleSubmit = async () => {
         setError('');
@@ -217,68 +220,66 @@ export default function EditTemplateDialog({
         setUpdating(true);
 
         try {
-            console.log('📤 Starting template update with new architecture...');
+            console.log('📤 Starting template update with new architecture (BINARY-SAFE)...');
 
-            let fileData: string = '';
             let xfdfData: string = '';
             let formFields: any[] = [];
 
-            if (currentStep === 2 && pdfViewerRef.current) {
-                // Use new save() method to get both fileData and xfdfData
-                console.log('📦 Using new save() method to export PDF and XFDF...');
-                const saveResult = await pdfViewerRef.current.save();
+            // Start with selected file (if new) or null (if keeping existing)
+            let fileToUpload: File | Blob | null = selectedFile;
 
-                if (saveResult) {
-                    fileData = saveResult.fileData;
-                    xfdfData = saveResult.xfdfData;
-                    console.log(`  ✓ fileData: ${fileData.length} chars`);
-                    console.log(`  ✓ xfdfData: ${xfdfData.length} chars`);
-                } else {
-                    console.warn('  ⚠️ save() returned null, falling back to existing data');
+            if (currentStep === 2 && pdfViewerRef.current) {
+                console.log('📦 Exporting data from Viewer...');
+                try {
+                    // 1. Export XFDF & Binary
+                    const exportResult = await pdfViewerRef.current.exportAnnotations();
+
+                    if (exportResult) {
+                        xfdfData = exportResult.xfdfString;
+                        console.log(`  ✓ Extracted XFDF (${xfdfData.length} chars)`);
+
+                       
+                        if (pdfModified) {
+                            console.log('  ⚠️ PDF was modified, using regenerated binary Blob...');
+                            fileToUpload = exportResult.blob;
+                            console.log(`  ✓ Switched to binary Blob (${fileToUpload.size} bytes)`);
+                        } else {
+                            console.log('  ✓ PDF not modified.');
+                        }
+                    }
+                } catch (ex) {
+                    console.error('Failed to export annotations:', ex);
+                    throw new Error('Failed to prepare document for update.');
                 }
 
-                // Also export form fields for backward compatibility
-                formFields = await pdfViewerRef.current.exportFormFields();
-                console.log(`  - Extracted ${formFields.length} form fields`);
-            }
-
-            // If save() didn't work and we have a new file, convert it to base64
-            if (!fileData && selectedFile) {
-                console.log('📄 Converting new file to base64...');
-                fileData = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result as string);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(selectedFile);
-                });
-                console.log(`  ✓ File converted: ${fileData.length} chars`);
+                // 3. Export form fields
+                try {
+                    formFields = await pdfViewerRef.current.exportFormFields();
+                    console.log(`  ✓ Extracted ${formFields.length} form fields`);
+                } catch (e) {
+                    console.warn('Failed to export form fields:', e);
+                }
             }
 
             // Update template using templateService.updateTemplate
-            console.log('💾 Updating template with new architecture...');
+            console.log('💾 Updating template via Service...');
 
             // Build update data
             const updateData: any = {
                 name: templateName.trim(),
                 description: description.trim(),
                 category: selectedCategory,
+                formFields: formFields,
+                hasFormFields: formFields.length > 0,
+                xfdfData: xfdfData
             };
 
-            // Add file-related updates if we have new data
-            if (fileData) {
-                updateData.fileUrl = fileData;
-                updateData.fileData = fileData;
-            }
-            if (xfdfData) {
-                updateData.xfdfData = xfdfData;
-            }
-            if (formFields.length > 0) {
-                updateData.formFields = formFields;
-                updateData.hasFormFields = true;
-            }
-            if (selectedFile) {
-                updateData.fileName = selectedFile.name;
-                updateData.fileType = selectedFile.type.includes('pdf') ? 'pdf' : 'docx';
+            // Only add file stuff if we have a file to upload (either new selected file OR modified blob)
+            if (fileToUpload) {
+                updateData.file = fileToUpload;
+                // Use new filename if selected, otherwise preserve existing
+                updateData.fileName = selectedFile?.name || template.fileName;
+                updateData.fileType = 'pdf';
             }
 
             const result = await templateService.updateTemplate(
@@ -288,10 +289,7 @@ export default function EditTemplateDialog({
             );
 
             if (result.success) {
-                console.log('✅ Template updated successfully!');
-                console.log('  - Template ID:', result.template?.id);
-                console.log('  - fileData length:', result.template?.fileData?.length || 0);
-                console.log('  - xfdfData length:', result.template?.xfdfData?.length || 0);
+                console.log('✅ Template updated successfully!', result.template?.id);
 
                 setSuccess(result.message);
                 setTimeout(() => {
@@ -301,7 +299,7 @@ export default function EditTemplateDialog({
             } else {
                 setError(result.message);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('❌ Error updating template:', err);
             setError('Failed to update template. Please try again.');
         } finally {
@@ -837,14 +835,20 @@ export default function EditTemplateDialog({
                                     documentUrl={documentUrl}
                                     readOnly={false}
                                     toolbarMode="forms"
+                                    // ✅ NEW: Listen for modifications to force binary update
+                                    onDocumentModified={() => {
+                                        console.log('📝 Template modified by user (fields added/changed)');
+                                        setPdfModified(true);
+                                    }}
                                     onDocumentLoaded={() => setDocumentLoaded(true)}
                                     onError={(err) => setError(err)}
-                                    // Pass existing XFDF data to restore annotations (only if using existing file)
-                                    // ✅ CRITICAL FIX: Don't import XFDF if fileData (baked PDF) is used
-                                    initialXfdf={selectedFile ? undefined : (template.fileData ? undefined : template.xfdfData)}
+                                    // ✅ CRITICAL FIX: ALWAYS import XFDF for templates (unless new file selected)
+                                    // Templates are saved with flatten=false, so form fields exist ONLY in XFDF
+                                    // Unlike signed contracts (which are flattened), templates need XFDF to show fields
+                                    initialXfdf={selectedFile ? undefined : template.xfdfData}
                                     // Pass existing form fields ONLY if we are using the existing file
                                     // If a new file is selected (selectedFile is not null), we start fresh
-                                    formFields={selectedFile ? undefined : (template.fileData ? undefined : template.formFields)}
+                                    formFields={selectedFile ? undefined : template.formFields}
                                 />
                             </Box>
                         ) : (

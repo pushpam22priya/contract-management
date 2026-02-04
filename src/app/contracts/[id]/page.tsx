@@ -19,7 +19,6 @@ import ContractInformation from '@/components/contracts/ContractInformation';
 import ContractDetailsPanel from '@/components/contracts/ContractDetailsPanel';
 import { contractService } from '@/services/contractService';
 import { templateService } from '@/services/templateService';
-import { mockApiService } from '@/services/mockApiService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { Document } from '@/components/contracts/ContractDetailsPanel';
 
@@ -32,6 +31,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const [loading, setLoading] = useState(true);
     const [contract, setContract] = useState<any | null>(null);
     const [details, setDetails] = useState<any | null>(null);
+    const [contractTemplate, setContractTemplate] = useState<any | null>(null); // New state for template
     const [viewerOpen, setViewerOpen] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
 
@@ -50,18 +50,17 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
             setLoading(true);
 
             try {
-                // 1. Try to find contract in LocalStorage directly (Most reliable source)
                 let found = null;
-                const localData = localStorage.getItem('mock_contracts');
-                if (localData) {
-                    const parsed = JSON.parse(localData);
-                    found = parsed.find((c: any) => c.id === id);
-                }
+                // LocalStorage fallback removed to enforce API usage
 
                 // 2. Fallback to service if not found in raw storage
                 if (!found) {
-                    const serviceContracts = contractService.getAllContracts();
-                    found = serviceContracts.find(c => c.id === id);
+                    const serviceContracts = await contractService.getAllContracts();
+                    if (Array.isArray(serviceContracts)) {
+                        found = serviceContracts.find(c => c.id === id);
+                    } else {
+                        console.error("ContractViewPage: getAllContracts returned non-array", serviceContracts);
+                    }
                 }
 
                 // 3. Handle Not Found
@@ -71,12 +70,31 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
                 if (isMounted) setContract(found);
 
-                // 4. Load extra details (Mock API)
-                const extra = await mockApiService.getContractDetails(id);
-                if (isMounted && extra.success) {
-                    setDetails(extra.details);
+                // 3.5 Fetch Template if needed
+                if (found.templateId) {
+                    try {
+                        const tmpl = await templateService.getTemplateById(found.templateId);
+                        if (isMounted && tmpl) setContractTemplate(tmpl);
+                    } catch (e) {
+                        console.warn("Could not fetch template:", e);
+                    }
                 }
 
+                // 4. Load extra details (from service or mock local)
+                // Since apiService contract details might not have documents/activities yet, we mock them
+                if (isMounted) {
+                    setDetails({
+                        documents: [{
+                            id: 'main-contract',
+                            name: `${found.title}.pdf`, // Ensure extension or use found.name
+                            size: 'PDF', // Placeholder size
+                            uploadDate: new Date(found.createdAt).toLocaleDateString(),
+                            url: found.fileUrl // Pass URL so handler can use it
+                        }],
+                        activities: [],
+                        ...found
+                    });
+                }
             } catch (err) {
                 console.error("💥 Load Error:", err);
             } finally {
@@ -356,22 +374,31 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 open={viewerOpen}
                 onClose={() => setViewerOpen(false)}
                 fileUrl={(() => {
-                    // ✅ CRITICAL FIX: Prioritize signedPdfBase64 (has baked signatures)
-                    // The XFDF only contains appearance REFERENCES, actual graphics are in the PDF
+                    // 1. Signed PDF Base64 (highest priority if available locally)
                     if (contract.signedPdfBase64) {
-                        console.log('📄 [ContractViewPage] Using signedPdfBase64 for PDF source');
+                        console.log('📄 [ContractViewPage] Using signedPdfBase64');
                         return `data:application/pdf;base64,${contract.signedPdfBase64}`;
                     }
 
-                    // Fallback to template PDF if no saved signed PDF yet
-                    if (contract.templateId) {
-                        console.log('📄 [ContractViewPage] Falling back to template PDF');
-                        const template = templateService.getTemplateById(contract.templateId);
-                        const url = template?.fileData || template?.fileUrl || "";
-                        if (url) return url;
+                    // 2. Selected Document from panel
+                    if (selectedDoc?.url) {
+                        console.log('📄 [ContractViewPage] Using selectedDoc.url');
+                        return selectedDoc.url;
                     }
 
-                    return selectedDoc?.url || contract.fileUrl || '';
+                    // 3. Contract's main file URL (points to saved PDF)
+                    if (contract.fileUrl) {
+                        console.log('📄 [ContractViewPage] Using contract.fileUrl');
+                        return contract.fileUrl;
+                    }
+
+                    // 4. Fallback to Template (only if no contract file exists)
+                    if (contract.templateId && contractTemplate) {
+                        console.log('📄 [ContractViewPage] Fallback: Using template URL');
+                        return contractTemplate.fileData || contractTemplate.fileUrl || "";
+                    }
+
+                    return '';
                 })()}
                 fileName={selectedDoc?.name || contract.title}
                 title={selectedDoc?.name || contract.title}
@@ -382,6 +409,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 initialXfdf={contract.signedPdfBase64 ? undefined : contract.xfdfData}
                 formFields={contract.signedPdfBase64 ? undefined : contract.formFields}
                 currentUserRole="contractor"
+                // ✅ NEW: Contract view page is always read-only
+                readOnly={true}
             />
         </AppLayout>
     );

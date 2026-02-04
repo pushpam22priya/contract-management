@@ -1,50 +1,35 @@
 /**
  * External Signature Service
  * 
- * This is the main service that orchestrates the external signature flow.
- * It combines JSONBin (storage) and EmailJS (email) to provide a complete
- * signature request workflow.
- * 
- * In production, this entire service will call your Java backend instead.
+ * This service orchestrates the external signature flow using internal MongoDB storage.
+ * It replaces the legacy JSONBin implementation.
  */
 
 import { Contract } from '@/types/contract';
 import { SignatureRequest, SignatureCompletionData } from '@/types/signature';
-import {
-    createSignatureRequest as createBin,
-    getSignatureRequest as getBin,
-    completeSignature as completeBinSignature,
-    markAsViewed
-} from './jsonBinService';
 import { sendSignatureRequestEmail } from './emailService';
-import { templateService } from './templateService';
 import { externalSignatureConfig } from '../../config/externalSignature';
+
+// Internal API base URL
+const API_BASE = '/api';
 
 /**
  * Generate a unique token for the signature request.
- * This token is used in the signing URL for security.
  */
 const generateToken = (): string => {
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 15);
-    const token = `sig_${timestamp}_${random}`;
-
-    console.log('🔑 [ExternalSignature] Generated token:', token);
-
-    return token;
+    return `sig_${timestamp}_${random}`;
 };
 
 /**
  * Generate the signing URL that will be sent to the client.
  */
-const generateSigningUrl = (token: string, binId: string): string => {
-    const baseUrl = externalSignatureConfig.app.baseUrl;
+const generateSigningUrl = (token: string): string => {
+    const baseUrl = externalSignatureConfig.app.getDynamicBaseUrl();
     const path = externalSignatureConfig.app.signingPagePath;
-    const url = `${baseUrl}${path}/${token}?bin=${binId}`;
-
-    console.log('🔗 [ExternalSignature] Generated signing URL:', url);
-
-    return url;
+    // Uses token only, binId is no longer needed
+    return `${baseUrl}${path}/${token}`;
 };
 
 /**
@@ -54,9 +39,6 @@ const calculateExpiryDate = (): string => {
     const days = externalSignatureConfig.settings.expiryDays;
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + days);
-
-    console.log('📅 [ExternalSignature] Expiry date:', expiryDate.toISOString());
-
     return expiryDate.toISOString();
 };
 
@@ -73,14 +55,8 @@ const formatDateForEmail = (isoString: string): string => {
 };
 
 /**
- * Main function: Submit a contract for external signature.
- * 
- * This function:
- * 1. Generates a unique token
- * 2. Prepares all contract data for the signing page
- * 3. Stores it in JSONBin
- * 4. Sends an email with the signing link
- * 5. Returns the token and bin ID for tracking
+ * Submit a contract for external signature.
+ * Creates a record in local MongoDB (signature_requests)
  */
 export const submitForExternalSignature = async (
     contract: Contract,
@@ -89,71 +65,51 @@ export const submitForExternalSignature = async (
 ): Promise<{
     success: boolean;
     token?: string;
-    binId?: string;
     signingUrl?: string;
     error?: string;
 }> => {
-    console.log('🚀 [ExternalSignature] Starting external signature submission...');
-    console.log('🚀 [ExternalSignature] Contract ID:', contract.id);
-    console.log('🚀 [ExternalSignature] Contract Title:', contract.title);
-    console.log('🚀 [ExternalSignature] Signer Email:', signerEmail);
-    console.log('🚀 [ExternalSignature] Sender:', senderName);
+    console.log('🚀 [ExternalSignature] Starting submission (Internal Flow)...');
 
     try {
-        // Step 1: Generate unique token
         const token = generateToken();
-
-        // Step 2: Get template file URL (base64 PDF)
-        console.log('📄 [ExternalSignature] Fetching template data...');
-        const template = templateService.getTemplateById(contract.templateId);
-
-        if (!template?.fileUrl) {
-            console.error('❌ [ExternalSignature] Template not found or has no fileUrl');
-            return { success: false, error: 'Contract template not found' };
-        }
-        console.log('✅ [ExternalSignature] Template found:', template.name);
-
-        // Step 3: Calculate expiry
         const expiresAt = calculateExpiryDate();
 
-        // Step 4: Create signature request data
-        const signatureRequest: SignatureRequest = {
+        // Prepare request data
+        // ✅ CRITICAL FIX: Include xfdfData so external signers can see pre-filled field values
+        const requestPayload = {
             token,
             contractId: contract.id,
             contractTitle: contract.title,
-            contractDescription: contract.description || '',
             signerEmail,
             createdBy: contract.createdBy,
             createdByName: senderName,
             createdAt: new Date().toISOString(),
             expiresAt,
-            status: 'pending',
             templateId: contract.templateId,
-            templateFileUrl: template.fileUrl,
-            xfdfString: contract.xfdfData || contract.xfdfString || '', // Use xfdfData as priority
-            formFields: contract.formFields || template.formFields || [],
-            fieldValues: contract.fieldValues || {},
+            formFields: contract.formFields,
+            hasFormFields: contract.hasFormFields, // ✅ Pass hasFormFields flag
+            xfdfData: contract.xfdfData  // Include XFDF for field values and signatures
         };
 
-        console.log('📦 [ExternalSignature] Signature request data prepared');
+        // 1. Create Request via API
+        const res = await fetch(`${API_BASE}/sign-requests`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestPayload)
+        });
 
-        // Step 5: Store in JSONBin
-        console.log('☁️ [ExternalSignature] Uploading to JSONBin...');
-        const binResult = await createBin(signatureRequest);
-
-        if (!binResult.success || !binResult.binId) {
-            console.error('❌ [ExternalSignature] Failed to create JSONBin:', binResult.error);
-            return { success: false, error: binResult.error || 'Failed to store signature request' };
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to create signature request');
         }
 
-        const binId = binResult.binId;
-        console.log('✅ [ExternalSignature] Stored in JSONBin, ID:', binId);
+        console.log('✅ [ExternalSignature] Request stored in DB');
 
-        // Step 6: Generate signing URL
-        const signingUrl = generateSigningUrl(token, binId);
+        // 2. Generate URL
+        const signingUrl = generateSigningUrl(token);
 
-        // Step 7: Send email
-        console.log('📧 [ExternalSignature] Sending email to signer...');
+        // 3. Send Email
+        console.log('📧 [ExternalSignature] Sending email...');
         const emailResult = await sendSignatureRequestEmail({
             to_email: signerEmail,
             contract_title: contract.title,
@@ -164,112 +120,100 @@ export const submitForExternalSignature = async (
         });
 
         if (!emailResult.success) {
-            console.error('❌ [ExternalSignature] Failed to send email:', emailResult.error);
-            // Note: We don't fail the whole operation if email fails
-            // The signing URL is still valid
-            console.warn('⚠️ [ExternalSignature] Continuing despite email failure...');
-        } else {
-            console.log('✅ [ExternalSignature] Email sent successfully');
+            console.error('❌ [ExternalSignature] Email failed:', emailResult.error);
         }
 
-        // Step 8: Return success with all tracking info
-        console.log('🎉 [ExternalSignature] Submission completed successfully!');
-        console.log('🎉 [ExternalSignature] Token:', token);
-        console.log('🎉 [ExternalSignature] Bin ID:', binId);
-        console.log('🎉 [ExternalSignature] Signing URL:', signingUrl);
-
-        return {
-            success: true,
-            token,
-            binId,
-            signingUrl,
-        };
+        return { success: true, token, signingUrl };
 
     } catch (error: any) {
-        console.error('❌ [ExternalSignature] Unexpected error:', error);
-        return { success: false, error: error.message || 'Unexpected error occurred' };
+        console.error('❌ [ExternalSignature] Error:', error);
+        return { success: false, error: error.message };
     }
-};
-
-/**
- * Check the status of a signature request.
- * Used for polling to detect when client has signed.
- */
-export const checkSignatureStatus = async (
-    binId: string
-): Promise<{
-    success: boolean;
-    status?: SignatureRequest['status'];
-    signedXfdf?: string;
-    signedPdfBase64?: string;
-    signedAt?: string;
-    error?: string;
-}> => {
-    console.log('🔍 [ExternalSignature] Checking signature status...');
-    console.log('🔍 [ExternalSignature] Bin ID:', binId);
-
-    const result = await getBin(binId);
-
-    if (!result.success || !result.data) {
-        console.error('❌ [ExternalSignature] Failed to fetch status:', result.error);
-        return { success: false, error: result.error };
-    }
-
-    const { status, signedXfdf, signedPdfBase64, signedAt } = result.data;
-
-    console.log('✅ [ExternalSignature] Status:', status);
-    if (status === 'signed') {
-        console.log('✅ [ExternalSignature] Signed at:', signedAt);
-        if (signedPdfBase64) {
-            console.log('✅ [ExternalSignature] Signed PDF Blob available:', signedPdfBase64.length, 'chars');
-        }
-    }
-
-    return {
-        success: true,
-        status,
-        signedXfdf,
-        signedPdfBase64,
-        signedAt,
-    };
 };
 
 /**
  * Get full signature request data.
- * Used by the public signing page to load the contract.
+ * Used by the public signing page.
  */
 export const getSignatureRequestData = async (
-    binId: string
+    token: string
 ): Promise<{
     success: boolean;
     data?: SignatureRequest;
     error?: string;
 }> => {
-    console.log('📥 [ExternalSignature] Fetching signature request data...');
-
-    const result = await getBin(binId);
-
-    if (result.success && result.data) {
-        // Mark as viewed if still pending
-        if (result.data.status === 'pending') {
-            console.log('👁️ [ExternalSignature] Marking as viewed...');
-            await markAsViewed(binId);
+    try {
+        const res = await fetch(`${API_BASE}/sign-requests/${token}`, { cache: 'no-store' });
+        if (!res.ok) {
+            return { success: false, error: 'Failed to fetch request' };
         }
+        const json = await res.json();
+        return { success: true, data: json.data };
+    } catch (error: any) {
+        return { success: false, error: error.message };
     }
-
-    return result;
 };
 
 /**
- * Complete a signature from the public signing page.
+ * Complete a signature.
+ * Uploads BLOB directly to backend.
  */
 export const completeExternalSignature = async (
-    binId: string,
-    signatureData: SignatureCompletionData
+    token: string,
+    pdfBlob: Blob,
+    xfdfString: string,
+    fieldValues?: Record<string, string>,
+    formFields?: any[]
 ): Promise<{ success: boolean; error?: string }> => {
-    console.log('✍️ [ExternalSignature] Completing external signature...');
-    console.log(`✍️ [ExternalSignature] Signature Data - PDF: ${signatureData.signedPdfBase64?.length || 0} chars, XFDF: ${signatureData.signedXfdf?.length || 0} chars`);
+    try {
+        console.log('✍️ [ExternalSignature] Uploading signed binary...');
 
-    return completeBinSignature(binId, signatureData);
+        // Use FormData to send both PDF and XFDF securely
+        const formData = new FormData();
+        formData.append('pdf', pdfBlob, 'signed_contract.pdf');
+        formData.append('xfdf', xfdfString);
+
+        // ✅ FIX: Also send fieldValues and formFields for full tracking like contract creation
+        if (fieldValues) {
+            formData.append('fieldValues', JSON.stringify(fieldValues));
+        }
+        if (formFields) {
+            formData.append('formFields', JSON.stringify(formFields));
+        }
+
+        // Upload FormData to completion endpoint
+        const res = await fetch(`${API_BASE}/sign-requests/${token}/complete`, {
+            method: 'PUT',
+            body: formData,
+        });
+
+        if (!res.ok) {
+            // Check content type before trying to parse JSON
+            const contentType = res.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const err = await res.json();
+                throw new Error(err.error || 'Failed to complete signature');
+            } else {
+                throw new Error(`Upload failed with status ${res.status}`);
+            }
+        }
+
+        return { success: true };
+    } catch (error: any) {
+        console.error('Completion error:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Legacy Polling (Optional - can be reimplemented if needed)
+export const checkSignatureStatus = async (token: string): Promise<any> => {
+    // Re-use getData
+    const result = await getSignatureRequestData(token);
+    if (!result.success || !result.data) return { success: false };
+    return {
+        success: true,
+        status: result.data.status,
+        signedAt: result.data.signedAt
+    };
 };
 

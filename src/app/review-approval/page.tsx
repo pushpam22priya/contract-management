@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { contractService } from '@/services/contractService';
 import { templateService } from '@/services/templateService';
-import { Contract } from '@/types/contract';
+import { Contract, ContractStatus } from '@/types/contract';
 import { authService } from '@/services/authService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import ReviewApprovalCard from '@/components/contracts/ReviewApprovalCard';
@@ -64,7 +64,7 @@ export default function ReviewApprovalPage() {
     /**
      * Load contracts assigned to current user
      */
-    const loadContracts = () => {
+    const loadContracts = async () => {
         setLoading(true);
         const currentUser = authService.getCurrentUser();
 
@@ -74,7 +74,11 @@ export default function ReviewApprovalPage() {
             return;
         }
 
-        const assignedContracts = contractService.getContractsForReview(currentUser.email);
+        const allContracts = await contractService.getAllContracts();
+        // Filter contracts pending review
+        const assignedContracts = allContracts.filter(c =>
+            c.status === ContractStatus.REVIEW_APPROVAL || c.status === ContractStatus.REVIEWED
+        );
         setContracts(assignedContracts);
         setLoading(false);
     };
@@ -155,15 +159,18 @@ export default function ReviewApprovalPage() {
 
     /**
      * Handle submitting for further review
+     * Uses addAdditionalReviewers to preserve existing reviewer statuses and approver
      */
     const handleFurtherReviewSubmit = async (additionalReviewers: string[]) => {
         const currentUser = authService.getCurrentUser();
         if (!currentUser || !contractForFurtherReview) return;
 
-        const result = await contractService.submitForFurtherReview(
+        // ✅ FIX: Use addAdditionalReviewers instead of submitForReview
+        // submitForReview resets all reviewer statuses and replaces the approver
+        // addAdditionalReviewers preserves existing reviewer statuses and keeps the approver
+        const result = await contractService.addAdditionalReviewers(
             contractForFurtherReview.id,
-            additionalReviewers,
-            currentUser.email
+            additionalReviewers
         );
 
         if (result.success) {
@@ -325,17 +332,26 @@ export default function ReviewApprovalPage() {
                             setSelectedContract(null);
                         }}
                         fileUrl={(() => {
-                            // ✅ Priority 1: Use signedPdfBase64 if available
+                            // ✅ CRITICAL FIX: Load contract's saved PDF, not template
+                            // Priority 1: Use contract's fileUrl (points to saved contract PDF with signatures)
+                            if (selectedContract.fileUrl) {
+                                console.log('📄 [ReviewApproval] Using contract.fileUrl (contract PDF)');
+                                return selectedContract.fileUrl;
+                            }
+                            // Priority 2: Use fileData (base64) if available
+                            if (selectedContract.fileData) {
+                                console.log('📄 [ReviewApproval] Using contract.fileData (base64)');
+                                return selectedContract.fileData;
+                            }
+                            // Priority 3: Use signedPdfBase64 if available
                             if (selectedContract.signedPdfBase64) {
-                                console.log('📄 Using signedPdfBase64 (preserves form fields)');
+                                console.log('📄 [ReviewApproval] Using signedPdfBase64');
                                 return `data:application/pdf;base64,${selectedContract.signedPdfBase64}`;
                             }
-                            // Priority 2: Fall back to template URL
+                            // Priority 4: Fall back to template URL (last resort)
                             if (selectedContract.templateId) {
-                                const template = templateService.getTemplateById(selectedContract.templateId);
-                                console.log('📄 Template for review viewing:', template);
-                                const url = template?.fileUrl || "";
-                                console.log('📄 Using template fileUrl:', url.substring(0, 50));
+                                const url = `/api/file/${selectedContract.templateId}?type=template`;
+                                console.log('📄 [ReviewApproval] Fallback: Using template URL:', url);
                                 return url;
                             }
                             return "";
@@ -345,6 +361,11 @@ export default function ReviewApprovalPage() {
                         content={selectedContract.signedPdfBase64 ? undefined : selectedContract.content}
                         templateDocxBase64={selectedContract.templateDocxBase64}
                         fieldValues={selectedContract.fieldValues}
+                        // ✅ CRITICAL FIX: Pass XFDF data to restore signatures and field values
+                        initialXfdf={selectedContract.xfdfData}
+                        contractId={selectedContract.id}
+                        // ✅ CRITICAL FIX: Pass form fields for proper rendering
+                        formFields={selectedContract.formFields}
                         readOnly={true}
                     />
                 )}

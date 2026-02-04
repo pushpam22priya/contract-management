@@ -1,54 +1,53 @@
 'use client';
 
-import { Box, Typography, Button } from '@mui/material';
+import { Box, Chip } from '@mui/material';
 
-interface NotificationHeaderProps {
-    onMarkAllRead?: () => void;
+interface NotificationFiltersProps {
+    selectedFilter: 'unread' | 'all' | 'read';
+    onFilterChange: (filter: 'unread' | 'all' | 'read') => void;
+    unreadCount: number;
+    allCount: number;
+    readCount: number;
 }
 
-export default function NotificationHeader({ onMarkAllRead }: NotificationHeaderProps) {
-    return (
-        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
-            <Box>
-                <Typography
-                    // variant="h4"
-                    sx={{
-                        fontWeight: 600,
-                        fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' },
-                        color: 'text.primary',
-                        mb: 0.5,
-                    }}
-                >
-                    Notifications
-                </Typography>
-                <Typography
-                    variant="body2"
-                    sx={{
-                        color: 'text.secondary',
-                        fontSize: '0.8rem',
-                    }}
-                >
-                    Stay updated on contract activities and deadlines
-                </Typography>
-            </Box>
+export default function NotificationFilters({
+    selectedFilter,
+    onFilterChange,
+    unreadCount,
+    allCount,
+    readCount,
+}: NotificationFiltersProps) {
+    const filters = [
+        { key: 'unread' as const, label: 'Unread', count: unreadCount },
+        { key: 'all' as const, label: 'All Notifications', count: allCount },
+        { key: 'read' as const, label: 'Read', count: readCount },
+    ];
 
-            <Button
-                variant="outlined"
-                onClick={onMarkAllRead}
-                sx={{
-                    textTransform: 'none',
-                    borderColor: 'divider',
-                    color: 'text.secondary',
-                    fontWeight: 500,
-                    '&:hover': {
-                        borderColor: 'primary.main',
-                        bgcolor: 'rgba(15, 118, 110, 0.04)',
-                        color: 'primary.main',
-                    },
-                }}
-            >
-                Mark All as Read
-            </Button>
+    return (
+        <Box sx={{ mb: 3, display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+            {filters.map((filter) => (
+                <Chip
+                    key={filter.key}
+                    label={`${filter.label} (${filter.count})`}
+                    onClick={() => onFilterChange(filter.key)}
+                    sx={{
+                        px: 1,
+                        height: 36,
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        bgcolor: selectedFilter === filter.key ? 'text.primary' : 'background.paper',
+                        color: selectedFilter === filter.key ? 'white' : 'text.secondary',
+                        border: '1px solid',
+                        borderColor: selectedFilter === filter.key ? 'text.primary' : 'divider',
+                        transition: 'all 0.2s',
+                        cursor: 'pointer',
+                        '&:hover': {
+                            bgcolor: selectedFilter === filter.key ? 'text.primary' : 'action.hover',
+                            borderColor: selectedFilter === filter.key ? 'text.primary' : 'text.secondary',
+                        },
+                    }}
+                />
+            ))}
         </Box>
     );
 }

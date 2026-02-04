@@ -165,6 +165,14 @@ export default function TemplateCard({
                 >
                     {[
                         {
+                            title: 'Create Contract',
+                            icon: <DescriptionOutlinedIcon sx={{ fontSize: '1.1rem' }} />,
+                            onClick: () => onUse?.(),
+                            color: 'success.main',
+                            shadow: 'rgba(46, 125, 50, 0.2)',
+                            show: true
+                        },
+                        {
                             title: 'View Template',
                             icon: <VisibilityOutlinedIcon sx={{ fontSize: '1.1rem' }} />,
                             onClick: () => onView?.(id),

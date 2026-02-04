@@ -26,12 +26,12 @@ export const initializeEmailService = (): void => {
         console.log('📧 [EmailJS] Already initialized');
         return;
     }
-    
+
     if (!publicKey) {
         console.error('❌ [EmailJS] Public key not configured');
         return;
     }
-    
+
     emailjs.init(publicKey);
     isInitialized = true;
     console.log('✅ [EmailJS] Initialized successfully');
@@ -47,21 +47,21 @@ export const sendSignatureRequestEmail = async (
     console.log('📧 [EmailJS] To:', params.to_email);
     console.log('📧 [EmailJS] Contract:', params.contract_title);
     console.log('📧 [EmailJS] Signing URL:', params.signing_url);
-    
+
     // Ensure EmailJS is initialized
     if (!isInitialized) {
         initializeEmailService();
     }
-    
+
     // Validate configuration
     if (!serviceId || !templateId) {
         console.error('❌ [EmailJS] Service ID or Template ID not configured');
         return { success: false, error: 'Email service not configured' };
     }
-    
+
     try {
         console.log('📧 [EmailJS] Sending email...');
-        
+
         const templateParams = {
             to_email: params.to_email,
             contract_title: params.contract_title,
@@ -78,20 +78,20 @@ export const sendSignatureRequestEmail = async (
             templateId,
             templateParams
         );
-        
+
         console.log('✅ [EmailJS] Email sent successfully');
         console.log('✅ [EmailJS] Response status:', response.status);
         console.log('✅ [EmailJS] Response text:', response.text);
-        
+
         return { success: true };
-        
+
     } catch (error: any) {
         console.error('❌ [EmailJS] Failed to send email:', error);
         console.error('❌ [EmailJS] Error details:', error?.text || error?.message);
-        
-        return { 
-            success: false, 
-            error: error?.text || error?.message || 'Failed to send email' 
+
+        return {
+            success: false,
+            error: error?.text || error?.message || 'Failed to send email'
         };
     }
 };
@@ -104,13 +104,13 @@ export const testEmailConfiguration = async (
     testEmail: string
 ): Promise<{ success: boolean; error?: string }> => {
     console.log('🧪 [EmailJS] Testing email configuration...');
-    
+
     return sendSignatureRequestEmail({
         to_email: testEmail,
         contract_title: 'Test Contract',
         sender_name: 'System Test',
         sent_date: new Date().toLocaleDateString(),
         expiry_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-        signing_url: `${externalSignatureConfig.app.baseUrl}/sign/test-token?bin=test-bin`,
+        signing_url: `${externalSignatureConfig.app.getDynamicBaseUrl()}/sign/test-token`,
     });
 };

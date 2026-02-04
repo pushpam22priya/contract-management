@@ -5,7 +5,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import { useState, useEffect, useRef } from 'react';
 import { contractService } from '@/services/contractService';
 import { templateService } from '@/services/templateService';
-import { Contract } from '@/types/contract';
+import { Contract, ContractStatus } from '@/types/contract';
 import { authService } from '@/services/authService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
@@ -45,7 +45,7 @@ export default function SignaturesPage() {
     /**
      * Load contracts assigned to current user for signature
      */
-    const loadContracts = () => {
+    const loadContracts = async () => {
         setLoading(true);
         const currentUser = authService.getCurrentUser();
 
@@ -55,7 +55,12 @@ export default function SignaturesPage() {
             return;
         }
 
-        const assignedContracts = contractService.getContractsForSignature(currentUser.email);
+        const allContracts = await contractService.getAllContracts();
+        // Filter contracts waiting for signature by current user
+        const assignedContracts = allContracts.filter(c =>
+            c.status === ContractStatus.WAITING_FOR_SIGNATURE &&
+            c.signer?.email === currentUser.email
+        );
         setContracts(assignedContracts);
         setLoading(false);
     };
@@ -233,10 +238,8 @@ export default function SignaturesPage() {
                             }
                             // Priority 2: Fall back to template URL for unsigned documents
                             if (selectedContract.templateId) {
-                                const template = templateService.getTemplateById(selectedContract.templateId);
-                                console.log('📄 Template for signature viewing:', template);
-                                const url = template?.fileUrl || "";
-                                console.log('📄 Using template fileUrl:', url.substring(0, 50));
+                                const url = `/api/file/${selectedContract.templateId}?type=template`;
+                                console.log('📄 Using template URL:', url);
                                 return url;
                             }
                             return "";
@@ -250,14 +253,8 @@ export default function SignaturesPage() {
                         onSave={handleSaveSignature}
                         clientSigningMode={true}
                         currentUserRole="client"
-                        // Use contract's formFields (with saved ReadOnly flags) if available,
-                        // otherwise fall back to template's formFields
-                        formFields={
-                            selectedContract.formFields ||
-                            (selectedContract.templateId
-                                ? templateService.getTemplateById(selectedContract.templateId)?.formFields
-                                : undefined)
-                        }
+                        // Use contract's formFields (with saved ReadOnly flags)
+                        formFields={selectedContract.formFields}
                     />
                 )}
 

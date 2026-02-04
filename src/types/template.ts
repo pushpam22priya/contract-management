@@ -77,7 +77,11 @@ export interface UploadTemplateData {
     name: string;
     description?: string;
     category: string;
-    file: File;
+    file: File | Blob;
+    // Optional fields for pre-processed data
+    fileName: string;
+    xfdfData?: string;
+    formFields?: any[];
 }
 
 export interface CreateCategoryData {

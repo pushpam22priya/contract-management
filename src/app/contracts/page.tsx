@@ -120,7 +120,7 @@ export default function ContractsPage() {
         setCategoryOptions(options);
     };
 
-    const loadContracts = () => {
+    const loadContracts = async () => {
         setLoading(true);
         // ... (rest of loadContracts logic)
         const currentUser = authService.getCurrentUser();
@@ -131,33 +131,46 @@ export default function ContractsPage() {
             return;
         }
 
-        const allContracts = contractService.getAllContracts(); // Fetch ALL to filter
+        try {
+            const allContracts = await contractService.getAllContracts(); // Fetch ALL to filter
 
-        // Show contracts created by user OR signed by user
-        const relevantContracts = allContracts.filter(c => {
-            const isCreator = c.createdBy === currentUser.email;
-
-            // For signer: show if they are the signer AND status is one of the lifecycle statuses
-            const isSigner = c.signer?.email === currentUser.email;
-            const isValidSignerStatus = ['signed', 'active', 'expiring', 'expired'].includes(c.status);
-            const isSignerAndVisible = isSigner && isValidSignerStatus;
-
-            if (isCreator) {
-                return [
-                    ContractStatus.APPROVED,
-                    ContractStatus.WAITING_FOR_SIGNATURE,
-                    ContractStatus.SIGNED,
-                    ContractStatus.ACTIVE,
-                    ContractStatus.EXPIRING,
-                    ContractStatus.EXPIRED
-                ].includes(c.status);
+            if (!Array.isArray(allContracts)) {
+                console.error("ContractsPage: getAllContracts returned non-array", allContracts);
+                setContracts([]);
+                setLoading(false);
+                return;
             }
 
-            return isSignerAndVisible;
-        });
+            // Show contracts created by user OR signed by user
+            const relevantContracts = allContracts.filter(c => {
+                const isCreator = c.createdBy === currentUser.email;
 
-        setContracts(relevantContracts || []);
-        setLoading(false);
+                // For signer: show if they are the signer AND status is one of the lifecycle statuses
+                const isSigner = c.signer?.email === currentUser.email;
+                const isValidSignerStatus = ['signed', 'active', 'expiring', 'expired'].includes(c.status);
+                const isSignerAndVisible = isSigner && isValidSignerStatus;
+
+                if (isCreator) {
+                    return [
+                        ContractStatus.APPROVED,
+                        ContractStatus.WAITING_FOR_SIGNATURE,
+                        ContractStatus.SIGNED,
+                        ContractStatus.ACTIVE,
+                        ContractStatus.EXPIRING,
+                        ContractStatus.EXPIRED
+                    ].includes(c.status);
+                }
+
+                return isSignerAndVisible;
+            });
+
+            setContracts(relevantContracts || []);
+        } catch (error) {
+            console.error("ContractsPage: Failed to load contracts", error);
+            setContracts([]);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const totalContracts = contracts.length;
@@ -221,18 +234,17 @@ export default function ContractsPage() {
 
         console.log('📝 [ContractsPage] Sender:', senderName);
 
-        // Call the new external signature method
-        const result = await contractService.submitForExternalSignature(
+        // Call the signature submission method
+        const result = await contractService.submitForSignature(
             contractForSignature.id,
-            signerEmail,
-            senderName
+            signerEmail
         );
 
         if (result.success) {
             console.log('✅ [ContractsPage] Signature request sent successfully');
             showNotification('Signature request sent to ' + signerEmail, 'success');
             loadContracts();  // Reload to show updated status
-            return { success: true, signingUrl: result.signingUrl };
+            return { success: true };
         } else {
             console.error('❌ [ContractsPage] Failed to send signature request:', result.message);
             showNotification(result.message, 'error');
@@ -373,17 +385,26 @@ export default function ContractsPage() {
                             setSelectedContract(null);
                         }}
                         fileUrl={(() => {
-                            // ✅ Priority 1: Use signedPdfBase64 if available (contains embedded form fields)
+                            // ✅ CRITICAL FIX: Load contract's saved PDF, not template
+                            // Priority 1: Use contract's fileUrl (points to saved contract PDF with signatures)
+                            if (selectedContract.fileUrl) {
+                                console.log('📄 [Contracts] Using contract.fileUrl (contract PDF)');
+                                return selectedContract.fileUrl;
+                            }
+                            // Priority 2: Use fileData (base64) if available
+                            if (selectedContract.fileData) {
+                                console.log('📄 [Contracts] Using contract.fileData (base64)');
+                                return selectedContract.fileData;
+                            }
+                            // Priority 3: Use signedPdfBase64 if available
                             if (selectedContract.signedPdfBase64) {
-                                console.log('📄 Using signedPdfBase64 (preserves form fields)');
+                                console.log('📄 [Contracts] Using signedPdfBase64');
                                 return `data:application/pdf;base64,${selectedContract.signedPdfBase64}`;
                             }
-                            // Priority 2: Fall back to template URL
+                            // Priority 4: Fall back to template URL (last resort)
                             if (selectedContract.templateId) {
-                                const template = templateService.getTemplateById(selectedContract.templateId);
-                                console.log('📄 Template for viewing:', template);
-                                const url = template?.fileUrl || "";
-                                console.log('📄 Using template fileUrl:', url.substring(0, 50));
+                                const url = `/api/file/${selectedContract.templateId}?type=template`;
+                                console.log('📄 [Contracts] Fallback: Using template URL:', url);
                                 return url;
                             }
                             return "";
@@ -394,7 +415,13 @@ export default function ContractsPage() {
                         templateDocxBase64={selectedContract.templateDocxBase64}
                         fieldValues={selectedContract.fieldValues}
                         signatureImage={selectedContract.signer?.signatureImage}
+                        // ✅ CRITICAL FIX: Pass XFDF data to restore signatures and field values
+                        initialXfdf={selectedContract.xfdfData}
+                        contractId={selectedContract.id}
+                        // ✅ CRITICAL FIX: Pass form fields for proper rendering
+                        formFields={selectedContract.formFields}
                         currentUserRole="contractor"
+                        readOnly={true}
                     />
                 )}
 
