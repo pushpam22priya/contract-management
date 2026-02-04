@@ -203,27 +203,11 @@ export default function DocumentViewerDialog({
         }
     };
 
-    // ✅ Start Filling Handler
-    const handleStartFilling = () => {
-        pdfViewerRef.current?.scrollToFirstField();
-    };
-
     // Action buttons for dialog footer
     // ✅ Show save button if onSave callback is provided
     // Note: xfdfString check removed - we now save full PDFs regardless
     const dialogActions = (
         <>
-            {/* Start Filling Button - helpful for long documents */}
-            {!readOnly && (
-                <Button
-                    onClick={handleStartFilling}
-                    variant="outlined"
-                    sx={{ mr: 2 }}
-                >
-                    Start Filling
-                </Button>
-            )}
-
             {onSave && (
                 <Button
                     variant="contained"

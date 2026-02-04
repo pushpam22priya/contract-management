@@ -326,8 +326,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
 
     // Step 2: PDF Editing Actions
     const step2Actions = (
-        <>
-            <Box sx={{ display: 'flex', gap: 1.5, mr: 'auto' }}>
+            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
                 <Button
                     onClick={() => setCurrentStep(1)}
                     startIcon={<ArrowBack />}
@@ -340,56 +339,6 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 >
                     Back to Details
                 </Button>
-
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button
-                        onClick={() => pdfViewerRef.current?.scrollToPrevField()}
-                        startIcon={<ArrowBack />}
-                        variant="outlined"
-                        sx={{
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            borderRadius: 2,
-                            borderColor: 'divider',
-                            color: 'text.secondary',
-                            '&:hover': {
-                                borderColor: 'primary.main',
-                                color: 'primary.main',
-                                bgcolor: 'transparent'
-                            }
-                        }}
-                    >
-                        Previous
-                    </Button>
-                    <Button
-                        onClick={() => pdfViewerRef.current?.scrollToNextField()}
-                        endIcon={<ArrowForward />}
-                        variant="outlined"
-                        sx={{
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            borderRadius: 2,
-                            borderColor: 'primary.main',
-                            color: 'primary.main',
-                            '&:hover': {
-                                bgcolor: alpha('#0f766e', 0.05),
-                            }
-                        }}
-                    >
-                        Next Field
-                    </Button>
-                </Box>
-            </Box>
-
-            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                {/* {documentLoaded && (
-                    <Chip
-                        label="✓ Document Ready"
-                        color="success"
-                        size="small"
-                        sx={{ fontWeight: 600 }}
-                    />
-                )} */}
                 <Button
                     onClick={handleSave}
                     startIcon={<Save />}
@@ -412,7 +361,6 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                     {saving ? 'Saving...' : 'Save Contract'}
                 </Button>
             </Box>
-        </>
     );
 
     // Conditional dialog actions based on current step
