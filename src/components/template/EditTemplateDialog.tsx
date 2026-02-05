@@ -835,7 +835,9 @@ export default function EditTemplateDialog({
                                     documentUrl={documentUrl}
                                     readOnly={false}
                                     toolbarMode="forms"
-                                    // ✅ NEW: Listen for modifications to force binary update
+                                    // ✅ Enable form field creation during template editing
+                                    canAddFormFields={true}
+                                    // ✅ Listen for modifications to force binary update
                                     onDocumentModified={() => {
                                         console.log('📝 Template modified by user (fields added/changed)');
                                         setPdfModified(true);
