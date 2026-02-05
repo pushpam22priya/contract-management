@@ -463,28 +463,85 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
 
 
+                    // ══════════════════════════════════════════════════════════════════
+                    // BUILD A SET OF SIGNATURE WIDGET NAMES THAT HAVE STAMP OVERLAYS
+                    // These are signatures that were loaded from XFDF/PDF and should be preserved
+                    // ══════════════════════════════════════════════════════════════════
+                    const widgetsWithStampOverlay = new Set<string>();
+                    const allStamps = allAnnotations.filter((a: any) =>
+                        a instanceof Core.Annotations.StampAnnotation ||
+                        a instanceof Core.Annotations.FreeHandAnnotation
+                    );
+                    const allSigWidgets = allAnnotations.filter((a: any) =>
+                        a instanceof Core.Annotations.SignatureWidgetAnnotation
+                    );
+
+                    for (const widget of allSigWidgets) {
+                        const widgetRect = widget.getRect();
+                        const widgetPage = widget.getPageNumber();
+                        const fieldName = widget.getField?.()?.name || widget.fieldName;
+
+                        // Check if any stamp/freehand overlaps this widget
+                        const hasOverlay = allStamps.some((stamp: any) => {
+                            if (stamp.getPageNumber() !== widgetPage) return false;
+                            const stampRect = stamp.getRect();
+                            // Check center point overlap
+                            const stampCenterX = (stampRect.x1 + stampRect.x2) / 2;
+                            const stampCenterY = (stampRect.y1 + stampRect.y2) / 2;
+                            return stampCenterX >= widgetRect.x1 && stampCenterX <= widgetRect.x2 &&
+                                stampCenterY >= widgetRect.y1 && stampCenterY <= widgetRect.y2;
+                        });
+
+                        if (hasOverlay && fieldName) {
+                            widgetsWithStampOverlay.add(fieldName);
+                            console.log(`  📌 Widget ${fieldName} has stamp overlay — will preserve`);
+                        }
+                    }
+
                     const annotationsForExport = allAnnotations.filter((annot: any) => {
-                        // Always include non-widgets (stamps, text, etc)
+                        // ✅ ALWAYS include stamp and freehand annotations (actual signature drawings)
+                        if (annot instanceof Core.Annotations.StampAnnotation ||
+                            annot instanceof Core.Annotations.FreeHandAnnotation) {
+                            console.log(`  ✓ Including stamp/freehand annotation: ${annot.Id}`);
+                            return true;
+                        }
+
+                        // For non-widgets (other annotations), always include
                         if (!annot.getField || !annot.getField()) return true;
 
                         const field = annot.getField();
                         if (field.type === 'Sig') {
-                            // 1. If modified recently, definitely export (new update)
-                            // (i.e. User signed it just now)
-                            if (modifiedFields.current.has(field.name)) return true;
+                            const fieldName = field.name;
 
-                            // 2. If NOT modified, only export if it looks like a PLACEHOLDER (empty).
-                            // If it's already signed (has value), we assume it's baked into the PDF
-                            // and re-exporting it causes conflicts ("No matching annotation" error).
-                            // But for templates, we MUST export the empty widgets so they persist.
+                            // 1. If modified in this session, definitely export
+                            if (modifiedFields.current.has(fieldName)) {
+                                console.log(`  ✓ Including signature ${fieldName}: modified in session`);
+                                return true;
+                            }
+
+                            // 2. ✅ FIX: If widget has a stamp overlay (pre-existing signature), INCLUDE it
+                            // This preserves signatures loaded from XFDF
+                            if (widgetsWithStampOverlay.has(fieldName)) {
+                                console.log(`  ✓ Including signature ${fieldName}: has stamp overlay (pre-existing)`);
+                                return true;
+                            }
+
+                            // 3. If empty placeholder, include it
                             const val = field.getValue();
                             const isSigned = val !== null && val !== undefined && val !== '';
-                            return !isSigned; // Export if empty (template), Skip if signed (contractor sig)
+                            if (!isSigned) {
+                                console.log(`  ✓ Including signature ${fieldName}: empty placeholder`);
+                                return true;
+                            }
+
+                            // 4. Skip only if truly baked into PDF (has value but no visible stamp)
+                            console.log(`  ⏭ Skipping signature ${fieldName}: appears baked into PDF`);
+                            return false;
                         }
                         return true; // Include other fields (Text, etc.)
                     });
 
-                    console.log(`[exportAnnotations] Exporting ${annotationsForExport.length} annotations to XFDF`);
+                    console.log(`[exportAnnotations] Exporting ${annotationsForExport.length}/${allAnnotations.length} annotations to XFDF`);
 
                     const xfdfString = await annotationManager.exportAnnotations({
                         annotList: annotationsForExport,
@@ -555,18 +612,29 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     const fieldManager = annotationManager.getFieldManager();
 
                     // ══════════════════════════════════════════════════════════════════
-                    // STEP 1: Start with MEMORY-TRACKED fields (most reliable source)
+                    // STEP 0: Start with PROP fields (previously saved from DB)
+                    // ══════════════════════════════════════════════════════════════════
+                    // These are fields passed via the formFields prop, representing the
+                    // authoritative state from the database. We start with these as base
+                    // to ensure fields from previous stages (e.g., signed during creation)
+                    // are NOT lost when editing drafts.
+                    const propFields = formFieldsRef.current ? [...formFieldsRef.current] : [];
+                    const propFieldNames = new Set(propFields.map((f: any) => f.name));
+
+                    console.log(`[exportFormFields] Prop fields (from DB): ${propFields.length}`);
+                    if (propFields.length > 0) {
+                        console.log(`  Prop field names: ${Array.from(propFieldNames).join(', ')}`);
+                    }
+
+                    // ══════════════════════════════════════════════════════════════════
+                    // STEP 1: Add MEMORY-TRACKED fields (newly created this session)
                     // ══════════════════════════════════════════════════════════════════
                     // These are captured in real-time via annotationChanged listener.
-                    // This is the PRIMARY source because PDFTron's FieldManager may not
-                    // have registered newly created fields yet (especially during fast saves).
+                    // Only fields created when canAddFormFields=true go here.
                     const trackedFields = [...createdFormFieldsRef.current];
                     const trackedFieldNames = new Set(trackedFields.map(f => f.name));
 
                     console.log(`[exportFormFields] Memory-tracked fields: ${trackedFields.length}`);
-                    if (trackedFields.length > 0) {
-                        console.log(`  Tracked names: ${Array.from(trackedFieldNames).join(', ')}`);
-                    }
 
                     // ══════════════════════════════════════════════════════════════════
                     // STEP 2: Also query PDFTron for any pre-existing fields
@@ -634,12 +702,44 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                         // Detect value
                         let value = typeof field?.getValue === 'function' ? field.getValue() : '';
+                        let signatureData: string | undefined;
+                        let stampAnnotationId: string | undefined;
+
                         if (type === 'signature') {
+                            // ✅ FIX: Also check for stamp overlay to detect appearance-based signatures
+                            const widgetRect = annot.getRect();
+                            const widgetPage = annot.getPageNumber();
+                            const stampOverlay = allAnnots.find((stamp: any) => {
+                                if (!(stamp instanceof Core.Annotations.StampAnnotation ||
+                                    stamp instanceof Core.Annotations.FreeHandAnnotation)) return false;
+                                if (stamp.getPageNumber() !== widgetPage) return false;
+                                const stampRect = stamp.getRect();
+                                const stampCenterX = (stampRect.x1 + stampRect.x2) / 2;
+                                const stampCenterY = (stampRect.y1 + stampRect.y2) / 2;
+                                return stampCenterX >= widgetRect.x1 && stampCenterX <= widgetRect.x2 &&
+                                    stampCenterY >= widgetRect.y1 && stampCenterY <= widgetRect.y2;
+                            });
+
+                            // ✅ Extract actual signature data instead of just "Signed"
+                            const customSigData = typeof annot.getCustomData === 'function'
+                                ? annot.getCustomData('trn-signature-data')
+                                : undefined;
+
                             const hasSignature =
-                                (typeof annot.getCustomData === 'function' && annot.getCustomData('trn-signature-data')) ||
+                                stampOverlay ||
+                                customSigData ||
                                 (typeof annot.getAppearance === 'function' && annot.getAppearance() !== null) ||
                                 (typeof annot.isSignedDigitalSignature === 'function' && annot.isSignedDigitalSignature());
-                            value = (hasSignature || value) ? 'Signed' : '';
+
+                            if (hasSignature) {
+                                // Store signature data if available
+                                signatureData = customSigData || (stampOverlay?.getCustomData?.('trn-signature-data'));
+                                stampAnnotationId = stampOverlay?.Id;
+                                // Use actual signature data as value if available, otherwise fallback to 'Signed'
+                                value = signatureData || 'Signed';
+                            } else {
+                                value = '';
+                            }
                         }
 
                         pdfTronFields.push({
@@ -652,6 +752,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             pageNumber,
                             label: name,
                             value,
+                            signatureData,
+                            stampAnnotationId, // Track for deduplication
                         });
                     }
 
@@ -671,7 +773,34 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         else if (field.type === 'Btn') type = 'checkbox';
 
                         let value = typeof field.getValue === 'function' ? field.getValue() : '';
-                        if (type === 'signature') value = value ? 'Signed' : '';
+                        let signatureData: string | undefined;
+                        let stampAnnotationId: string | undefined;
+
+                        if (type === 'signature') {
+                            // Check for stamp overlay on this signature widget
+                            const widgetRect = widget.getRect();
+                            const widgetPage = widget.getPageNumber();
+                            const stampOverlay = allAnnots.find((stamp: any) => {
+                                if (!(stamp instanceof Core.Annotations.StampAnnotation ||
+                                    stamp instanceof Core.Annotations.FreeHandAnnotation)) return false;
+                                if (stamp.getPageNumber() !== widgetPage) return false;
+                                const stampRect = stamp.getRect();
+                                const stampCenterX = (stampRect.x1 + stampRect.x2) / 2;
+                                const stampCenterY = (stampRect.y1 + stampRect.y2) / 2;
+                                return stampCenterX >= widgetRect.x1 && stampCenterX <= widgetRect.x2 &&
+                                    stampCenterY >= widgetRect.y1 && stampCenterY <= widgetRect.y2;
+                            });
+
+                            const customSigData = widget.getCustomData?.('trn-signature-data');
+
+                            if (stampOverlay || customSigData || value) {
+                                signatureData = customSigData || stampOverlay?.getCustomData?.('trn-signature-data');
+                                stampAnnotationId = stampOverlay?.Id;
+                                value = signatureData || 'Signed';
+                            } else {
+                                value = '';
+                            }
+                        }
 
                         pdfTronFields.push({
                             name: field.name,
@@ -683,30 +812,80 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             pageNumber,
                             label: field.name,
                             value,
+                            signatureData,
+                            stampAnnotationId,
                         });
                     }
 
                     console.log(`[exportFormFields] PDFTron fields: ${pdfTronFields.length} (${allAnnots.length} annotations scanned)`);
 
                     // ══════════════════════════════════════════════════════════════════
-                    // STEP 3: MERGE tracked fields + PDFTron fields (deduplicated)
+                    // STEP 3: MERGE all field sources (deduplicated)
                     // ══════════════════════════════════════════════════════════════════
-                    // Priority: tracked fields first, then add any PDFTron fields not already tracked
-                    const mergedFields: any[] = [...trackedFields];
-                    const mergedFieldNames = new Set(trackedFieldNames);
+                    // Priority order (later sources update earlier ones):
+                    // 1. propFields (from DB - includes data from previous stages like creation)
+                    // 2. trackedFields (newly created this session when canAddFormFields=true)
+                    // 3. pdfTronFields (current state from PDFTron annotations)
+                    // This ensures fields from ALL stages are preserved.
 
+                    const mergedFields: any[] = [...propFields]; // Start with DB fields
+                    const mergedFieldNames = new Set(propFieldNames);
+
+                    // Layer 2: Add tracked fields (new fields created this session)
+                    for (const trackedField of trackedFields) {
+                        if (!mergedFieldNames.has(trackedField.name)) {
+                            mergedFields.push(trackedField);
+                            mergedFieldNames.add(trackedField.name);
+                        } else {
+                            // Update existing field with tracked data (new field may have updated structure)
+                            const existingIdx = mergedFields.findIndex(f => f.name === trackedField.name);
+                            if (existingIdx > -1) {
+                                // Keep the value from the existing field if it has one
+                                const existingValue = mergedFields[existingIdx]?.value;
+                                mergedFields[existingIdx] = {
+                                    ...mergedFields[existingIdx],
+                                    ...trackedField,
+                                    value: (trackedField as any).value || existingValue, // Keep existing value if tracked is empty
+                                };
+                            }
+                        }
+                    }
+
+                    // Layer 3: Update with PDFTron fields (current annotation state)
                     for (const pdfField of pdfTronFields) {
                         if (!mergedFieldNames.has(pdfField.name)) {
                             mergedFields.push(pdfField);
                             mergedFieldNames.add(pdfField.name);
                         } else {
-                            // Field exists in tracked - update value from PDFTron (may have been filled)
-                            const trackedIdx = mergedFields.findIndex(f => f.name === pdfField.name);
-                            if (trackedIdx > -1 && pdfField.value) {
-                                mergedFields[trackedIdx] = {
-                                    ...mergedFields[trackedIdx],
-                                    value: pdfField.value,
-                                };
+                            // Field exists - update value if PDFTron has one
+                            const existingIdx = mergedFields.findIndex(f => f.name === pdfField.name);
+                            if (existingIdx > -1) {
+                                const existingValue = mergedFields[existingIdx]?.value;
+                                const existingIsEmpty = !existingValue || existingValue === '';
+                                const pdfHasValue = pdfField.value && pdfField.value !== '';
+
+                                // CRITICAL: Only update value if:
+                                // 1. PDFTron has a value AND existing is empty, OR
+                                // 2. PDFTron has a value (prefer current state)
+                                // But NEVER overwrite a filled value with empty!
+                                if (pdfHasValue) {
+                                    mergedFields[existingIdx] = {
+                                        ...mergedFields[existingIdx],
+                                        value: pdfField.value,
+                                        signatureData: pdfField.signatureData || mergedFields[existingIdx].signatureData,
+                                    };
+                                } else if (!existingIsEmpty) {
+                                    // PDFTron is empty but existing has value - keep existing
+                                    // Just update position/geometry from PDFTron
+                                    mergedFields[existingIdx] = {
+                                        ...mergedFields[existingIdx],
+                                        x: pdfField.x,
+                                        y: pdfField.y,
+                                        width: pdfField.width,
+                                        height: pdfField.height,
+                                        pageNumber: pdfField.pageNumber,
+                                    };
+                                }
                             }
                         }
                     }
@@ -770,14 +949,50 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     console.log(`[exportFormFields] FINAL: ${mergedFields.length} fields (${trackedFields.length} tracked + ${pdfTronFields.length} PDFTron, deduplicated)`);
 
                     // ══════════════════════════════════════════════════════════════════
+                    // FINAL DEDUPLICATION: Ensure no duplicate field names exist
+                    // Also hide "Sign here" indicators for signed fields
+                    // ══════════════════════════════════════════════════════════════════
+                    const seenNames = new Set<string>();
+                    const deduplicatedFields: any[] = [];
+
+                    for (const field of mergedFields) {
+                        if (!field.name || seenNames.has(field.name)) {
+                            console.log(`  ⚠️ Duplicate skipped: ${field.name}`);
+                            continue;
+                        }
+                        seenNames.add(field.name);
+                        deduplicatedFields.push(field);
+
+                        // Hide "Sign here" indicator for signed signature fields
+                        if (field.type === 'signature' && field.value) {
+                            try {
+                                const annots = annotationManager.getAnnotationsList();
+                                const sigWidget = annots.find((a: any) =>
+                                    a instanceof Core.Annotations.SignatureWidgetAnnotation &&
+                                    (a.fieldName === field.name || a.getField?.()?.name === field.name)
+                                );
+                                if (sigWidget && typeof (sigWidget as any).setFieldIndicator === 'function') {
+                                    (sigWidget as any).setFieldIndicator(false);
+                                }
+                            } catch (e) {
+                                // Non-critical
+                            }
+                        }
+                    }
+
+                    if (deduplicatedFields.length !== mergedFields.length) {
+                        console.log(`  🔄 Deduplication: ${mergedFields.length} → ${deduplicatedFields.length} fields`);
+                    }
+
+                    // ══════════════════════════════════════════════════════════════════
                     // LAST RESORT: If still no fields, return tracked fields only
                     // ══════════════════════════════════════════════════════════════════
-                    if (mergedFields.length === 0 && trackedFields.length > 0) {
+                    if (deduplicatedFields.length === 0 && trackedFields.length > 0) {
                         console.log('[exportFormFields] Returning memory-tracked fields as fallback');
                         return trackedFields;
                     }
 
-                    return mergedFields;
+                    return deduplicatedFields;
                 } catch (e) {
                     console.error('exportFormFields failed:', e);
                     // FALLBACK: Return memory-tracked fields even on error
@@ -1039,8 +1254,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     } else if (toolbarMode === 'forms' && canAddFormFields) {
                         // Use explicit defaultToolbar if provided, otherwise default to Forms
                         const toolbar = defaultToolbar === 'view' ? 'toolbarGroup-View' :
-                                       defaultToolbar === 'annotate' ? 'toolbarGroup-Annotate' :
-                                       'toolbarGroup-Forms';
+                            defaultToolbar === 'annotate' ? 'toolbarGroup-Annotate' :
+                                'toolbarGroup-Forms';
                         UI.setToolbarGroup(toolbar);
                     } else if (toolbarMode === 'forms' && !canAddFormFields) {
                         // ✅ NEW: Forms mode but can't add fields - use Annotate toolbar
@@ -1257,8 +1472,12 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
 
                             // If this field structure isn't tracked yet, add it
+                            // ONLY add to form field structure tracking if:
+                            // 1. Field doesn't already exist in tracking
+                            // 2. We're in a mode that allows field creation (template/contract creation)
+                            // This prevents pre-existing fields from being incorrectly tracked during draft/signing
                             const existingField = createdFormFieldsRef.current.find(f => f.name === field.name);
-                            if (!existingField && field.widgets?.length > 0) {
+                            if (!existingField && field.widgets?.length > 0 && canAddFormFields) {
                                 const rect = widget.getRect?.() || { x1: 0, y1: 0, x2: 100, y2: 30 };
                                 const pageNumber = widget.getPageNumber?.() || 1;
 
@@ -1343,6 +1562,20 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         const fieldName = getFieldName(parentWidget, field) || `SignatureField_${parentWidget.Id}`;
 
                                         // ══════════════════════════════════════════════════════════════════
+                                        // CRITICAL: Hide "Sign here" indicator when signature is applied
+                                        // The indicator remains visible even with a stamp on top unless we
+                                        // explicitly hide it via setFieldIndicator(false)
+                                        // ══════════════════════════════════════════════════════════════════
+                                        try {
+                                            if (typeof parentWidget.setFieldIndicator === 'function') {
+                                                parentWidget.setFieldIndicator(false);
+                                                console.log(`    👁️ Hidden "Sign here" indicator for ${fieldName}`);
+                                            }
+                                        } catch (e) {
+                                            console.warn(`    ⚠️ Could not hide indicator for ${fieldName}:`, e);
+                                        }
+
+                                        // ══════════════════════════════════════════════════════════════════
                                         // CRITICAL: Capture XFDF of the annotation for recovery
                                         // This is the actual signature appearance that PDFTron may lose
                                         // ══════════════════════════════════════════════════════════════════
@@ -1421,7 +1654,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     const existingById = createdFormFieldsRef.current.find((f: any) => f.annotationId === annot.Id);
                                     const existingByName = createdFormFieldsRef.current.find((f: any) => f.name === fieldName);
 
-                                    if (!existingById && !existingByName) {
+                                    // ONLY track new field structures if:
+                                    // 1. Field doesn't already exist in tracking
+                                    // 2. We're in a mode that allows field creation (template/contract creation)
+                                    // This prevents pre-existing fields from being incorrectly tracked during draft/signing
+                                    if (!existingById && !existingByName && canAddFormFields) {
                                         const rect = annot.getRect();
                                         const pageNumber = annot.getPageNumber();
                                         const fieldType = detectFieldType(annot, field);
@@ -1449,8 +1686,10 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         createdAnnotationsRef.current.push(annot);
 
                                         console.log(`    ✅ TRACKED: ${fieldName} (type=${fieldType}), total fields=${createdFormFieldsRef.current.length}, total annots=${createdAnnotationsRef.current.length}`);
-                                    } else {
+                                    } else if (existingById || existingByName) {
                                         console.log(`    ℹ️ Already tracked: ${fieldName}`);
+                                    } else {
+                                        console.log(`    ℹ️ Skipping field tracking (not in creation mode): ${fieldName}`);
                                     }
                                 } catch (err) {
                                     console.warn('    ❌ Failed to track field:', err);
@@ -1633,11 +1872,13 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 console.log(`🔄 [PDFViewer] Found ${sigWidgets.length} signature widgets, ${stampAnnots.length} stamps, ${freeHandAnnots.length} freehand`);
 
                                 // ══════════════════════════════════════════════════════════════════
-                                // CRITICAL: Hide "Sign here" indicator on widgets that have stamps
-                                // PDFTron shows indicator when widget value is empty, but we have
-                                // a stamp annotation on top - need to hide the indicator
+                                // CRITICAL: Collect signature widgets with overlays for later hiding
+                                // The actual hiding happens AFTER drawAnnotationsFromList to prevent
+                                // the indicator from being reset by the rendering operation
                                 // ══════════════════════════════════════════════════════════════════
                                 const allSignatureDrawings = [...stampAnnots, ...freeHandAnnots];
+                                const widgetsToHideIndicator: any[] = [];
+
                                 for (const widget of sigWidgets) {
                                     const widgetRect = widget.getRect();
                                     const widgetPage = widget.getPageNumber();
@@ -1654,13 +1895,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     });
 
                                     if (hasOverlay) {
-                                        const fieldName = widget.fieldName || widget.getField?.()?.name || 'unknown';
-                                        console.log(`  🖊️ Widget ${fieldName} has signature overlay (stamp on top)`);
-                                        // NOTE: We intentionally do NOT call field.setValue() here
-                                        // as it creates appearance references that cause errors on reload.
-                                        // The stamp annotation displays on top of the widget anyway.
+                                        widgetsToHideIndicator.push(widget);
                                     }
                                 }
+
+                                console.log(`  🖊️ Found ${widgetsToHideIndicator.length} signed widgets to hide indicators`);
 
 
                                 if (xfdfToImport) {
@@ -1697,6 +1936,33 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         Core.annotationManager.drawAnnotationsFromList(stampAnnots);
                                     }
                                 }
+
+                                // ══════════════════════════════════════════════════════════════════
+                                // CRITICAL: Hide "Sign here" indicators AFTER all rendering
+                                // This must happen after drawAnnotationsFromList to prevent reset
+                                // ══════════════════════════════════════════════════════════════════
+                                const hideIndicators = () => {
+                                    for (const widget of widgetsToHideIndicator) {
+                                        try {
+                                            const fieldName = widget.fieldName || widget.getField?.()?.name || 'unknown';
+                                            if (typeof widget.setFieldIndicator === 'function') {
+                                                widget.setFieldIndicator(false);
+                                                console.log(`    👁️ Hidden "Sign here" indicator for ${fieldName}`);
+                                            }
+                                        } catch (e) {
+                                            // Non-critical
+                                        }
+                                    }
+                                };
+
+                                // Hide immediately
+                                hideIndicators();
+
+                                // Also hide after a delay to catch async rendering
+                                setTimeout(hideIndicators, 100);
+                                setTimeout(hideIndicators, 500);
+                                setTimeout(hideIndicators, 1000);
+
                             } catch (err) {
                                 console.error('Error refreshing signatures:', err);
                             }
@@ -1798,11 +2064,15 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             // ══════════════════════════════════════════════════════════════════
                             // FALLBACK: Recreate form fields from formFields prop if none exist
                             // This ensures fields are visible when reopening templates/contracts
+                            // ONLY runs when:
+                            // 1. No widgets exist at all (XFDF import may have failed)
+                            // 2. We have saved form fields to restore from
+                            // 3. NOT in clientSigningMode (external signers should never recreate fields)
                             // ══════════════════════════════════════════════════════════════════
                             const savedFormFields = formFieldsRef.current;
-                            console.log(`🔍 [PDFViewer] Fallback check: widgets=${widgets.length}, savedFormFields=${savedFormFields?.length || 0}`);
+                            console.log(`🔍 [PDFViewer] Fallback check: widgets=${widgets.length}, savedFormFields=${savedFormFields?.length || 0}, clientSigningMode=${clientSigningMode}`);
 
-                            if (widgets.length === 0 && savedFormFields && savedFormFields.length > 0) {
+                            if (widgets.length === 0 && savedFormFields && savedFormFields.length > 0 && !clientSigningMode) {
                                 console.log(`🔧 [PDFViewer] No widgets found, recreating ${savedFormFields.length} fields programmatically...`);
                                 console.log('🔧 [PDFViewer] First field structure:', JSON.stringify(savedFormFields[0], null, 2));
                                 const annotManager = Core.annotationManager;

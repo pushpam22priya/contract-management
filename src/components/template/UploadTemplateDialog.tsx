@@ -450,12 +450,12 @@ export default function UploadTemplateDialog({
                                         fontSize: '0.875rem',
                                     }}
                                 >
-                                    Supported formats: PDF, DOCX, DOC
+                                    Supported formats: PDF
                                 </Typography>
                                 <input
                                     id="file-upload-input"
                                     type="file"
-                                    accept=".pdf,.doc,.docx"
+                                    accept=".pdf"
                                     onChange={handleFileChange}
                                     style={{ display: 'none' }}
                                 />
