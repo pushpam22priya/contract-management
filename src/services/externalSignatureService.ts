@@ -1,12 +1,13 @@
 /**
  * External Signature Service
- * 
- * This service orchestrates the external signature flow using internal MongoDB storage.
- * It replaces the legacy JSONBin implementation.
+ *
+ * This service orchestrates the external signature flow.
+ * All signing data is now stored directly in the contracts collection
+ * (consolidated from the separate signature_requests collection).
  */
 
 import { Contract } from '@/types/contract';
-import { SignatureRequest, SignatureCompletionData } from '@/types/signature';
+import { SignatureRequest } from '@/types/signature';
 import { sendSignatureRequestEmail } from './emailService';
 import { externalSignatureConfig } from '../../config/externalSignature';
 
@@ -56,7 +57,7 @@ const formatDateForEmail = (isoString: string): string => {
 
 /**
  * Submit a contract for external signature.
- * Creates a record in local MongoDB (signature_requests)
+ * Updates the contract document with signing request data.
  */
 export const submitForExternalSignature = async (
     contract: Contract,
@@ -75,20 +76,15 @@ export const submitForExternalSignature = async (
         const expiresAt = calculateExpiryDate();
 
         // Prepare request data
-        // ✅ CRITICAL FIX: Include xfdfData so external signers can see pre-filled field values
+        // Note: formFields, xfdfData etc. are already in the contract document,
+        // so we only need to send the signing-specific data
         const requestPayload = {
             token,
             contractId: contract.id,
-            contractTitle: contract.title,
             signerEmail,
-            createdBy: contract.createdBy,
             createdByName: senderName,
             createdAt: new Date().toISOString(),
             expiresAt,
-            templateId: contract.templateId,
-            formFields: contract.formFields,
-            hasFormFields: contract.hasFormFields, // ✅ Pass hasFormFields flag
-            xfdfData: contract.xfdfData  // Include XFDF for field values and signatures
         };
 
         // 1. Create Request via API
@@ -103,7 +99,7 @@ export const submitForExternalSignature = async (
             throw new Error(err.error || 'Failed to create signature request');
         }
 
-        console.log('✅ [ExternalSignature] Request stored in DB');
+        console.log('✅ [ExternalSignature] Signing request added to contract');
 
         // 2. Generate URL
         const signingUrl = generateSigningUrl(token);

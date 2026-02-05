@@ -3,9 +3,40 @@
 */
 export interface SignerInfo {
     email: string;
+    name?: string;                    // Signer's name
     status: 'pending' | 'signed' | 'rejected';
     signedAt?: string;
-    signatureImage?: string; // Base64 data URL of the signature
+    signatureImage?: string;          // Base64 data URL of the signature
+}
+
+/**
+ * Status of a signing request
+ */
+export type SigningRequestStatus = 'pending' | 'viewed' | 'signed' | 'expired' | 'cancelled';
+
+/**
+ * Event tracking for signing request
+ */
+export interface SigningEvent {
+    type: 'created' | 'viewed' | 'signed' | 'expired' | 'cancelled';
+    at: string;
+}
+
+/**
+ * Embedded signing request data (consolidated from signature_requests collection)
+ * This is now stored directly in the contract document
+ */
+export interface SigningRequest {
+    token: string;                        // Unique signing token
+    signerEmail: string;                  // Email of external signer
+    signerName?: string;                  // Name of signer
+    senderName?: string;                  // Name of contractor who sent
+    status: SigningRequestStatus;         // Current status
+    createdAt: string;                    // When request was created
+    expiresAt: string;                    // When link expires
+    signedAt?: string;                    // When signed
+    signedXfdf?: string;                  // XFDF with signature from signer
+    events: SigningEvent[];               // Event tracking
 }
 
 export enum ContractStatus {
@@ -71,12 +102,13 @@ export interface Contract {
     createdBy: string;
     updatedAt?: string;
 
-    // External signature tracking (ADD THESE NEW FIELDS)
-    externalSigningToken?: string;      // Token used in signing URL
-    externalSigningBinId?: string;      // JSONBin ID for this signature request
+    // External signature tracking
+    externalSigningToken?: string;      // Token used in signing URL (for quick lookup)
     externalSigningUrl?: string;        // Full signing URL sent to client
     externalSigningSentAt?: string;     // When the signature request was sent
 
+    // Consolidated signing request (replaces separate signature_requests collection)
+    signingRequest?: SigningRequest;
 }
 
 /**

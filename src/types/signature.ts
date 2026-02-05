@@ -1,13 +1,17 @@
 /**
  * Types for external signature functionality.
- * 
+ *
  * This file defines the data structures used when sending contracts
  * for external signature via email link.
+ *
+ * Note: Signing data is now stored directly in the contracts collection
+ * (see Contract.signingRequest in contract.ts). This type is maintained
+ * for API response compatibility with the signing page.
  */
 
 /**
- * Represents a signature request sent to an external party.
- * This is stored in JSONBin and contains all data needed for signing.
+ * Represents signature request data returned to the signing page.
+ * This is now derived from the contract document.
  */
 export interface SignatureRequest {
     // Unique identifier for this signature request
@@ -61,29 +65,7 @@ export type SignatureRequestStatus =
     | 'expired'      // Link has expired
     | 'cancelled';   // Contractor cancelled the request
 
-/**
- * Response from JSONBin API when creating a bin
- */
-export interface JSONBinCreateResponse {
-    record: SignatureRequest;
-    metadata: {
-        id: string;
-        createdAt: string;
-        private: boolean;
-    };
-}
-
-/**
- * Response from JSONBin API when reading a bin
- */
-export interface JSONBinReadResponse {
-    record: SignatureRequest;
-    metadata: {
-        id: string;
-        createdAt: string;
-        private: boolean;
-    };
-}
+// Legacy JSONBin types removed - no longer using external storage
 
 /**
  * Data sent when completing a signature
