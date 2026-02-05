@@ -1903,9 +1903,32 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
 
                                 if (xfdfToImport) {
-                                    // XFDF was imported — appearances are already set.
-                                    // Only trigger visual rendering; do NOT regenerate.
-                                    console.log('  ℹ️ XFDF imported — skipping refreshAppearance to preserve signatures');
+                                    // XFDF was imported — need to refresh form field widget appearances
+                                    // (but NOT signature widgets, to preserve signature appearances)
+                                    console.log('  ℹ️ XFDF imported — refreshing form field widgets (not signatures)');
+
+                                    // Get all form field widgets (text, checkbox, radio, listbox, combobox)
+                                    const formFieldWidgets = allAnnots.filter((a: any) =>
+                                        (a instanceof Core.Annotations.TextWidgetAnnotation ||
+                                         a instanceof Core.Annotations.CheckButtonWidgetAnnotation ||
+                                         a instanceof Core.Annotations.ListWidgetAnnotation ||
+                                         a instanceof Core.Annotations.ChoiceWidgetAnnotation) &&
+                                        !(a instanceof Core.Annotations.SignatureWidgetAnnotation)
+                                    );
+
+                                    if (formFieldWidgets.length > 0) {
+                                        console.log(`  📝 Refreshing ${formFieldWidgets.length} form field widget appearances...`);
+                                        for (const widget of formFieldWidgets) {
+                                            try {
+                                                if (typeof (widget as any).refreshAppearance === 'function') {
+                                                    await (widget as any).refreshAppearance();
+                                                }
+                                            } catch (e) {
+                                                // Non-critical - widget may still render
+                                            }
+                                        }
+                                    }
+
                                     Core.annotationManager.drawAnnotationsFromList(allAnnots);
 
                                 } else {
