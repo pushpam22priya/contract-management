@@ -82,27 +82,26 @@ export default function DraftPage() {
         let initialXfdf: string | undefined = undefined;
         let formFields: any[] | undefined = undefined;
 
-        // Priority 1: Use fileData if available (points to the saved binary)
-        if (contract.fileData) {
-            console.log('📄 [DraftPage] Using contract.fileData');
-            console.log('📄 [DraftPage] XFDF length:', contract.xfdfData?.length || 0);
-            console.log('📄 [DraftPage] FormFields count:', contract.formFields?.length || 0);
-            console.log('📄 [DraftPage] Contract ID:', contract.id);
-            fileUrl = `data:application/pdf;base64,${contract.fileData}`;
-            // ✅ CRITICAL FIX: Always load XFDF/FormFields to ensure signatures/inputs are restored
-            // even if they are baked into the PDF, this ensures interactivity and appearance
-            initialXfdf = contract.xfdfData;
-            formFields = contract.formFields;
-        }
-        // Priority 2: Use fileUrl (from API - points to /api/file/[id])
-        // ✅ CRITICAL FIX: This is the PRIMARY path for contracts saved via updateContractSignedPdf
-        else if (contract.fileUrl) {
-            console.log('📄 [DraftPage] Using contract.fileUrl (fetching from API)');
+        // ✅ PRIORITY 1: Use fileUrl (from API) - always fetches the latest saved PDF
+        // This ensures we get the most recent version after each save
+        if (contract.fileUrl) {
+            console.log('📄 [DraftPage] Using contract.fileUrl (fetching latest from API)');
             console.log('📄 [DraftPage] File URL:', contract.fileUrl);
             console.log('📄 [DraftPage] XFDF length:', contract.xfdfData?.length || 0);
             console.log('📄 [DraftPage] FormFields count:', contract.formFields?.length || 0);
             fileUrl = contract.fileUrl;
             // ✅ Load the contract's XFDF and formFields (NOT template's!)
+            initialXfdf = contract.xfdfData;
+            formFields = contract.formFields;
+        }
+        // Priority 2: Use fileData if fileUrl not available (legacy/fallback)
+        else if (contract.fileData) {
+            console.log('📄 [DraftPage] Using contract.fileData (base64)');
+            console.log('📄 [DraftPage] XFDF length:', contract.xfdfData?.length || 0);
+            console.log('📄 [DraftPage] FormFields count:', contract.formFields?.length || 0);
+            console.log('📄 [DraftPage] Contract ID:', contract.id);
+            fileUrl = `data:application/pdf;base64,${contract.fileData}`;
+            // ✅ CRITICAL FIX: Always load XFDF/FormFields to ensure signatures/inputs are restored
             initialXfdf = contract.xfdfData;
             formFields = contract.formFields;
         }
@@ -223,10 +222,31 @@ export default function DraftPage() {
 
     /**
      * Save contract changes from PDF viewer
-     * Now accepts pdfBlob, xfdfString, fieldValues, and formFields - matching contract creation flow
+     * Now accepts pdfBlob, xfdfString, fieldValues, formFields, and isAutoSave flag
+     *
+     * ✅ IMPORTANT: All pending changes are ALREADY COMMITTED before this function is called
+     * The commit process happens in PDFViewerContainer.exportAnnotations() which includes:
+     * - Deselecting active annotations
+     * - Switching tools to finalize edits
+     * - Calling field.commit() on all form fields
+     * - Refreshing the document viewer
+     * - Redrawing all annotations
+     *
+     * @param isAutoSave - If true, don't close the dialog (background save)
      */
-    const handleSaveChanges = async (pdfBlob: Blob, xfdfString: string, fieldValues?: Record<string, string>, formFields?: any[]) => {
+    const handleSaveChanges = async (pdfBlob: Blob, xfdfString: string, fieldValues?: Record<string, string>, formFields?: any[], isAutoSave?: boolean) => {
         if (!selectedContract) return;
+
+        console.log('═══════════════════════════════════════════════════════════════════');
+        console.log('💾 [DraftPage] Saving contract changes:', selectedContract.id);
+        console.log('✅ [DraftPage] All pending changes were committed before this callback');
+        console.log('═══════════════════════════════════════════════════════════════════');
+        console.log(`📄 PDF Blob size: ${pdfBlob.size} bytes`);
+        console.log(`📋 XFDF string length: ${xfdfString?.length || 0} chars`);
+        console.log(`📋 XFDF preview: ${xfdfString?.substring(0, 500)}...`);
+        console.log(`📝 Field values count: ${fieldValues ? Object.keys(fieldValues).length : 0}`);
+        console.log(`📋 Form fields count: ${formFields?.length || 0}`);
+        console.log(`📋 Previous XFDF length: ${selectedContract.xfdfData?.length || 0} chars`);
 
         try {
             // Convert Blob to base64
@@ -278,8 +298,20 @@ export default function DraftPage() {
                     console.log('✅ [DraftPage] Field metadata updated successfully');
                 }
 
-                showNotification('Changes saved successfully!', 'success');
-                loadDrafts(); // Reload to get updated contract
+                // ✅ Only show notification and close dialog on manual save (not auto-save)
+                if (!isAutoSave) {
+                    showNotification('Changes saved successfully!', 'success');
+
+                    // Close the viewer first to prevent stale data display
+                    setViewerOpen(false);
+                    setSelectedContract(null);
+                    setViewerData(null);
+
+                    // Then reload to get updated contract
+                    await loadDrafts();
+                } else {
+                    console.log('💾 [DraftPage] Auto-save completed silently (dialog stays open)');
+                }
             } else {
                 showNotification('Failed to save changes: ' + result.message, 'error');
                 throw new Error(result.message);
@@ -488,6 +520,8 @@ export default function DraftPage() {
                     // ✅ NEW: Contractors can edit field values but NOT add new form fields in draft mode
                     canAddFormFields={false}
                     editableFieldMode="all"
+                    // ✅ Enable annotation navigation for draft editing
+                    showAnnotationNavigation={true}
                 />
             )}
 

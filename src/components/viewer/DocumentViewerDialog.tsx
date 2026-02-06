@@ -71,6 +71,7 @@ interface DocumentViewerDialogProps {
     // ✅ NEW: Permission control props for field lifecycle
     canAddFormFields?: boolean;
     editableFieldMode?: 'all' | 'empty-only' | 'none';
+    showAnnotationNavigation?: boolean; // ✅ Show floating navigation button for annotations
 }
 
 export default function DocumentViewerDialog({
@@ -93,7 +94,8 @@ export default function DocumentViewerDialog({
     formFields,
     currentUserRole,
     canAddFormFields = false,
-    editableFieldMode = 'all'
+    editableFieldMode = 'all',
+    showAnnotationNavigation = false
 }: DocumentViewerDialogProps) {
 
 
@@ -142,11 +144,9 @@ export default function DocumentViewerDialog({
             console.log('📝 [DocumentViewerDialog] Starting export from DRAFT with field values:', filledFieldValues);
             console.log('📝 [DocumentViewerDialog] Initial XFDF length:', initialXfdf?.length || 0);
 
-            // ✅ CRITICAL: exportAnnotations now returns { blob, xfdfString }
-            // Both are needed to persist signatures properly
-            // ✅ FIX: Pass empty {} matching contract creation flow.
-            // Values are already in the PDF. Passing filledFieldValues causes
-            // redundant setValue calls which can invalidate signature appearances.
+            // ✅ FIX: Use flatten: false to keep annotations interactive in drafts
+            // Flattening (true) burns annotations into the PDF image, making them permanent.
+            // By using false, we preserve the ability to edit/delete annotations using the XFDF data.
             const exportResult = await pdfViewerRef.current.exportAnnotations({}, { flatten: false });
 
             if (!exportResult) {
@@ -275,6 +275,8 @@ export default function DocumentViewerDialog({
                             // ✅ NEW: Permission control props
                             canAddFormFields={canAddFormFields}
                             editableFieldMode={editableFieldMode}
+                            // ✅ Enable annotation navigation
+                            showAnnotationNavigation={showAnnotationNavigation}
                         />
                     );
 

@@ -1,10 +1,3 @@
-/**
- * API Route: PUT /api/sign-requests/[token]/complete
- *
- * Completes a signing request by updating the contract document directly.
- * Also supports backward compatibility with old signature_requests collection.
- * Stores the signed PDF and merges field values.
- */
 
 import { NextResponse, NextRequest } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
@@ -16,7 +9,6 @@ export async function PUT(
 ) {
     try {
         const { token } = await params;
-        console.log(`📋 [SignRequest COMPLETE] Processing completion for token: ${token}`);
 
         // 1. Parse FormData
         const formData = await request.formData();
@@ -24,6 +16,7 @@ export async function PUT(
         const xfdf = (formData.get('xfdf') as string) || '';
         const fieldValuesStr = (formData.get('fieldValues') as string) || '';
         const formFieldsStr = (formData.get('formFields') as string) || '';
+        const isAutoSave = formData.get('isAutoSave') === 'true'; // ✅ Check if this is auto-save
 
         if (!pdfFile) {
             return NextResponse.json({ error: 'No PDF file provided' }, { status: 400 });
@@ -49,77 +42,108 @@ export async function PUT(
 
         const { db } = await connectToDatabase();
 
-        // 2. Try to find contract by token (new approach)
-        let contract = await db.collection('contracts').findOne({ externalSigningToken: token });
-        let isLegacy = false;
-        let legacyRequest = null;
+        // 2. Locate Request
+        const signRequest = await db.collection('signature_requests').findOne({ token });
+        if (!signRequest) {
+            return NextResponse.json({ error: 'Invalid token' }, { status: 403 });
+        }
 
-        if (!contract || !contract.signingRequest) {
-            // BACKWARD COMPATIBILITY: Check old signature_requests collection
-            console.log(`⚠️ [SignRequest COMPLETE] Contract not found with embedded signingRequest, checking legacy...`);
-
-            legacyRequest = await db.collection('signature_requests').findOne({ token });
-
-            if (!legacyRequest) {
-                return NextResponse.json({ error: 'Invalid token' }, { status: 403 });
-            }
-
-            if (legacyRequest.status === 'signed' || legacyRequest.status === 'cancelled') {
-                return NextResponse.json({ error: 'Request no longer pending' }, { status: 400 });
-            }
-
-            // Get the contract from legacy request
-            contract = await db.collection('contracts').findOne({ _id: new ObjectId(legacyRequest.contractId) });
-
-            if (!contract) {
-                return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
-            }
-
-            isLegacy = true;
-            console.log(`✅ [SignRequest COMPLETE] Using legacy flow for contract: ${contract._id}`);
-        } else {
-            // Check signing request status (new approach)
-            if (contract.signingRequest.status === 'signed' || contract.signingRequest.status === 'cancelled') {
-                return NextResponse.json({ error: 'Request no longer pending' }, { status: 400 });
-            }
-            console.log(`✅ [SignRequest COMPLETE] Using new flow for contract: ${contract._id}`);
+        // ✅ Only block if already signed AND this is not an auto-save
+        // Auto-save should still be able to save progress even if status is 'signed' (edge case)
+        if ((signRequest.status === 'signed' || signRequest.status === 'cancelled') && !isAutoSave) {
+            return NextResponse.json({ error: 'Request no longer pending' }, { status: 400 });
         }
 
         const now = new Date().toISOString();
 
-        // 3. Build update object for contract
+        // ✅ AUTO-SAVE vs FINAL SUBMIT handling
+        if (isAutoSave) {
+            // 3a. Auto-save: Only save progress, don't change status
+            console.log('💾 [AUTO-SAVE] Saving external signer progress (not marking as signed)');
+
+            await db.collection('signature_requests').updateOne(
+                { token },
+                {
+                    $set: {
+                        lastSavedAt: now,
+                        savedXfdf: xfdf // Save XFDF progress separately
+                    },
+                    $push: {
+                        events: { type: 'auto-saved', at: now }
+                    }
+                } as any
+            );
+
+            // Update contract PDF and XFDF without changing status
+            const contractUpdate: Record<string, any> = {
+                pdf: buffer,
+                xfdfData: xfdf,
+            };
+
+            // Merge field values
+            const existingContract = await db.collection('contracts').findOne(
+                { _id: new ObjectId(signRequest.contractId) },
+                { projection: { fieldValues: 1 } }
+            );
+
+            if (fieldValues) {
+                contractUpdate.fieldValues = {
+                    ...(existingContract?.fieldValues || {}),
+                    ...fieldValues
+                };
+            }
+
+            await db.collection('contracts').updateOne(
+                { _id: new ObjectId(signRequest.contractId) },
+                { $set: contractUpdate }
+            );
+
+            return NextResponse.json({ success: true, message: 'Progress saved' });
+        }
+
+        // 3b. Final Submit: Update Request Status to signed
+        await db.collection('signature_requests').updateOne(
+            { token },
+            {
+                $set: {
+                    status: 'signed',
+                    signedAt: now,
+                    signedXfdf: xfdf
+                },
+                $push: {
+                    events: { type: 'signed', at: now }
+                }
+            } as any
+        );
+
+        // 4. Update Original Contract with Signed PDF
+        // ✅ FIX: Also persist fieldValues and formFields like contract creation does
         const contractUpdate: Record<string, any> = {
-            // Update contract status
             status: 'signed',
-            signedDate: now,
-
-            // Update PDF and XFDF
             pdf: buffer,
+            signedDate: now,
             xfdfData: xfdf,
-
-            // Update signer info
             'signer.status': 'signed',
             'signer.signedAt': now,
         };
 
-        // For new approach, also update the embedded signingRequest
-        if (!isLegacy) {
-            contractUpdate['signingRequest.status'] = 'signed';
-            contractUpdate['signingRequest.signedAt'] = now;
-            contractUpdate['signingRequest.signedXfdf'] = xfdf;
-        }
+        // Fetch existing contract to merge field values and form fields
+        const existingContract = await db.collection('contracts').findOne(
+            { _id: new ObjectId(signRequest.contractId) },
+            { projection: { fieldValues: 1, formFields: 1 } }
+        );
 
         // Merge client's field values with existing contract field values
         if (fieldValues) {
             contractUpdate.fieldValues = {
-                ...(contract.fieldValues || {}),
+                ...(existingContract?.fieldValues || {}),
                 ...fieldValues
             };
         }
 
-        // Merge formFields instead of overwriting to preserve fields from contract creation
+        // ✅ FIX: Merge formFields instead of overwriting to preserve fields from contract creation
         if (formFields && formFields.length > 0) {
-            const existingFormFields = contract.formFields || [];
+            const existingFormFields = existingContract?.formFields || [];
 
             // Create a map of existing fields by name for quick lookup
             const existingFieldsMap = new Map<string, any>();
@@ -143,45 +167,15 @@ export async function PUT(
             contractUpdate.formFields = Array.from(existingFieldsMap.values());
         }
 
-        // 4. Update contract
-        const updateQuery = isLegacy
-            ? { _id: new ObjectId(legacyRequest!.contractId) }
-            : { externalSigningToken: token };
-
-        const updateOperation: any = { $set: contractUpdate };
-
-        // Add event push for new approach
-        if (!isLegacy) {
-            updateOperation.$push = {
-                'signingRequest.events': { type: 'signed', at: now }
-            };
-        }
-
-        await db.collection('contracts').updateOne(updateQuery, updateOperation);
-
-        // 5. For legacy flow, also update the signature_requests collection
-        if (isLegacy && legacyRequest) {
-            await db.collection('signature_requests').updateOne(
-                { token },
-                {
-                    $set: {
-                        status: 'signed',
-                        signedAt: now,
-                        signedXfdf: xfdf
-                    },
-                    $push: {
-                        events: { type: 'signed', at: now }
-                    }
-                } as any
-            );
-        }
-
-        console.log(`✅ [SignRequest COMPLETE] Signature completed for contract ${contract._id}`);
+        await db.collection('contracts').updateOne(
+            { _id: new ObjectId(signRequest.contractId) },
+            { $set: contractUpdate }
+        );
 
         return NextResponse.json({ success: true, message: 'Signature completed' });
 
     } catch (error: any) {
-        console.error('❌ [SignRequest COMPLETE] Error:', error);
+        console.error('Signature completion failed:', error);
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }

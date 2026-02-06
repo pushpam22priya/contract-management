@@ -131,15 +131,23 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 return;
             }
 
-            console.log('🔍 Starting PDF export...');
+            console.log('═══════════════════════════════════════════════════════════════════');
+            console.log('🔍 [CreateContractDialog] Starting PDF export...');
+            console.log('✅ [CreateContractDialog] Commit process will run in exportAnnotations');
+            console.log('═══════════════════════════════════════════════════════════════════');
             console.log('📄 PDF Viewer Ref exists:', !!pdfViewerRef.current);
             console.log('📝 Field values to export:', filledFieldValues);
 
             // Export PDF Blob and XFDF from PDF viewer
+            // ✅ IMPORTANT: exportAnnotations() will COMMIT all pending changes before exporting
+            // This includes: deselecting annotations, switching tools, calling field.commit(),
+            // refreshing viewer, and redrawing annotations
             // CRITICAL: exportAnnotations now returns { blob, xfdfString }
-            // ✅ FIX: Do NOT pass filledFieldValues to exportAnnotations. 
+            // ✅ FIX: Do NOT pass filledFieldValues to exportAnnotations.
             // The values are already in the PDF (typed by user). Passing them causes redundant setValue calls which invalidate signatures.
-            // ✅ CRITICAL FIX: Flatten the contract PDF to burn in signatures and fields
+            // ✅ FIX: Using flatten: false allows signatures to remain as interactive annotations.
+            // This ensures they can be modified or deleted without leaving "ghost" images in the PDF background.
+            // We rely on the XFDF (saved below) to restore the visual appearance of annotations on load.
             const exportResult = await pdfViewerRef.current?.exportAnnotations({}, { flatten: false });
 
             console.log('📋 PDF Export Result:');
@@ -320,47 +328,44 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
         </>
     );
 
-    const handleStartFilling = () => {
-        pdfViewerRef.current?.scrollToFirstField();
-    };
 
     // Step 2: PDF Editing Actions
     const step2Actions = (
-            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                <Button
-                    onClick={() => setCurrentStep(1)}
-                    startIcon={<ArrowBack />}
-                    variant="outlined"
-                    sx={{
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        borderRadius: 2,
-                    }}
-                >
-                    Back to Details
-                </Button>
-                <Button
-                    onClick={handleSave}
-                    startIcon={<Save />}
-                    variant="contained"
-                    disabled={!canSave || saving}
-                    sx={{
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        // px: 3,
-                        borderRadius: 2,
-                        minWidth: 150,
-                        bgcolor: 'primary.main',
-                        boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
-                        '&:hover': {
-                            bgcolor: 'primary.dark',
-                            boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
-                        },
-                    }}
-                >
-                    {saving ? 'Saving...' : 'Save Contract'}
-                </Button>
-            </Box>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+            <Button
+                onClick={() => setCurrentStep(1)}
+                startIcon={<ArrowBack />}
+                variant="outlined"
+                sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderRadius: 2,
+                }}
+            >
+                Back to Details
+            </Button>
+            <Button
+                onClick={handleSave}
+                startIcon={<Save />}
+                variant="contained"
+                disabled={!canSave || saving}
+                sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    // px: 3,
+                    borderRadius: 2,
+                    minWidth: 150,
+                    bgcolor: 'primary.main',
+                    boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
+                    '&:hover': {
+                        bgcolor: 'primary.dark',
+                        boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
+                    },
+                }}
+            >
+                {saving ? 'Saving...' : 'Save Contract'}
+            </Button>
+        </Box>
     );
 
     // Conditional dialog actions based on current step
@@ -602,13 +607,10 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                                 <PDFViewerContainer
                                     ref={pdfViewerRef}
                                     documentUrl={selectedTemplate.fileData || selectedTemplate.fileUrl}
-                                    // ✅ CRITICAL FIX: DON'T pass initialXfdf for contract creation
-                                    // Template PDF already has annotations embedded (saved with flatten=false)
-                                    // Re-importing XFDF causes conflicts and loses template signatures
-                                    // Just load the PDF - it has everything we need
+                                    // ✅ CRITICAL: Load template XFDF to display form fields during contract creation
+                                    // Template form fields are stored in XFDF and need to be imported
+                                    initialXfdf={selectedTemplate?.xfdfData}
                                     formFields={selectedTemplate?.formFields}
-                                    // ❌ DON'T import template XFDF - causes duplicate/conflicting annotations
-                                    // initialXfdf={selectedTemplate?.xfdfData}
                                     readOnly={false}
                                     currentUserRole="contractor"
                                     // ✅ NEW: Enable form field creation during contract creation ONLY
@@ -619,6 +621,8 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                                     // Explanation: Fires when user types/checks a field, stores value
                                     onFieldChange={handleFieldChange}
                                     onDocumentLoaded={() => setDocumentLoaded(true)}
+                                    // ✅ Enable annotation navigation for contract creation
+                                    showAnnotationNavigation={true}
                                     onError={(err) => setError(err)}
                                 />
                             </Box>

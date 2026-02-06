@@ -1,13 +1,12 @@
 /**
  * External Signature Service
- *
- * This service orchestrates the external signature flow.
- * All signing data is now stored directly in the contracts collection
- * (consolidated from the separate signature_requests collection).
+ * 
+ * This service orchestrates the external signature flow using internal MongoDB storage.
+ * It replaces the legacy JSONBin implementation.
  */
 
 import { Contract } from '@/types/contract';
-import { SignatureRequest } from '@/types/signature';
+import { SignatureRequest, SignatureCompletionData } from '@/types/signature';
 import { sendSignatureRequestEmail } from './emailService';
 import { externalSignatureConfig } from '../../config/externalSignature';
 
@@ -57,7 +56,7 @@ const formatDateForEmail = (isoString: string): string => {
 
 /**
  * Submit a contract for external signature.
- * Updates the contract document with signing request data.
+ * Creates a record in local MongoDB (signature_requests)
  */
 export const submitForExternalSignature = async (
     contract: Contract,
@@ -76,15 +75,21 @@ export const submitForExternalSignature = async (
         const expiresAt = calculateExpiryDate();
 
         // Prepare request data
-        // Note: formFields, xfdfData etc. are already in the contract document,
-        // so we only need to send the signing-specific data
+        // ✅ CRITICAL FIX: Include xfdfData and fieldValues so external signers can see pre-filled field values
         const requestPayload = {
             token,
             contractId: contract.id,
+            contractTitle: contract.title,
             signerEmail,
+            createdBy: contract.createdBy,
             createdByName: senderName,
             createdAt: new Date().toISOString(),
             expiresAt,
+            templateId: contract.templateId,
+            formFields: contract.formFields,
+            hasFormFields: contract.hasFormFields,
+            xfdfData: contract.xfdfData,  // Include XFDF for field values and signatures
+            fieldValues: contract.fieldValues  // ✅ Include fieldValues for text field restoration
         };
 
         // 1. Create Request via API
@@ -99,7 +104,7 @@ export const submitForExternalSignature = async (
             throw new Error(err.error || 'Failed to create signature request');
         }
 
-        console.log('✅ [ExternalSignature] Signing request added to contract');
+        console.log('✅ [ExternalSignature] Request stored in DB');
 
         // 2. Generate URL
         const signingUrl = generateSigningUrl(token);
@@ -153,16 +158,21 @@ export const getSignatureRequestData = async (
 /**
  * Complete a signature.
  * Uploads BLOB directly to backend.
+ *
+ * @param isAutoSave - If true, only save progress without marking as signed
  */
 export const completeExternalSignature = async (
     token: string,
     pdfBlob: Blob,
     xfdfString: string,
     fieldValues?: Record<string, string>,
-    formFields?: any[]
-): Promise<{ success: boolean; error?: string }> => {
+    formFields?: any[],
+    isAutoSave?: boolean
+): Promise<{ success: boolean; message?: string; error?: string }> => {
     try {
-        console.log('✍️ [ExternalSignature] Uploading signed binary...');
+        console.log(isAutoSave
+            ? '💾 [ExternalSignature] Auto-saving progress...'
+            : '✍️ [ExternalSignature] Uploading signed binary...');
 
         // Use FormData to send both PDF and XFDF securely
         const formData = new FormData();
@@ -175,6 +185,11 @@ export const completeExternalSignature = async (
         }
         if (formFields) {
             formData.append('formFields', JSON.stringify(formFields));
+        }
+
+        // ✅ Pass isAutoSave flag so API knows not to mark as signed
+        if (isAutoSave) {
+            formData.append('isAutoSave', 'true');
         }
 
         // Upload FormData to completion endpoint

@@ -105,10 +105,10 @@ export default function PublicSigningPage() {
         setSubmitting(true);
 
         try {
-            // ✅ FIX: Pass empty {} to exportAnnotations, matching contract creation flow.
-            // The values are already in the PDF (typed by user). Passing filledFieldValues
-            // causes redundant setValue calls which can invalidate signature appearances.
-            const exportResult = await pdfViewerRef.current?.exportAnnotations({}, { flatten: false });
+            // ✅ CRITICAL FIX: Use flatten: true to permanently embed signature in PDF
+            // Pass empty {} to exportAnnotations - values are already in the PDF
+            // Without flattening, signature appearance data is lost during XFDF import/export cycles
+            const exportResult = await pdfViewerRef.current?.exportAnnotations({}, { flatten: true });
 
             if (!exportResult || !exportResult.blob) {
                 setError('Failed to capture signature. Please try again.');
@@ -234,10 +234,11 @@ export default function PublicSigningPage() {
                             clientSigningMode={true}
                             readOnly={false}
                             currentUserRole="client"
-                            showFieldNavigation={true}
                             onFieldChange={handleFieldChange}
                             // ✅ NEW: External signers can ONLY fill empty fields, NOT modify pre-filled values
                             editableFieldMode="empty-only"
+                            // ✅ Enable annotation navigation for external signature
+                            showAnnotationNavigation={true}
                         />
                     )}
                 </Paper>

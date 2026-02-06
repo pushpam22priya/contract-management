@@ -24,6 +24,7 @@ import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import { authService } from '@/services/authService';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
+import { resolve } from 'path';
 
 interface UploadTemplateDialogProps {
     open: boolean;
@@ -171,6 +172,22 @@ export default function UploadTemplateDialog({
     // State for modification tracking
     const [pdfModified, setPdfModified] = useState(false);
 
+    // ✅ AUTO-SAVE: Handle change notifications during template editing
+    // Note: For NEW templates, we don't save to JSONBin until final submit
+    // (because template doesn't exist yet). This handler just logs changes.
+    // For EDITING existing templates, this could be enhanced to actually save.
+    const handleAutoSave = async (fileData: string, xfdfData: string) => {
+        console.log('💾 [AUTO-SAVE] Template change detected');
+        console.log(`📄 File data length: ${fileData?.length || 0}`);
+        console.log(`📋 XFDF data length: ${xfdfData?.length || 0}`);
+        console.log('ℹ️  [AUTO-SAVE] Changes will be captured on final submit');
+
+        // Note: We don't actually save here because:
+        // 1. Template doesn't exist in JSONBin yet (no ID)
+        // 2. We always do a fresh export on submit to ensure latest state
+        // 3. This avoids race conditions with debounced auto-save
+    };
+
     // Handle submit
     const handleSubmit = async () => {
         setError('');
@@ -202,15 +219,34 @@ export default function UploadTemplateDialog({
 
         try {
 
+            if(pdfViewerRef.current) {
+                pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
+                pdfViewerRef.current.setToolMode('Pan');
+                console.log('Set toolbar to View mode and Pan tool before save')
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
             let xfdfData = '';
             let formFields: any[] = [];
             let fileToUpload: File | Blob = selectedFile;
 
             // IF on step 2 (Designer) and viewer is active
             if (currentStep === 2 && pdfViewerRef.current) {
-                console.log('📦 Exporting data from Viewer...');
+                console.log('═══════════════════════════════════════════════════════════════════');
+                console.log('📦 [UploadTemplateDialog] Exporting data from Viewer...');
+                console.log('✅ [UploadTemplateDialog] Commit process will run in exportAnnotations');
+                console.log('═══════════════════════════════════════════════════════════════════');
+
+                // ✅ CRITICAL FIX: Always export fresh data on submit
+                // Don't rely on cached auto-save data as it may be stale or incomplete
+                // The exportAnnotations() call includes the full pre-export commit process
+                console.log('📋 [UploadTemplateDialog] Performing fresh export on submit');
 
                 // 1. Export XFDF (annotations/data)
+                // ✅ IMPORTANT: exportAnnotations() will COMMIT all pending changes before exporting
+                // This includes: deselecting annotations, switching tools, calling field.commit(),
+                // refreshing viewer, and redrawing annotations
                 // We use exportAnnotations() which returns both blob and xfdf string.
                 try {
                     const exportResult = await pdfViewerRef.current.exportAnnotations();
@@ -218,34 +254,43 @@ export default function UploadTemplateDialog({
                     if (exportResult) {
                         xfdfData = exportResult.xfdfString;
                         console.log(`  ✓ Extracted XFDF (${xfdfData.length} chars)`);
-
-                        // 2. If PDF was modified, use the regenerated Blob
-                        if (pdfModified) {
-                            console.log('  ⚠️ PDF was modified, using regenerated binary Blob...');
-                            fileToUpload = exportResult.blob;
-                            console.log(`  ✓ Switched to binary Blob (${fileToUpload.size} bytes)`);
-                        } else {
-                            console.log('  ✓ PDF not modified, uploading original file.');
-                        }
                     }
                 } catch (ex) {
                     console.error('Failed to export annotations:', ex);
                     throw new Error('Failed to prepare document for upload.');
                 }
 
-                // 3. Export form field metadata (legacy/helper)
+                // 2. Export form field metadata
                 try {
                     formFields = await pdfViewerRef.current.exportFormFields();
                     console.log(`  ✓ Extracted ${formFields.length} form field definitions`);
                 } catch (e) {
                     console.warn('Failed to export form fields metadata:', e);
                 }
+
+                // 3. If PDF was modified, use the blob from the export
+                if (pdfModified) {
+                    console.log('  ⚠️ PDF was modified, using exported binary Blob...');
+                    // We already have the exportResult from above
+                    try {
+                        const exportResult = await pdfViewerRef.current.exportAnnotations();
+                        if (exportResult) {
+                            fileToUpload = exportResult.blob;
+                            console.log(`  ✓ Using exported Blob (${fileToUpload.size} bytes)`);
+                        }
+                    } catch (ex) {
+                        console.error('Failed to export PDF blob:', ex);
+                        throw new Error('Failed to prepare document for upload.');
+                    }
+                } else {
+                    console.log('  ✓ PDF not modified, uploading original file.');
+                }
             }
 
             // At this point:
             // - fileToUpload is either original File (step 1 or unmodified step 2) OR dynamic Blob (modified step 2)
-            // - xfdfData is populated if step 2 export succeeded
-            // - formFields is populated if step 2 export succeeded
+            // - xfdfData is populated from fresh export
+            // - formFields is populated from fresh export
 
 
             console.log('💾 Saving template via Service...');
@@ -262,10 +307,21 @@ export default function UploadTemplateDialog({
             console.log('✅ Template saved successfully!', savedTemplate.template?.id);
 
             setSuccess('Template uploaded successfully!');
+
+            // ✅ Set toolbar to View mode after success
+            if (pdfViewerRef.current && pdfViewerRef.current.setToolbarGroup) {
+                console.log('✅ Setting toolbar to View mode');
+                pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
+                // ✅ Also set to Pan mode as requested
+                // if (pdfViewerRef.current.setToolMode) {
+                //     pdfViewerRef.current.setToolMode('Pan');
+                // }
+            }
+
             setTimeout(() => {
                 handleClose();
                 onSuccess?.();
-            }, 1500);
+            }, 2000); // 2 second delay as requested
         } catch (err: any) {
             console.error('❌ Error uploading template:', err);
             setError(err.message || 'Failed to upload template. Please try again.');
@@ -768,11 +824,13 @@ export default function UploadTemplateDialog({
                                 <PDFViewerContainer
                                     ref={pdfViewerRef}
                                     documentUrl={documentUrl}
-                                    readOnly={false}
-                                    toolbarMode="forms"
-                                    // ✅ NEW: Enable form field creation during template creation
-                                    canAddFormFields={true}
+                                    isReadOnly={false}
+                                    // ✅ Force start with Forms toolbar
+                                    initialToolbarGroup="toolbarGroup-Forms"
                                     onDocumentLoaded={() => setDocumentLoaded(true)}
+                                    onError={(msg) => setError(msg)}
+                                    // ✅ AUTO-SAVE: Auto-save when form fields are added/modified
+                                    onSave={handleAutoSave}
                                     // Track modifications
                                     onDocumentModified={() => {
                                         if (!pdfModified) {
@@ -780,7 +838,6 @@ export default function UploadTemplateDialog({
                                             setPdfModified(true);
                                         }
                                     }}
-                                    onError={(err) => setError(err)}
                                 />
                             </Box>
                         ) : (

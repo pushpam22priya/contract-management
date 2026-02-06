@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Box } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/layout/AppLayout';
-import NotificationHeader from '@/components/notifications/NotificationHeader';
 import NotificationStats from '@/components/notifications/NotificationStats';
 import NotificationFilters from '@/components/notifications/NotificationFilters';
 import NotificationList from '@/components/notifications/NotificationList';
@@ -89,7 +88,6 @@ export default function NotificationsPage() {
     return (
         <AppLayout>
             <Box>
-                <NotificationHeader onMarkAllRead={handleMarkAllRead} />
 {/* 
                 <NotificationStats
                     unreadCount={unreadCount}
