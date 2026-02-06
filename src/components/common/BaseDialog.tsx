@@ -32,9 +32,11 @@ interface BaseDialogProps {
     actions?: React.ReactNode;
     maxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
     fullWidth?: boolean;
-    customHeight?: string; // NEW: Allow custom height like '100vh', '90vh', etc.
-    disableEnforceFocus?: boolean; // NEW: Disable focus enforcement for embedded editors like PDFTron
-    disableBackdropClick?: boolean; // NEW: Prevent closing dialog when clicking backdrop
+    fullScreen?: boolean; // Force full screen mode (overrides mobile detection)
+    noPadding?: boolean; // Remove content padding (useful for full-screen editors)
+    customHeight?: string; // Allow custom height like '100vh', '90vh', etc.
+    disableEnforceFocus?: boolean; // Disable focus enforcement for embedded editors like PDFTron
+    disableBackdropClick?: boolean; // Prevent closing dialog when clicking backdrop
 }
 
 export default function BaseDialog({
@@ -45,12 +47,15 @@ export default function BaseDialog({
     actions,
     maxWidth = 'sm',
     fullWidth = true,
-    customHeight, // NEW
-    disableEnforceFocus = true, // NEW: Default to true for better compatibility with PDFTron
-    disableBackdropClick = false, // NEW
+    fullScreen: fullScreenProp, // Force full screen mode
+    noPadding = false, // Remove content padding
+    customHeight,
+    disableEnforceFocus = true, // Default to true for better compatibility with PDFTron
+    disableBackdropClick = false,
 }: BaseDialogProps) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const isFullScreen = fullScreenProp || isMobile;
 
     return (
         <Dialog
@@ -64,11 +69,11 @@ export default function BaseDialog({
             TransitionComponent={Transition}
             maxWidth={maxWidth}
             fullWidth={fullWidth}
-            fullScreen={isMobile}
+            fullScreen={fullScreenProp ?? isMobile}
             disableEnforceFocus={disableEnforceFocus} // Allow embedded editors to manage their own focus
             PaperProps={{
                 sx: {
-                    borderRadius: isMobile ? 0 : 3,
+                    borderRadius: isFullScreen ? 0 : 3,
                     boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
                     overflow: 'visible',
                     zIndex: 1300, // Ensure dialog paper is above backdrop but below PDFTron modals
@@ -99,7 +104,7 @@ export default function BaseDialog({
                     bgcolor: '#fafafa',
                     px: 1.2,
                     py: 0.5,
-                    borderRadius: "16px 16px 0 0",
+                    borderRadius: isFullScreen ? 0 : "16px 16px 0 0",
                 }}
             >
                 <Box
@@ -131,9 +136,16 @@ export default function BaseDialog({
             {/* Dialog Content */}
             <DialogContent
                 sx={{
-                    px: { xs: 2, sm: 2 },
-                    py: { xs: 3, sm: 2 },
-                    paddingTop: '16px !important',
+                    px: noPadding ? 0 : { xs: 2, sm: 2 },
+                    py: noPadding ? 0 : { xs: 3, sm: 2 },
+                    paddingTop: noPadding ? '0 !important' : '16px !important',
+                    // Full screen mode: fill available space
+                    ...(isFullScreen && noPadding && {
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                    }),
                 }}
             >
                 {children}
@@ -143,12 +155,12 @@ export default function BaseDialog({
             {actions && (
                 <DialogActions
                     sx={{
-                        p: 1,
+                        p: isFullScreen ? 0.2 : 1,
                         borderTop: '1px solid',
                         borderColor: 'rgba(0, 0, 0, 0.08)',
                         bgcolor: '#fafafa',
                         gap: 1,
-                        borderRadius: "0 0 16px 16px",
+                        borderRadius: isFullScreen ? 0 : "0 0 16px 16px",
                     }}
                 >
                     {actions}
