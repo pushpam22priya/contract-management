@@ -425,7 +425,8 @@ export default function EditTemplateDialog({
             actions={dialogActions}
             maxWidth={currentStep === 1 ? 'sm' : 'xl'}
             fullWidth
-            customHeight={currentStep === 2 ? '98vh' : undefined}
+            fullScreen={currentStep === 2}
+            noPadding={currentStep === 2}
         >
             {/* STEP 1: Basic Information */}
             {currentStep === 1 && (
@@ -829,69 +830,50 @@ export default function EditTemplateDialog({
                 </Box>
             )}
 
-            {/* STEP 2: PDF Form Builder */}
+            {/* STEP 2: PDF Form Builder - Full Screen */}
             {currentStep === 2 && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(98vh - 150px)' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                     {/* Error Alert */}
                     {error && (
-                        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+                        <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError('')}>
                             {error}
                         </Alert>
                     )}
 
-                    {/* Full-Height PDF Viewer */}
-                    <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                        {documentUrl ? (
-                            <Box sx={{
-                                height: '100%',
-                                border: '1px solid',
-                                borderColor: 'divider',
-                                borderRadius: 2,
-                                overflow: 'hidden'
-                            }}>
-                                <PDFViewerContainer
-                                    ref={pdfViewerRef}
-                                    documentUrl={documentUrl}
-                                    isReadOnly={false}
-                                    // ✅ Enable form field creation during template editing
-                                    canAddFormFields={true}
-                                    // ✅ Listen for modifications to force binary update
-                                    onDocumentModified={() => {
-                                        console.log('📝 Template modified by user (fields added/changed)');
-                                        setPdfModified(true);
-                                    }}
-                                    // ✅ Force start with Forms toolbar
-                                    initialToolbarGroup="toolbarGroup-Forms"
-                                    onDocumentLoaded={() => setDocumentLoaded(true)}
-                                    onError={(err) => setError(err)}
-                                    // ✅ CRITICAL FIX: ALWAYS import XFDF for templates (unless new file selected)
-                                    // Templates are saved with flatten=false, so form fields exist ONLY in XFDF
-                                    // Unlike signed contracts (which are flattened), templates need XFDF to show fields
-                                    initialXfdf={selectedFile ? undefined : template.xfdfData}
-                                    // Pass existing form fields ONLY if we are using the existing file
-                                    // If a new file is selected (selectedFile is not null), we start fresh
-                                    formFields={selectedFile ? undefined : template.formFields}
-                                />
-                            </Box>
-                        ) : (
-                            <Box
-                                sx={{
-                                    height: '100%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    border: '2px dashed',
-                                    borderColor: 'divider',
-                                    borderRadius: 2,
-                                    bgcolor: 'grey.50'
+                    {/* Full-Screen PDF Viewer */}
+                    {documentUrl ? (
+                        <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                            <PDFViewerContainer
+                                ref={pdfViewerRef}
+                                documentUrl={documentUrl}
+                                isReadOnly={false}
+                                canAddFormFields={true}
+                                onDocumentModified={() => {
+                                    console.log('📝 Template modified by user (fields added/changed)');
+                                    setPdfModified(true);
                                 }}
-                            >
-                                <Typography variant="h6" color="text.secondary">
-                                    No document loaded
-                                </Typography>
-                            </Box>
-                        )}
-                    </Box>
+                                initialToolbarGroup="toolbarGroup-Forms"
+                                onDocumentLoaded={() => setDocumentLoaded(true)}
+                                onError={(err) => setError(err)}
+                                initialXfdf={selectedFile ? undefined : template.xfdfData}
+                                formFields={selectedFile ? undefined : template.formFields}
+                            />
+                        </Box>
+                    ) : (
+                        <Box
+                            sx={{
+                                flex: 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                bgcolor: 'grey.50'
+                            }}
+                        >
+                            <Typography variant="h6" color="text.secondary">
+                                No document loaded
+                            </Typography>
+                        </Box>
+                    )}
                 </Box>
             )}
         </BaseDialog>

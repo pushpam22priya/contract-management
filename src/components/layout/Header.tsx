@@ -75,6 +75,7 @@ export default function Header() {
                         size="large"
                         color="inherit"
                         onClick={() => router.push('/notifications')}
+                        sx={{ p: 0.5 }}
                     >
                         <Badge badgeContent={3} color="error">
                             <NotificationsOutlinedIcon sx={{ color: 'text.secondary' }} />
@@ -105,6 +106,7 @@ export default function Header() {
                                     color: 'error.main',
                                     bgcolor: 'rgba(211, 47, 47, 0.08)',
                                 },
+                                p: 0.5
                             }}
                         >
                             <LogoutOutlinedIcon sx={{ color: 'text.secondary' }} />

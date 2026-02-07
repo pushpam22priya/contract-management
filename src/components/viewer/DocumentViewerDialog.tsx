@@ -228,60 +228,28 @@ export default function DocumentViewerDialog({
             title={title || fileName || 'Document Viewer'}
             maxWidth="lg"
             fullWidth
-            customHeight="98vh"
+            fullScreen
+            noPadding
             actions={dialogActions}
         >
-            <Box sx={{
-                height: dialogActions ? 'calc(100vh - 160px)' : 'calc(100vh - 100px)',
-                overflow: 'hidden',
-                p: 0,
-                m: 0
-            }}>
-                {(() => {
-                    // Debug logging
-                    console.log('DocumentViewerDialog render:', {
-                        hasFileUrl: !!fileUrl,
-                        fileUrl: fileUrl?.substring?.(0, 100) || fileUrl,
-                        readOnly,
-                        commentsOnly,
-                        clientSigningMode
-                    });
-
-                    console.log('📄 DocumentViewerDialog source analysis:', {
-                        isDataUrl: fileUrl?.startsWith('data:'),
-                        fileUrlLength: fileUrl?.length || 0,
-                        contractId,
-                        currentUserRole
-                    });
-
-                    // ✅ ALWAYS show PDFTron viewer
-                    console.log('Rendering PDFViewerContainer');
-                    return (
-                        <PDFViewerContainer
-                            ref={pdfViewerRef}
-                            documentUrl={fileUrl || ""}
-                            // ✅ CRITICAL FIX: ALWAYS pass initialXfdf for both templates AND contracts
-                            // Contracts are saved with flatten=false (CreateContractDialog.tsx:144)
-                            // So we NEED to import XFDF to restore signatures and field values
-                            // Previous logic incorrectly skipped XFDF for contracts, causing signatures to disappear
-                            initialXfdf={initialXfdf}
-                            readOnly={readOnly}
-                            commentsOnly={commentsOnly}
-                            clientSigningMode={clientSigningMode}
-                            templateFormFields={templateFormFields}
-                            formFields={formFields}
-                            currentUserRole={currentUserRole}
-                            onFieldChange={handleFieldChange}
-                            // ✅ NEW: Permission control props
-                            canAddFormFields={canAddFormFields}
-                            editableFieldMode={editableFieldMode}
-                            // ✅ Enable annotation navigation
-                            showAnnotationNavigation={showAnnotationNavigation}
-                        />
-                    );
-
-
-                })()}
+            <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                    <PDFViewerContainer
+                        ref={pdfViewerRef}
+                        documentUrl={fileUrl || ""}
+                        initialXfdf={initialXfdf}
+                        readOnly={readOnly}
+                        commentsOnly={commentsOnly}
+                        clientSigningMode={clientSigningMode}
+                        templateFormFields={templateFormFields}
+                        formFields={formFields}
+                        currentUserRole={currentUserRole}
+                        onFieldChange={handleFieldChange}
+                        canAddFormFields={canAddFormFields}
+                        editableFieldMode={editableFieldMode}
+                        showAnnotationNavigation={showAnnotationNavigation}
+                    />
+                </Box>
             </Box>
         </BaseDialog>
     );

@@ -10,6 +10,7 @@ import {
     Slide,
     useMediaQuery,
     useTheme,
+    Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { TransitionProps } from '@mui/material/transitions';
@@ -102,25 +103,26 @@ export default function BaseDialog({
                     borderBottom: '1px solid',
                     borderColor: 'rgba(0, 0, 0, 0.08)',
                     bgcolor: '#fafafa',
-                    px: 1.2,
-                    py: 0.5,
+                    px: 1,
+                    py: isFullScreen ? 0.3 : 0.7,
                     borderRadius: isFullScreen ? 0 : "16px 16px 0 0",
                 }}
             >
-                <Box
+                <Typography
                     sx={{
-                        // fontSize: { xs: '1rem', sm: '1.25rem' },
+                        fontSize: { xs: '1rem', sm: '1rem' },
                         // fontWeight: 700,
                         color: 'text.primary',
                     }}
                 >
                     {title}
-                </Box>
+                </Typography>
                 <IconButton
                     onClick={onClose}
                     sx={{
                         color: 'text.secondary',
                         transition: 'all 0.2s',
+                        p: 0,
                         '&:hover': {
                             bgcolor: 'rgba(0, 0, 0, 0.08)',
                             color: 'text.primary',

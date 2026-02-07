@@ -13,7 +13,7 @@ import {
     alpha,
     Divider,
 } from '@mui/material';
-import { Save, Close, ArrowBack, ArrowForward } from '@mui/icons-material';
+import { Save, ArrowBack, ArrowForward } from '@mui/icons-material';
 import BaseDialog from '@/components/common/BaseDialog';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import { templateService } from '@/services/templateService';
@@ -376,12 +376,13 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
             open={open}
             onClose={handleClose}
             title={currentStep === 1 ? "Create Contract - Step 1: Contract Details" : `Create Contract - Step 2: Edit Document`}
-            maxWidth={currentStep === 1 ? "md" : "xl"} // Compact for Step 1, Full-width for Step 2
+            maxWidth={currentStep === 1 ? "md" : "xl"}
             fullWidth
-            customHeight={currentStep === 1 ? undefined : "98vh"} // Auto height for Step 1, Full height for Step 2
+            fullScreen={currentStep === 2}
+            noPadding={currentStep === 2}
             actions={dialogActions}
-            disableEnforceFocus={true} // Allow PDFTron text fields to work properly
-            disableBackdropClick={false} // Allow closing on backdrop click
+            disableEnforceFocus={true}
+            disableBackdropClick={false}
         >
             {/* STEP 1: Contract Details Form */}
             {currentStep === 1 && (
@@ -568,88 +569,48 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
 
             {/* STEP 2: Full-Screen PDF Editor */}
             {currentStep === 2 && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(98vh - 150px)' }}>
-                    {/* Minimal Header with Contract Info */}
-                    {/* <Box sx={{
-                        px: 2,
-                        py: 1.5,
-                        borderBottom: '1px solid',
-                        borderColor: 'divider',
-                        bgcolor: alpha('#0f766e', 0.02),
-                    }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Box>
-                                <Typography variant="h6" fontWeight={600}>{contractTitle}</Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    Template: {selectedTemplate?.name} • Client: {clientName}
-                                </Typography>
-                            </Box>
-                        </Box>
-                    </Box> */}
-
+                <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                     {/* Error Alert */}
                     {error && (
-                        <Alert severity="error" sx={{ mx: 2, mt: 2 }} onClose={() => setError('')}>
+                        <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError('')}>
                             {error}
                         </Alert>
                     )}
 
-                    {/* Full-Height PDF Viewer */}
-                    <Box sx={{ flex: 1, p: 0.5, overflow: 'hidden' }}>
-                        {selectedTemplate ? (
-                            <Box sx={{
-                                height: '100%',
-                                border: '1px solid',
-                                borderColor: 'divider',
-                                borderRadius: 2,
-                                overflow: 'hidden'
-                            }}>
-                                <PDFViewerContainer
-                                    ref={pdfViewerRef}
-                                    documentUrl={selectedTemplate.fileData || selectedTemplate.fileUrl}
-                                    // ✅ CRITICAL: Load template XFDF to display form fields during contract creation
-                                    // Template form fields are stored in XFDF and need to be imported
-                                    initialXfdf={selectedTemplate?.xfdfData}
-                                    formFields={selectedTemplate?.formFields}
-                                    readOnly={false}
-                                    currentUserRole="contractor"
-                                    // ✅ NEW: Enable form field creation during contract creation ONLY
-                                    canAddFormFields={true}
-                                    toolbarMode="forms"
-                                    defaultToolbar="view"
-                                    // Callback when user fills any field
-                                    // Explanation: Fires when user types/checks a field, stores value
-                                    onFieldChange={handleFieldChange}
-                                    onDocumentLoaded={() => setDocumentLoaded(true)}
-                                    // ✅ Enable annotation navigation for contract creation
-                                    showAnnotationNavigation={true}
-                                    onError={(err) => setError(err)}
-                                />
-                            </Box>
-                        ) : (
-                            <Box
-                                sx={{
-                                    height: '100%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    border: '2px dashed',
-                                    borderColor: 'divider',
-                                    borderRadius: 2,
-                                    bgcolor: 'grey.50'
-                                }}
-                            >
-                                <Box sx={{ textAlign: 'center', maxWidth: 400 }}>
-                                    <Typography variant="h6" color="text.secondary" gutterBottom>
-                                        No Template Selected
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        Select a template from the dropdown above to start editing
-                                    </Typography>
-                                </Box>
-                            </Box>
-                        )}
-                    </Box>
+                    {/* Full-Screen PDF Viewer */}
+                    {selectedTemplate ? (
+                        <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                            <PDFViewerContainer
+                                ref={pdfViewerRef}
+                                documentUrl={selectedTemplate.fileData || selectedTemplate.fileUrl}
+                                initialXfdf={selectedTemplate?.xfdfData}
+                                formFields={selectedTemplate?.formFields}
+                                readOnly={false}
+                                currentUserRole="contractor"
+                                canAddFormFields={true}
+                                toolbarMode="forms"
+                                defaultToolbar="view"
+                                onFieldChange={handleFieldChange}
+                                onDocumentLoaded={() => setDocumentLoaded(true)}
+                                showAnnotationNavigation={true}
+                                onError={(err) => setError(err)}
+                            />
+                        </Box>
+                    ) : (
+                        <Box
+                            sx={{
+                                flex: 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                bgcolor: 'grey.50'
+                            }}
+                        >
+                            <Typography variant="h6" color="text.secondary">
+                                No Template Selected
+                            </Typography>
+                        </Box>
+                    )}
                 </Box>
             )}
         </BaseDialog>
