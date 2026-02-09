@@ -157,7 +157,7 @@ export default function BaseDialog({
             {actions && (
                 <DialogActions
                     sx={{
-                        p: isFullScreen ? 0.2 : 1,
+                        p: isFullScreen ? 0.5 : 1,
                         borderTop: '1px solid',
                         borderColor: 'rgba(0, 0, 0, 0.08)',
                         bgcolor: '#fafafa',

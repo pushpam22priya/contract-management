@@ -399,8 +399,8 @@ export default function UploadTemplateDialog({
                 sx={{
                     textTransform: 'none',
                     fontWeight: 600,
-                    px: 3,
-                    py: 1,
+                    px: 2,
+                    py: 0.6,
                     borderRadius: 2,
                     bgcolor: 'primary.main',
                     boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',

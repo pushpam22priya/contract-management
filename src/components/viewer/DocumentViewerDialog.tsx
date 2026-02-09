@@ -214,6 +214,7 @@ export default function DocumentViewerDialog({
                     startIcon={<SaveIcon />}
                     onClick={handleSaveClick}
                     disabled={saving || (clientSigningMode && !signatureCommitted)}
+                    sx={{py: 0.6}}
                 >
                     {saving ? 'Saving...' : 'Save Changes'}
                 </Button>

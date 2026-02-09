@@ -335,7 +335,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
             <Button
                 onClick={() => setCurrentStep(1)}
                 startIcon={<ArrowBack />}
-                variant="outlined"
+                // variant="outlined"
                 sx={{
                     textTransform: 'none',
                     fontWeight: 600,
@@ -352,7 +352,8 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 sx={{
                     textTransform: 'none',
                     fontWeight: 600,
-                    // px: 3,
+                    px: 2,
+                    py: 0.6,
                     borderRadius: 2,
                     minWidth: 150,
                     bgcolor: 'primary.main',
