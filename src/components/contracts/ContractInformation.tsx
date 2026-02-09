@@ -12,6 +12,7 @@ interface ContractInformationProps {
     endDate: string;
     daysRemaining: number;
     progressPercentage: number;
+    status?: string;
     description?: string;
 }
 
@@ -24,8 +25,54 @@ const ContractInformation = ({
     endDate,
     daysRemaining,
     progressPercentage,
+    status,
     description,
 }: ContractInformationProps) => {
+    // Get progress bar color based on status
+    const getProgressBarColor = () => {
+        switch (status) {
+            case 'active':
+                return '#0f766e'; // Teal - healthy/active
+            case 'signed':
+                return '#6366f1'; // Indigo - signed but not started
+            case 'expiring':
+                return '#f59e0b'; // Amber/Orange - warning
+            case 'expired':
+                return '#ef4444'; // Red - expired
+            default:
+                return '#6b7280'; // Gray - default
+        }
+    };
+
+    // Get progress bar background color
+    const getProgressBarBgColor = () => {
+        switch (status) {
+            case 'active':
+                return '#d1fae5'; // Light teal
+            case 'signed':
+                return '#e0e7ff'; // Light indigo
+            case 'expiring':
+                return '#fef3c7'; // Light amber
+            case 'expired':
+                return '#fee2e2'; // Light red
+            default:
+                return '#e5e7eb'; // Light gray
+        }
+    };
+
+    // Get status-specific text for days remaining
+    const getDaysText = () => {
+        if (status === 'signed' && daysRemaining > 0) {
+            return `Starts in ${daysRemaining} days`;
+        }
+        if (status === 'expired' || daysRemaining < 0) {
+            return `Expired ${Math.abs(daysRemaining)} days ago`;
+        }
+        if (daysRemaining === 0) {
+            return 'Ends today';
+        }
+        return `${daysRemaining} days remaining`;
+    };
     return (
         <Paper
             elevation={0}
@@ -318,11 +365,11 @@ const ContractInformation = ({
                     <Typography
                         variant="body2"
                         sx={{
-                            color: 'text.primary',
+                            color: status === 'expiring' ? '#f59e0b' : status === 'expired' ? '#ef4444' : 'text.primary',
                             fontWeight: 500,
                         }}
                     >
-                        {daysRemaining} days remaining
+                        {getDaysText()}
                     </Typography>
                     <Typography
                         variant="body2"
@@ -331,7 +378,7 @@ const ContractInformation = ({
                             fontWeight: 600,
                         }}
                     >
-                        {progressPercentage}% complete
+                        {progressPercentage}% remaining
                     </Typography>
                 </Box>
 
@@ -342,9 +389,9 @@ const ContractInformation = ({
                     sx={{
                         height: 8,
                         borderRadius: 1,
-                        bgcolor: '#e5e7eb',
+                        bgcolor: getProgressBarBgColor(),
                         '& .MuiLinearProgress-bar': {
-                            bgcolor: 'text.primary',
+                            bgcolor: getProgressBarColor(),
                             borderRadius: 1,
                         },
                     }}

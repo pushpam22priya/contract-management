@@ -197,51 +197,62 @@ const ContractDetailsPanel = ({
                 {
                     activeTab === 1 && (
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            {activities.map((activity, index) => (
-                                <Box
-                                    key={activity.id}
-                                    sx={{
-                                        display: 'flex',
-                                        alignItems: 'flex-start',
-                                        gap: 2,
-                                        position: 'relative',
-                                        ...(index !== activities.length - 1 && {
-                                            // pb: 3,
-                                        }),
-                                    }}
-                                >
-                                    <FiberManualRecordIcon
-                                        sx={{
-                                            color: '#4f46e5',
-                                            fontSize: '0.75rem',
-                                            mt: 0.5,
-                                            flexShrink: 0,
-                                        }}
-                                    />
-                                    <Box sx={{ flex: 1 }}>
-                                        <Typography
-                                            variant="body1"
-                                            fontWeight={600}
-                                            sx={{
-                                                color: 'text.primary',
-                                                // mb: 0.5,
-                                                fontSize: { xs: '0.95rem', sm: '1rem' },
-                                            }}
-                                        >
-                                            {activity.title}
-                                        </Typography>
-                                        <Typography
-                                            variant="body2"
-                                            sx={{
-                                                color: 'text.secondary',
-                                                fontSize: { xs: '0.8rem', sm: '0.875rem' },
-                                            }}
-                                        >
-                                            {activity.user} • {activity.date}
-                                        </Typography>
-                                    </Box>
+                            {activities.length === 0 ? (
+                                <Box sx={{ textAlign: 'center', py: 4 }}>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{ color: 'text.secondary' }}
+                                    >
+                                        No activity recorded yet
+                                    </Typography>
                                 </Box>
-                            ))}
+                            ) : (
+                                activities.map((activity, index) => (
+                                    <Box
+                                        key={activity.id}
+                                        sx={{
+                                            display: 'flex',
+                                            alignItems: 'flex-start',
+                                            gap: 2,
+                                            position: 'relative',
+                                            ...(index !== activities.length - 1 && {
+                                                // pb: 3,
+                                            }),
+                                        }}
+                                    >
+                                        <FiberManualRecordIcon
+                                            sx={{
+                                                color: '#4f46e5',
+                                                fontSize: '0.75rem',
+                                                mt: 0.5,
+                                                flexShrink: 0,
+                                            }}
+                                        />
+                                        <Box sx={{ flex: 1 }}>
+                                            <Typography
+                                                variant="body1"
+                                                fontWeight={600}
+                                                sx={{
+                                                    color: 'text.primary',
+                                                    // mb: 0.5,
+                                                    fontSize: { xs: '0.95rem', sm: '1rem' },
+                                                }}
+                                            >
+                                                {activity.title}
+                                            </Typography>
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    color: 'text.secondary',
+                                                    fontSize: { xs: '0.8rem', sm: '0.875rem' },
+                                                }}
+                                            >
+                                                {activity.user} • {activity.date}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                ))
+                            )}
                         </Box>
                     )
                 }

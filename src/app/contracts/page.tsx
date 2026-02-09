@@ -416,11 +416,28 @@ export default function ContractsPage() {
                         templateDocxBase64={selectedContract.templateDocxBase64}
                         fieldValues={selectedContract.fieldValues}
                         signatureImage={selectedContract.signer?.signatureImage}
-                        // ✅ CRITICAL FIX: Pass XFDF data to restore signatures and field values
-                        initialXfdf={selectedContract.xfdfData}
+                        // ✅ CRITICAL FIX: Do NOT import XFDF when loading a saved contract PDF
+                        // The PDF already has annotations embedded. Importing XFDF causes
+                        // "appearanceReference" errors because XFDF references appearance
+                        // streams that are now baked into the PDF.
+                        initialXfdf={(() => {
+                            // Skip XFDF if contract has its own saved PDF
+                            if (selectedContract.fileUrl || selectedContract.fileData || selectedContract.signedPdfBase64) {
+                                console.log('📄 [Contracts] Skipping XFDF - using saved contract PDF');
+                                return undefined;
+                            }
+                            // Only use XFDF when falling back to template
+                            console.log('📄 [Contracts] Using XFDF - falling back to template');
+                            return selectedContract.xfdfData;
+                        })()}
                         contractId={selectedContract.id}
-                        // ✅ CRITICAL FIX: Pass form fields for proper rendering
-                        formFields={selectedContract.formFields}
+                        // ✅ Same logic for form fields
+                        formFields={(() => {
+                            if (selectedContract.fileUrl || selectedContract.fileData || selectedContract.signedPdfBase64) {
+                                return undefined;
+                            }
+                            return selectedContract.formFields;
+                        })()}
                         currentUserRole="contractor"
                         readOnly={true}
                     />
