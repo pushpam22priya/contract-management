@@ -67,7 +67,7 @@ export default function ContractsPage() {
 
     // Get contracts waiting for signature (for polling)
     const waitingForSignatureIds = contracts
-        .filter(c => c.status === ContractStatus.WAITING_FOR_SIGNATURE && c.externalSigningBinId)
+        .filter(c => c.status === ContractStatus.WAITING_FOR_SIGNATURE)
         .map(c => c.id);
 
     // Callback when signature is detected

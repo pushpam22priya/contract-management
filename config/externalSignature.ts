@@ -4,12 +4,13 @@
  * This centralizes all configuration values making it easy to
  * switch between demo mode and production mode later.
  */
-
+ 
 export const externalSignatureConfig = {
     // EmailJS configuration
     emailjs: {
         serviceId: process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID || '',
         templateId: process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID || '',
+        signedCopyTemplateId: process.env.NEXT_PUBLIC_EMAILJS_SIGNED_COPY_TEMPLATE_ID || '',
         publicKey: process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY || '',
     },
     
@@ -39,7 +40,7 @@ export const externalSignatureConfig = {
         pollIntervalMs: 30000,  // Check for updates every 30 seconds
     }
 };
-
+ 
 /**
  * Validate that all required configuration is present.
  * Call this on app startup to catch missing env vars early.
@@ -68,3 +69,4 @@ export const validateConfig = (): { valid: boolean; missing: string[] } => {
     
     return { valid: missing.length === 0, missing };
 };
+ 

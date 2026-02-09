@@ -11,13 +11,14 @@ import {
     Paper,
     Container,
 } from '@mui/material';
-import { CheckCircle, Error, Save } from '@mui/icons-material';
+import { CheckCircle, Error, Save, Download } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
 import { SignatureRequest } from '@/types/signature';
 import {
     getSignatureRequestData,
     completeExternalSignature
 } from '@/services/externalSignatureService';
+import { sendSignedCopyEmail } from '@/services/emailService';
 
 // Dynamically import PDFViewerContainer
 const PDFViewerContainer = dynamic(
@@ -42,6 +43,7 @@ export default function PublicSigningPage() {
     const [signatureRequest, setSignatureRequest] = useState<SignatureRequest | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [completed, setCompleted] = useState(false);
+    const [signedPdfBlob, setSignedPdfBlob] = useState<Blob | null>(null);
 
     // Ref for PDF viewer
     const pdfViewerRef = useRef<any>(null);
@@ -141,7 +143,29 @@ export default function PublicSigningPage() {
             );
 
             if (result.success) {
+                // Store the signed PDF blob for download
+                setSignedPdfBlob(pdfBlob);
                 setCompleted(true);
+
+                // Send signed copy email to the client (fire-and-forget)
+                if (signatureRequest?.signerEmail) {
+                    const signerName = signatureRequest.signerName ||
+                        signatureRequest.signerEmail.split('@')[0];
+                    const downloadUrl = `${window.location.origin}/api/sign-requests/${token}/download`;
+                    sendSignedCopyEmail({
+                        to_email: signatureRequest.signerEmail,
+                        contract_title: signatureRequest.contractTitle,
+                        signer_name: signerName,
+                        signed_date: new Date().toLocaleDateString(),
+                        download_url: downloadUrl,
+                    }).then((emailResult: { success: boolean; error?: string }) => {
+                        if (emailResult.success) {
+                            console.log('Signed copy email sent to client');
+                        } else {
+                            console.warn('Could not send signed copy email:', emailResult.error);
+                        }
+                    });
+                }
             } else {
                 setError('Failed to submit signature. Please try again.');
             }
@@ -178,6 +202,19 @@ export default function PublicSigningPage() {
         );
     }
 
+    // Download the signed PDF
+    const handleDownloadSignedPdf = () => {
+        if (!signedPdfBlob) return;
+        const url = URL.createObjectURL(signedPdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${signatureRequest?.contractTitle || 'signed_contract'}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     // Completed state
     if (completed) {
         return (
@@ -185,9 +222,29 @@ export default function PublicSigningPage() {
                 <Paper sx={{ p: 4, maxWidth: 500, textAlign: 'center' }}>
                     <CheckCircle sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
                     <Typography variant="h5" gutterBottom>Document Signed Successfully!</Typography>
-                    <Typography color="text.secondary" sx={{ mb: 3 }}>
+                    <Typography color="text.secondary" sx={{ mb: 2 }}>
                         Thank you for signing "{signatureRequest?.contractTitle}". The contract has been updated.
                     </Typography>
+                    <Typography color="text.secondary" sx={{ mb: 3 }}>
+                        You will get the signed document by email.
+                    </Typography>
+                    {signedPdfBlob && (
+                        <Button
+                            variant="contained"
+                            startIcon={<Download />}
+                            onClick={handleDownloadSignedPdf}
+                            sx={{
+                                mb: 3,
+                                bgcolor: '#115e59',
+                                '&:hover': { bgcolor: '#0f4c47' },
+                                textTransform: 'none',
+                                px: 4,
+                                py: 1,
+                            }}
+                        >
+                            Download
+                        </Button>
+                    )}
                     <Alert severity="success">You can close this window now.</Alert>
                 </Paper>
             </Box>

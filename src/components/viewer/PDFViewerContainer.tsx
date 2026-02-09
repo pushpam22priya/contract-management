@@ -114,19 +114,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     // PRE-EXPORT: Force PDFTron to commit any pending annotations
                     // CRITICAL: ALL steps execute WITHOUT exceptions - no conditional checks
                     // ══════════════════════════════════════════════════════════════════
-                    console.log('═══════════════════════════════════════════════════════════════════');
-                    console.log('🔄 [PRE-EXPORT COMMIT] Starting pending changes commit process...');
-                    console.log('═══════════════════════════════════════════════════════════════════');
-
-                    // Step 1: Programmatically select a different tool to deselect active annotation
-                    console.log('📌 [PRE-EXPORT COMMIT] Step 1: Selecting different tool to deselect active annotation...');
-                    try {
-                        UI.setToolMode('AnnotationEdit');
-                        console.log('✅ [PRE-EXPORT COMMIT] Switched to AnnotationEdit tool');
-                    } catch (e) {
-                        console.error('❌ [PRE-EXPORT COMMIT] Step 1 failed:', e);
-                    }
-
+                   
                     // Step 2: Deselect all active annotations to finalize any in-progress edits
                     console.log('📌 [PRE-EXPORT COMMIT] Step 2: Deselecting all annotations...');
                     try {
@@ -134,15 +122,6 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         console.log('✅ [PRE-EXPORT COMMIT] All annotations deselected');
                     } catch (e) {
                         console.error('❌ [PRE-EXPORT COMMIT] Step 2 failed:', e);
-                    }
-
-                    // Step 3: Switch to Pan tool to finalize form field creation
-                    console.log('📌 [PRE-EXPORT COMMIT] Step 3: Switching to Pan tool...');
-                    try {
-                        UI.setToolMode('Pan');
-                        console.log('✅ [PRE-EXPORT COMMIT] Switched to Pan tool');
-                    } catch (e) {
-                        console.error('❌ [PRE-EXPORT COMMIT] Step 3 failed:', e);
                     }
 
                     // Step 3b: CRITICAL - Restore captured field values before commit
@@ -345,10 +324,6 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     } catch (e) {
                         console.error('❌ [PRE-EXPORT COMMIT] Step 8 failed:', e);
                     }
-
-                    console.log('═══════════════════════════════════════════════════════════════════');
-                    console.log('✅ [PRE-EXPORT COMMIT] All changes committed successfully!');
-                    console.log('═══════════════════════════════════════════════════════════════════');
 
                     // Step 9: CRITICAL - Restore captured signature annotations
                     // WebViewer 11's appearance mode deletes FreeHand annotations after applying
@@ -832,16 +807,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                         // Listen for when signature is created/selected by user
                         if (signatureTool) {
-                            signatureTool.addEventListener('signatureCreated', (signatureAnnotation: any) => {
-                                console.log('🖊️ [SIGNATURE CREATED] New signature created');
-                                console.log('🖊️ [SIGNATURE CREATED] Type:', signatureAnnotation?.constructor?.name);
-                                console.log('🖊️ [SIGNATURE CREATED] Subject:', signatureAnnotation?.Subject);
-                            });
-
                             signatureTool.addEventListener('signatureSaved', (signatureWidgets: any) => {
-                                console.log('🖊️ [SIGNATURE SAVED] Signature saved to widgets');
-                                console.log('🖊️ [SIGNATURE SAVED] Widgets count:', signatureWidgets?.length);
-
                                 // Get all annotations after signature is saved to see what was added
                                 setTimeout(() => {
                                     const allAnnots = Core.annotationManager.getAnnotationsList();
@@ -849,19 +815,14 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         a instanceof Core.Annotations.StampAnnotation ||
                                         a.Subject === 'Signature'
                                     );
-                                    console.log('🖊️ [SIGNATURE SAVED] Total annotations:', allAnnots.length);
-                                    console.log('🖊️ [SIGNATURE SAVED] Stamp/Signature annotations:', stampAnnots.length);
+                                
                                     stampAnnots.forEach((a: any, i: number) => {
                                         console.log(`🖊️ [STAMP #${i + 1}] Type: ${a.constructor.name}, Subject: ${a.Subject}`);
                                     });
                                 }, 100);
                             });
 
-                            // Listen for location selected (when user clicks to place signature)
-                            signatureTool.addEventListener('locationSelected', (widget: any, location: any) => {
-                                console.log('🖊️ [LOCATION SELECTED] Widget:', widget?.fieldName);
-                                console.log('🖊️ [LOCATION SELECTED] Location:', location);
-                            });
+                        
                         }
                     } catch (e) {
                         console.warn('⚠️ Could not configure signature mode:', e);
@@ -883,10 +844,6 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     const annotId = annot.Id || annot.getCustomData?.('id') || `sig_${Date.now()}`;
 
                                     if (action === 'add') {
-                                        console.log('🖊️ [SIGNATURE CAPTURE] Capturing signature annotation!');
-                                        console.log('🖊️ [SIGNATURE CAPTURE] Type:', annot.constructor?.name);
-                                        console.log('🖊️ [SIGNATURE CAPTURE] Subject:', annot.Subject);
-                                        console.log('🖊️ [SIGNATURE CAPTURE] ID:', annotId);
 
                                         // Store the annotation for later restoration
                                         capturedSignatureAnnotationsRef.current.set(annotId, {
@@ -895,29 +852,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             type: annot.constructor?.name,
                                             subject: annot.Subject
                                         });
-                                        console.log('🖊️ [SIGNATURE CAPTURE] Total captured:', capturedSignatureAnnotationsRef.current.size);
                                     }
 
-                                    if (action === 'delete') {
-                                        console.log('🖊️ [SIGNATURE DELETED] Signature annotation deleted by WebViewer!');
-                                        console.log('🖊️ [SIGNATURE DELETED] ID:', annotId);
-                                        console.log('🖊️ [SIGNATURE DELETED] Still in capture store:', capturedSignatureAnnotationsRef.current.has(annotId));
-                                        // Keep it in our store - don't remove! We need it for export
-                                    }
+                                
                                 }
-
-                                // Original stamp logging
-                                if (annot instanceof Core.Annotations.StampAnnotation && action === 'add') {
-                                    console.log('🖊️ [STAMP ADDED] StampAnnotation added!');
-                                    console.log('🖊️ [STAMP ADDED] Subject:', annot.Subject);
-                                    console.log('🖊️ [STAMP ADDED] ImageData:', !!(annot as any).ImageData);
-                                }
-
-                                // Original freehand logging
-                                if (annot instanceof Core.Annotations.FreeHandAnnotation && action === 'add') {
-                                    console.log('🖊️ [FREEHAND ADDED] FreeHandAnnotation added!');
-                                    console.log('🖊️ [FREEHAND ADDED] Subject:', annot.Subject);
-                                }
+                             
                             });
                         });
                     } catch (e) {
@@ -1259,10 +1198,6 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                 console.log('✅ [AUTO-SAVE] Change listeners registered');
                             }
-
-                            // ✅ Set tool mode to Pan (View) and switch to View tab after document loads
-                            // This ensures View mode is the default for all contexts (contract, draft, etc.)
-                            // UI.setToolMode('Pan'); // REMOVED as per user request (will set after save)
 
                             // Switch to View toolbar group (tab) so the View ribbon is shown
                             if (UI.setToolbarGroup && typeof UI.setToolbarGroup === 'function') {

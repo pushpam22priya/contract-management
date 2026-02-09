@@ -1,45 +1,40 @@
-import { authService } from './authService';
-
 /**
- * User Service
- * Handles user-related operations using real users from localStorage
- */
-
+* User Service
+* Handles user-related operations using MongoDB via API
+*/
+ 
 export interface User {
     id: string;
     email: string;
     name?: string; // Optional, derived from email if not present
     role?: string; // Optional
 }
-
-const USERS_STORAGE_KEY = 'cms_users';
-
+ 
 class UserService {
     /**
-     * Get all users from localStorage (via authService)
+     * Get all users from MongoDB via API
      * Returns users without passwords for security
      */
     async getAllUsers(): Promise<User[]> {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        if (typeof window === 'undefined') return [];
-
-        // Get users from localStorage
-        const usersData = localStorage.getItem(USERS_STORAGE_KEY);
-        if (!usersData) return [];
-
-        const rawUsers = JSON.parse(usersData);
-
-        // Transform to User type without password and add name from email
-        return rawUsers.map((user: any) => ({
-            id: user.id,
-            email: user.email,
-            name: this.extractNameFromEmail(user.email),
-            role: user.role || 'User',
-        }));
+        try {
+            const res = await fetch('/api/users', { cache: 'no-store' });
+            if (!res.ok) throw new Error('Failed to fetch users');
+ 
+            const rawUsers = await res.json();
+ 
+            // Transform to User type and add name from email
+            return rawUsers.map((user: any) => ({
+                id: user.id,
+                email: user.email,
+                name: user.name || this.extractNameFromEmail(user.email),
+                role: user.role || 'User',
+            }));
+        } catch (error) {
+            console.error('Failed to fetch users:', error);
+            return [];
+        }
     }
-
+ 
     /**
      * Extract name from email
      * e.g., "john.doe@company.com" => "John Doe"
@@ -51,22 +46,20 @@ class UserService {
             .map(part => part.charAt(0).toUpperCase() + part.slice(1))
             .join(' ');
     }
-
+ 
     /**
      * Search users by email or name
      */
     async searchUsers(query: string): Promise<User[]> {
-        await new Promise(resolve => setTimeout(resolve, 200));
-
         const allUsers = await this.getAllUsers();
         const lowercaseQuery = query.toLowerCase();
-
+ 
         return allUsers.filter(user =>
             user.email.toLowerCase().includes(lowercaseQuery) ||
             (user.name && user.name.toLowerCase().includes(lowercaseQuery))
         );
     }
-
+ 
     /**
      * Get user by email
      */
@@ -75,6 +68,6 @@ class UserService {
         return allUsers.find(user => user.email === email);
     }
 }
-
+ 
 // Export singleton instance
 export const userService = new UserService();

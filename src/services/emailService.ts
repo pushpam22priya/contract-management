@@ -7,16 +7,16 @@
  * In production, this will be replaced with your Java backend's
  * email sending functionality.
  */
-
+ 
 import emailjs from '@emailjs/browser';
-import { SignatureEmailParams } from '@/types/signature';
+import { SignatureEmailParams, SignedCopyEmailParams } from '@/types/signature';
 import { externalSignatureConfig } from '../../config/externalSignature';
-
-const { serviceId, templateId, publicKey } = externalSignatureConfig.emailjs;
-
+ 
+const { serviceId, templateId, signedCopyTemplateId, publicKey } = externalSignatureConfig.emailjs;
+ 
 // Track if EmailJS has been initialized
 let isInitialized = false;
-
+ 
 /**
  * Initialize EmailJS with your public key.
  * Should be called once when the app starts.
@@ -26,17 +26,17 @@ export const initializeEmailService = (): void => {
         console.log('📧 [EmailJS] Already initialized');
         return;
     }
-
+ 
     if (!publicKey) {
         console.error('❌ [EmailJS] Public key not configured');
         return;
     }
-
+ 
     emailjs.init(publicKey);
     isInitialized = true;
     console.log('✅ [EmailJS] Initialized successfully');
 };
-
+ 
 /**
  * Send a signature request email to the client.
  */
@@ -47,21 +47,21 @@ export const sendSignatureRequestEmail = async (
     console.log('📧 [EmailJS] To:', params.to_email);
     console.log('📧 [EmailJS] Contract:', params.contract_title);
     console.log('📧 [EmailJS] Signing URL:', params.signing_url);
-
+ 
     // Ensure EmailJS is initialized
     if (!isInitialized) {
         initializeEmailService();
     }
-
+ 
     // Validate configuration
     if (!serviceId || !templateId) {
         console.error('❌ [EmailJS] Service ID or Template ID not configured');
         return { success: false, error: 'Email service not configured' };
     }
-
+ 
     try {
         console.log('📧 [EmailJS] Sending email...');
-
+ 
         const templateParams = {
             to_email: params.to_email,
             contract_title: params.contract_title,
@@ -70,32 +70,80 @@ export const sendSignatureRequestEmail = async (
             expiry_date: params.expiry_date,
             signing_url: params.signing_url,
         };
-
+ 
         console.log('📧 [EmailJS] Template params being sent:', JSON.stringify(templateParams, null, 2));
-
+ 
         const response = await emailjs.send(
             serviceId,
             templateId,
             templateParams
         );
-
+ 
         console.log('✅ [EmailJS] Email sent successfully');
         console.log('✅ [EmailJS] Response status:', response.status);
         console.log('✅ [EmailJS] Response text:', response.text);
-
+ 
         return { success: true };
-
+ 
     } catch (error: any) {
         console.error('❌ [EmailJS] Failed to send email:', error);
         console.error('❌ [EmailJS] Error details:', error?.text || error?.message);
-
+ 
         return {
             success: false,
             error: error?.text || error?.message || 'Failed to send email'
         };
     }
 };
-
+ 
+/**
+ * Send a signed copy notification email to the client after they sign.
+ */
+export const sendSignedCopyEmail = async (
+    params: SignedCopyEmailParams
+): Promise<{ success: boolean; error?: string }> => {
+    console.log('📧 [EmailJS] Preparing to send signed copy email...');
+    console.log('📧 [EmailJS] To:', params.to_email);
+    console.log('📧 [EmailJS] Contract:', params.contract_title);
+ 
+    // Ensure EmailJS is initialized
+    if (!isInitialized) {
+        initializeEmailService();
+    }
+ 
+    // Validate configuration
+    if (!serviceId || !signedCopyTemplateId) {
+        console.warn('⚠️ [EmailJS] Signed copy template ID not configured, skipping email');
+        return { success: false, error: 'Signed copy email template not configured' };
+    }
+ 
+    try {
+        const templateParams = {
+            to_email: params.to_email,
+            contract_title: params.contract_title,
+            signer_name: params.signer_name,
+            signed_date: params.signed_date,
+            download_url: params.download_url,
+        };
+ 
+        const response = await emailjs.send(
+            serviceId,
+            signedCopyTemplateId,
+            templateParams
+        );
+ 
+        console.log('✅ [EmailJS] Signed copy email sent successfully');
+        return { success: true };
+ 
+    } catch (error: any) {
+        console.error('❌ [EmailJS] Failed to send signed copy email:', error);
+        return {
+            success: false,
+            error: error?.text || error?.message || 'Failed to send signed copy email'
+        };
+    }
+};
+ 
 /**
  * Test email configuration by sending a test email.
  * Useful for debugging setup issues.
@@ -104,7 +152,7 @@ export const testEmailConfiguration = async (
     testEmail: string
 ): Promise<{ success: boolean; error?: string }> => {
     console.log('🧪 [EmailJS] Testing email configuration...');
-
+ 
     return sendSignatureRequestEmail({
         to_email: testEmail,
         contract_title: 'Test Contract',
@@ -114,3 +162,4 @@ export const testEmailConfiguration = async (
         signing_url: `${externalSignatureConfig.app.getDynamicBaseUrl()}/sign/test-token`,
     });
 };
+ 

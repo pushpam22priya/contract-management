@@ -218,8 +218,9 @@ export default function UploadTemplateDialog({
 
 
         try {
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
-            if(pdfViewerRef.current) {
+            if (pdfViewerRef.current) {
                 pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
                 pdfViewerRef.current.setToolMode('Pan');
                 console.log('Set toolbar to View mode and Pan tool before save')
@@ -312,10 +313,6 @@ export default function UploadTemplateDialog({
             if (pdfViewerRef.current && pdfViewerRef.current.setToolbarGroup) {
                 console.log('✅ Setting toolbar to View mode');
                 pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
-                // ✅ Also set to Pan mode as requested
-                // if (pdfViewerRef.current.setToolMode) {
-                //     pdfViewerRef.current.setToolMode('Pan');
-                // }
             }
 
             setTimeout(() => {
