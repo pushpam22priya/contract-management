@@ -119,8 +119,8 @@ const ContractCard = ({
      */
     const getShareTooltip = (): string => {
         return variant === 'draft'
-            ? 'Submit for review or approval....'
-            : 'Submit for signature....';
+            ? 'Submit for review or approval'
+            : 'Submit for signature';
     };
 
     const statusColors = getStatusColor(contract.status);

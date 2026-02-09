@@ -9,7 +9,6 @@ import {
     Alert,
     Button,
     Paper,
-    Container,
 } from '@mui/material';
 import { CheckCircle, Error, Save, Download } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
@@ -251,55 +250,59 @@ export default function PublicSigningPage() {
         );
     }
 
-    // Signing state
+    // Signing state - Full screen editor
     return (
-        <Box sx={{ minHeight: '100vh', bgcolor: 'grey.100' }}>
-            <Box sx={{ bgcolor: 'primary.main', color: 'white', boxShadow: 2 }}>
-                <Container maxWidth="lg">
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 2 }}>
-                        <Box>
-                            <Typography variant="h6">{signatureRequest?.contractTitle}</Typography>
-                            <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                                Requested by: {signatureRequest?.createdByName || signatureRequest?.createdBy}
-                            </Typography>
-                        </Box>
-                        <Button
-                            variant="contained"
-                            color="secondary"
-                            startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : <Save />}
-                            onClick={handleSubmitSignature}
-                            disabled={submitting}
-                            sx={{ bgcolor: 'white', color: 'primary.main', '&:hover': { bgcolor: 'grey.100' } }}
-                        >
-                            {submitting ? 'Submitting...' : 'Submit Signature'}
-                        </Button>
-                    </Box>
-                </Container>
+        <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Minimal Header Bar */}
+            <Box sx={{
+                bgcolor: 'primary.main',
+                color: 'white',
+                px: 2,
+                py: 1,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexShrink: 0
+            }}>
+                <Typography variant="body1" color='#fff' fontWeight={500}>
+                    {signatureRequest?.contractTitle}
+                </Typography>
+                <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <Save />}
+                    onClick={handleSubmitSignature}
+                    disabled={submitting}
+                    sx={{
+                        bgcolor: 'white',
+                        color: 'primary.main',
+                        '&:hover': { bgcolor: 'grey.100' },
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        py: 0.5
+                    }}
+                >
+                    {submitting ? 'Submitting...' : 'Submit Signature'}
+                </Button>
             </Box>
 
-            <Container maxWidth="lg" sx={{ py: 2 }}>
-                <Paper sx={{ height: 'calc(100vh - 140px)', overflow: 'hidden' }}>
-                    {signatureRequest && (
-                        <PDFViewerContainer
-                            ref={pdfViewerRef}
-                            documentUrl={`/api/sign-requests/${token}/file`}
-                            // ✅ FIX: Re-enable XFDF import so contractor signatures and filled values
-                            // are visible to the external signer. Without this, signature appearances
-                            // and field values from contract creation are not displayed.
-                            initialXfdf={signatureRequest.xfdfData}
-                            formFields={signatureRequest.formFields}
-                            clientSigningMode={true}
-                            readOnly={false}
-                            currentUserRole="client"
-                            onFieldChange={handleFieldChange}
-                            // ✅ NEW: External signers can ONLY fill empty fields, NOT modify pre-filled values
-                            editableFieldMode="empty-only"
-                            // ✅ Enable annotation navigation for external signature
-                            showAnnotationNavigation={true}
-                        />
-                    )}
-                </Paper>
-            </Container>
+            {/* Full-Screen PDF Viewer */}
+            <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                {signatureRequest && (
+                    <PDFViewerContainer
+                        ref={pdfViewerRef}
+                        documentUrl={`/api/sign-requests/${token}/file`}
+                        initialXfdf={signatureRequest.xfdfData}
+                        formFields={signatureRequest.formFields}
+                        clientSigningMode={true}
+                        readOnly={false}
+                        currentUserRole="client"
+                        onFieldChange={handleFieldChange}
+                        editableFieldMode="empty-only"
+                        showAnnotationNavigation={true}
+                    />
+                )}
+            </Box>
         </Box>
     );
 }
