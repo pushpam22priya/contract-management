@@ -220,12 +220,14 @@ export default function EditTemplateDialog({
         setUpdating(true);
 
         try {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
             if (pdfViewerRef.current) {
                 pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
                 pdfViewerRef.current.setToolMode('Pan');
                 console.log('Set toolbar to View mode and Pan tool before save');
             }
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 500));
 
             console.log('📤 Starting template update with new architecture (BINARY-SAFE)...');
 
@@ -288,20 +290,6 @@ export default function EditTemplateDialog({
                 updateData.fileName = selectedFile?.name || template.fileName;
                 updateData.fileType = 'pdf';
             }
-
-            //test comment PR
-            // // ✅ Set toolbar to View mode BEFORE saving (Requested by user)
-            // if (pdfViewerRef.current && pdfViewerRef.current.setToolbarGroup) {
-            //     console.log('✅ Setting toolbar to View mode and Pan tool before save');
-            //     pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
-            //     // ✅ Also set to Pan mode as requested
-            //     if (pdfViewerRef.current.setToolMode) {
-            //         pdfViewerRef.current.setToolMode('Pan');
-            //     }
-            // }
-
-            // // ✅ Wait 2 seconds BEFORE saving
-            // await new Promise(resolve => setTimeout(resolve, 2000));
 
             const result = await templateService.updateTemplate(
                 template.id,

@@ -26,6 +26,7 @@ interface PDFViewerContainerProps {
     defaultToolbar?: 'view' | 'annotate' | 'insert';
     initialToolbarGroup?: string; // ✅ New prop for controlling initial toolbar
     showAnnotationNavigation?: boolean; // ✅ Show floating navigation button for annotations
+    onSignatureApplied?: (data: { emptySignatureFieldCount: number }) => void; // ✅ Callback when a signature is applied to a field
 }
 
 export interface PDFViewerHandle {
@@ -36,10 +37,11 @@ export interface PDFViewerHandle {
     save: () => Promise<{ fileData: string; xfdfData: string } | null>;
     setToolbarGroup: (group: string) => void;
     setToolMode: (mode: string) => void;
+    applySignatureToAllEmptyFields: () => Promise<number>;
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const [loading, setLoading] = useState(true);
@@ -67,7 +69,14 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         // We capture values in fieldChanged listener and re-apply before export
         const capturedFieldValuesRef = useRef<Map<string, string>>(new Map());
 
+        // ✅ Refs for "Sign All" feature
+        const onSignatureAppliedRef = useRef<((data: { emptySignatureFieldCount: number }) => void) | undefined>(undefined);
+        const isApplyingSignAllRef = useRef(false);
+
         const effectiveReadOnly = isReadOnly ?? readOnly;
+
+        // Keep onSignatureApplied ref updated for use in event handlers
+        onSignatureAppliedRef.current = onSignatureApplied;
 
         // ✅ Helper function to get form field annotations (accessible throughout component)
         const getFormFieldAnnotations = (Core: any) => {
@@ -89,6 +98,52 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                 });
 
             return formAnnotations;
+        };
+
+        // ✅ Helper: check if a signature widget is truly empty (no overlapping signature annotation)
+        const isSignatureWidgetEmpty = (widget: any, allAnnotations: any[], Core: any): boolean => {
+            // Check 1: Has linked annotation
+            if ((widget as any).annot) return false;
+
+            // Check 2: Field has non-empty value
+            const field = widget.getField?.();
+            const value = field?.getValue?.();
+            if (value && value.toString().trim() !== '') return false;
+
+            // Check 3: Has an overlapping signature annotation on the same page
+            const widgetRect = widget.getRect();
+            const widgetPage = widget.PageNumber;
+            const tolerance = 5;
+
+            const hasOverlappingSignature = allAnnotations.some((annot: any) => {
+                if (annot === widget) return false;
+                const isSignatureAnnot =
+                    annot instanceof Core.Annotations.FreeHandAnnotation ||
+                    (annot instanceof Core.Annotations.StampAnnotation &&
+                        (annot as any).Subject?.includes('Signature'));
+                if (!isSignatureAnnot || annot.PageNumber !== widgetPage) return false;
+
+                const sigRect = annot.getRect();
+                return !(sigRect.x2 < widgetRect.x1 - tolerance ||
+                    sigRect.x1 > widgetRect.x2 + tolerance ||
+                    sigRect.y2 < widgetRect.y1 - tolerance ||
+                    sigRect.y1 > widgetRect.y2 + tolerance);
+            });
+            if (hasOverlappingSignature) return false;
+
+            return true;
+        };
+
+        // ✅ Helper function to count empty signature widget fields
+        const getEmptySignatureWidgetCount = (): number => {
+            if (!viewerInstance.current) return 0;
+            const { Core } = viewerInstance.current;
+            const annotationManager = Core.annotationManager;
+            const allAnnotations = annotationManager.getAnnotationsList();
+            return allAnnotations.filter((annot: any) => {
+                if (!(annot instanceof Core.Annotations.SignatureWidgetAnnotation)) return false;
+                return isSignatureWidgetEmpty(annot, allAnnotations, Core);
+            }).length;
         };
 
         useImperativeHandle(ref, () => ({
@@ -114,11 +169,13 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     // PRE-EXPORT: Force PDFTron to commit any pending annotations
                     // CRITICAL: ALL steps execute WITHOUT exceptions - no conditional checks
                     // ══════════════════════════════════════════════════════════════════
-                   
+
                     // Step 2: Deselect all active annotations to finalize any in-progress edits
                     console.log('📌 [PRE-EXPORT COMMIT] Step 2: Deselecting all annotations...');
                     try {
                         annotationManager.deselectAllAnnotations();
+                        viewerInstance.current.UI.setToolbarGroup('toolbarGroup-View');
+                        viewerInstance.current.UI.setToolMode('Pan');
                         console.log('✅ [PRE-EXPORT COMMIT] All annotations deselected');
                     } catch (e) {
                         console.error('❌ [PRE-EXPORT COMMIT] Step 2 failed:', e);
@@ -288,7 +345,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         if (documentViewer.refreshAll && typeof documentViewer.refreshAll === 'function') {
                             documentViewer.refreshAll();
                             console.log('✅ [PRE-EXPORT COMMIT] Document viewer refreshed with refreshAll()');
-                        } else if (documentViewer.updateView && typeof documentViewer.updateView === 'function') {
+                        } else if (documentViewer.updateView && typeof documentViewer.x === 'function') {
                             documentViewer.updateView();
                             console.log('✅ [PRE-EXPORT COMMIT] Document viewer refreshed with updateView()');
                         } else {
@@ -310,7 +367,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     // Step 7: Wait for PDFTron to process all changes
                     console.log('📌 [PRE-EXPORT COMMIT] Step 7: Waiting for PDFTron processing...');
                     try {
-                        await new Promise(resolve => setTimeout(resolve, 300));
+                        await new Promise(resolve => setTimeout(resolve, 2000));
                         console.log('✅ [PRE-EXPORT COMMIT] Processing wait completed');
                     } catch (e) {
                         console.error('❌ [PRE-EXPORT COMMIT] Step 7 failed:', e);
@@ -642,17 +699,60 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                 if (viewerInstance.current && viewerInstance.current.UI) {
                     try {
                         const { UI } = viewerInstance.current;
-                        UI.setToolbarGroup(group);
-                        console.log(`✅ Toolbar group set to: ${group}`);
 
-                        // Force UI refresh to ensure visual update
-                        setTimeout(() => {
+                        console.log(`🔧 [TOOLBAR] Attempting to set toolbar group to: ${group}`);
+
+                        // ✅ CRITICAL FIX: Multiple strategies to ensure toolbar changes are reflected in UI
+                        const applyToolbarChange = () => {
                             try {
+                                // Strategy 1: Set the toolbar group directly
                                 UI.setToolbarGroup(group);
-                            } catch (e) {
-                                // Silent retry
+                                console.log(`✅ [TOOLBAR] setToolbarGroup called with: ${group}`);
+
+                                // Strategy 2: Trigger a UI "click" on the toolbar tab to force visual update
+                                // This simulates a user clicking on the View/Forms/etc tab
+                                try {
+                                    const iframe = document.querySelector('iframe');
+                                    if (iframe && iframe.contentDocument) {
+                                        const iframeDoc = iframe.contentDocument;
+                                        // Look for the toolbar group button that matches our target
+                                        const targetGroupName = group.replace('toolbarGroup-', '');
+                                        const toolbarButton = iframeDoc.querySelector(`[data-element="${group}"], [aria-label*="${targetGroupName}" i]`);
+
+                                        if (toolbarButton && typeof (toolbarButton as HTMLElement).click === 'function') {
+                                            (toolbarButton as HTMLElement).click();
+                                            console.log(`✅ [TOOLBAR] Triggered click on toolbar button for: ${group}`);
+                                        }
+                                    }
+                                } catch (clickError) {
+                                    // Silent fail - this is a fallback strategy
+                                    console.log(`⚠️ [TOOLBAR] Could not trigger toolbar button click:`, clickError);
+                                }
+
+                                // Strategy 3: Verify the change after a delay
+                                setTimeout(() => {
+                                    const currentGroup = UI.getCurrentToolbarGroup?.();
+                                    console.log(`🔍 [TOOLBAR] Current toolbar group after change: ${currentGroup}`);
+
+                                    if (currentGroup !== group) {
+                                        console.warn(`⚠️ [TOOLBAR] Toolbar group mismatch! Expected ${group}, got ${currentGroup}`);
+                                        // Retry once more
+                                        UI.setToolbarGroup(group);
+                                        console.log(`🔄 [TOOLBAR] Retrying setToolbarGroup...`);
+                                    } else {
+                                        console.log(`✅ [TOOLBAR] Toolbar group successfully set to: ${group}`);
+                                    }
+                                }, 50);
+                            } catch (innerError) {
+                                console.error(`❌ [TOOLBAR] Error in applyToolbarChange:`, innerError);
                             }
-                        }, 100);
+                        };
+
+                        // Apply immediately
+                        applyToolbarChange();
+
+                        // Also apply after a short delay to ensure React UI has settled
+                        setTimeout(applyToolbarChange, 150);
                     } catch (e) {
                         console.error(`❌ Failed to set toolbar group to ${group}:`, e);
                     }
@@ -664,21 +764,244 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     try {
                         const { UI, Core } = viewerInstance.current;
 
-                        // Set via UI
-                        UI.setToolMode(mode);
+                        // ✅ CRITICAL FIX: Set tool mode via multiple methods to ensure it takes effect
 
-                        // Also set via documentViewer for immediate effect
+                        // Method 1: Set via UI.setToolMode (affects UI state)
+                        UI.setToolMode(mode);
+                        console.log(`✅ Tool mode set via UI: ${mode}`);
+
+                        // Method 2: Set via documentViewer.setToolMode (affects core state)
                         if (Core && Core.documentViewer) {
                             const toolModeMap = UI.ToolMode || Core.Tools;
                             if (toolModeMap && toolModeMap[mode]) {
                                 Core.documentViewer.setToolMode(toolModeMap[mode]);
+                                console.log(`✅ Tool mode set via Core: ${mode}`);
+                            } else {
+                                // Fallback: Try to construct the tool directly
+                                const tool = Core.documentViewer.getTool(mode);
+                                if (tool) {
+                                    Core.documentViewer.setToolMode(tool);
+                                    console.log(`✅ Tool mode set via getTool: ${mode}`);
+                                }
                             }
                         }
 
-                        console.log(`✅ Tool mode set to: ${mode}`);
+                        // Method 3: Force UI to update active tool indicator
+                        try {
+                            if (UI.updateElement) {
+                                UI.updateElement('toolsHeader');
+                                console.log('✅ Forced tool button UI refresh');
+                            }
+                        } catch (refreshError) {
+                            console.warn('⚠️ UI refresh not available:', refreshError);
+                        }
+
+                        console.log(`✅ Tool mode fully set to: ${mode}`);
                     } catch (e) {
                         console.error(`❌ Failed to set tool mode to ${mode}:`, e);
                     }
+                }
+            },
+
+            // ✅ Apply the most recent signature to all empty signature fields
+            applySignatureToAllEmptyFields: async () => {
+                if (!viewerInstance.current) return 0;
+
+                const { Core } = viewerInstance.current;
+                const annotationManager = Core.annotationManager;
+
+                isApplyingSignAllRef.current = true;
+
+                try {
+                    // 1. Find all SignatureWidgetAnnotations
+                    const allAnnotations = annotationManager.getAnnotationsList();
+                    const signatureWidgets = allAnnotations.filter((annot: any) =>
+                        annot instanceof Core.Annotations.SignatureWidgetAnnotation
+                    );
+
+                    // 2. Identify truly empty widgets (using overlap detection)
+                    const emptyWidgets = signatureWidgets.filter((widget: any) =>
+                        isSignatureWidgetEmpty(widget, allAnnotations, Core)
+                    );
+
+                    if (emptyWidgets.length === 0) {
+                        console.log('🖊️ [SIGN ALL] No empty signature widgets found');
+                        return 0;
+                    }
+
+                    // 3. Get the most recently captured signature annotation as source
+                    const capturedSigs = Array.from(capturedSignatureAnnotationsRef.current.values())
+                        .sort((a: any, b: any) => b.capturedAt - a.capturedAt);
+
+                    if (capturedSigs.length === 0) {
+                        console.warn('🖊️ [SIGN ALL] No captured signature annotations found');
+                        return 0;
+                    }
+
+                    const sourceAnnotation = capturedSigs[0].annotation;
+                    console.log(`🖊️ [SIGN ALL] Source: ${sourceAnnotation.constructor?.name}, Subject: ${sourceAnnotation.Subject}`);
+
+                    // 4. Extract signature image data from source annotation
+                    let signatureImageData: string | null = null;
+
+                    // Method A: StampAnnotation - get image data directly
+                    if (sourceAnnotation.getImageData) {
+                        try {
+                            signatureImageData = sourceAnnotation.getImageData();
+                            console.log('🖊️ [SIGN ALL] Got image data via getImageData()');
+                        } catch (e) {
+                            console.warn('🖊️ [SIGN ALL] getImageData() failed:', e);
+                        }
+                    }
+
+                    if (!signatureImageData && sourceAnnotation.ImageData) {
+                        signatureImageData = sourceAnnotation.ImageData;
+                        console.log('🖊️ [SIGN ALL] Got image data via ImageData property');
+                    }
+
+                    // Method B: FreeHandAnnotation - render paths to canvas
+                    if (!signatureImageData && sourceAnnotation.getPaths) {
+                        try {
+                            const paths = sourceAnnotation.getPaths();
+                            if (paths && paths.length > 0) {
+                                const canvas = document.createElement('canvas');
+                                const sw = sourceAnnotation.Width || 200;
+                                const sh = sourceAnnotation.Height || 80;
+                                const scale = 2; // Higher res for quality
+                                canvas.width = Math.ceil(sw * scale);
+                                canvas.height = Math.ceil(sh * scale);
+                                const ctx = canvas.getContext('2d');
+                                if (ctx) {
+                                    ctx.scale(scale, scale);
+                                    ctx.strokeStyle = sourceAnnotation.StrokeColor?.toHexString?.() || '#000000';
+                                    ctx.lineWidth = sourceAnnotation.StrokeThickness || 2;
+                                    ctx.lineCap = 'round';
+                                    ctx.lineJoin = 'round';
+
+                                    for (const path of paths) {
+                                        if (!path || path.length < 2) continue;
+                                        ctx.beginPath();
+                                        const startX = (path[0].x ?? path[0].X ?? 0) - sourceAnnotation.X;
+                                        const startY = (path[0].y ?? path[0].Y ?? 0) - sourceAnnotation.Y;
+                                        ctx.moveTo(startX, startY);
+                                        for (let i = 1; i < path.length; i++) {
+                                            const px = (path[i].x ?? path[i].X ?? 0) - sourceAnnotation.X;
+                                            const py = (path[i].y ?? path[i].Y ?? 0) - sourceAnnotation.Y;
+                                            ctx.lineTo(px, py);
+                                        }
+                                        ctx.stroke();
+                                    }
+
+                                    signatureImageData = canvas.toDataURL('image/png');
+                                    console.log('🖊️ [SIGN ALL] Rendered FreeHand to canvas image');
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('🖊️ [SIGN ALL] FreeHand canvas rendering failed:', e);
+                        }
+                    }
+
+                    if (!signatureImageData) {
+                        console.error('🖊️ [SIGN ALL] Could not extract signature image from source annotation');
+                        return 0;
+                    }
+
+                    // 5. Apply signature to each empty widget
+                    let signedCount = 0;
+
+                    for (const widget of emptyWidgets) {
+                        try {
+                            const widgetRect = widget.getRect();
+                            const pageNumber = widget.PageNumber;
+
+                            // Create a StampAnnotation with the signature image
+                            const stamp = new Core.Annotations.StampAnnotation();
+                            stamp.PageNumber = pageNumber;
+                            stamp.X = widgetRect.x1;
+                            stamp.Y = widgetRect.y1;
+                            stamp.Width = widgetRect.x2 - widgetRect.x1;
+                            stamp.Height = widgetRect.y2 - widgetRect.y1;
+                            stamp.Subject = 'Signature';
+                            stamp.Author = annotationManager.getCurrentUser();
+
+                            // Set image data
+                            if (typeof stamp.setImageData === 'function') {
+                                stamp.setImageData(signatureImageData);
+                            } else {
+                                (stamp as any).ImageData = signatureImageData;
+                            }
+
+                            // Add to document
+                            annotationManager.addAnnotation(stamp, { imported: false });
+                            annotationManager.drawAnnotationsFromList([stamp]);
+
+                            // Link annotation to the signature widget
+                            (widget as any).annot = stamp;
+
+                            // Set field value to mark as signed
+                            const field = widget.getField?.();
+                            if (field?.setValue) {
+                                const fieldName = field.name || 'signed';
+                                field.setValue(fieldName);
+                                if (field.commit) {
+                                    try { field.commit(fieldName, widget); } catch (e) { /* ok */ }
+                                }
+                                // Mark as read-only (matches editableFieldMode="empty-only" behavior)
+                                field.flags.ReadOnly = true;
+
+                                // Capture value for export
+                                capturedFieldValuesRef.current.set(field.name, fieldName);
+                            }
+
+                            // ✅ Force widget to re-render and hide "Sign here" indicator
+                            try {
+                                if (typeof widget.refreshAppearance === 'function') {
+                                    widget.refreshAppearance();
+                                }
+                                // Trigger modification event so WebViewer updates the widget's visual state
+                                annotationManager.trigger('annotationChanged', [[widget], 'modify', {}]);
+                            } catch (e) {
+                                console.warn('🖊️ [SIGN ALL] Could not refresh widget appearance:', e);
+                            }
+
+                            // Store in capture ref for export
+                            const stampId = stamp.Id || `signall_${Date.now()}_${signedCount}`;
+                            capturedSignatureAnnotationsRef.current.set(stampId, {
+                                annotation: stamp,
+                                capturedAt: Date.now(),
+                                type: 'StampAnnotation',
+                                subject: 'Signature'
+                            });
+
+                            signedCount++;
+                            console.log(`🖊️ [SIGN ALL] Signed widget: ${(widget as any).fieldName || 'unknown'} on page ${pageNumber}`);
+                        } catch (e) {
+                            console.error('🖊️ [SIGN ALL] Error applying to widget:', e);
+                        }
+                    }
+
+                    // Redraw all annotations and refresh viewer
+                    if (signedCount > 0) {
+                        annotationManager.drawAnnotationsFromList(annotationManager.getAnnotationsList());
+
+                        // Force viewer refresh to update all widget appearances
+                        try {
+                            const documentViewer = Core.documentViewer;
+                            if (documentViewer.refreshAll) {
+                                documentViewer.refreshAll();
+                            } else if (documentViewer.updateView) {
+                                documentViewer.updateView();
+                            }
+                        } catch (e) {
+                            console.warn('🖊️ [SIGN ALL] Could not refresh viewer:', e);
+                        }
+                    }
+
+                    console.log(`🖊️ [SIGN ALL] Applied signature to ${signedCount}/${emptyWidgets.length} empty fields`);
+                    return signedCount;
+                } finally {
+                    // Reset flag after events settle
+                    setTimeout(() => { isApplyingSignAllRef.current = false; }, 500);
                 }
             },
         }));
@@ -815,14 +1138,25 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         a instanceof Core.Annotations.StampAnnotation ||
                                         a.Subject === 'Signature'
                                     );
-                                
+
                                     stampAnnots.forEach((a: any, i: number) => {
                                         console.log(`🖊️ [STAMP #${i + 1}] Type: ${a.constructor.name}, Subject: ${a.Subject}`);
                                     });
+
+                                    // ✅ Check for "Sign All" opportunity after signature is fully applied
+                                    if (!isApplyingSignAllRef.current && onSignatureAppliedRef.current) {
+                                        setTimeout(() => {
+                                            const emptyCount = getEmptySignatureWidgetCount();
+                                            console.log(`🖊️ [SIGN ALL] Empty signature fields remaining: ${emptyCount}`);
+                                            if (emptyCount > 0 && onSignatureAppliedRef.current) {
+                                                onSignatureAppliedRef.current({ emptySignatureFieldCount: emptyCount });
+                                            }
+                                        }, 300);
+                                    }
                                 }, 100);
                             });
 
-                        
+
                         }
                     } catch (e) {
                         console.warn('⚠️ Could not configure signature mode:', e);
@@ -854,9 +1188,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         });
                                     }
 
-                                
+
                                 }
-                             
+
                             });
                         });
                     } catch (e) {
@@ -989,7 +1323,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     } else {
                                         console.log(`🔔 [AUTO-SAVE] Annotation changed (action: ${action}, count: ${annotations.length})`);
                                     }
-                                    scheduleAutoSave();
+                                    // scheduleAutoSave();
                                 });
 
                                 // Listen for field value changes
@@ -1045,7 +1379,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         }
                                     }
 
-                                    scheduleAutoSave();
+                                    // scheduleAutoSave();
                                 });
 
                                 // ✅ CRITICAL FIX: Track form fields directly as widgets are created
@@ -1144,7 +1478,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                 }
 
                                                 // Trigger auto-save to persist the deletion
-                                                scheduleAutoSave();
+                                                // scheduleAutoSave();
                                             }
                                         });
                                         return;
@@ -1172,7 +1506,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             console.log(`🖊️ [SIGNATURE ANNOT] Found ${allWidgets.length} signature widgets to check`);
 
                                             // Trigger auto-save to capture this annotation
-                                            scheduleAutoSave();
+                                            // scheduleAutoSave();
                                         }
                                     });
                                 });

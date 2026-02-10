@@ -218,15 +218,14 @@ export default function UploadTemplateDialog({
 
 
         try {
-            await new Promise(resolve => setTimeout(resolve, 2000));
 
             if (pdfViewerRef.current) {
+                console.log('🔧 [SUBMIT] Switching to View mode and Pan tool before export...');
                 pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
                 pdfViewerRef.current.setToolMode('Pan');
-                console.log('Set toolbar to View mode and Pan tool before save')
+                await new Promise(resolve => setTimeout(resolve, 500));
+                console.log('✅ [SUBMIT] Toolbar switched to View mode');
             }
-
-            await new Promise(resolve => setTimeout(resolve, 2000));
 
             let xfdfData = '';
             let formFields: any[] = [];

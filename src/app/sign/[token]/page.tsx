@@ -18,6 +18,7 @@ import {
     completeExternalSignature
 } from '@/services/externalSignatureService';
 import { sendSignedCopyEmail } from '@/services/emailService';
+import SignAllDialog from '@/components/contracts/SignAllDialog';
 
 // Dynamically import PDFViewerContainer
 const PDFViewerContainer = dynamic(
@@ -50,11 +51,39 @@ export default function PublicSigningPage() {
     // Track field changes
     const [filledFieldValues, setFilledFieldValues] = useState<Record<string, string>>({});
 
+    // ✅ "Sign All" dialog state
+    const [showSignAllDialog, setShowSignAllDialog] = useState(false);
+    const [emptySignFieldCount, setEmptySignFieldCount] = useState(0);
+    const [hasDeclinedSignAll, setHasDeclinedSignAll] = useState(false);
+
     const handleFieldChange = (fieldName: string, value: any) => {
         setFilledFieldValues(prev => ({
             ...prev,
             [fieldName]: value?.toString() || ''
         }));
+    };
+
+    // ✅ Called when a signature is applied to a field - shows "Sign All" prompt
+    const handleSignatureApplied = (data: { emptySignatureFieldCount: number }) => {
+        if (!hasDeclinedSignAll && data.emptySignatureFieldCount > 0) {
+            setEmptySignFieldCount(data.emptySignatureFieldCount);
+            setShowSignAllDialog(true);
+        }
+    };
+
+    // ✅ Apply signature to all empty fields
+    const handleSignAll = async () => {
+        setShowSignAllDialog(false);
+        if (pdfViewerRef.current?.applySignatureToAllEmptyFields) {
+            const count = await pdfViewerRef.current.applySignatureToAllEmptyFields();
+            console.log(`🖊️ [SIGN ALL] Applied signature to ${count} fields`);
+        }
+    };
+
+    // ✅ User declined - don't ask again for this session
+    const handleDeclineSignAll = () => {
+        setShowSignAllDialog(false);
+        setHasDeclinedSignAll(true);
     };
 
     /**
@@ -300,9 +329,18 @@ export default function PublicSigningPage() {
                         onFieldChange={handleFieldChange}
                         editableFieldMode="empty-only"
                         showAnnotationNavigation={true}
+                        onSignatureApplied={handleSignatureApplied}
                     />
                 )}
             </Box>
+
+            {/* ✅ "Sign All" Dialog - appears after client signs a field */}
+            <SignAllDialog
+                open={showSignAllDialog}
+                onClose={handleDeclineSignAll}
+                onSignAll={handleSignAll}
+                emptyFieldCount={emptySignFieldCount}
+            />
         </Box>
     );
 }
