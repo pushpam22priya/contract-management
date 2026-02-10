@@ -461,12 +461,12 @@ export default function EditTemplateDialog({
                                         fontSize: '0.875rem',
                                     }}
                                 >
-                                    Supported formats: PDF, DOCX, DOC
+                                    Supported formats: PDF
                                 </Typography>
                                 <input
                                     id="file-edit-input"
                                     type="file"
-                                    accept=".pdf,.doc,.docx"
+                                    accept=".pdf"
                                     onChange={handleFileChange}
                                     style={{ display: 'none' }}
                                 />

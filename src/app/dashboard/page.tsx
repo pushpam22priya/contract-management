@@ -51,7 +51,9 @@ export default function DashboardPage() {
 
             if (c.status === ContractStatus.DRAFT) draft++;
             if (c.status === ContractStatus.REVIEW_APPROVAL) underReview++;
-            if (c.status === ContractStatus.WAITING_FOR_SIGNATURE) approved++;
+            if (c.status === ContractStatus.APPROVED) approved++;
+            // Note: WAITING_FOR_SIGNATURE is currently not counted in stats cards based on user request to prioritize 'Approved'
+
             if (c.status === ContractStatus.ACTIVE) active++;
             if (c.status === ContractStatus.EXPIRING) expiring++;
             if (c.status === ContractStatus.EXPIRED) expired++;
@@ -99,11 +101,11 @@ export default function DashboardPage() {
         {
             title: 'Approved',
             value: stats.approvedCount,
-            description: 'Waiting for signature',
+            description: 'Ready for signature',
             icon: 'check' as const,
             iconColor: '#14b8a6',
             iconBgColor: '#ccfbf1',
-            path: '/contracts?status=waiting_for_signature'
+            path: '/contracts?status=approved'
         },
         {
             title: 'Active Contracts',

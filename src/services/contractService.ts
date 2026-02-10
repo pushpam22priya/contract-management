@@ -38,11 +38,11 @@ class ContractService {
                 if (c.startDate && c.startDate <= today) newStatus = ContractStatus.ACTIVE;
             }
 
-            // 2. Active -> Expiring (7 Days Rule)
+            // 2. Active -> Expiring (30 Days Rule)
             if (newStatus === ContractStatus.ACTIVE && c.endDate) {
                 const endDate = new Date(c.endDate);
                 const warningDate = new Date(endDate);
-                warningDate.setDate(endDate.getDate() - 7); // 7 DAYS WARNING
+                warningDate.setDate(endDate.getDate() - 30); // 30 DAYS WARNING
                 const warningStr = warningDate.toISOString().split('T')[0];
 
                 if (today >= warningStr) newStatus = ContractStatus.EXPIRING;

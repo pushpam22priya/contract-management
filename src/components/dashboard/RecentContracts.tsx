@@ -32,9 +32,10 @@ export default function RecentContracts() {
 
             const allContracts = contractService.getAllContracts();
 
-            // Filter relevant contracts (created by or signer)
+            // Filter relevant contracts (created by or signer) AND only Active/Expiring
             const relevantContracts = allContracts.filter(c =>
-                c.createdBy === currentUser.email || c.signer?.email === currentUser.email
+                (c.createdBy === currentUser.email || c.signer?.email === currentUser.email) &&
+                (c.status === ContractStatus.ACTIVE || c.status === ContractStatus.EXPIRING)
             );
 
             // Sort by creation date (newest first)

@@ -138,6 +138,18 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     // --- MAIN RENDER ---
     const statusColors = getStatusColor(contract.status);
 
+    // Calculate progress percentage based on days remaining vs total duration
+    const calculateProgress = () => {
+        if (!contract.startDate || !contract.endDate) return 0;
+        const startDateObj = new Date(contract.startDate);
+        const endDateObj = new Date(contract.endDate);
+        const totalDays = Math.ceil((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24));
+        const daysRemaining = contract.expiresInDays || 0;
+        if (totalDays <= 0) return 0;
+        return Math.min(100, Math.max(0, Math.round((daysRemaining / totalDays) * 100)));
+    };
+    const progressPercentage = calculateProgress();
+
     // Fallback data for details in case loading failed partially
     const displayDetails = details || {
         description: contract.description,
@@ -321,7 +333,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 startDate={contract.startDate || 'N/A'}
                                 endDate={contract.endDate || 'N/A'}
                                 daysRemaining={contract.expiresInDays || 0}
-                                progressPercentage={50} // Mock progress
+                                progressPercentage={progressPercentage}
                                 description={displayDetails.description}
                             />
                         </Box>

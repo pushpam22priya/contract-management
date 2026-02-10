@@ -27,6 +27,7 @@ const statusOptions = [
     { label: 'All Status', value: 'all' },
     { label: 'Active', value: ContractStatus.ACTIVE },
     { label: 'Expiring', value: ContractStatus.EXPIRING },
+    { label: 'Approved', value: ContractStatus.APPROVED },
     { label: 'Waiting for Signature', value: ContractStatus.WAITING_FOR_SIGNATURE },
     { label: 'Signed', value: ContractStatus.SIGNED },
     { label: 'Expired', value: ContractStatus.EXPIRED },
