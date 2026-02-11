@@ -33,7 +33,7 @@ const ShimmerBlock = ({
             width,
             height,
             borderRadius: `${borderRadius}px`,
-            background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+            background: 'linear-gradient(90deg, #e6f5f3 25%, #ccebe7 50%, #e6f5f3 75%)',
             backgroundSize: '800px 100%',
             animation: `${shimmer} 1.5s ease-in-out infinite`,
             mb,
@@ -171,7 +171,7 @@ const ReviewApprovalShimmerCard = () => (
         <Box
             sx={{
                 p: 1.5,
-                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                background: 'linear-gradient(90deg, #e6f5f3 25%, #ccebe7 50%, #e6f5f3 75%)',
                 backgroundSize: '800px 100%',
                 animation: `${shimmer} 1.5s ease-in-out infinite`,
                 borderBottom: '1px solid',
