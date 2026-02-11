@@ -221,10 +221,14 @@ export default function UploadTemplateDialog({
 
             if (pdfViewerRef.current) {
                 console.log('🔧 [SUBMIT] Switching to View mode and Pan tool before export...');
-                pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
-                pdfViewerRef.current.setToolMode('Pan');
-                await new Promise(resolve => setTimeout(resolve, 500));
-                console.log('✅ [SUBMIT] Toolbar switched to View mode');
+                const switched = await pdfViewerRef.current.switchToViewMode();
+                if (!switched) {
+                    console.error('❌ [SUBMIT] Failed to switch to View mode — aborting upload');
+                    setError('Failed to switch to View mode. Please try again.');
+                    setUploading(false);
+                    return;
+                }
+                console.log('✅ [SUBMIT] View mode switch verified — proceeding with export');
             }
 
             let xfdfData = '';
@@ -249,7 +253,7 @@ export default function UploadTemplateDialog({
                 // refreshing viewer, and redrawing annotations
                 // We use exportAnnotations() which returns both blob and xfdf string.
                 try {
-                    const exportResult = await pdfViewerRef.current.exportAnnotations();
+                    const exportResult = await pdfViewerRef.current.exportAnnotations(undefined, { skipToolbarSwitch: true });
 
                     if (exportResult) {
                         xfdfData = exportResult.xfdfString;
@@ -273,7 +277,7 @@ export default function UploadTemplateDialog({
                     console.log('  ⚠️ PDF was modified, using exported binary Blob...');
                     // We already have the exportResult from above
                     try {
-                        const exportResult = await pdfViewerRef.current.exportAnnotations();
+                        const exportResult = await pdfViewerRef.current.exportAnnotations(undefined, { skipToolbarSwitch: true });
                         if (exportResult) {
                             fileToUpload = exportResult.blob;
                             console.log(`  ✓ Using exported Blob (${fileToUpload.size} bytes)`);

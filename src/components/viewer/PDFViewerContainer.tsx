@@ -1,8 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
-import { Box, CircularProgress, Fab, Tooltip } from '@mui/material';
-import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import { Box, CircularProgress } from '@mui/material';
 
 interface PDFViewerContainerProps {
     documentUrl?: string;
@@ -30,13 +29,14 @@ interface PDFViewerContainerProps {
 }
 
 export interface PDFViewerHandle {
-    exportAnnotations: (fieldValues?: Record<string, string>, options?: { flatten?: boolean }) => Promise<{ blob: Blob; xfdfString: string } | null>;
+    exportAnnotations: (fieldValues?: Record<string, string>, options?: { flatten?: boolean; skipToolbarSwitch?: boolean }) => Promise<{ blob: Blob; xfdfString: string } | null>;
     exportFormFields: () => Promise<any[]>;
     clearSignatureStore: () => void;
     dispose: () => void;
     save: () => Promise<{ fileData: string; xfdfData: string } | null>;
     setToolbarGroup: (group: string) => void;
     setToolMode: (mode: string) => void;
+    switchToViewMode: () => Promise<boolean>;
     applySignatureToAllEmptyFields: () => Promise<number>;
 }
 
@@ -48,6 +48,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         const [error, setError] = useState<string>('');
         const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
         const initialLoadDone = useRef(false);
+        // Guard against React 18 StrictMode double-mount creating two WebViewer instances
+        const isInitializingRef = useRef(false);
         const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
         const hasUnsavedChanges = useRef(false);
 
@@ -55,6 +57,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         const [annotations, setAnnotations] = useState<any[]>([]);
         const [currentAnnotationIndex, setCurrentAnnotationIndex] = useState(0);
         const [showNavButton, setShowNavButton] = useState(false);
+        const [navStarted, setNavStarted] = useState(false);
         // ✅ CRITICAL FIX: Store fieldMetadataStore as a component-level ref
         // This ensures the same Map instance persists throughout the component lifecycle
         const fieldMetadataStoreRef = useRef<Map<string, any>>(new Map());
@@ -77,6 +80,32 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
         // Keep onSignatureApplied ref updated for use in event handlers
         onSignatureAppliedRef.current = onSignatureApplied;
+
+        // ✅ Helper: Switch toolbar group using the correct API for the UI version
+        // WebViewer 11+ uses Modular UI by default, where setToolbarGroup is a Legacy API
+        // that silently no-ops. The correct Modular UI API is setActiveRibbonItem.
+        const safeSetToolbarGroup = (UI: any, group: string) => {
+            try {
+                // Modular UI (WebViewer 11+) — this is the correct API
+                if (typeof UI.setActiveRibbonItem === 'function') {
+                    UI.setActiveRibbonItem(group);
+                    console.log(`✅ [TOOLBAR] setActiveRibbonItem('${group}') called (Modular UI)`);
+                    return;
+                }
+            } catch (e) {
+                console.warn(`⚠️ [TOOLBAR] setActiveRibbonItem failed for '${group}':`, e);
+            }
+
+            try {
+                // Legacy UI fallback
+                if (typeof UI.setToolbarGroup === 'function') {
+                    UI.setToolbarGroup(group);
+                    console.log(`✅ [TOOLBAR] setToolbarGroup('${group}') called (Legacy UI fallback)`);
+                }
+            } catch (e) {
+                console.warn(`⚠️ [TOOLBAR] setToolbarGroup also failed for '${group}':`, e);
+            }
+        };
 
         // ✅ Helper function to get form field annotations (accessible throughout component)
         const getFormFieldAnnotations = (Core: any) => {
@@ -147,7 +176,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         };
 
         useImperativeHandle(ref, () => ({
-            exportAnnotations: async (fieldValues?: Record<string, string>, options?: { flatten?: boolean }) => {
+            exportAnnotations: async (fieldValues?: Record<string, string>, options?: { flatten?: boolean; skipToolbarSwitch?: boolean }) => {
                 if (!viewerInstance.current) {
                     console.error('Cannot export: Viewer instance not initialized');
                     return null;
@@ -174,8 +203,14 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     console.log('📌 [PRE-EXPORT COMMIT] Step 2: Deselecting all annotations...');
                     try {
                         annotationManager.deselectAllAnnotations();
-                        viewerInstance.current.UI.setToolbarGroup('toolbarGroup-View');
-                        viewerInstance.current.UI.setToolMode('Pan');
+                        // ✅ Only switch toolbar if caller hasn't already done so
+                        if (!options?.skipToolbarSwitch) {
+                            safeSetToolbarGroup(viewerInstance.current.UI, 'toolbarGroup-View');
+                            viewerInstance.current.UI.setToolMode('Pan');
+                            console.log('✅ [PRE-EXPORT COMMIT] Toolbar switched to View/Pan');
+                        } else {
+                            console.log('✅ [PRE-EXPORT COMMIT] Skipping toolbar switch (already done by caller)');
+                        }
                         console.log('✅ [PRE-EXPORT COMMIT] All annotations deselected');
                     } catch (e) {
                         console.error('❌ [PRE-EXPORT COMMIT] Step 2 failed:', e);
@@ -697,65 +732,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
             setToolbarGroup: (group: string) => {
                 if (viewerInstance.current && viewerInstance.current.UI) {
-                    try {
-                        const { UI } = viewerInstance.current;
-
-                        console.log(`🔧 [TOOLBAR] Attempting to set toolbar group to: ${group}`);
-
-                        // ✅ CRITICAL FIX: Multiple strategies to ensure toolbar changes are reflected in UI
-                        const applyToolbarChange = () => {
-                            try {
-                                // Strategy 1: Set the toolbar group directly
-                                UI.setToolbarGroup(group);
-                                console.log(`✅ [TOOLBAR] setToolbarGroup called with: ${group}`);
-
-                                // Strategy 2: Trigger a UI "click" on the toolbar tab to force visual update
-                                // This simulates a user clicking on the View/Forms/etc tab
-                                try {
-                                    const iframe = document.querySelector('iframe');
-                                    if (iframe && iframe.contentDocument) {
-                                        const iframeDoc = iframe.contentDocument;
-                                        // Look for the toolbar group button that matches our target
-                                        const targetGroupName = group.replace('toolbarGroup-', '');
-                                        const toolbarButton = iframeDoc.querySelector(`[data-element="${group}"], [aria-label*="${targetGroupName}" i]`);
-
-                                        if (toolbarButton && typeof (toolbarButton as HTMLElement).click === 'function') {
-                                            (toolbarButton as HTMLElement).click();
-                                            console.log(`✅ [TOOLBAR] Triggered click on toolbar button for: ${group}`);
-                                        }
-                                    }
-                                } catch (clickError) {
-                                    // Silent fail - this is a fallback strategy
-                                    console.log(`⚠️ [TOOLBAR] Could not trigger toolbar button click:`, clickError);
-                                }
-
-                                // Strategy 3: Verify the change after a delay
-                                setTimeout(() => {
-                                    const currentGroup = UI.getCurrentToolbarGroup?.();
-                                    console.log(`🔍 [TOOLBAR] Current toolbar group after change: ${currentGroup}`);
-
-                                    if (currentGroup !== group) {
-                                        console.warn(`⚠️ [TOOLBAR] Toolbar group mismatch! Expected ${group}, got ${currentGroup}`);
-                                        // Retry once more
-                                        UI.setToolbarGroup(group);
-                                        console.log(`🔄 [TOOLBAR] Retrying setToolbarGroup...`);
-                                    } else {
-                                        console.log(`✅ [TOOLBAR] Toolbar group successfully set to: ${group}`);
-                                    }
-                                }, 50);
-                            } catch (innerError) {
-                                console.error(`❌ [TOOLBAR] Error in applyToolbarChange:`, innerError);
-                            }
-                        };
-
-                        // Apply immediately
-                        applyToolbarChange();
-
-                        // Also apply after a short delay to ensure React UI has settled
-                        setTimeout(applyToolbarChange, 150);
-                    } catch (e) {
-                        console.error(`❌ Failed to set toolbar group to ${group}:`, e);
-                    }
+                    console.log(`🔧 [TOOLBAR] Setting toolbar group to: ${group}`);
+                    safeSetToolbarGroup(viewerInstance.current.UI, group);
                 }
             },
 
@@ -800,6 +778,126 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     } catch (e) {
                         console.error(`❌ Failed to set tool mode to ${mode}:`, e);
                     }
+                }
+            },
+
+            // ✅ Reliable async switch to View mode with forced state reset
+            switchToViewMode: async (): Promise<boolean> => {
+                if (!viewerInstance.current || !viewerInstance.current.UI) {
+                    console.error('❌ [switchToViewMode] Viewer not initialized');
+                    return false;
+                }
+
+                // ✅ CRITICAL: Re-read from viewerInstance.current on EVERY call
+                // to avoid any stale closure issues
+                const instance = viewerInstance.current;
+                const { UI, Core } = instance;
+                const targetGroup = 'toolbarGroup-View';
+
+                try {
+                    console.log('═══════════════════════════════════════════════════════════');
+                    console.log('🔄 [switchToViewMode] Starting forced View mode switch...');
+                    console.log('═══════════════════════════════════════════════════════════');
+
+                    // Step 1: Close any open overlays/popups that could block the switch
+                    try {
+                        UI.closeElements(['menuOverlay', 'contextMenuPopup', 'toolsOverlay', 'toolStylePopup']);
+                        console.log('✅ [switchToViewMode] Closed overlays/popups');
+                    } catch (e) {
+                        console.warn('⚠️ [switchToViewMode] Could not close overlays:', e);
+                    }
+
+                    // Step 2: Deselect all annotations to finalize in-progress edits
+                    try {
+                        Core.annotationManager.deselectAllAnnotations();
+                        console.log('✅ [switchToViewMode] All annotations deselected');
+                    } catch (e) {
+                        console.warn('⚠️ [switchToViewMode] Could not deselect annotations:', e);
+                    }
+
+                    // Step 3: Set Pan tool via BOTH Core and UI to break out of form creation mode
+                    try {
+                        // Core path (most reliable — directly changes internal state)
+                        const panTool = Core.documentViewer.getTool('Pan');
+                        if (panTool) {
+                            Core.documentViewer.setToolMode(panTool);
+                            console.log('✅ [switchToViewMode] Pan tool set via Core.documentViewer');
+                        }
+                        // UI path (updates the toolbar UI indicator)
+                        UI.setToolMode('Pan');
+                        console.log('✅ [switchToViewMode] Pan tool set via UI.setToolMode');
+                    } catch (e) {
+                        console.warn('⚠️ [switchToViewMode] Could not set Pan tool:', e);
+                    }
+
+                    // Step 4: CRITICAL — Force a toolbar state change by switching to an
+                    // INTERMEDIATE toolbar group first. This prevents WebViewer from
+                    // no-op'ing when it thinks the toolbar is already in 'toolbarGroup-View'
+                    // (which happens on subsequent calls after the first successful switch).
+                    try {
+                        safeSetToolbarGroup(UI, 'toolbarGroup-Annotate');
+                        console.log('✅ [switchToViewMode] Switched to intermediate toolbar (Annotate)');
+                    } catch (e) {
+                        console.warn('⚠️ [switchToViewMode] Intermediate switch failed:', e);
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    // Step 5: Now switch to the target View toolbar group
+                    safeSetToolbarGroup(UI, targetGroup);
+                    console.log('✅ [switchToViewMode] setToolbarGroup called (1st → View)');
+
+                    await new Promise(resolve => setTimeout(resolve, 150));
+
+                    // Step 6: Re-set Pan tool after toolbar switch (toolbar switch can reset tool mode)
+                    try {
+                        const panTool = Core.documentViewer.getTool('Pan');
+                        if (panTool) {
+                            Core.documentViewer.setToolMode(panTool);
+                        }
+                        UI.setToolMode('Pan');
+                        console.log('✅ [switchToViewMode] Pan tool re-confirmed after toolbar switch');
+                    } catch (e) {
+                        console.warn('⚠️ [switchToViewMode] Could not re-confirm Pan tool:', e);
+                    }
+
+                    // Step 7: Second toolbar group call after tool mode is firmly set
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    safeSetToolbarGroup(UI, targetGroup);
+                    console.log('✅ [switchToViewMode] setToolbarGroup called (2nd → View)');
+
+                    // Step 8: Verify using available APIs
+                    const canVerifyToolbar = typeof UI.getCurrentToolbarGroup === 'function';
+                    if (canVerifyToolbar) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        const currentGroup = UI.getCurrentToolbarGroup();
+                        console.log(`🔍 [switchToViewMode] Toolbar verification: ${currentGroup}`);
+                        if (currentGroup && currentGroup !== targetGroup) {
+                            // Force one more attempt
+                            safeSetToolbarGroup(UI, targetGroup);
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                            console.log('🔄 [switchToViewMode] Forced retry after verification mismatch');
+                        }
+                    } else {
+                        console.log('ℹ️ [switchToViewMode] getCurrentToolbarGroup not available — relying on forced switch');
+                    }
+
+                    // Step 9: Verify Pan tool is active
+                    try {
+                        const currentTool = Core.documentViewer.getToolMode();
+                        const toolName = currentTool?.name || currentTool?.constructor?.name || 'unknown';
+                        console.log(`🔍 [switchToViewMode] Current tool mode: ${toolName}`);
+                    } catch (e) {
+                        console.warn('⚠️ [switchToViewMode] Could not verify tool mode:', e);
+                    }
+
+                    // Step 10: Final settle delay for iframe UI to fully render
+                    await new Promise(resolve => setTimeout(resolve, 300));
+
+                    console.log('✅ [switchToViewMode] View mode switch completed (forced)');
+                    return true;
+                } catch (error) {
+                    console.error('❌ [switchToViewMode] Unexpected error:', error);
+                    return false;
                 }
             },
 
@@ -909,36 +1007,47 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     // 5. Apply signature to each empty widget
                     let signedCount = 0;
 
+                    console.log(`🖊️ [SIGN ALL] Source signature dimensions: ${sourceAnnotation.Width} x ${sourceAnnotation.Height}`);
+
                     for (const widget of emptyWidgets) {
                         try {
-                            const widgetRect = widget.getRect();
                             const pageNumber = widget.PageNumber;
 
-                            // Create a StampAnnotation with the signature image
+                            // ✅ Create a StampAnnotation with the signature image
                             const stamp = new Core.Annotations.StampAnnotation();
                             stamp.PageNumber = pageNumber;
-                            stamp.X = widgetRect.x1;
-                            stamp.Y = widgetRect.y1;
-                            stamp.Width = widgetRect.x2 - widgetRect.x1;
-                            stamp.Height = widgetRect.y2 - widgetRect.y1;
+                            stamp.X = widget.X;
+                            stamp.Y = widget.Y;
+                            stamp.Width = widget.Width;
+                            stamp.Height = widget.Height;
                             stamp.Subject = 'Signature';
                             stamp.Author = annotationManager.getCurrentUser();
 
-                            // Set image data
+                            // Set image data (async for proper loading)
                             if (typeof stamp.setImageData === 'function') {
-                                stamp.setImageData(signatureImageData);
+                                await stamp.setImageData(signatureImageData);
                             } else {
                                 (stamp as any).ImageData = signatureImageData;
                             }
 
-                            // Add to document
-                            annotationManager.addAnnotation(stamp, { imported: false });
-                            annotationManager.drawAnnotationsFromList([stamp]);
+                            // ✅ Use official Apryse API: widget.sign(stamp)
+                            // This properly:
+                            // 1. Removes the "Sign Here" placeholder element
+                            // 2. Links the stamp annotation to the widget
+                            // 3. Creates the signature appearance
+                            // 4. Handles rendering automatically
+                            if (typeof widget.sign === 'function') {
+                                widget.sign(stamp);
+                                console.log(`🖊️ [SIGN ALL] Used widget.sign() for: ${(widget as any).fieldName || 'unknown'}`);
+                            } else {
+                                // Fallback for older WebViewer versions
+                                console.warn('🖊️ [SIGN ALL] widget.sign() not available, using fallback');
+                                annotationManager.addAnnotation(stamp, { imported: false });
+                                (widget as any).annot = stamp;
+                                annotationManager.drawAnnotationsFromList([stamp]);
+                            }
 
-                            // Link annotation to the signature widget
-                            (widget as any).annot = stamp;
-
-                            // Set field value to mark as signed
+                            // Set field value to mark as signed (but keep editable so user can clear/remove)
                             const field = widget.getField?.();
                             if (field?.setValue) {
                                 const fieldName = field.name || 'signed';
@@ -946,22 +1055,10 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 if (field.commit) {
                                     try { field.commit(fieldName, widget); } catch (e) { /* ok */ }
                                 }
-                                // Mark as read-only (matches editableFieldMode="empty-only" behavior)
-                                field.flags.ReadOnly = true;
+                                // ✅ Do NOT set ReadOnly — allows user to clear/remove signatures
 
                                 // Capture value for export
                                 capturedFieldValuesRef.current.set(field.name, fieldName);
-                            }
-
-                            // ✅ Force widget to re-render and hide "Sign here" indicator
-                            try {
-                                if (typeof widget.refreshAppearance === 'function') {
-                                    widget.refreshAppearance();
-                                }
-                                // Trigger modification event so WebViewer updates the widget's visual state
-                                annotationManager.trigger('annotationChanged', [[widget], 'modify', {}]);
-                            } catch (e) {
-                                console.warn('🖊️ [SIGN ALL] Could not refresh widget appearance:', e);
                             }
 
                             // Store in capture ref for export
@@ -974,26 +1071,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             });
 
                             signedCount++;
-                            console.log(`🖊️ [SIGN ALL] Signed widget: ${(widget as any).fieldName || 'unknown'} on page ${pageNumber}`);
                         } catch (e) {
                             console.error('🖊️ [SIGN ALL] Error applying to widget:', e);
-                        }
-                    }
-
-                    // Redraw all annotations and refresh viewer
-                    if (signedCount > 0) {
-                        annotationManager.drawAnnotationsFromList(annotationManager.getAnnotationsList());
-
-                        // Force viewer refresh to update all widget appearances
-                        try {
-                            const documentViewer = Core.documentViewer;
-                            if (documentViewer.refreshAll) {
-                                documentViewer.refreshAll();
-                            } else if (documentViewer.updateView) {
-                                documentViewer.updateView();
-                            }
-                        } catch (e) {
-                            console.warn('🖊️ [SIGN ALL] Could not refresh viewer:', e);
                         }
                     }
 
@@ -1009,6 +1088,18 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         // Initialize viewer once (on mount)
         useEffect(() => {
             if (!viewerDiv.current || viewerInstance.current) return;
+
+            // ✅ CRITICAL: Prevent React 18 StrictMode from creating two WebViewer instances.
+            // StrictMode does: mount → dispose (cleanup) → remount.
+            // Without this guard, the cleanup nulls viewerInstance.current, causing
+            // the remount to pass the guard above and create a SECOND instance.
+            // Both iframes end up in the same container — user interacts with one,
+            // but viewerInstance.current points to the other.
+            if (isInitializingRef.current) {
+                console.warn('⚠️ [INIT] Skipping duplicate WebViewer init (StrictMode detected)');
+                return;
+            }
+            isInitializingRef.current = true;
 
             const initWebViewer = async () => {
                 try {
@@ -1082,6 +1173,13 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         }, 2000); // 2 second debounce
                     };
 
+                    // ✅ Clear any existing iframes in the container (safety net for StrictMode)
+                    if (viewerDiv.current) {
+                        while (viewerDiv.current.firstChild) {
+                            viewerDiv.current.removeChild(viewerDiv.current.firstChild);
+                        }
+                    }
+
                     const instance = await WebViewer(
                         {
                             path: '/webviewer',
@@ -1128,20 +1226,56 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             }
                         }
 
+                        // ✅ Always show "Sign here" placeholder on signature fields
+                        if (signatureTool && signatureTool.setCustomCreateSignHereElementHandler) {
+                            signatureTool.setCustomCreateSignHereElementHandler((_widget: any) => {
+                                const signHereElement = document.createElement('div');
+                                signHereElement.style.backgroundColor = '#E8F5E9';
+                                signHereElement.style.border = '2px dashed #4CAF50';
+                                signHereElement.style.display = 'flex';
+                                signHereElement.style.alignItems = 'center';
+                                signHereElement.style.justifyContent = 'center';
+                                signHereElement.style.color = '#1B5E20';
+                                signHereElement.style.fontWeight = 'bold';
+                                signHereElement.style.fontSize = '14px';
+                                signHereElement.style.cursor = 'pointer';
+                                signHereElement.style.height = '100%';
+                                signHereElement.style.width = '100%';
+                                signHereElement.textContent = 'Sign here';
+                                return signHereElement;
+                            });
+                            console.log('✅ Custom sign here element handler configured (always visible)');
+                        }
+
                         // Listen for when signature is created/selected by user
                         if (signatureTool) {
                             signatureTool.addEventListener('signatureSaved', (signatureWidgets: any) => {
-                                // Get all annotations after signature is saved to see what was added
+                                // Get all annotations after signature is saved
                                 setTimeout(() => {
                                     const allAnnots = Core.annotationManager.getAnnotationsList();
-                                    const stampAnnots = allAnnots.filter((a: any) =>
-                                        a instanceof Core.Annotations.StampAnnotation ||
-                                        a.Subject === 'Signature'
+
+                                    // ✅ FIX: Capture ALL signature-related annotations (drawn, typed, image)
+                                    // Typed signatures create StampAnnotations that may NOT have Subject='Signature'
+                                    const sigAnnots = allAnnots.filter((a: any) =>
+                                        a instanceof Core.Annotations.FreeHandAnnotation ||
+                                        a instanceof Core.Annotations.StampAnnotation
                                     );
 
-                                    stampAnnots.forEach((a: any, i: number) => {
-                                        console.log(`🖊️ [STAMP #${i + 1}] Type: ${a.constructor.name}, Subject: ${a.Subject}`);
-                                    });
+                                    // ✅ Capture the most recent signature for Sign All reuse
+                                    if (sigAnnots.length > 0) {
+                                        // Sort by most recently added (last in list is newest)
+                                        const newestSig = sigAnnots[sigAnnots.length - 1];
+                                        const annotId = newestSig.Id || `sig_saved_${Date.now()}`;
+                                        capturedSignatureAnnotationsRef.current.set(annotId, {
+                                            annotation: newestSig,
+                                            capturedAt: Date.now(),
+                                            type: newestSig.constructor?.name,
+                                            subject: newestSig.Subject
+                                        });
+                                        console.log(`🖊️ [MANUAL SIGN] Captured signature: ${newestSig.constructor?.name}, Subject: ${newestSig.Subject}, Id: ${annotId}`);
+                                    }
+
+                                    console.log(`🖊️ [MANUAL SIGN] Signature saved, widgets: ${Array.isArray(signatureWidgets) ? signatureWidgets.length : 1}`);
 
                                     // ✅ Check for "Sign All" opportunity after signature is fully applied
                                     if (!isApplyingSignAllRef.current && onSignatureAppliedRef.current) {
@@ -1168,11 +1302,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     try {
                         Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string, info: any) => {
                             annotations.forEach((annot: any) => {
-                                // Check for signature-type annotations (FreeHand or Stamp with Signature subject)
+                                // ✅ FIX: Check for ALL signature-type annotations (FreeHand or ANY Stamp)
+                                // Typed signatures create StampAnnotations without Subject='Signature'
                                 const isSignatureAnnot =
                                     annot instanceof Core.Annotations.FreeHandAnnotation ||
-                                    (annot instanceof Core.Annotations.StampAnnotation &&
-                                        (annot as any).Subject?.includes('Signature'));
+                                    annot instanceof Core.Annotations.StampAnnotation;
 
                                 if (isSignatureAnnot) {
                                     const annotId = annot.Id || annot.getCustomData?.('id') || `sig_${Date.now()}`;
@@ -1186,11 +1320,68 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             type: annot.constructor?.name,
                                             subject: annot.Subject
                                         });
+                                    } else if (action === 'delete') {
+                                        // ✅ FIX: When a signature is deleted, restore the widget visibility
+                                        console.log(`🗑️ [SIGNATURE DELETE] Signature deleted, restoring widget`);
+
+                                        // Find all signature widgets and clear linked annotation reference
+                                        const allAnnotations = Core.annotationManager.getAnnotationsList();
+                                        const signatureWidgets = allAnnotations.filter((a: any) =>
+                                            a instanceof Core.Annotations.SignatureWidgetAnnotation
+                                        );
+
+                                        signatureWidgets.forEach((widget: any) => {
+                                            const linkedAnnot = (widget as any).annot;
+                                            if (linkedAnnot && linkedAnnot.Id === annot.Id) {
+                                                try {
+                                                    // Clear the linked annotation reference
+                                                    (widget as any).annot = null;
+
+                                                    // Clear field value
+                                                    const field = widget.getField?.();
+                                                    if (field) {
+                                                        field.setValue('');
+                                                        field.flags.ReadOnly = false;
+                                                        if (field.commit) {
+                                                            try { field.commit('', widget); } catch (e) { /* ok */ }
+                                                        }
+                                                    }
+
+                                                    Core.annotationManager.updateAnnotation(widget);
+                                                    console.log(`✅ [SIGNATURE DELETE] Cleared widget link: ${widget.fieldName || 'unknown'}`);
+                                                } catch (e) {
+                                                    console.warn('⚠️ [SIGNATURE DELETE] Could not clear widget:', e);
+                                                }
+                                            }
+                                        });
+
+                                        // Remove from captured signatures
+                                        capturedSignatureAnnotationsRef.current.delete(annotId);
                                     }
 
 
                                 }
 
+                                // ✅ NEW: Handle signature widget changes to update "Sign here" placeholder
+                                if (annot instanceof Core.Annotations.SignatureWidgetAnnotation && (action === 'modify' || action === 'add')) {
+                                    // Refresh the "Sign here" element for this widget
+                                    setTimeout(() => {
+                                        const signatureTool = Core.documentViewer.getTool('AnnotationCreateSignature') as any;
+                                        if (signatureTool && signatureTool.setCustomCreateSignHereElementHandler) {
+                                            // Trigger a refresh by calling the custom handler
+                                            try {
+                                                const element = (annot as any).element || (annot as any).elementRef?.current;
+                                                if (element) {
+                                                    // Force re-render of the widget element
+                                                    Core.annotationManager.trigger('annotationChanged', [[annot], 'render', {}]);
+                                                    console.log(`🔄 [WIDGET REFRESH] Refreshed sign here element for: ${(annot as any).fieldName}`);
+                                                }
+                                            } catch (e) {
+                                                console.warn('⚠️ [WIDGET REFRESH] Could not refresh element:', e);
+                                            }
+                                        }
+                                    }, 100);
+                                }
                             });
                         });
                     } catch (e) {
@@ -1534,12 +1725,10 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             }
 
                             // Switch to View toolbar group (tab) so the View ribbon is shown
-                            if (UI.setToolbarGroup && typeof UI.setToolbarGroup === 'function') {
-                                // ✅ Use initialToolbarGroup if provided, else default to View
-                                const targetGroup = initialToolbarGroup || 'toolbarGroup-View';
-                                UI.setToolbarGroup(targetGroup);
-                                console.log(`✅ Toolbar group set to ${targetGroup}`);
-                            }
+                            // ✅ Use initialToolbarGroup if provided, else default to View
+                            const targetGroup = initialToolbarGroup || 'toolbarGroup-View';
+                            safeSetToolbarGroup(UI, targetGroup);
+                            console.log(`✅ Toolbar group set to ${targetGroup}`);
 
                             // ✅ Initialize annotation navigation if enabled
                             console.log('🔍 [NAV] Check:', {
@@ -1637,13 +1826,15 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     autoSaveTimeoutRef.current = null;
                 }
 
+                // ✅ In StrictMode, do NOT dispose/null the instance — it will be
+                // reused on remount. Only dispose if the component is truly unmounting.
+                // We can tell by checking isInitializingRef: if it's true, this is a
+                // StrictMode cleanup (component will remount immediately after).
+                // The real unmount will happen when the parent removes this component.
                 if (viewerInstance.current) {
-                    try {
-                        viewerInstance.current.UI.dispose();
-                    } catch (e) {
-                        console.error('Error disposing viewer:', e);
-                    }
-                    viewerInstance.current = null;
+                    // Don't dispose — let the instance persist for the remount.
+                    // The container div cleanup at the start of init handles stale iframes.
+                    console.log('🔄 [CLEANUP] Keeping WebViewer instance alive (StrictMode-safe)');
                 }
             };
         }, []);
@@ -1779,19 +1970,21 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     }}
                 />
 
-                {/* ✅ Floating Annotation Navigation Button */}
+                {/* ✅ Floating Arrow-Shaped Navigation Button */}
                 {showNavButton && showAnnotationNavigation && annotations.length > 0 && (
-                    <Tooltip
-                        title={
-                            currentAnnotationIndex === annotations.length - 1
-                                ? 'Next (Move to top)'
-                                : `Next (${currentAnnotationIndex + 2}/${annotations.length})`
-                        }
-                        placement="right"
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            left: 0,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            zIndex: 1000,
+                            display: 'flex',
+                            alignItems: 'center',
+                        }}
                     >
-                        <Fab
-                            color="primary"
-                            size="medium"
+                        {/* Arrow-shaped button */}
+                        <Box
                             onClick={async () => {
                                 if (!viewerInstance.current) return;
 
@@ -1801,81 +1994,142 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                 if (formAnnotations.length === 0) return;
 
-                                const nextIndex = (currentAnnotationIndex + 1) % formAnnotations.length;
+                                // If not started yet, go to first annotation
+                                if (!navStarted) {
+                                    setNavStarted(true);
+                                    const firstAnnotation = formAnnotations[0];
+                                    console.log(`🔍 [NAV] Starting navigation - jumping to first annotation`);
+
+                                    try {
+                                        const scrollContainer = documentViewer.getScrollViewElement();
+                                        if (scrollContainer) scrollContainer.style.scrollBehavior = 'smooth';
+                                        annotationManager.deselectAllAnnotations();
+
+                                        const currentPage = documentViewer.getCurrentPage();
+                                        if (currentPage !== firstAnnotation.PageNumber) {
+                                            documentViewer.setCurrentPage(firstAnnotation.PageNumber);
+                                            await new Promise(resolve => setTimeout(resolve, 250));
+                                        }
+
+                                        annotationManager.selectAnnotation(firstAnnotation);
+                                        await new Promise(resolve => setTimeout(resolve, 50));
+                                        annotationManager.jumpToAnnotation(firstAnnotation);
+
+                                        setTimeout(() => {
+                                            if (scrollContainer) scrollContainer.style.scrollBehavior = 'auto';
+                                        }, 600);
+                                    } catch (error) {
+                                        console.error('🔍 [NAV] Error during start navigation:', error);
+                                        try {
+                                            annotationManager.selectAnnotation(firstAnnotation);
+                                            annotationManager.jumpToAnnotation(firstAnnotation);
+                                        } catch (e) { console.error('🔍 [NAV] Fallback failed:', e); }
+                                    }
+
+                                    setCurrentAnnotationIndex(0);
+                                    return;
+                                }
+
+                                // If at the last annotation, scroll to top and reset
+                                if (currentAnnotationIndex === formAnnotations.length - 1) {
+                                    console.log('🔄 [NAV] Move to top - resetting navigation');
+                                    try {
+                                        annotationManager.deselectAllAnnotations();
+                                        const scrollContainer = documentViewer.getScrollViewElement();
+                                        if (scrollContainer) {
+                                            scrollContainer.style.scrollBehavior = 'smooth';
+                                            scrollContainer.scrollTop = 0;
+                                            setTimeout(() => {
+                                                scrollContainer.style.scrollBehavior = 'auto';
+                                            }, 600);
+                                        }
+                                        documentViewer.setCurrentPage(1);
+                                    } catch (error) {
+                                        console.error('🔍 [NAV] Error scrolling to top:', error);
+                                    }
+                                    setCurrentAnnotationIndex(0);
+                                    setNavStarted(false);
+                                    return;
+                                }
+
+                                // Navigate to next annotation
+                                const nextIndex = currentAnnotationIndex + 1;
                                 const nextAnnotation = formAnnotations[nextIndex];
 
                                 console.log(`🔍 [NAV] Jumping to annotation ${nextIndex + 1}/${formAnnotations.length}`);
-                                console.log(`🔍 [NAV] Target page: ${nextAnnotation.PageNumber}`);
 
                                 try {
-                                    // ✅ SMOOTH SCROLL IMPLEMENTATION
                                     const currentPage = documentViewer.getCurrentPage();
-                                    console.log(`🔍 [NAV] Current page: ${currentPage}, Target page: ${nextAnnotation.PageNumber}`);
-
-                                    // Get scroll container and enable smooth scrolling
                                     const scrollContainer = documentViewer.getScrollViewElement();
-                                    if (scrollContainer) {
-                                        scrollContainer.style.scrollBehavior = 'smooth';
-                                        console.log('🔍 [NAV] Enabled smooth scrolling');
-                                    }
+                                    if (scrollContainer) scrollContainer.style.scrollBehavior = 'smooth';
 
-                                    // Deselect current annotations
                                     annotationManager.deselectAllAnnotations();
 
-                                    // Navigate to the page first if different
                                     if (currentPage !== nextAnnotation.PageNumber) {
-                                        console.log(`🔍 [NAV] Changing page from ${currentPage} to ${nextAnnotation.PageNumber}`);
                                         documentViewer.setCurrentPage(nextAnnotation.PageNumber);
-                                        // Wait for page to render
                                         await new Promise(resolve => setTimeout(resolve, 250));
                                     }
 
-                                    // Select and jump to annotation
                                     annotationManager.selectAnnotation(nextAnnotation);
-
-                                    // Wait a bit for selection to render
                                     await new Promise(resolve => setTimeout(resolve, 50));
-
-                                    // Use jumpToAnnotation which will scroll to the annotation
                                     annotationManager.jumpToAnnotation(nextAnnotation);
-                                    console.log('🔍 [NAV] Scrolled to annotation');
 
-                                    // Reset scroll behavior after animation
                                     setTimeout(() => {
-                                        if (scrollContainer) {
-                                            scrollContainer.style.scrollBehavior = 'auto';
-                                        }
+                                        if (scrollContainer) scrollContainer.style.scrollBehavior = 'auto';
                                     }, 600);
-
                                 } catch (error) {
                                     console.error('🔍 [NAV] Error during navigation:', error);
-                                    // Fallback to simple jumpToAnnotation
                                     try {
                                         annotationManager.selectAnnotation(nextAnnotation);
                                         annotationManager.jumpToAnnotation(nextAnnotation);
-                                    } catch (e) {
-                                        console.error('🔍 [NAV] Fallback also failed:', e);
-                                    }
+                                    } catch (e) { console.error('🔍 [NAV] Fallback failed:', e); }
                                 }
 
                                 setCurrentAnnotationIndex(nextIndex);
-
-                                if (nextIndex === 0) {
-                                    console.log('🔄 [NAV] Reached last annotation, moved back to top');
-                                }
                             }}
                             sx={{
-                                position: 'absolute',
-                                left: 16,
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                zIndex: 1000,
-                                boxShadow: 3,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: '#8B6B8B',
+                                color: '#fff',
+                                fontWeight: 700,
+                                fontSize: '13px',
+                                letterSpacing: '0.5px',
+                                padding: '10px 28px 10px 16px',
+                                cursor: 'pointer',
+                                clipPath: 'polygon(0% 0%, calc(100% - 18px) 0%, 100% 50%, calc(100% - 18px) 100%, 0% 100%)',
+                                userSelect: 'none',
+                                transition: 'background-color 0.2s ease, transform 0.15s ease',
+                                whiteSpace: 'nowrap',
+                                boxShadow: '2px 2px 8px rgba(0,0,0,0.3)',
+                                '&:hover': {
+                                    backgroundColor: '#7A5A7A',
+                                    transform: 'scale(1.03)',
+                                },
+                                '&:active': {
+                                    backgroundColor: '#694969',
+                                    transform: 'scale(0.98)',
+                                },
                             }}
                         >
-                            <NavigateNextIcon />
-                        </Fab>
-                    </Tooltip>
+                            {!navStarted
+                                ? 'CLICK TO START'
+                                : currentAnnotationIndex === annotations.length - 1
+                                    ? 'MOVE TO TOP'
+                                    : 'NEXT'
+                            }
+                        </Box>
+
+                        {/* Dotted line extending from arrow */}
+                        <Box
+                            sx={{
+                                width: '60px',
+                                borderTop: '2px dotted rgba(139, 107, 139, 0.5)',
+                                marginLeft: '-2px',
+                            }}
+                        />
+                    </Box>
                 )}
             </Box>
         );
