@@ -22,6 +22,8 @@ import { templateService } from '@/services/templateService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { Document } from '@/components/contracts/ContractDetailsPanel';
 
+import { ContractDetailShimmer } from '@/components/common/ShimmerCard';
+
 export default function ContractViewPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
     const resolvedParams = use(params);
@@ -236,9 +238,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     if (loading) {
         return (
             <AppLayout>
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}>
-                    <Typography>Loading contract details...</Typography>
-                </Box>
+                <ContractDetailShimmer />
             </AppLayout>
         );
     }

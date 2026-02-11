@@ -18,6 +18,7 @@ import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import ReusableFilter from '@/components/common/ReusableFilter';
 import { apiService } from '@/services/apiService';
+import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 
 export default function DraftPage() {
     const [draftContracts, setDraftContracts] = useState<Contract[]>([]);
@@ -486,14 +487,18 @@ export default function DraftPage() {
                         gap: 0.75,
                     }}
                 >
-                    {filteredDrafts.map((contract) => (
-                        <ContractCard variant="draft"
-                            key={contract.id}
-                            contract={contract}
-                            onView={handleView}
-                            onShare={handleShare}
-                        />
-                    ))}
+                    {loading ? (
+                        <ShimmerCardGrid count={12} variant="contract" />
+                    ) : (
+                        filteredDrafts.map((contract) => (
+                            <ContractCard variant="draft"
+                                key={contract.id}
+                                contract={contract}
+                                onView={handleView}
+                                onShare={handleShare}
+                            />
+                        ))
+                    )}
                 </Box>
             </Box>
             {/* ← ADD VIEWER DIALOG */}

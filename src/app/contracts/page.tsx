@@ -21,6 +21,7 @@ import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import ReusableFilter from '@/components/common/ReusableFilter';
 import { useSignaturePolling } from '@/hooks/useSignaturePolling';
+import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 
 
 const statusOptions = [
@@ -365,14 +366,18 @@ export default function ContractsPage() {
                             gap: 0.75,
                         }}
                     >
-                        {(filteredContracts || []).map((contract) => (
-                            <ContractCard
-                                key={contract.id}
-                                contract={contract}
-                                onView={handleViewContract}
-                                onShare={handleShareContract}
-                            />
-                        ))}
+                        {loading ? (
+                            <ShimmerCardGrid count={12} variant="contract" />
+                        ) : (
+                            (filteredContracts || []).map((contract) => (
+                                <ContractCard
+                                    key={contract.id}
+                                    contract={contract}
+                                    onView={handleViewContract}
+                                    onShare={handleShareContract}
+                                />
+                            ))
+                        )}
                     </Box>
                 </Box>
 

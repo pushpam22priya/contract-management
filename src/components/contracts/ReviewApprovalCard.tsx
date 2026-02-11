@@ -281,7 +281,7 @@ export default function ReviewApprovalCard({
                     )}
 
                     {/* Request Modification (both roles) */}
-                    {!showCommentInput && (
+                    {/* {!showCommentInput && (
                         <Tooltip title="Request Modification" arrow>
                             <IconButton
                                 size="small"
@@ -299,7 +299,7 @@ export default function ReviewApprovalCard({
                                 <Edit sx={{ fontSize: 18 }} />
                             </IconButton>
                         </Tooltip>
-                    )}
+                    )} */}
                 </Box>
             </Box>
         </Box>

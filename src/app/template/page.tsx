@@ -15,6 +15,7 @@ import { categoryService } from '@/services/categoryService';
 import { authService } from '@/services/authService';
 import { Template } from '@/types/template';
 import ReusableFilter from '@/components/common/ReusableFilter';
+import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 
 export default function TemplatePage() {
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -27,6 +28,7 @@ export default function TemplatePage() {
     const [selectedCategory, setSelectedCategory] = useState<string>('All Categories');
     const [searchQuery, setSearchQuery] = useState('');
     const [isAdmin, setIsAdmin] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     // Separate state for each dialog to prevent UI conflicts
     const [viewerOpen, setViewerOpen] = useState(false);
@@ -43,8 +45,13 @@ export default function TemplatePage() {
     }, []);
 
     const loadTemplates = async () => {
-        const allTemplates = await templateService.getAllTemplates();
-        setTemplates(allTemplates);
+        setLoading(true);
+        try {
+            const allTemplates = await templateService.getAllTemplates();
+            setTemplates(allTemplates);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const loadCategories = () => {
@@ -247,7 +254,9 @@ export default function TemplatePage() {
                         gap: 1,
                     }}
                 >
-                    {filteredTemplates.length > 0 ? (
+                    {loading ? (
+                        <ShimmerCardGrid count={12} variant="template" />
+                    ) : filteredTemplates.length > 0 ? (
                         filteredTemplates.map((template, index) => (
                             <TemplateCard
                                 key={template.id}

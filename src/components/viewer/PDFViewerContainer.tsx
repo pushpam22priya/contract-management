@@ -2091,7 +2091,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                backgroundColor: '#8B6B8B',
+                                backgroundColor: '#0F4C47',
                                 color: '#fff',
                                 fontWeight: 700,
                                 fontSize: '13px',
@@ -2104,11 +2104,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 whiteSpace: 'nowrap',
                                 boxShadow: '2px 2px 8px rgba(0,0,0,0.3)',
                                 '&:hover': {
-                                    backgroundColor: '#7A5A7A',
+                                    backgroundColor: '#0F4C47',
                                     transform: 'scale(1.03)',
                                 },
                                 '&:active': {
-                                    backgroundColor: '#694969',
+                                    backgroundColor: '#0F4C47',
                                     transform: 'scale(0.98)',
                                 },
                             }}
@@ -2125,7 +2125,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         <Box
                             sx={{
                                 width: '60px',
-                                borderTop: '2px dotted rgba(139, 107, 139, 0.5)',
+                                borderTop: '2px dotted #0F4C47',
                                 marginLeft: '-2px',
                             }}
                         />

@@ -15,6 +15,7 @@ import FurtherReviewDialog from '@/components/contracts/FurtherReviewDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { AlertColor } from '@mui/material';
 import { useRouter } from 'next/navigation';
+import { ReviewApprovalShimmerGrid } from '@/components/common/ShimmerCard';
 
 /**
  * Review & Approval Page
@@ -289,7 +290,21 @@ export default function ReviewApprovalPage() {
                         </Tabs>
 
                         {/* Contracts Grid */}
-                        {filteredContracts.length === 0 ? (
+                        {loading ? (
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: {
+                                        xs: '1fr',
+                                        sm: 'repeat(2, 1fr)',
+                                        lg: 'repeat(3, 1fr)',
+                                    },
+                                    gap: 2,
+                                }}
+                            >
+                                <ReviewApprovalShimmerGrid count={6} />
+                            </Box>
+                        ) : filteredContracts.length === 0 ? (
                             <Alert severity="info">
                                 {tabValue === 0
                                     ? 'No contracts assigned to you for review.'
