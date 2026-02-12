@@ -335,12 +335,12 @@ export default function PublicSigningPage() {
             </Box>
 
             {/* ✅ "Sign All" Dialog - appears after client signs a field */}
-            <SignAllDialog
+            {/* <SignAllDialog
                 open={showSignAllDialog}
                 onClose={handleDeclineSignAll}
                 onSignAll={handleSignAll}
                 emptyFieldCount={emptySignFieldCount}
-            />
+            /> */}
         </Box>
     );
 }
