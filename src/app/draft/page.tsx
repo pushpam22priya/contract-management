@@ -150,11 +150,13 @@ export default function DraftPage() {
         // Get contracts created by user
         const userContracts = await contractService.getContractsCreatedByUser(currentUser.email);
 
-        // Show Drafts AND Reviewed (Waiting for Approval)
+        // Show Drafts, Reviewed (Waiting for Approval), and Rejected contracts
         const drafts = userContracts.filter(c =>
             c.status === ContractStatus.DRAFT ||
             c.status === ContractStatus.REVIEW_APPROVAL ||
-            c.status === ContractStatus.REVIEWED
+            c.status === ContractStatus.REVIEWED ||
+            c.status === ContractStatus.REJECTED_BY_REVIEWER ||
+            c.status === ContractStatus.REJECTED_BY_APPROVER
         );
         setDraftContracts(drafts);
         setLoading(false);
@@ -193,27 +195,30 @@ export default function DraftPage() {
 
     /**
      * Submit contract for review and approval
+     * Note: The service handles preserving existing reviewers and approver
      */
-    const handleSubmitForReview = async (newReviewers: string[], approver: string) => {
+    const handleSubmitForReview = async (
+        newReviewers: string[],
+        approver: string,
+        reviewerMessage?: string,
+        approverMessage?: string
+    ) => {
         if (!contractForReview) return;
 
-        // Get existing reviewers if any
-        const existingReviewerEmails = contractForReview.reviewers?.map(r => r.email) || [];
+        const currentUser = authService.getCurrentUser();
 
-        // Merge existing and new reviewers (removing duplicates)
-        const allReviewers = Array.from(new Set([
-            ...existingReviewerEmails,
-            ...newReviewers
-        ]));
-
+        // Pass only NEW reviewers - service will preserve existing ones
         const result = await contractService.submitForReview(
             contractForReview.id,
-            allReviewers,
-            approver
+            newReviewers,
+            approver,
+            reviewerMessage,
+            approverMessage,
+            currentUser?.email // Pass sender email
         );
 
         if (result.success) {
-            showNotification('Contract submitted for review and approval!', 'success');
+            showNotification(result.message, 'success');
             loadDrafts(); // Reload drafts
         } else {
             showNotification('Failed to submit: ' + result.message, 'error');
@@ -328,6 +333,8 @@ export default function DraftPage() {
         { label: 'All Status', value: 'all' },
         { label: 'Draft', value: ContractStatus.DRAFT },
         { label: 'Review and Approve', value: ContractStatus.REVIEW_APPROVAL },
+        { label: 'Rejected by Reviewer', value: ContractStatus.REJECTED_BY_REVIEWER },
+        { label: 'Rejected by Approver', value: ContractStatus.REJECTED_BY_APPROVER },
     ];
 
     const [searchQuery, setSearchQuery] = useState('');

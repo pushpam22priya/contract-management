@@ -53,6 +53,10 @@ const ContractCard = ({
                 return 'Draft';
             case ContractStatus.SIGNED:
                 return 'Signed';
+            case ContractStatus.REJECTED_BY_REVIEWER:
+                return 'Rejected by Reviewer';
+            case ContractStatus.REJECTED_BY_APPROVER:
+                return 'Rejected by Approver';
             default:
                 return status;
         }
@@ -72,6 +76,8 @@ const ContractCard = ({
                 return { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' };
             case ContractStatus.EXPIRED:
             case ContractStatus.REJECTED:
+            case ContractStatus.REJECTED_BY_REVIEWER:
+            case ContractStatus.REJECTED_BY_APPROVER:
                 return { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' };
             case ContractStatus.REVIEW_APPROVAL:
             case ContractStatus.REVIEWED:

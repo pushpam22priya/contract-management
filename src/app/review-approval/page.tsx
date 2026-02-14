@@ -1,11 +1,11 @@
 'use client';
 
-import { Box, Typography, Tab, Tabs, Alert } from '@mui/material';
+import { Box, Typography, Tab, Tabs, Alert, Autocomplete, TextField, Chip, InputAdornment } from '@mui/material';
+import { Person, Assignment } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { contractService } from '@/services/contractService';
-import { templateService } from '@/services/templateService';
 import { Contract, ContractStatus } from '@/types/contract';
 import { authService } from '@/services/authService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
@@ -47,6 +47,46 @@ export default function ReviewApprovalPage() {
         severity: 'success' as AlertColor,
     });
 
+    // Filter state
+    type FilterOption = { label: string; value: string };
+    const [statusFilter, setStatusFilter] = useState<FilterOption | null>(null);
+    const [roleFilter, setRoleFilter] = useState<FilterOption | null>(null);
+
+    // Status filter options based on tab
+    const getStatusOptions = (): FilterOption[] => {
+        if (tabValue === 0) {
+            // My Tasks: Pending states
+            return [
+                { label: 'All Status', value: 'all' },
+                { label: 'Pending Review', value: 'pending_review' },
+                { label: 'Ready for Approval', value: 'ready_approval' },
+                { label: 'Awaiting Reviews', value: 'awaiting_reviews' },
+            ];
+        } else {
+            // History: Completed states
+            return [
+                { label: 'All Status', value: 'all' },
+                { label: 'Reviewed', value: 'reviewed' },
+                { label: 'Approved', value: 'approved' },
+                { label: 'Rejected', value: 'rejected' },
+            ];
+        }
+    };
+
+    // Role filter options
+    const roleOptions: FilterOption[] = [
+        { label: 'All Roles', value: 'all' },
+        { label: 'As Reviewer', value: 'reviewer' },
+        { label: 'As Approver', value: 'approver' },
+    ];
+
+    // Reset filter when tab changes
+    const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
+        setTabValue(newValue);
+        setStatusFilter(null); // Reset filter when switching tabs
+        setRoleFilter(null);
+    };
+
     // Load contracts on mount
     const searchParams = useSearchParams();
 
@@ -76,9 +116,13 @@ export default function ReviewApprovalPage() {
         }
 
         const allContracts = await contractService.getAllContracts();
-        // Filter contracts pending review
+        // Filter contracts for review/approval (including approved and rejected for history)
         const assignedContracts = allContracts.filter(c =>
-            c.status === ContractStatus.REVIEW_APPROVAL || c.status === ContractStatus.REVIEWED
+            c.status === ContractStatus.REVIEW_APPROVAL ||
+            c.status === ContractStatus.REVIEWED ||
+            c.status === ContractStatus.APPROVED ||
+            c.status === ContractStatus.REJECTED_BY_REVIEWER ||
+            c.status === ContractStatus.REJECTED_BY_APPROVER
         );
         setContracts(assignedContracts);
         setLoading(false);
@@ -92,23 +136,102 @@ export default function ReviewApprovalPage() {
     };
 
     /**
-     * Filter contracts based on tab (reviewer vs approver)
+     * Filter contracts based on tab
+     * Tab 0 (My Tasks): Show pending review/approval items
+     * Tab 1 (History): Show completed review/approval items (including rejected)
      */
-    const getFilteredContracts = (): Contract[] => {
+    const getFilteredContracts = (): { contract: Contract; role: 'reviewer' | 'approver' }[] => {
         const currentUser = authService.getCurrentUser();
         if (!currentUser) return [];
 
-        if (tabValue === 0) {
-            // As Reviewer
-            return contracts.filter(c =>
-                c.reviewers?.some(r => r.email === currentUser.email)
-            );
-        } else {
-            // As Approver
-            return contracts.filter(c =>
-                c.approver?.email === currentUser.email
-            );
+        const result: { contract: Contract; role: 'reviewer' | 'approver' }[] = [];
+
+        contracts.forEach(c => {
+            // Check reviewer status for current user
+            const myReviewerInfo = c.reviewers?.find(r => r.email === currentUser.email);
+            const isReviewer = !!myReviewerInfo;
+            const hasReviewed = myReviewerInfo?.status === 'reviewed';
+            const hasRejectedAsReviewer = myReviewerInfo?.status === 'rejected';
+
+            // Check approver status for current user
+            const isApprover = c.approver?.email === currentUser.email;
+            const hasApproved = c.approver?.status === 'approved';
+            const hasRejectedAsApprover = c.approver?.status === 'rejected';
+
+            // Check if all reviewers have completed
+            const allReviewersComplete = !c.reviewers || c.reviewers.length === 0 ||
+                c.reviewers.every(r => r.status === 'reviewed');
+
+            if (tabValue === 0) {
+                // My Tasks: Show pending items only
+                // Add as reviewer card if user is a reviewer and hasn't reviewed/rejected yet
+                if (isReviewer && !hasReviewed && !hasRejectedAsReviewer) {
+                    result.push({ contract: c, role: 'reviewer' });
+                }
+                // Add as approver card if user is the approver and hasn't approved/rejected yet
+                if (isApprover && !hasApproved && !hasRejectedAsApprover) {
+                    result.push({ contract: c, role: 'approver' });
+                }
+            } else {
+                // History: Show completed items only (reviewed, approved, or rejected)
+                // Add as reviewer card if user reviewed or rejected this contract
+                if (isReviewer && (hasReviewed || hasRejectedAsReviewer)) {
+                    result.push({ contract: c, role: 'reviewer' });
+                }
+                // Add as approver card if user approved or rejected this contract
+                if (isApprover && (hasApproved || hasRejectedAsApprover)) {
+                    result.push({ contract: c, role: 'approver' });
+                }
+            }
+        });
+
+        // Apply filters
+        let filtered = result;
+
+        // Apply role filter
+        if (roleFilter && roleFilter.value !== 'all') {
+            filtered = filtered.filter(item => item.role === roleFilter.value);
         }
+
+        // Apply status filter if selected
+        if (statusFilter && statusFilter.value !== 'all') {
+            filtered = filtered.filter(item => {
+                const c = item.contract;
+                const currentUser = authService.getCurrentUser();
+                const myReviewerInfo = c.reviewers?.find(r => r.email === currentUser?.email);
+                const allReviewersComplete = !c.reviewers || c.reviewers.length === 0 ||
+                    c.reviewers.every(r => r.status === 'reviewed');
+
+                if (tabValue === 0) {
+                    // My Tasks filters
+                    switch (statusFilter.value) {
+                        case 'pending_review':
+                            return item.role === 'reviewer';
+                        case 'ready_approval':
+                            return item.role === 'approver' && allReviewersComplete;
+                        case 'awaiting_reviews':
+                            return item.role === 'approver' && !allReviewersComplete;
+                        default:
+                            return true;
+                    }
+                } else {
+                    // History filters
+                    switch (statusFilter.value) {
+                        case 'reviewed':
+                            return item.role === 'reviewer' && myReviewerInfo?.status === 'reviewed';
+                        case 'approved':
+                            return item.role === 'approver' && c.approver?.status === 'approved';
+                        case 'rejected':
+                            return (item.role === 'reviewer' && myReviewerInfo?.status === 'rejected') ||
+                                   (item.role === 'approver' && c.approver?.status === 'rejected');
+                        default:
+                            return true;
+                    }
+                }
+            });
+        }
+
+        return filtered;
     };
 
     /**
@@ -193,23 +316,48 @@ export default function ReviewApprovalPage() {
 
         if (result.success) {
             showNotification(result.message, 'success');
-            // NAVIGATE TO CONTRACTS PAGE
-            router.push('/contracts');
-            // loadContracts();
+            // Reload contracts and switch to History tab to show approved card
+            await loadContracts();
+            setTabValue(1); // Switch to History tab
         } else {
             showNotification(result.message, 'error');
         }
     };
 
     /**
-     * Handle requesting modifications
+     * Handle rejecting contract (by reviewer or approver)
      */
-    const handleRequestModification = async (contractId: string, comments: string) => {
+    const handleReject = async (contractId: string, role: 'reviewer' | 'approver') => {
         const currentUser = authService.getCurrentUser();
         if (!currentUser) return;
 
-        // Determine role based on active tab
-        const role = tabValue === 0 ? 'reviewer' : 'approver';
+        let result;
+        if (role === 'reviewer') {
+            result = await contractService.rejectByReviewer(contractId, currentUser.email);
+        } else {
+            result = await contractService.rejectByApprover(contractId, currentUser.email);
+        }
+
+        if (result.success) {
+            showNotification(result.message, 'success');
+            // Reload contracts and switch to History tab to show rejected card
+            await loadContracts();
+            setTabValue(1); // Switch to History tab
+        } else {
+            showNotification(result.message, 'error');
+        }
+    };
+
+    /**
+     * Handle requesting modifications with explicit role
+     */
+    const handleRequestModification = async (
+        contractId: string,
+        comments: string,
+        role: 'reviewer' | 'approver'
+    ) => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) return;
 
         const result = await contractService.requestModification(
             contractId,
@@ -270,24 +418,122 @@ export default function ReviewApprovalPage() {
                 {/* Tabs for Reviewer vs Approver */}
                 {currentUser && (
                     <>
-                        <Tabs
-                            value={tabValue}
-                            onChange={(_, newValue) => setTabValue(newValue)}
-                            sx={{
-                                mb: 3,
-                                borderBottom: 1,
-                                borderColor: 'divider',
-                            }}
-                        >
-                            <Tab
-                                label="As Reviewer"
-                                sx={{ textTransform: 'none', fontWeight: 600 }}
-                            />
-                            <Tab
-                                label="As Approver"
-                                sx={{ textTransform: 'none', fontWeight: 600 }}
-                            />
-                        </Tabs>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 2 }}>
+                            <Tabs
+                                value={tabValue}
+                                onChange={handleTabChange}
+                                sx={{
+                                    borderBottom: 1,
+                                    borderColor: 'divider',
+                                    minHeight: 'auto',
+                                }}
+                            >
+                                <Tab
+                                    label="My Tasks"
+                                    sx={{ textTransform: 'none', fontWeight: 600 }}
+                                />
+                                <Tab
+                                    label="History"
+                                    sx={{ textTransform: 'none', fontWeight: 600 }}
+                                />
+                            </Tabs>
+
+                            {/* Filters */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                {/* Role Filter */}
+                                <Autocomplete
+                                    size="small"
+                                    options={roleOptions}
+                                    value={roleFilter}
+                                    onChange={(_, newValue) => setRoleFilter(newValue)}
+                                    getOptionLabel={(option) => option.label}
+                                    isOptionEqualToValue={(option, value) => option.value === value.value}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Role"
+                                            InputProps={{
+                                                ...params.InputProps,
+                                                startAdornment: (
+                                                    <InputAdornment position="start">
+                                                        <Person sx={{ fontSize: 18, color: 'primary.main' }} />
+                                                    </InputAdornment>
+                                                ),
+                                            }}
+                                            sx={{
+                                                '& .MuiOutlinedInput-root': {
+                                                    borderRadius: 2,
+                                                    bgcolor: 'white',
+                                                    '& fieldset': {
+                                                        borderColor: '#e0e0e0',
+                                                    },
+                                                    '&:hover fieldset': {
+                                                        borderColor: 'primary.main',
+                                                    },
+                                                },
+                                                '& .MuiInputLabel-root': {
+                                                    fontSize: '0.875rem',
+                                                },
+                                            }}
+                                        />
+                                    )}
+                                    sx={{ width: 160 }}
+                                />
+
+                                {/* Status Filter */}
+                                <Autocomplete
+                                    size="small"
+                                    options={getStatusOptions()}
+                                    value={statusFilter}
+                                    onChange={(_, newValue) => setStatusFilter(newValue)}
+                                    getOptionLabel={(option) => option.label}
+                                    isOptionEqualToValue={(option, value) => option.value === value.value}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Status"
+                                            InputProps={{
+                                                ...params.InputProps,
+                                                startAdornment: (
+                                                    <InputAdornment position="start">
+                                                        <Assignment sx={{ fontSize: 18, color: 'primary.main' }} />
+                                                    </InputAdornment>
+                                                ),
+                                            }}
+                                            sx={{
+                                                '& .MuiOutlinedInput-root': {
+                                                    borderRadius: 2,
+                                                    bgcolor: 'white',
+                                                    '& fieldset': {
+                                                        borderColor: '#e0e0e0',
+                                                    },
+                                                    '&:hover fieldset': {
+                                                        borderColor: 'primary.main',
+                                                    },
+                                                },
+                                                '& .MuiInputLabel-root': {
+                                                    fontSize: '0.875rem',
+                                                },
+                                            }}
+                                        />
+                                    )}
+                                    sx={{ width: 180 }}
+                                />
+
+                                {/* Result Count */}
+                                {((statusFilter && statusFilter.value !== 'all') || (roleFilter && roleFilter.value !== 'all')) && (
+                                    <Chip
+                                        label={`${filteredContracts.length} found`}
+                                        size="small"
+                                        sx={{
+                                            fontWeight: 600,
+                                            bgcolor: 'primary.main',
+                                            color: 'white',
+                                        }}
+                                    />
+                                )}
+                            </Box>
+                        </Box>
 
                         {/* Contracts Grid */}
                         {loading ? (
@@ -307,8 +553,8 @@ export default function ReviewApprovalPage() {
                         ) : filteredContracts.length === 0 ? (
                             <Alert severity="info">
                                 {tabValue === 0
-                                    ? 'No contracts assigned to you for review.'
-                                    : 'No contracts assigned to you for approval.'}
+                                    ? 'No pending contracts for review or approval.'
+                                    : 'No completed reviews or approvals yet.'}
                             </Alert>
                         ) : (
                             <Box
@@ -322,15 +568,18 @@ export default function ReviewApprovalPage() {
                                     gap: 2,
                                 }}
                             >
-                                {filteredContracts.map((contract) => (
+                                {filteredContracts.map((item, index) => (
                                     <ReviewApprovalCard
-                                        key={contract.id}
-                                        contract={contract}
-                                        userRole={tabValue === 0 ? 'reviewer' : 'approver'}
+                                        key={`${item.contract.id}-${item.role}-${index}`}
+                                        contract={item.contract}
+                                        userRole={item.role}
                                         onView={handleView}
                                         onMarkAsReviewed={handleOpenReviewConfirmation}
                                         onApprove={handleApprove}
-                                        onRequestModification={handleRequestModification}
+                                        onRequestModification={(id, comments) =>
+                                            handleRequestModification(id, comments, item.role)
+                                        }
+                                        onReject={(id) => handleReject(id, item.role)}
                                     />
                                 ))}
                             </Box>
