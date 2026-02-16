@@ -12,12 +12,15 @@ import {
     Chip,
     alpha,
     Divider,
+    AlertColor,
 } from '@mui/material';
 import { Save, ArrowBack, ArrowForward } from '@mui/icons-material';
 import BaseDialog from '@/components/common/BaseDialog';
+import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import { templateService } from '@/services/templateService';
 import { contractService } from '@/services/contractService';
+import { apiService } from '@/services/apiService';
 import { authService } from '@/services/authService';
 import { Template } from '@/types/template';
 import dayjs from 'dayjs';
@@ -55,6 +58,19 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
 
     // Saving state
     const [saving, setSaving] = useState(false);
+
+    // Snackbar state
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: AlertColor }>({
+        open: false,
+        message: '',
+        severity: 'success',
+    });
+
+    // Track contract ID after first save (prevents duplicate contracts on re-save)
+    const [contractId, setContractId] = useState<string | null>(null);
+
+    // Unsaved changes confirmation dialog state
+    const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
 
     // Track filled field values
     // Explanation: This stores the values user enters in form fields (e.g., {"client_name": "John Doe"})
@@ -219,41 +235,53 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 hasFormFields: (exportedFormFields?.length ?? 0) > 0 || selectedTemplate.hasFormFields || false, // ✅ Use template flag or check fields
             };
 
-            const result = await contractService.createContract(contractData);
+            let activeContractId = contractId;
 
-            if (result.success && result.contract) {
-                console.log('✅ Contract metadata created, ID:', result.contract.id);
-
-                // Now upload the PDF binary
-                if (pdfBlob) {
-                    console.log(`📤 Uploading PDF binary (${pdfBlob.size} bytes)...`);
-                    const uploadResult = await contractService.updateContractSignedPdf(
-                        result.contract.id,
-                        pdfBlob, // Pass Blob directly
-                        finalXfdf // ✅ Use finalXfdf (preserves template signatures)
-                    );
-
-                    if (uploadResult.success) {
-                        console.log('✅ PDF binary uploaded successfully');
-                    } else {
-                        console.error('❌ Failed to upload PDF binary');
-                        setError('Contract created but PDF upload failed');
-                        setSaving(false);
-                        return;
-                    }
+            if (contractId) {
+                // Subsequent save: UPDATE existing contract
+                console.log('📝 Updating existing contract, ID:', contractId);
+                const updateResult = await apiService.updateContractMetadata(contractId, contractData);
+                if (!updateResult.success) {
+                    setError(updateResult.message || 'Failed to update contract');
+                    return;
                 }
-
-                console.log('Contract created successfully with PDF!');
-
-                setSuccess('Contract created successfully!');
-                setTimeout(() => {
-                    handleClose();
-                    router.push('/draft');
-                }, 1500);
+                console.log('✅ Contract metadata updated');
             } else {
-                console.error('❌ Contract creation failed:', result.message);
-                setError(result.message);
+                // First save: CREATE new contract
+                const result = await contractService.createContract(contractData);
+                if (result.success && result.contract) {
+                    activeContractId = result.contract.id;
+                    setContractId(activeContractId);
+                    console.log('✅ Contract created, ID:', activeContractId);
+                } else {
+                    console.error('❌ Contract creation failed:', result.message);
+                    setError(result.message);
+                    return;
+                }
             }
+
+            // Upload/overwrite the PDF binary
+            if (pdfBlob && activeContractId) {
+                console.log(`📤 Uploading PDF binary (${pdfBlob.size} bytes)...`);
+                const uploadResult = await contractService.updateContractSignedPdf(
+                    activeContractId,
+                    pdfBlob,
+                    finalXfdf
+                );
+
+                if (uploadResult.success) {
+                    console.log('✅ PDF binary uploaded successfully');
+                } else {
+                    console.error('❌ Failed to upload PDF binary');
+                    setError('Contract saved but PDF upload failed');
+                    setSaving(false);
+                    return;
+                }
+            }
+
+            console.log('Contract saved successfully with PDF!');
+
+            setSnackbar({ open: true, message: 'Contract Saved successfully!', severity: 'success' });
         } catch (err) {
             console.error('❌ Error creating contract:', err);
             setError('Failed to create contract. Please try again.');
@@ -274,12 +302,34 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
         setEndDate('');
         setDocumentLoaded(false);
         setError('');
+        setContractId(null); // Reset so next dialog creates a new contract
         setFilledFieldValues({}); // Reset for next contract
 
         // Dispose PDF viewer
         pdfViewerRef.current?.dispose();
 
         onClose();
+    };
+
+    const hasUnsavedChanges = (): boolean => {
+        return (
+            contractTitle !== '' ||
+            clientName !== '' ||
+            description !== '' ||
+            contractValue !== '' ||
+            startDate !== '' ||
+            endDate !== '' ||
+            Object.keys(filledFieldValues).length > 0 ||
+            documentLoaded
+        );
+    };
+
+    const handleCloseAttempt = () => {
+        if (currentStep === 2 && hasUnsavedChanges()) {
+            setShowUnsavedDialog(true);
+        } else {
+            handleClose();
+        }
     };
 
     const handleNextStep = () => {
@@ -373,9 +423,10 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
     const dialogActions = currentStep === 1 ? step1Actions : step2Actions;
 
     return (
+        <>
         <BaseDialog
             open={open}
-            onClose={handleClose}
+            onClose={handleCloseAttempt}
             title={currentStep === 1 ? "Create Contract - Step 1: Contract Details" : `Create Contract - Step 2: Edit Document`}
             maxWidth={currentStep === 1 ? "md" : "xl"}
             fullWidth
@@ -615,6 +666,49 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 </Box>
             )}
         </BaseDialog>
+
+            {/* Unsaved Changes Confirmation Dialog */}
+            <BaseDialog
+                open={showUnsavedDialog}
+                onClose={() => setShowUnsavedDialog(false)}
+                title="Unsaved Changes"
+                maxWidth="xs"
+                actions={
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                            onClick={() => {
+                                setShowUnsavedDialog(false);
+                                handleClose();
+                            }}
+                        >
+                            No
+                        </Button>
+                        <Button
+                            variant="contained"
+                            onClick={() => {
+                                setShowUnsavedDialog(false);
+                                handleSave();
+                            }}
+                        >
+                            Yes
+                        </Button>
+                    </Box>
+                }
+            >
+                <Typography variant="body1" color="text.secondary">
+                    Do you want to save changes?
+                </Typography>
+            </BaseDialog>
+
+            {/* Notification Snackbar */}
+            <NotificationSnackbar
+                open={snackbar.open}
+                message={snackbar.message}
+                severity={snackbar.severity}
+                onClose={() => setSnackbar({ ...snackbar, open: false })}
+                autoHideDuration={3000}
+            />
+        </>
     );
 };
 
