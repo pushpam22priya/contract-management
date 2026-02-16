@@ -49,7 +49,9 @@ export enum ContractStatus {
     ACTIVE = 'active',           // Signed + Started
     EXPIRING = 'expiring',       // Active + fading
     EXPIRED = 'expired',
-    REJECTED = 'rejected'
+    REJECTED = 'rejected',
+    REJECTED_BY_REVIEWER = 'rejected_by_reviewer',
+    REJECTED_BY_APPROVER = 'rejected_by_approver'
 }
 
 export interface Contract {
@@ -126,9 +128,13 @@ export interface ModificationRequest {
 */
 export interface ReviewerInfo {
     email: string;                                               // Reviewer's email
-    status: 'pending' | 'reviewed' | 'requested_changes';       // Review status
+    status: 'pending' | 'reviewed' | 'requested_changes' | 'rejected';  // Review status
     reviewedAt?: string;                                         // Timestamp when reviewed
+    rejectedAt?: string;                                         // Timestamp when rejected
     comments?: string;                                           // Comments from reviewer
+    submissionMessage?: string;                                  // Message sent when submitting for review
+    sentAt?: string;                                             // Timestamp when review request was sent
+    sentBy?: string;                                             // Email of sender who requested review
 }
 
 /**
@@ -139,4 +145,7 @@ export interface ApproverInfo {
     status: 'pending' | 'approved' | 'rejected';                // Approval status
     approvedAt?: string;                                         // Timestamp when approved
     comments?: string;                                           // Comments from approver
+    submissionMessage?: string;                                  // Message sent when submitting for approval
+    sentAt?: string;                                             // Timestamp when approval request was sent
+    sentBy?: string;                                             // Email of sender who requested approval
 }

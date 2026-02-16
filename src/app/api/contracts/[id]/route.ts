@@ -72,9 +72,17 @@ export async function PATCH(
             'modificationComments', 'modificationRequests'
         ];
 
+        // Track fields to unset (when value is null)
+        const unsetFields: any = {};
+
         for (const field of allowedFields) {
             if (body[field] !== undefined) {
-                updateFields[field] = body[field];
+                if (body[field] === null) {
+                    // Use $unset to remove null fields from document
+                    unsetFields[field] = '';
+                } else {
+                    updateFields[field] = body[field];
+                }
             }
         }
 
@@ -86,9 +94,15 @@ export async function PATCH(
             };
         }
 
+        // Build the update operation
+        const updateOperation: any = { $set: updateFields };
+        if (Object.keys(unsetFields).length > 0) {
+            updateOperation.$unset = unsetFields;
+        }
+
         const result = await db.collection('contracts').updateOne(
             { _id: new ObjectId(id) },
-            { $set: updateFields }
+            updateOperation
         );
 
         if (result.matchedCount === 0) {

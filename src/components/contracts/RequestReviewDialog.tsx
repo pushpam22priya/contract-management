@@ -18,6 +18,7 @@ import PendingIcon from '@mui/icons-material/Pending';
 import BaseDialog from '@/components/common/BaseDialog';
 import { userService, User } from '@/services/userService';
 import { contractService } from '@/services/contractService';
+import { authService } from '@/services/authService';
 import { ModificationRequest } from '@/types/contract';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
@@ -26,7 +27,12 @@ interface RequestReviewDialogProps {
     onClose: () => void;
     contractId: string;
     contractTitle: string;
-    onSubmit: (reviewers: string[], approver: string) => Promise<void>;
+    onSubmit: (
+        reviewers: string[],
+        approver: string,
+        reviewerMessage?: string,
+        approverMessage?: string
+    ) => Promise<void>;
 }
 
 /**
@@ -54,13 +60,18 @@ export default function RequestReviewDialog({
     // State for approver
     const [selectedApprover, setSelectedApprover] = useState<User | null>(null);
 
+    // State for messages
+    const [reviewerMessage, setReviewerMessage] = useState('');
+    const [approverMessage, setApproverMessage] = useState('');
+
     // UI state
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [removing, setRemoving] = useState<string | null>(null); // Track which item is being removed
 
     // Previously shared users (from existing contract data)
-    const [existingReviewers, setExistingReviewers] = useState<{ email: string; status: string }[]>([]);
-    const [existingApprover, setExistingApprover] = useState<{ email: string; status: string } | null>(null);
+    const [existingReviewers, setExistingReviewers] = useState<{ email: string; status: string; submissionMessage?: string }[]>([]);
+    const [existingApprover, setExistingApprover] = useState<{ email: string; status: string; submissionMessage?: string } | null>(null);
     const [existingModificationRequests, setExistingModificationRequests] = useState<ModificationRequest[]>([]);
     const [hasExistingData, setHasExistingData] = useState(false);
 
@@ -96,6 +107,7 @@ export default function RequestReviewDialog({
                 setExistingReviewers(contract.reviewers.map(r => ({
                     email: r.email,
                     status: r.status,
+                    submissionMessage: r.submissionMessage,
                 })));
                 hasData = true;
             } else {
@@ -107,6 +119,7 @@ export default function RequestReviewDialog({
                 setExistingApprover({
                     email: contract.approver.email,
                     status: contract.approver.status,
+                    submissionMessage: contract.approver.submissionMessage,
                 });
                 hasData = true;
             } else {
@@ -134,32 +147,23 @@ export default function RequestReviewDialog({
     };
 
     /**
-     * Pre-populate fields when users and existing data are loaded
+     * Note: We intentionally DO NOT pre-populate selectedReviewers or selectedApprover.
+     * - Existing reviewers/approvers are shown in the "Previously Assigned" sections
+     * - selectedReviewers and selectedApprover are only for NEW selections
+     * - Submit button is only enabled when NEW selections are made
      */
-    /**
-     * Pre-populate fields when users and existing data are loaded
-     */
-    useEffect(() => {
-        if (users.length > 0 && hasExistingData) {
-            // Note: We intentionally DO NOT pre-populate reviewers here per user request.
-            // This prevents "replacing" confusion. We only allow adding NEW reviewers.
-            // The merging happens in the parent component.
-
-            // Populate approver (User wants this pre-filled)
-            if (existingApprover) {
-                const approverToSelect = users.find(user => user.email === existingApprover.email);
-                if (approverToSelect) {
-                    setSelectedApprover(approverToSelect);
-                }
-            }
-        }
-    }, [users, hasExistingData, existingApprover]);
 
     /**
-     * Get available reviewers (exclude approver AND existing reviewers)
+     * Get available reviewers (exclude current user, approver, and existing reviewers)
      */
     const getAvailableReviewers = (): User[] => {
+        const currentUser = authService.getCurrentUser();
         let filtered = users;
+
+        // Exclude current logged-in user (can't review your own contract)
+        if (currentUser) {
+            filtered = filtered.filter(u => u.email !== currentUser.email);
+        }
 
         // Exclude currently selected approver
         if (selectedApprover) {
@@ -176,11 +180,23 @@ export default function RequestReviewDialog({
     };
 
     /**
-     * Get available approvers (exclude selected reviewers)
+     * Get available approvers (exclude current user and selected reviewers)
      */
     const getAvailableApprovers = (): User[] => {
+        const currentUser = authService.getCurrentUser();
         const reviewerEmails = selectedReviewers.map(r => r.email);
-        return users.filter(user => !reviewerEmails.includes(user.email));
+
+        return users.filter(user => {
+            // Exclude current logged-in user (can't approve your own contract)
+            if (currentUser && user.email === currentUser.email) {
+                return false;
+            }
+            // Exclude selected reviewers
+            if (reviewerEmails.includes(user.email)) {
+                return false;
+            }
+            return true;
+        });
     };
 
     /**
@@ -200,26 +216,75 @@ export default function RequestReviewDialog({
     };
 
     /**
+     * Handle removing an existing reviewer
+     */
+    const handleRemoveReviewer = async (reviewerEmail: string) => {
+        setRemoving(reviewerEmail);
+        setError('');
+
+        try {
+            const result = await contractService.removeReviewer(contractId, reviewerEmail);
+
+            if (result.success) {
+                // Update local state to reflect removal
+                setExistingReviewers(prev => prev.filter(r => r.email !== reviewerEmail));
+            } else {
+                setError(result.message || 'Failed to remove reviewer');
+            }
+        } catch (err) {
+            setError('Failed to remove reviewer');
+        } finally {
+            setRemoving(null);
+        }
+    };
+
+    /**
+     * Handle removing the existing approver
+     */
+    const handleRemoveApprover = async () => {
+        if (!existingApprover) return;
+
+        setRemoving('approver');
+        setError('');
+
+        try {
+            const result = await contractService.removeApprover(contractId);
+
+            if (result.success) {
+                // Clear existing approver to show the selection input again
+                setExistingApprover(null);
+                // Also clear any previously selected approver in the autocomplete
+                setSelectedApprover(null);
+            } else {
+                setError(result.message || 'Failed to remove approver');
+            }
+        } catch (err) {
+            setError('Failed to remove approver');
+        } finally {
+            setRemoving(null);
+        }
+    };
+
+    /**
      * Submit the review request
      */
     const handleSubmit = async () => {
         setError('');
 
-        // Validation - at least one reviewer is mandatory
-        if (selectedReviewers.length === 0) {
-            setError('Please select at least one reviewer');
-            return;
-        }
-
-        // Validation - approver is mandatory
-        if (!selectedApprover) {
-            setError('Please select an approver');
-            return;
-        }
-
-        // Validate that reviewers and approver are not the same
+        // Get current selections
         const reviewerEmails = selectedReviewers.map(r => r.email);
-        if (reviewerEmails.includes(selectedApprover.email)) {
+        const approverEmail = existingApprover?.email || selectedApprover?.email;
+        const hasNewReviewers = selectedReviewers.length > 0;
+        const hasNewApprover = !!selectedApprover;
+
+        // Validation - at least one NEW reviewer OR NEW approver must be selected
+        if (!hasNewReviewers && !hasNewApprover) {
+            setError('Please select at least one new reviewer or a new approver');
+            return;
+        }
+
+        // Validate that reviewers and approver are not the same (only for new selections)
+        if (selectedApprover && reviewerEmails.includes(selectedApprover.email)) {
             setError('The approver cannot also be a reviewer');
             return;
         }
@@ -227,7 +292,13 @@ export default function RequestReviewDialog({
         setSubmitting(true);
 
         try {
-            await onSubmit(reviewerEmails, selectedApprover.email);
+            await onSubmit(
+                reviewerEmails,
+                approverEmail || '', // Pass empty string if no approver
+                reviewerMessage.trim() || undefined,
+                // Only pass approver message if it's a new approver
+                !existingApprover ? (approverMessage.trim() || undefined) : undefined
+            );
             handleClose();
         } catch (err) {
             setError('Failed to submit. Please try again.');
@@ -242,6 +313,8 @@ export default function RequestReviewDialog({
     const handleClose = () => {
         setSelectedReviewers([]);
         setSelectedApprover(null);
+        setReviewerMessage('');
+        setApproverMessage('');
         setError('');
         setSubmitting(false);
         onClose();
@@ -263,7 +336,8 @@ export default function RequestReviewDialog({
             <Button
                 onClick={handleSubmit}
                 variant="contained"
-                disabled={submitting || selectedReviewers.length === 0 || !selectedApprover}
+                // Only enable when NEW reviewer(s) OR NEW approver is selected
+                disabled={submitting || (selectedReviewers.length === 0 && !selectedApprover)}
                 sx={{
                     textTransform: 'none',
                     fontWeight: 600,
@@ -289,12 +363,12 @@ export default function RequestReviewDialog({
             actions={dialogActions}
             maxWidth="sm"
         >
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, py: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {/* Contract Info */}
                 <Box
                     sx={{
                         bgcolor: '#f8fafc',
-                        p: 2,
+                        p: 1,
                         borderRadius: 2,
                         border: '1px solid',
                         borderColor: 'rgba(0, 0, 0, 0.08)',
@@ -364,67 +438,123 @@ export default function RequestReviewDialog({
                     </Alert>
                 )}
 
-                {/* Previously Shared With Section */}
-                {(existingReviewers.length > 0 || existingApprover) && (
+                {/* Previously Submitted Reviewers Section - Grouped by Message */}
+                {existingReviewers.length > 0 && (
                     <Paper
                         elevation={0}
                         sx={{
                             bgcolor: '#f0fdfa',
                             border: '1px solid #99f6e4',
                             borderRadius: 2,
-                            p: 2,
+                            p: 1,
                         }}
                     >
                         <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: '#115e59' }}>
-                            Submitted to
+                            Assigned Reviewers
                         </Typography>
 
-                        {/* Existing Reviewers */}
-                        {existingReviewers.length > 0 && (
-                            <Box sx={{ mb: 2 }}>
-                                <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
-                                    Reviewers:
-                                </Typography>
-                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                    {existingReviewers.map((reviewer, index) => (
-                                        <Chip
-                                            key={index}
-                                            icon={reviewer.status === 'reviewed' ? <CheckCircleIcon /> : <PendingIcon />}
-                                            label={`${reviewer.email} (${reviewer.status})`}
-                                            size="small"
-                                            sx={{
-                                                bgcolor: reviewer.status === 'reviewed' ? '#d1fae5' : '#fef3c7',
-                                                color: reviewer.status === 'reviewed' ? '#065f46' : '#92400e',
-                                                '& .MuiChip-icon': {
-                                                    color: reviewer.status === 'reviewed' ? '#065f46' : '#92400e',
-                                                },
-                                            }}
-                                        />
-                                    ))}
-                                </Box>
-                            </Box>
-                        )}
+                        {/* Group reviewers by their submission message - maintaining order */}
+                        {(() => {
+                            // Group reviewers by submissionMessage while maintaining order
+                            const groups: { message: string | null; reviewers: typeof existingReviewers }[] = [];
 
-                        {/* Existing Approver */}
-                        {existingApprover && (
-                            <Box>
-                                <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
-                                    Approver:
-                                </Typography>
-                                <Chip
-                                    icon={existingApprover.status === 'approved' ? <CheckCircleIcon /> : <PendingIcon />}
-                                    label={`${existingApprover.email} (${existingApprover.status})`}
-                                    size="small"
+                            existingReviewers.forEach((reviewer) => {
+                                const message = reviewer.submissionMessage || null;
+                                // Find existing group with same message
+                                const existingGroup = groups.find(g => g.message === message);
+                                if (existingGroup) {
+                                    existingGroup.reviewers.push(reviewer);
+                                } else {
+                                    groups.push({ message, reviewers: [reviewer] });
+                                }
+                            });
+
+                            return groups.map(({ message, reviewers }, groupIndex) => (
+                                <Box
+                                    key={groupIndex}
                                     sx={{
-                                        bgcolor: existingApprover.status === 'approved' ? '#dbeafe' : '#fef3c7',
-                                        color: existingApprover.status === 'approved' ? '#1e40af' : '#92400e',
-                                        '& .MuiChip-icon': {
-                                            color: existingApprover.status === 'approved' ? '#1e40af' : '#92400e',
-                                        },
+                                        mb: groupIndex < groups.length - 1 ? 1.5 : 0,
+                                        pb: groupIndex < groups.length - 1 ? 1.5 : 0,
+                                        borderBottom: groupIndex < groups.length - 1
+                                            ? '1px dashed rgba(0, 105, 92, 0.2)'
+                                            : 'none',
                                     }}
-                                />
-                            </Box>
-                        )}
+                                >
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                        {reviewers.map((reviewer, index) => (
+                                            <Chip
+                                                key={index}
+                                                icon={reviewer.status === 'reviewed' ? <CheckCircleIcon /> : <PendingIcon />}
+                                                label={`${reviewer.email} (${reviewer.status})`}
+                                                size="small"
+                                                onDelete={() => handleRemoveReviewer(reviewer.email)}
+                                                deleteIcon={
+                                                    removing === reviewer.email ? (
+                                                        <Box
+                                                            sx={{
+                                                                width: 18,
+                                                                height: 18,
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                            }}
+                                                        >
+                                                            <Box
+                                                                sx={{
+                                                                    width: 12,
+                                                                    height: 12,
+                                                                    border: '2px solid',
+                                                                    borderColor: reviewer.status === 'reviewed' ? '#065f46' : '#92400e',
+                                                                    borderTopColor: 'transparent',
+                                                                    borderRadius: '50%',
+                                                                    animation: 'spin 1s linear infinite',
+                                                                    '@keyframes spin': {
+                                                                        '0%': { transform: 'rotate(0deg)' },
+                                                                        '100%': { transform: 'rotate(360deg)' },
+                                                                    },
+                                                                }}
+                                                            />
+                                                        </Box>
+                                                    ) : (
+                                                        <CloseIcon />
+                                                    )
+                                                }
+                                                disabled={removing !== null}
+                                                sx={{
+                                                    bgcolor: reviewer.status === 'reviewed' ? '#d1fae5' : '#fef3c7',
+                                                    color: reviewer.status === 'reviewed' ? '#065f46' : '#92400e',
+                                                    '& .MuiChip-icon': {
+                                                        color: reviewer.status === 'reviewed' ? '#065f46' : '#92400e',
+                                                    },
+                                                    '& .MuiChip-deleteIcon': {
+                                                        color: reviewer.status === 'reviewed' ? '#065f46' : '#92400e',
+                                                        '&:hover': {
+                                                            color: reviewer.status === 'reviewed' ? '#064e3b' : '#78350f',
+                                                        },
+                                                    },
+                                                }}
+                                            />
+                                        ))}
+                                    </Box>
+                                    {/* Show submission message for this group */}
+                                    {message && (
+                                        <Box
+                                            sx={{
+                                                mt: 1,
+                                                p: 1,
+                                                bgcolor: 'rgba(255, 255, 255, 0.6)',
+                                                borderRadius: 1,
+                                                borderLeft: '3px solid #00695c',
+                                            }}
+                                        >
+                                            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                                "{message}"
+                                            </Typography>
+                                        </Box>
+                                    )}
+                                </Box>
+                            ));
+                        })()}
                     </Paper>
                 )}
 
@@ -483,6 +613,51 @@ export default function RequestReviewDialog({
                             {selectedReviewers.length} reviewer{selectedReviewers.length > 1 ? 's' : ''} selected
                         </Typography>
                     )}
+
+                    {/* Message for Reviewers */}
+                    {selectedReviewers.length > 0 && (
+                        <Box
+                            sx={{
+                                mt: 1.5,
+                                p: 1.5,
+                                bgcolor: 'rgba(0, 105, 92, 0.04)',
+                                borderRadius: 1.5,
+                                border: '1px dashed rgba(0, 105, 92, 0.2)',
+                            }}
+                        >
+                            <Typography
+                                variant="caption"
+                                fontWeight={500}
+                                sx={{ display: 'block', mb: 1, color: '#00695c' }}
+                            >
+                                Message to Reviewers (optional)
+                            </Typography>
+                            <TextField
+                                multiline
+                                rows={2}
+                                fullWidth
+                                placeholder="Add instructions or context for reviewers..."
+                                value={reviewerMessage}
+                                onChange={(e) => setReviewerMessage(e.target.value)}
+                                size="small"
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        bgcolor: 'white',
+                                        fontSize: '0.875rem',
+                                        '& fieldset': {
+                                            borderColor: 'rgba(0, 105, 92, 0.2)',
+                                        },
+                                        '&:hover fieldset': {
+                                            borderColor: 'rgba(0, 105, 92, 0.4)',
+                                        },
+                                        '&.Mui-focused fieldset': {
+                                            borderColor: '#00695c',
+                                        },
+                                    },
+                                }}
+                            />
+                        </Box>
+                    )}
                 </Box>
 
                 <Divider />
@@ -492,46 +667,178 @@ export default function RequestReviewDialog({
                     <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                         Approver <span style={{ color: '#d32f2f' }}>*</span>
                     </Typography>
-                    {/* Approver Autocomplete */}
-                    <Autocomplete
-                        options={getAvailableApprovers()}
-                        getOptionLabel={(option) => `${option.name} (${option.email})`}
-                        value={selectedApprover}
-                        onChange={handleApproverChange}
-                        loading={loadingUsers}
-                        renderInput={(params) => (
-                            <TextField
-                                {...params}
-                                placeholder="Search and select approver..."
-                                size="small"
-                                sx={{
-                                    '& .MuiOutlinedInput-root': {
-                                        bgcolor: 'white',
-                                    },
-                                }}
-                            />
-                        )}
-                    />
 
-                    {/* Selected Approver Display */}
-                    {selectedApprover && (
-                        <Box sx={{ mt: 1.5 }}>
+                    {/* Show existing approver with remove option */}
+                    {existingApprover ? (
+                        <Box
+                            sx={{
+                                p: 1,
+                                bgcolor: '#f7fdf0ff',
+                                borderRadius: 2,
+                                border: '1px solid #ddf699ff',
+                            }}
+                        >
                             <Chip
-                                label={`${selectedApprover.name} - ${selectedApprover.email}`}
-                                onDelete={() => setSelectedApprover(null)}
-                                deleteIcon={<CloseIcon />}
+                                icon={existingApprover.status === 'approved' ? <CheckCircleIcon /> : <PendingIcon />}
+                                label={`${existingApprover.email} (${existingApprover.status})`}
+                                size="small"
+                                onDelete={handleRemoveApprover}
+                                deleteIcon={
+                                    removing === 'approver' ? (
+                                        <Box
+                                            sx={{
+                                                width: 18,
+                                                height: 18,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
+                                        >
+                                            <Box
+                                                sx={{
+                                                    width: 12,
+                                                    height: 12,
+                                                    border: '2px solid',
+                                                    borderColor: existingApprover.status === 'approved' ? '#1e40af' : '#92400e',
+                                                    borderTopColor: 'transparent',
+                                                    borderRadius: '50%',
+                                                    animation: 'spin 1s linear infinite',
+                                                    '@keyframes spin': {
+                                                        '0%': { transform: 'rotate(0deg)' },
+                                                        '100%': { transform: 'rotate(360deg)' },
+                                                    },
+                                                }}
+                                            />
+                                        </Box>
+                                    ) : (
+                                        <CloseIcon />
+                                    )
+                                }
+                                disabled={removing !== null}
                                 sx={{
-                                    bgcolor: '#fff3e0',
-                                    color: '#e65100',
+                                    bgcolor: existingApprover.status === 'approved' ? '#dbeafe' : '#fef3c7',
+                                    color: existingApprover.status === 'approved' ? '#1e40af' : '#92400e',
+                                    '& .MuiChip-icon': {
+                                        color: existingApprover.status === 'approved' ? '#1e40af' : '#92400e',
+                                    },
                                     '& .MuiChip-deleteIcon': {
-                                        color: '#e65100',
+                                        color: existingApprover.status === 'approved' ? '#1e40af' : '#92400e',
                                         '&:hover': {
-                                            color: '#bf360c',
+                                            color: existingApprover.status === 'approved' ? '#1e3a8a' : '#78350f',
                                         },
                                     },
                                 }}
                             />
+                            {existingApprover.submissionMessage && (
+                                <Box
+                                    sx={{
+                                        mt: 1,
+                                        p: 1,
+                                        bgcolor: 'rgba(255, 255, 255, 0.6)',
+                                        borderRadius: 1,
+                                        borderLeft: '3px solid #a5e600ff',
+                                    }}
+                                >
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                        "{existingApprover.submissionMessage}"
+                                    </Typography>
+                                </Box>
+                            )}
                         </Box>
+                    ) : (
+                        <>
+                            {/* Approver Autocomplete - only shown if no existing approver */}
+                            <Autocomplete
+                                options={getAvailableApprovers()}
+                                getOptionLabel={(option) => `${option.name} (${option.email})`}
+                                value={selectedApprover}
+                                onChange={handleApproverChange}
+                                loading={loadingUsers}
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        placeholder="Search and select approver..."
+                                        size="small"
+                                        sx={{
+                                            '& .MuiOutlinedInput-root': {
+                                                bgcolor: 'white',
+                                            },
+                                        }}
+                                    />
+                                )}
+                            />
+
+                            {/* Selected Approver Display */}
+                            {selectedApprover && (
+                                <Box sx={{ mt: 1.5 }}>
+                                    <Chip
+                                        icon={<PendingIcon />}
+                                        label={`${selectedApprover.name} (${selectedApprover.email})`}
+                                        size="small"
+                                        onDelete={() => setSelectedApprover(null)}
+                                        deleteIcon={<CloseIcon />}
+                                        sx={{
+                                            bgcolor: '#fef3c7',
+                                            color: '#92400e',
+                                            '& .MuiChip-icon': {
+                                                color: '#92400e',
+                                            },
+                                            '& .MuiChip-deleteIcon': {
+                                                color: '#92400e',
+                                                '&:hover': {
+                                                    color: '#78350f',
+                                                },
+                                            },
+                                        }}
+                                    />
+                                </Box>
+                            )}
+
+                            {/* Message for Approver */}
+                            {selectedApprover && (
+                                <Box
+                                    sx={{
+                                        mt: 1.5,
+                                        p: 1.5,
+                                        bgcolor: 'rgba(0, 105, 92, 0.04)',
+                                        borderRadius: 1.5,
+                                        border: '1px dashed rgba(0, 105, 92, 0.2)',
+                                    }}
+                                >
+                                    <Typography
+                                        variant="caption"
+                                        fontWeight={500}
+                                        sx={{ display: 'block', mb: 1, color: '#00695c' }}
+                                    >
+                                        Message to Approver (optional)
+                                    </Typography>
+                                    <TextField
+                                        multiline
+                                        rows={2}
+                                        fullWidth
+                                        placeholder="Add instructions or context for the approver..."
+                                        value={approverMessage}
+                                        onChange={(e) => setApproverMessage(e.target.value)}
+                                        size="small"
+                                        sx={{
+                                            '& .MuiOutlinedInput-root': {
+                                                bgcolor: 'white',
+                                                fontSize: '0.875rem',
+                                                '& fieldset': {
+                                                    borderColor: 'rgba(230, 81, 0, 0.2)',
+                                                },
+                                                '&:hover fieldset': {
+                                                    borderColor: 'rgba(230, 81, 0, 0.4)',
+                                                },
+                                                '&.Mui-focused fieldset': {
+                                                    borderColor: '#e65100',
+                                                },
+                                            },
+                                        }}
+                                    />
+                                </Box>
+                            )}
+                        </>
                     )}
                 </Box>
             </Box>
