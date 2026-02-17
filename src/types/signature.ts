@@ -9,6 +9,8 @@
 * for API response compatibility with the signing page.
 */
 
+import { PartyConfiguration } from './template';
+
 /**
 * Represents signature request data returned to the signing page.
 * This is now derived from the contract document.
@@ -48,6 +50,7 @@ export interface SignatureRequest {
     hasFormFields?: boolean;      // Quick check if contract has form fields
     formFields: any[];            // Form field definitions
     fieldValues: Record<string, string>;
+    parties?: PartyConfiguration[];  // ✅ Party configurations for validation
 
     // Filled after signing
     signedAt?: string;
