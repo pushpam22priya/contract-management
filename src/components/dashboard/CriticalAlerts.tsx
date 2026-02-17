@@ -49,7 +49,7 @@ export default function CriticalAlerts() {
                 return isRelevant && c.status === ContractStatus.EXPIRING;
             });
 
-            // Map to alerts
+            // Map to alerts and sort by nearest expiry (ascending)
             const newAlerts = expiringContracts.map(c => {
                 const endDateStr = c.endDate || new Date().toISOString();
                 const endDate = new Date(endDateStr);
@@ -65,7 +65,7 @@ export default function CriticalAlerts() {
                     contractTitle: c.title,
                     clientName: c.client
                 };
-            });
+            }).sort((a, b) => a.daysRemaining - b.daysRemaining);
 
             setAlerts(newAlerts);
             // Only show section if we have alerts
@@ -73,6 +73,12 @@ export default function CriticalAlerts() {
         } catch (error) {
             console.error("CriticalAlerts: Failed to load contracts", error);
         }
+    };
+
+    const handleViewAll = () => {
+        const params = new URLSearchParams();
+        params.set('status', ContractStatus.EXPIRING);
+        router.push(`/contracts?${params.toString()}`);
     };
 
     const handleView = (alert: Alert) => {
@@ -116,47 +122,65 @@ export default function CriticalAlerts() {
                 }}
             >
                 {/* Header */}
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: 40,
-                            height: 40,
-                            borderRadius: '50%',
-                            bgcolor: '#f59e0b',
-                            mr: 2,
-                            animation: 'pulse 2s infinite',
-                            '@keyframes pulse': {
-                                '0%, 100%': {
-                                    transform: 'scale(1)',
-                                    boxShadow: '0 0 0 0 rgba(245, 158, 11, 0.7)',
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: 40,
+                                height: 40,
+                                borderRadius: '50%',
+                                bgcolor: '#f59e0b',
+                                mr: 2,
+                                animation: 'pulse 2s infinite',
+                                '@keyframes pulse': {
+                                    '0%, 100%': {
+                                        transform: 'scale(1)',
+                                        boxShadow: '0 0 0 0 rgba(245, 158, 11, 0.7)',
+                                    },
+                                    '50%': {
+                                        transform: 'scale(1.05)',
+                                        boxShadow: '0 0 0 8px rgba(245, 158, 11, 0)',
+                                    },
                                 },
-                                '50%': {
-                                    transform: 'scale(1.05)',
-                                    boxShadow: '0 0 0 8px rgba(245, 158, 11, 0)',
-                                },
-                            },
-                        }}
-                    >
-                        <WarningAmberIcon sx={{ color: 'white', fontSize: 24 }} />
+                            }}
+                        >
+                            <WarningAmberIcon sx={{ color: 'white', fontSize: 24 }} />
+                        </Box>
+                        <Typography
+                            variant="h6"
+                            fontWeight={700}
+                            sx={{
+                                color: '#92400e',
+                                fontSize: { xs: '1.1rem', sm: '1.25rem' }
+                            }}
+                        >
+                            Critical Alerts
+                        </Typography>
                     </Box>
-                    <Typography
-                        variant="h6"
-                        fontWeight={700}
-                        sx={{
-                            color: '#92400e',
-                            fontSize: { xs: '1.1rem', sm: '1.25rem' }
-                        }}
-                    >
-                        Critical Alerts
-                    </Typography>
+                    {alerts.length > 2 && (
+                        <Button
+                            size="small"
+                            onClick={handleViewAll}
+                            sx={{
+                                color: '#92400e',
+                                fontWeight: 600,
+                                textTransform: 'none',
+                                '&:hover': {
+                                    bgcolor: 'rgba(245, 158, 11, 0.1)',
+                                },
+                            }}
+                        >
+                            View All
+                        </Button>
+                    )}
                 </Box>
 
                 {/* Alert Items */}
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {alerts.map((alert, index) => (
+                    {alerts.slice(0, 2).map((alert, index) => (
                         <Grow
                             key={alert.id}
                             in

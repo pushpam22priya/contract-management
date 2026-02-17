@@ -2,10 +2,6 @@
 
 import { useState } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
     Button,
     TextField,
     Box,
@@ -15,6 +11,7 @@ import {
     InputAdornment,
 } from '@mui/material';
 import { Email, Send, CheckCircle, ContentCopy } from '@mui/icons-material';
+import BaseDialog from '@/components/common/BaseDialog';
 
 interface SubmitForSignatureDialogProps {
     open: boolean;
@@ -118,143 +115,20 @@ const SubmitForSignatureDialog = ({
     };
 
     return (
-        <Dialog 
-            open={open} 
-            onClose={loading ? undefined : handleClose}
+        <BaseDialog
+            open={open}
+            onClose={loading ? () => {} : handleClose}
+            title={success ? 'Signature Request Sent!' : 'Request Signature'}
             maxWidth="sm"
-            fullWidth
-        >
-            <DialogTitle>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Send color="primary" />
-                    <Typography variant="h6">
-                        {success ? 'Signature Request Sent!' : 'Request Signature'}
-                    </Typography>
-                </Box>
-            </DialogTitle>
-
-            <DialogContent>
-                {/* Contract Title */}
-                {contractTitle && (
-                    <Typography 
-                        variant="body2" 
-                        color="text.secondary" 
-                        sx={{ mb: 3 }}
-                    >
-                        Contract: <strong>{contractTitle}</strong>
-                    </Typography>
-                )}
-
-                {/* Success State */}
-                {success ? (
-                    <Box>
-                        <Alert 
-                            severity="success" 
-                            icon={<CheckCircle />}
-                            sx={{ mb: 3 }}
-                        >
-                            Signature request has been sent to <strong>{signerEmail}</strong>
-                        </Alert>
-
-                        <Typography variant="body2" sx={{ mb: 2 }}>
-                            The recipient will receive an email with a link to sign the document.
-                            You will be notified when they complete the signature.
-                        </Typography>
-
-                        {/* Show signing URL for manual sharing */}
-                        {signingUrl && (
-                            <Box sx={{ mt: 3 }}>
-                                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                                    Signing Link (for manual sharing):
-                                </Typography>
-                                <Box
-                                    sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 1,
-                                        p: 1.5,
-                                        bgcolor: 'grey.100',
-                                        borderRadius: 1,
-                                        wordBreak: 'break-all',
-                                    }}
-                                >
-                                    <Typography 
-                                        variant="caption" 
-                                        sx={{ flex: 1, fontFamily: 'monospace' }}
-                                    >
-                                        {signingUrl}
-                                    </Typography>
-                                    <Button
-                                        size="small"
-                                        startIcon={<ContentCopy />}
-                                        onClick={handleCopyUrl}
-                                    >
-                                        Copy
-                                    </Button>
-                                </Box>
-                            </Box>
-                        )}
-                    </Box>
-                ) : (
-                    /* Input State */
-                    <Box>
-                        <Typography variant="body2" sx={{ mb: 3 }}>
-                            Enter the email address of the person who needs to sign this contract.
-                            They will receive an email with a secure link to review and sign the document.
-                        </Typography>
-
-                        {/* Error Alert */}
-                        {error && (
-                            <Alert severity="error" sx={{ mb: 2 }}>
-                                {error}
-                            </Alert>
-                        )}
-
-                        {/* Email Input */}
-                        <TextField
-                            fullWidth
-                            label="Signer's Email Address"
-                            type="email"
-                            value={signerEmail}
-                            onChange={(e) => setSignerEmail(e.target.value)}
-                            disabled={loading}
-                            placeholder="client@example.com"
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <Email color="action" />
-                                    </InputAdornment>
-                                ),
-                            }}
-                            onKeyPress={(e) => {
-                                if (e.key === 'Enter' && !loading) {
-                                    handleSubmit();
-                                }
-                            }}
-                            autoFocus
-                        />
-
-                        {/* Info Text */}
-                        <Typography 
-                            variant="caption" 
-                            color="text.secondary" 
-                            sx={{ mt: 1, display: 'block' }}
-                        >
-                            The signer will not need to create an account. They can sign directly from the email link.
-                        </Typography>
-                    </Box>
-                )}
-            </DialogContent>
-
-            <DialogActions sx={{ px: 3, pb: 2 }}>
-                {success ? (
+            actions={
+                success ? (
                     <Button onClick={handleClose} variant="contained">
                         Done
                     </Button>
                 ) : (
                     <>
-                        <Button 
-                            onClick={handleClose} 
+                        <Button
+                            onClick={handleClose}
                             disabled={loading}
                         >
                             Cancel
@@ -268,9 +142,120 @@ const SubmitForSignatureDialog = ({
                             {loading ? 'Sending...' : 'Send Request'}
                         </Button>
                     </>
-                )}
-            </DialogActions>
-        </Dialog>
+                )
+            }
+        >
+            {/* Contract Title */}
+            {contractTitle && (
+                <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 3 }}
+                >
+                    Contract: <strong>{contractTitle}</strong>
+                </Typography>
+            )}
+
+            {/* Success State */}
+            {success ? (
+                <Box>
+                    <Alert
+                        severity="success"
+                        icon={<CheckCircle />}
+                        sx={{ mb: 3 }}
+                    >
+                        Signature request has been sent to <strong>{signerEmail}</strong>
+                    </Alert>
+
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                        The recipient will receive an email with a link to sign the document.
+                        You will be notified when they complete the signature.
+                    </Typography>
+
+                    {/* Show signing URL for manual sharing */}
+                    {signingUrl && (
+                        <Box sx={{ mt: 3 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                Signing Link (for manual sharing):
+                            </Typography>
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                    p: 1.5,
+                                    bgcolor: 'grey.100',
+                                    borderRadius: 1,
+                                    wordBreak: 'break-all',
+                                }}
+                            >
+                                <Typography
+                                    variant="caption"
+                                    sx={{ flex: 1, fontFamily: 'monospace' }}
+                                >
+                                    {signingUrl}
+                                </Typography>
+                                <Button
+                                    size="small"
+                                    startIcon={<ContentCopy />}
+                                    onClick={handleCopyUrl}
+                                >
+                                    Copy
+                                </Button>
+                            </Box>
+                        </Box>
+                    )}
+                </Box>
+            ) : (
+                /* Input State */
+                <Box>
+                    <Typography variant="body2" sx={{ mb: 3 }}>
+                        Enter the email address of the person who needs to sign this contract.
+                        They will receive an email with a secure link to review and sign the document.
+                    </Typography>
+
+                    {/* Error Alert */}
+                    {error && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {error}
+                        </Alert>
+                    )}
+
+                    {/* Email Input */}
+                    <TextField
+                        fullWidth
+                        label="Signer's Email Address"
+                        type="email"
+                        value={signerEmail}
+                        onChange={(e) => setSignerEmail(e.target.value)}
+                        disabled={loading}
+                        placeholder="client@example.com"
+                        InputProps={{
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <Email color="action" />
+                                </InputAdornment>
+                            ),
+                        }}
+                        onKeyPress={(e) => {
+                            if (e.key === 'Enter' && !loading) {
+                                handleSubmit();
+                            }
+                        }}
+                        autoFocus
+                    />
+
+                    {/* Info Text */}
+                    <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ mt: 1, display: 'block' }}
+                    >
+                        The signer will not need to create an account. They can sign directly from the email link.
+                    </Typography>
+                </Box>
+            )}
+        </BaseDialog>
     );
 };
 

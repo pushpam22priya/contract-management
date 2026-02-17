@@ -2,7 +2,7 @@
 
 
 import { useState, useEffect } from 'react';
-import { Box, Typography, Button, Tooltip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
+import { Box, Typography, Button, Tooltip, IconButton } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import UploadIcon from '@mui/icons-material/Upload';
 import TemplateCard from '@/components/template/TemplateCard';
@@ -10,6 +10,7 @@ import UploadTemplateDialog from '@/components/template/UploadTemplateDialog';
 import EditTemplateDialog from '@/components/template/EditTemplateDialog';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import CreateContractDialog from '@/components/contracts/CreateContractDialog';
+import BaseDialog from '@/components/common/BaseDialog';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import { authService } from '@/services/authService';
@@ -328,46 +329,36 @@ export default function TemplatePage() {
                 )}
 
                 {/* Delete Confirmation Dialog */}
-                <Dialog
+                <BaseDialog
                     open={deleteDialogOpen}
                     onClose={() => !deleting && setDeleteDialogOpen(false)}
-                    maxWidth="sm"
-                    fullWidth
+                    title="Delete Template"
+                    maxWidth="xs"
+                    actions={
+                        <>
+                            <Button
+                                onClick={() => setDeleteDialogOpen(false)}
+                                disabled={deleting}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={confirmDelete}
+                                variant="contained"
+                                color="error"
+                                disabled={deleting}
+                                sx={{ minWidth: 100 }}
+                            >
+                                {deleting ? 'Deleting...' : 'Delete'}
+                            </Button>
+                        </>
+                    }
                 >
-                    <DialogTitle sx={{ fontWeight: 600, color: 'error.main' }}>
-                        Delete Template
-                    </DialogTitle>
-                    <DialogContent>
-                        <DialogContentText>
-                            Are you sure you want to delete the template <strong>"{templateToDelete?.name}"</strong>?
-                            This action cannot be undone.
-                        </DialogContentText>
-                    </DialogContent>
-                    <DialogActions sx={{ p: 2, gap: 1 }}>
-                        <Button
-                            onClick={() => setDeleteDialogOpen(false)}
-                            disabled={deleting}
-                            sx={{
-                                textTransform: 'none',
-                                color: 'text.secondary',
-                            }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={confirmDelete}
-                            variant="contained"
-                            color="error"
-                            disabled={deleting}
-                            sx={{
-                                textTransform: 'none',
-                                minWidth: 100,
-                            }}
-                        >
-                            {deleting ? 'Deleting...' : 'Delete'}
-                        </Button>
-                    </DialogActions>
-                </Dialog>
+                    <Typography variant="body1" color="text.secondary">
+                        Are you sure you want to delete the template <strong>&quot;{templateToDelete?.name}&quot;</strong>?
+                        This action cannot be undone.
+                    </Typography>
+                </BaseDialog>
 
                 {/* Create Contract Wizard */}
                 <CreateContractDialog

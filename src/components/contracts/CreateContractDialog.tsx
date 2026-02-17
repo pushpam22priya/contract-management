@@ -14,9 +14,12 @@ import {
     Divider,
     AlertColor,
 } from '@mui/material';
-import { Save, ArrowBack, ArrowForward } from '@mui/icons-material';
+import { ArrowBack, ArrowForward } from '@mui/icons-material';
 import BaseDialog from '@/components/common/BaseDialog';
+import ConfirmationDialog from '@/components/common/ConfirmationDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
+import RequestReviewDialog from '@/components/contracts/RequestReviewDialog';
+import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import { templateService } from '@/services/templateService';
 import { contractService } from '@/services/contractService';
@@ -71,6 +74,11 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
 
     // Unsaved changes confirmation dialog state
     const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+    // Track which action triggered the unsaved changes dialog
+    const [pendingAction, setPendingAction] = useState<'close' | 'review' | 'signature' | null>(null);
+    // Dialog states for Review & Signature
+    const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+    const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
 
     // Track filled field values
     // Explanation: This stores the values user enters in form fields (e.g., {"client_name": "John Doe"})
@@ -326,10 +334,51 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
 
     const handleCloseAttempt = () => {
         if (currentStep === 2 && hasUnsavedChanges()) {
+            setPendingAction('close');
             setShowUnsavedDialog(true);
         } else {
             handleClose();
         }
+    };
+
+    const handleReviewClick = () => {
+        if (hasUnsavedChanges()) {
+            setPendingAction('review');
+            setShowUnsavedDialog(true);
+        } else {
+            setReviewDialogOpen(true);
+        }
+    };
+
+    const handleSignatureClick = () => {
+        if (hasUnsavedChanges()) {
+            setPendingAction('signature');
+            setShowUnsavedDialog(true);
+        } else {
+            setSignatureDialogOpen(true);
+        }
+    };
+
+    const handleUnsavedYes = async () => {
+        setShowUnsavedDialog(false);
+        await handleSave();
+        if (pendingAction === 'close') {
+            handleClose();
+            router.push('/draft');
+        } else if (pendingAction === 'review') {
+            setReviewDialogOpen(true);
+        } else if (pendingAction === 'signature') {
+            setSignatureDialogOpen(true);
+        }
+        setPendingAction(null);
+    };
+
+    const handleUnsavedNo = () => {
+        setShowUnsavedDialog(false);
+        if (pendingAction === 'close') {
+            handleClose();
+        }
+        setPendingAction(null);
     };
 
     const handleNextStep = () => {
@@ -394,9 +443,9 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
             >
                 Back to Details
             </Button>
+
             <Button
                 onClick={handleSave}
-                startIcon={<Save />}
                 variant="contained"
                 disabled={!canSave || saving}
                 sx={{
@@ -415,6 +464,49 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 }}
             >
                 {saving ? 'Saving...' : 'Save Contract'}
+            </Button>
+
+            <Button
+                variant="contained"
+                onClick={handleReviewClick}
+                disabled={!contractId || saving}
+                sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    px: 2,
+                    py: 0.6,
+                    borderRadius: 2,
+                    minWidth: 150,
+                    bgcolor: '#2e7d32',
+                    boxShadow: '0 2px 8px rgba(46, 125, 50, 0.25)',
+                    '&:hover': {
+                        bgcolor: '#1b5e20',
+                        boxShadow: '0 4px 12px rgba(46, 125, 50, 0.35)',
+                    },
+                }}
+            >
+                Review & Approve
+            </Button>
+            <Button
+                variant="contained"
+                onClick={handleSignatureClick}
+                disabled={!contractId || saving}
+                sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    px: 2,
+                    py: 0.6,
+                    borderRadius: 2,
+                    minWidth: 150,
+                    bgcolor: '#1565c0',
+                    boxShadow: '0 2px 8px rgba(21, 101, 192, 0.25)',
+                    '&:hover': {
+                        bgcolor: '#0d47a1',
+                        boxShadow: '0 4px 12px rgba(21, 101, 192, 0.35)',
+                    },
+                }}
+            >
+                Signature
             </Button>
         </Box>
     );
@@ -668,37 +760,63 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
         </BaseDialog>
 
             {/* Unsaved Changes Confirmation Dialog */}
-            <BaseDialog
+            <ConfirmationDialog
                 open={showUnsavedDialog}
-                onClose={() => setShowUnsavedDialog(false)}
                 title="Unsaved Changes"
-                maxWidth="xs"
-                actions={
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button
-                            onClick={() => {
-                                setShowUnsavedDialog(false);
-                                handleClose();
-                            }}
-                        >
-                            No
-                        </Button>
-                        <Button
-                            variant="contained"
-                            onClick={() => {
-                                setShowUnsavedDialog(false);
-                                handleSave();
-                            }}
-                        >
-                            Yes
-                        </Button>
-                    </Box>
-                }
-            >
-                <Typography variant="body1" color="text.secondary">
-                    Do you want to save changes?
-                </Typography>
-            </BaseDialog>
+                message="Do you want to save changes?"
+                onYes={handleUnsavedYes}
+                onNo={handleUnsavedNo}
+                loading={saving}
+            />
+
+            {/* Request Review Dialog */}
+            {contractId && (
+                <RequestReviewDialog
+                    open={reviewDialogOpen}
+                    onClose={() => setReviewDialogOpen(false)}
+                    contractId={contractId}
+                    contractTitle={contractTitle}
+                    onSubmit={async (reviewers, approver, reviewerMessage, approverMessage) => {
+                        const currentUser = authService.getCurrentUser();
+                        const result = await contractService.submitForReview(
+                            contractId,
+                            reviewers,
+                            approver,
+                            reviewerMessage,
+                            approverMessage,
+                            currentUser?.email
+                        );
+                        if (result.success) {
+                            setSnackbar({ open: true, message: result.message, severity: 'success' });
+                            setReviewDialogOpen(false);
+                        } else {
+                            setSnackbar({ open: true, message: result.message, severity: 'error' });
+                        }
+                    }}
+                />
+            )}
+
+            {/* Submit for Signature Dialog */}
+            {contractId && (
+                <SubmitForSignatureDialog
+                    open={signatureDialogOpen}
+                    onClose={() => setSignatureDialogOpen(false)}
+                    contractTitle={contractTitle}
+                    onSubmit={async (signerEmail) => {
+                        const currentUser = authService.getCurrentUser();
+                        const result = await contractService.submitForSignature(
+                            contractId,
+                            signerEmail,
+                            currentUser?.email
+                        );
+                        if (result.success) {
+                            setSnackbar({ open: true, message: result.message, severity: 'success' });
+                            setSignatureDialogOpen(false);
+                        }
+                        return result;
+                    }}
+                />
+            )}
 
             {/* Notification Snackbar */}
             <NotificationSnackbar
