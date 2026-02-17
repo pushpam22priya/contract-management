@@ -38,7 +38,15 @@ export const apiService = {
                 uploadedBy: 'user', // Replace with real user info if available
                 xfdfData: data.xfdfData,
                 formFields: data.formFields,
+                parties: data.parties,  // Multi-party configuration
             };
+
+            console.log('[API-SERVICE] Uploading template with metadata:', {
+                name: metadata.name,
+                category: metadata.category,
+                formFieldsCount: metadata.formFields?.length || 0,
+                partiesCount: metadata.parties?.length || 0,
+            });
 
             const metaRes = await fetch(`${API_BASE}/templates`, {
                 method: 'POST',

@@ -26,11 +26,39 @@ interface PDFViewerContainerProps {
     initialToolbarGroup?: string; // ✅ New prop for controlling initial toolbar
     showAnnotationNavigation?: boolean; // ✅ Show floating navigation button for annotations
     onSignatureApplied?: (data: { emptySignatureFieldCount: number }) => void; // ✅ Callback when a signature is applied to a field
+
+    // Multi-party field assignment props
+    parties?: PartyConfiguration[];           // Available parties for field assignment
+    editableParties?: string[];               // Which parties' fields are editable (empty = all editable)
+    currentFillingParty?: string;             // Which party the current user is filling for
+    enablePartyAssignment?: boolean;          // Enable party assignment mode (for template creation)
+    onPartyAssigned?: (fieldName: string, partyId: string, partyLabel: string) => void; // Callback when field is assigned to party
+    onFieldsWithPartyExported?: (fields: FormFieldDefinitionWithParty[]) => void; // Callback with fields including party data
+}
+
+// Import types for multi-party support
+import { PartyConfiguration } from '@/types/template';
+
+// Extended FormFieldDefinition with party assignment
+export interface FormFieldDefinitionWithParty {
+    name: string;
+    type: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    pageNumber: number;
+    required: boolean;
+    readOnly?: boolean;
+    assignedParty?: string;
+    partyLabel?: string;
+    annotationId?: string;
 }
 
 export interface PDFViewerHandle {
     exportAnnotations: (fieldValues?: Record<string, string>, options?: { flatten?: boolean; skipToolbarSwitch?: boolean }) => Promise<{ blob: Blob; xfdfString: string } | null>;
     exportFormFields: () => Promise<any[]>;
+    exportFormFieldsWithParty: () => Promise<FormFieldDefinitionWithParty[]>;
     clearSignatureStore: () => void;
     dispose: () => void;
     save: () => Promise<{ fileData: string; xfdfData: string } | null>;
@@ -38,10 +66,15 @@ export interface PDFViewerHandle {
     setToolMode: (mode: string) => void;
     switchToViewMode: () => Promise<boolean>;
     applySignatureToAllEmptyFields: () => Promise<number>;
+    // Multi-party field assignment methods
+    assignFieldToParty: (fieldName: string, partyId: string, partyLabel: string, partyColor: string) => boolean;
+    getFieldPartyAssignment: (fieldName: string) => { partyId: string; partyLabel: string } | null;
+    getAllFieldPartyAssignments: () => Record<string, { partyId: string; partyLabel: string }>;
+    highlightPartyFields: (partyId: string | null) => void;
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const [loading, setLoading] = useState(true);
@@ -75,6 +108,15 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         // ✅ Refs for "Sign All" feature
         const onSignatureAppliedRef = useRef<((data: { emptySignatureFieldCount: number }) => void) | undefined>(undefined);
         const isApplyingSignAllRef = useRef(false);
+
+        // ✅ Multi-party field assignment storage
+        // Maps fieldName -> { partyId, partyLabel, partyColor }
+        const fieldPartyAssignmentsRef = useRef<Map<string, { partyId: string; partyLabel: string; partyColor: string }>>(new Map());
+
+        // ✅ Track signature annotation ID -> field name mapping for deletion tracking
+        // When a signature is added, we store annotationId -> fieldName
+        // When deleted, we look up which field to clear
+        const signatureAnnotationToFieldRef = useRef<Map<string, string>>(new Map());
 
         const effectiveReadOnly = isReadOnly ?? readOnly;
 
@@ -1059,6 +1101,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                 // Capture value for export
                                 capturedFieldValuesRef.current.set(field.name, fieldName);
+
+                                // Notify parent of signature field change (for party validation tracking)
+                                if (onFieldChange) {
+                                    onFieldChange(field.name, 'signed');
+                                }
                             }
 
                             // Store in capture ref for export
@@ -1081,6 +1128,301 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                 } finally {
                     // Reset flag after events settle
                     setTimeout(() => { isApplyingSignAllRef.current = false; }, 500);
+                }
+            },
+
+            // ═══════════════════════════════════════════════════════════════════
+            // MULTI-PARTY FIELD ASSIGNMENT METHODS
+            // ═══════════════════════════════════════════════════════════════════
+
+            /**
+             * Assign a field to a specific party
+             * Stores the assignment in both:
+             * 1. Our local ref (fieldPartyAssignmentsRef)
+             * 2. The annotation's custom data (via setCustomData)
+             */
+            assignFieldToParty: (fieldName: string, partyId: string, partyLabel: string, partyColor: string): boolean => {
+                console.log(`🏷️ [PARTY ASSIGN] Assigning field "${fieldName}" to party "${partyId}" (${partyLabel})`);
+
+                if (!viewerInstance.current) {
+                    console.error('🏷️ [PARTY ASSIGN] Viewer not initialized');
+                    return false;
+                }
+
+                try {
+                    const { Core } = viewerInstance.current;
+                    const annotationManager = Core.annotationManager;
+
+                    // Find the widget annotation for this field
+                    const allAnnotations = annotationManager.getAnnotationsList();
+                    const widgetAnnotation = allAnnotations.find((annot: any) => {
+                        if (!(annot instanceof Core.Annotations.WidgetAnnotation)) return false;
+                        const field = annot.getField?.();
+                        return field?.name === fieldName || (annot as any).fieldName === fieldName;
+                    });
+
+                    if (!widgetAnnotation) {
+                        console.warn(`🏷️ [PARTY ASSIGN] Widget annotation not found for field: ${fieldName}`);
+                        // Still store in our ref even if widget not found (for template creation)
+                        fieldPartyAssignmentsRef.current.set(fieldName, { partyId, partyLabel, partyColor });
+                        return true;
+                    }
+
+                    // Store in annotation's custom data (persists in XFDF)
+                    widgetAnnotation.setCustomData('assignedParty', partyId);
+                    widgetAnnotation.setCustomData('partyLabel', partyLabel);
+                    widgetAnnotation.setCustomData('partyColor', partyColor);
+
+                    // Store in our local ref
+                    fieldPartyAssignmentsRef.current.set(fieldName, { partyId, partyLabel, partyColor });
+
+                    // Update field metadata store
+                    if (fieldMetadataStoreRef.current.has(fieldName)) {
+                        const existing = fieldMetadataStoreRef.current.get(fieldName);
+                        fieldMetadataStoreRef.current.set(fieldName, {
+                            ...existing,
+                            assignedParty: partyId,
+                            partyLabel: partyLabel,
+                        });
+                    }
+
+                    // Visual indicator: update border color
+                    try {
+                        // Parse hex color to RGB
+                        const hexToRgb = (hex: string): [number, number, number] => {
+                            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                            return result ? [
+                                parseInt(result[1], 16),
+                                parseInt(result[2], 16),
+                                parseInt(result[3], 16)
+                            ] : [0, 0, 0];
+                        };
+
+                        const [r, g, b] = hexToRgb(partyColor);
+                        widgetAnnotation.StrokeColor = new Core.Annotations.Color(r, g, b, 1);
+                        widgetAnnotation.StrokeThickness = 2;
+                        annotationManager.redrawAnnotation(widgetAnnotation);
+                        console.log(`🏷️ [PARTY ASSIGN] Updated visual indicator for "${fieldName}" with color ${partyColor}`);
+                    } catch (colorError) {
+                        console.warn(`🏷️ [PARTY ASSIGN] Could not update visual indicator:`, colorError);
+                    }
+
+                    // Trigger callback
+                    if (onPartyAssigned) {
+                        onPartyAssigned(fieldName, partyId, partyLabel);
+                    }
+
+                    console.log(`✅ [PARTY ASSIGN] Successfully assigned "${fieldName}" to "${partyLabel}" (${partyId})`);
+                    return true;
+                } catch (error) {
+                    console.error(`❌ [PARTY ASSIGN] Error assigning field:`, error);
+                    return false;
+                }
+            },
+
+            /**
+             * Get the party assignment for a specific field
+             */
+            getFieldPartyAssignment: (fieldName: string): { partyId: string; partyLabel: string } | null => {
+                console.log(`🔍 [PARTY ASSIGN] Getting assignment for field "${fieldName}"`);
+
+                // First check our local ref
+                const localAssignment = fieldPartyAssignmentsRef.current.get(fieldName);
+                if (localAssignment) {
+                    return { partyId: localAssignment.partyId, partyLabel: localAssignment.partyLabel };
+                }
+
+                // Then check the annotation's custom data
+                if (!viewerInstance.current) return null;
+
+                try {
+                    const { Core } = viewerInstance.current;
+                    const annotationManager = Core.annotationManager;
+                    const allAnnotations = annotationManager.getAnnotationsList();
+
+                    const widgetAnnotation = allAnnotations.find((annot: any) => {
+                        if (!(annot instanceof Core.Annotations.WidgetAnnotation)) return false;
+                        const field = annot.getField?.();
+                        return field?.name === fieldName || (annot as any).fieldName === fieldName;
+                    });
+
+                    if (widgetAnnotation) {
+                        const partyId = widgetAnnotation.getCustomData('assignedParty');
+                        const partyLabel = widgetAnnotation.getCustomData('partyLabel');
+                        if (partyId) {
+                            return { partyId, partyLabel: partyLabel || partyId };
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`🔍 [PARTY ASSIGN] Error getting assignment:`, error);
+                }
+
+                return null;
+            },
+
+            /**
+             * Get all party assignments for all fields
+             */
+            getAllFieldPartyAssignments: (): Record<string, { partyId: string; partyLabel: string }> => {
+                console.log(`🔍 [PARTY ASSIGN] Getting all field party assignments`);
+                const assignments: Record<string, { partyId: string; partyLabel: string }> = {};
+
+                // Start with local ref
+                fieldPartyAssignmentsRef.current.forEach((value, key) => {
+                    assignments[key] = { partyId: value.partyId, partyLabel: value.partyLabel };
+                });
+
+                // Then check annotations for any we might have missed
+                if (viewerInstance.current) {
+                    try {
+                        const { Core } = viewerInstance.current;
+                        const annotationManager = Core.annotationManager;
+                        const allAnnotations = annotationManager.getAnnotationsList();
+
+                        allAnnotations.forEach((annot: any) => {
+                            if (!(annot instanceof Core.Annotations.WidgetAnnotation)) return;
+
+                            const field = annot.getField?.();
+                            const fieldName = field?.name || (annot as any).fieldName;
+                            if (!fieldName) return;
+
+                            const partyId = annot.getCustomData('assignedParty');
+                            const partyLabel = annot.getCustomData('partyLabel');
+
+                            if (partyId && !assignments[fieldName]) {
+                                assignments[fieldName] = { partyId, partyLabel: partyLabel || partyId };
+                            }
+                        });
+                    } catch (error) {
+                        console.warn(`🔍 [PARTY ASSIGN] Error scanning annotations:`, error);
+                    }
+                }
+
+                console.log(`🔍 [PARTY ASSIGN] Found ${Object.keys(assignments).length} assignments:`, assignments);
+                return assignments;
+            },
+
+            /**
+             * Highlight all fields belonging to a specific party
+             * Pass null to clear highlighting
+             */
+            highlightPartyFields: (partyId: string | null): void => {
+                console.log(`🔦 [PARTY HIGHLIGHT] Highlighting fields for party: ${partyId || 'NONE (clearing)'}`);
+
+                if (!viewerInstance.current) return;
+
+                try {
+                    const { Core } = viewerInstance.current;
+                    const annotationManager = Core.annotationManager;
+                    const allAnnotations = annotationManager.getAnnotationsList();
+
+                    allAnnotations.forEach((annot: any) => {
+                        if (!(annot instanceof Core.Annotations.WidgetAnnotation)) return;
+
+                        const field = annot.getField?.();
+                        const fieldName = field?.name || (annot as any).fieldName;
+                        const assignedParty = annot.getCustomData('assignedParty') ||
+                            fieldPartyAssignmentsRef.current.get(fieldName)?.partyId;
+
+                        if (partyId === null) {
+                            // Clear highlighting - restore original appearance
+                            annot.Opacity = 1;
+                            annot.StrokeThickness = 1;
+                        } else if (assignedParty === partyId) {
+                            // Highlight this field
+                            annot.Opacity = 1;
+                            annot.StrokeThickness = 3;
+                        } else {
+                            // Dim other fields
+                            annot.Opacity = 0.4;
+                            annot.StrokeThickness = 1;
+                        }
+
+                        annotationManager.redrawAnnotation(annot);
+                    });
+
+                    console.log(`✅ [PARTY HIGHLIGHT] Highlighting updated`);
+                } catch (error) {
+                    console.error(`❌ [PARTY HIGHLIGHT] Error:`, error);
+                }
+            },
+
+            /**
+             * Export form fields with party assignment data
+             */
+            exportFormFieldsWithParty: async (): Promise<FormFieldDefinitionWithParty[]> => {
+                console.log(`📤 [EXPORT] exportFormFieldsWithParty called`);
+
+                const fields: FormFieldDefinitionWithParty[] = [];
+
+                if (!viewerInstance.current) {
+                    console.warn(`📤 [EXPORT] Viewer not initialized`);
+                    return fields;
+                }
+
+                try {
+                    const { Core } = viewerInstance.current;
+                    const annotationManager = Core.annotationManager;
+                    const allAnnotations = annotationManager.getAnnotationsList();
+
+                    allAnnotations.forEach((annot: any) => {
+                        if (!(annot instanceof Core.Annotations.WidgetAnnotation)) return;
+
+                        const field = annot.getField?.();
+                        const fieldName = field?.name || (annot as any).fieldName;
+                        if (!fieldName) return;
+
+                        // Get party assignment from annotation or local ref
+                        const assignedParty = annot.getCustomData('assignedParty') ||
+                            fieldPartyAssignmentsRef.current.get(fieldName)?.partyId ||
+                            'unassigned';
+                        const partyLabel = annot.getCustomData('partyLabel') ||
+                            fieldPartyAssignmentsRef.current.get(fieldName)?.partyLabel ||
+                            '';
+
+                        // Determine field type
+                        let fieldType = 'text';
+                        if (annot instanceof Core.Annotations.SignatureWidgetAnnotation) {
+                            fieldType = 'signature';
+                        } else if (annot instanceof Core.Annotations.CheckButtonWidgetAnnotation) {
+                            fieldType = 'checkbox';
+                        } else if (annot instanceof Core.Annotations.RadioButtonWidgetAnnotation) {
+                            fieldType = 'radio';
+                        } else if (annot instanceof Core.Annotations.ChoiceWidgetAnnotation) {
+                            fieldType = 'dropdown';
+                        } else if (annot instanceof Core.Annotations.DatePickerWidgetAnnotation) {
+                            fieldType = 'date';
+                        }
+
+                        const rect = annot.getRect?.() || { x1: 0, y1: 0, x2: 100, y2: 30 };
+
+                        fields.push({
+                            name: fieldName,
+                            type: fieldType,
+                            x: rect.x1,
+                            y: rect.y1,
+                            width: rect.x2 - rect.x1,
+                            height: rect.y2 - rect.y1,
+                            pageNumber: annot.PageNumber || 1,
+                            required: field?.flags?.Required || false,
+                            readOnly: field?.flags?.ReadOnly || false,
+                            assignedParty,
+                            partyLabel,
+                            annotationId: annot.Id,
+                        });
+                    });
+
+                    console.log(`✅ [EXPORT] Exported ${fields.length} fields with party data`);
+
+                    // Trigger callback if provided
+                    if (onFieldsWithPartyExported) {
+                        onFieldsWithPartyExported(fields);
+                    }
+
+                    return fields;
+                } catch (error) {
+                    console.error(`❌ [EXPORT] Error exporting fields with party:`, error);
+                    return [];
                 }
             },
         }));
@@ -1277,6 +1619,19 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                     console.log(`🖊️ [MANUAL SIGN] Signature saved, widgets: ${Array.isArray(signatureWidgets) ? signatureWidgets.length : 1}`);
 
+                                    // Notify parent of signature field change (for party validation tracking)
+                                    if (onFieldChange) {
+                                        const widgets = Array.isArray(signatureWidgets) ? signatureWidgets : [signatureWidgets];
+                                        widgets.forEach((widget: any) => {
+                                            const fieldName = widget?.fieldName || widget?.getField?.()?.name;
+                                            if (fieldName) {
+                                                capturedFieldValuesRef.current.set(fieldName, 'signed');
+                                                onFieldChange(fieldName, 'signed');
+                                                console.log(`📝 [SIGNATURE TRACK] Notified parent: ${fieldName} = signed`);
+                                            }
+                                        });
+                                    }
+
                                     // ✅ Check for "Sign All" opportunity after signature is fully applied
                                     if (!isApplyingSignAllRef.current && onSignatureAppliedRef.current) {
                                         setTimeout(() => {
@@ -1320,40 +1675,101 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             type: annot.constructor?.name,
                                             subject: annot.Subject
                                         });
+
+                                        // Find which SignatureWidgetAnnotation this signature was applied to
+                                        // by matching page number and spatial overlap
+                                        if (onFieldChange) {
+                                            try {
+                                                const sigPage = annot.PageNumber;
+                                                const sigRect = annot.getRect?.();
+                                                if (sigRect && sigPage) {
+                                                    const allAnnots = Core.annotationManager.getAnnotationsList();
+                                                    const sigWidgets = allAnnots.filter((a: any) =>
+                                                        a instanceof Core.Annotations.SignatureWidgetAnnotation &&
+                                                        a.PageNumber === sigPage
+                                                    );
+
+                                                    for (const widget of sigWidgets) {
+                                                        const wRect = (widget as any).getRect?.();
+                                                        if (!wRect) continue;
+
+                                                        // Check if the signature overlaps the widget
+                                                        const overlaps =
+                                                            sigRect.x1 < wRect.x2 && sigRect.x2 > wRect.x1 &&
+                                                            sigRect.y1 < wRect.y2 && sigRect.y2 > wRect.y1;
+
+                                                        if (overlaps) {
+                                                            const field = (widget as any).getField?.();
+                                                            const fieldName = field?.name || (widget as any).fieldName;
+                                                            if (fieldName && capturedFieldValuesRef.current.get(fieldName) !== 'signed') {
+                                                                capturedFieldValuesRef.current.set(fieldName, 'signed');
+                                                                // ✅ Store mapping: annotation ID → field name (for delete tracking)
+                                                                const annotId = annot.Id || (annot as any).getId?.();
+                                                                if (annotId) {
+                                                                    signatureAnnotationToFieldRef.current.set(annotId, fieldName);
+                                                                    console.log(`📝 [SIGNATURE TRACK] Mapped annotation ${annotId} → ${fieldName}`);
+                                                                }
+                                                                onFieldChange(fieldName, 'signed');
+                                                                console.log(`📝 [SIGNATURE TRACK] Signature added on widget: ${fieldName} = signed`);
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            } catch (e) {
+                                                console.warn('⚠️ [SIGNATURE TRACK] Error matching signature to widget:', e);
+                                            }
+                                        }
                                     } else if (action === 'delete') {
                                         // ✅ FIX: When a signature is deleted, restore the widget visibility
                                         console.log(`🗑️ [SIGNATURE DELETE] Signature deleted, restoring widget`);
 
-                                        // Find all signature widgets and clear linked annotation reference
-                                        const allAnnotations = Core.annotationManager.getAnnotationsList();
-                                        const signatureWidgets = allAnnotations.filter((a: any) =>
-                                            a instanceof Core.Annotations.SignatureWidgetAnnotation
-                                        );
+                                        // ✅ FIXED: Use annotation ID → field name mapping to find which field to clear
+                                        const deletedAnnotId = annot.Id || (annot as any).getId?.();
+                                        const mappedFieldName = deletedAnnotId ? signatureAnnotationToFieldRef.current.get(deletedAnnotId) : null;
 
-                                        signatureWidgets.forEach((widget: any) => {
-                                            const linkedAnnot = (widget as any).annot;
-                                            if (linkedAnnot && linkedAnnot.Id === annot.Id) {
-                                                try {
-                                                    // Clear the linked annotation reference
-                                                    (widget as any).annot = null;
+                                        if (mappedFieldName) {
+                                            console.log(`📝 [SIGNATURE DELETE] Found mapped field: ${mappedFieldName} for annotation ${deletedAnnotId}`);
 
-                                                    // Clear field value
-                                                    const field = widget.getField?.();
-                                                    if (field) {
-                                                        field.setValue('');
-                                                        field.flags.ReadOnly = false;
-                                                        if (field.commit) {
-                                                            try { field.commit('', widget); } catch (e) { /* ok */ }
-                                                        }
-                                                    }
+                                            // Clear from captured values
+                                            capturedFieldValuesRef.current.delete(mappedFieldName);
+                                            signatureAnnotationToFieldRef.current.delete(deletedAnnotId);
 
-                                                    Core.annotationManager.updateAnnotation(widget);
-                                                    console.log(`✅ [SIGNATURE DELETE] Cleared widget link: ${widget.fieldName || 'unknown'}`);
-                                                } catch (e) {
-                                                    console.warn('⚠️ [SIGNATURE DELETE] Could not clear widget:', e);
-                                                }
+                                            // Notify parent that signature was removed (for party validation tracking)
+                                            if (onFieldChange) {
+                                                onFieldChange(mappedFieldName, '');
+                                                console.log(`📝 [SIGNATURE TRACK] Notified parent: ${mappedFieldName} = cleared`);
                                             }
-                                        });
+
+                                            // Find and restore the widget
+                                            const allAnnotations = Core.annotationManager.getAnnotationsList();
+                                            const signatureWidgets = allAnnotations.filter((a: any) =>
+                                                a instanceof Core.Annotations.SignatureWidgetAnnotation
+                                            );
+
+                                            signatureWidgets.forEach((widget: any) => {
+                                                const field = widget.getField?.();
+                                                const widgetFieldName = widget.fieldName || field?.name;
+                                                if (widgetFieldName === mappedFieldName) {
+                                                    try {
+                                                        // Clear field value
+                                                        if (field) {
+                                                            field.setValue('');
+                                                            field.flags.ReadOnly = false;
+                                                            if (field.commit) {
+                                                                try { field.commit('', widget); } catch (e) { /* ok */ }
+                                                            }
+                                                        }
+                                                        Core.annotationManager.updateAnnotation(widget);
+                                                        console.log(`✅ [SIGNATURE DELETE] Cleared widget: ${widgetFieldName}`);
+                                                    } catch (e) {
+                                                        console.warn('⚠️ [SIGNATURE DELETE] Could not clear widget:', e);
+                                                    }
+                                                }
+                                            });
+                                        } else {
+                                            console.log(`⚠️ [SIGNATURE DELETE] No mapping found for annotation ${deletedAnnotId}`);
+                                        }
 
                                         // Remove from captured signatures
                                         capturedSignatureAnnotationsRef.current.delete(annotId);
@@ -1468,6 +1884,91 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 console.log('✏️ [FIELD EDITABILITY] All fields editable (all mode)');
                             }
 
+                            // ══════════════════════════════════════════════════════════════════
+                            // MULTI-PARTY FIELD EDITABILITY
+                            // If editableParties is provided, only those parties' fields are editable
+                            // ══════════════════════════════════════════════════════════════════
+                            if (editableParties && editableParties.length > 0 && !effectiveReadOnly) {
+                                console.log(`🏷️ [MULTI-PARTY] Configuring editability for parties: ${editableParties.join(', ')}`);
+
+                                const annotationManager = Core.annotationManager;
+                                const allAnnotations = annotationManager.getAnnotationsList();
+                                const fieldManager = annotationManager.getFieldManager();
+
+                                let editableCount = 0;
+                                let readOnlyCount = 0;
+
+                                allAnnotations.forEach((annot: any) => {
+                                    if (!(annot instanceof Core.Annotations.WidgetAnnotation)) return;
+
+                                    const field = annot.getField?.();
+                                    const fieldName = field?.name || (annot as any).fieldName;
+                                    if (!fieldName) return;
+
+                                    // Get party assignment from annotation custom data
+                                    const assignedParty = annot.getCustomData('assignedParty') || 'unassigned';
+                                    const isEditableParty = editableParties.includes(assignedParty);
+
+                                    // Also check if field already has a value (filled fields stay read-only)
+                                    const fieldValue = field?.getValue?.() || '';
+                                    const hasValue = fieldValue && fieldValue.toString().trim() !== '';
+
+                                    if (isEditableParty && !hasValue) {
+                                        // This party's field is editable
+                                        if (field?.flags) {
+                                            (field.flags as any).ReadOnly = false;
+                                        }
+                                        (annot as any).Opacity = 1;
+
+                                        // Visual indicator: highlight editable fields
+                                        const partyColor = annot.getCustomData('partyColor');
+                                        if (partyColor) {
+                                            try {
+                                                const hexToRgb = (hex: string): [number, number, number] => {
+                                                    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                                                    return result ? [
+                                                        parseInt(result[1], 16),
+                                                        parseInt(result[2], 16),
+                                                        parseInt(result[3], 16)
+                                                    ] : [0, 0, 0];
+                                                };
+                                                const [r, g, b] = hexToRgb(partyColor);
+                                                (annot as any).StrokeColor = new Core.Annotations.Color(r, g, b, 1);
+                                                (annot as any).StrokeThickness = 3;
+                                            } catch (e) {
+                                                // Ignore color errors
+                                            }
+                                        }
+                                        editableCount++;
+                                        console.log(`🏷️ [MULTI-PARTY] Field "${fieldName}" (${assignedParty}): EDITABLE`);
+                                    } else {
+                                        // Not this party's field or already filled - make read-only
+                                        if (field?.flags) {
+                                            (field.flags as any).ReadOnly = true;
+                                        }
+                                        (annot as any).Opacity = 0.6;
+                                        readOnlyCount++;
+                                        console.log(`🏷️ [MULTI-PARTY] Field "${fieldName}" (${assignedParty}): READ-ONLY`);
+                                    }
+
+                                    // Store party assignment in local ref
+                                    const partyLabel = annot.getCustomData('partyLabel') || '';
+                                    const partyColor = annot.getCustomData('partyColor') || '';
+                                    if (assignedParty !== 'unassigned') {
+                                        fieldPartyAssignmentsRef.current.set(fieldName, {
+                                            partyId: assignedParty,
+                                            partyLabel,
+                                            partyColor
+                                        });
+                                    }
+                                });
+
+                                console.log(`✅ [MULTI-PARTY] Configured ${editableCount} editable, ${readOnlyCount} read-only fields`);
+
+                                // Redraw all annotations to reflect visual changes
+                                annotationManager.drawAnnotationsFromList(allAnnotations);
+                            }
+
                             if (effectiveReadOnly) {
                                 console.log('🔒 Setting read-only mode');
                                 const annotations = Core.annotationManager.getAnnotationsList();
@@ -1528,6 +2029,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         const stringValue = String(value);
                                         capturedFieldValuesRef.current.set(field.name, stringValue);
                                         console.log(`📝 [VALUE CAPTURE] Captured field value: ${field.name} = "${stringValue}" (total: ${capturedFieldValuesRef.current.size})`);
+
+                                        // Notify parent component of field value change (for party validation tracking)
+                                        if (onFieldChange) {
+                                            onFieldChange(field.name, value);
+                                        }
                                     }
 
                                     // ✅ NEW: Update field metadata when value changes
@@ -1750,6 +2256,24 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 } else {
                                     console.log('🔍 [NAV] No annotations found');
                                 }
+                            }
+
+                            // ✅ Restore party assignments from formFields prop
+                            if (formFields && formFields.length > 0) {
+                                console.log(`🏷️ [PARTY] Restoring party assignments from ${formFields.length} form fields`);
+                                let restoredCount = 0;
+                                formFields.forEach((field: any) => {
+                                    if (field.assignedParty && field.assignedParty !== 'unassigned') {
+                                        fieldPartyAssignmentsRef.current.set(field.name, {
+                                            partyId: field.assignedParty,
+                                            partyLabel: field.partyLabel || '',
+                                            partyColor: field.partyColor || ''
+                                        });
+                                        restoredCount++;
+                                        console.log(`🏷️ [PARTY] Restored: ${field.name} → ${field.assignedParty}`);
+                                    }
+                                });
+                                console.log(`🏷️ [PARTY] Restored ${restoredCount} party assignments`);
                             }
 
                             console.log('✅ Setting loading to false');

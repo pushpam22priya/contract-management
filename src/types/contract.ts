@@ -10,6 +10,43 @@ export interface SignerInfo {
 }
 
 /**
+ * Party Configuration (imported from template)
+ */
+export interface PartyConfiguration {
+    id: string;                // Unique party ID: "party_1", "party_2", etc.
+    label: string;             // Human-readable label: "Buyer", "Seller", "Witness"
+    color: string;             // Hex color for visual distinction
+    order: number;             // Signing order
+}
+
+/**
+ * Status of fields filled by a specific party
+ */
+export interface PartyFilledStatus {
+    partyId: string;           // Party ID
+    filledBy?: string;         // Email of who filled
+    filledByName?: string;     // Name of who filled
+    filledAt?: string;         // When filled (ISO date string)
+    isComplete: boolean;       // All fields for this party are filled
+    fieldCount: number;        // Total fields assigned to this party
+    filledCount: number;       // Number of fields filled
+}
+
+/**
+ * Signing sequence entry for multi-party signing
+ */
+export interface SigningSequenceEntry {
+    partyId: string;           // Party ID
+    partyLabel: string;        // Party label for display
+    signerEmail: string;       // Email of the signer for this party
+    signerName?: string;       // Name of the signer
+    status: 'pending' | 'sent' | 'in_progress' | 'completed';
+    token?: string;            // Signing token if sent
+    sentAt?: string;           // When signing request was sent
+    completedAt?: string;      // When signing was completed
+}
+
+/**
  * Status of a signing request
  */
 export type SigningRequestStatus = 'pending' | 'viewed' | 'signed' | 'expired' | 'cancelled';

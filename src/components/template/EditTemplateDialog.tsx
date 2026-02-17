@@ -23,8 +23,10 @@ import ArrowBack from '@mui/icons-material/ArrowBack';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import { authService } from '@/services/authService';
-import { Template } from '@/types/template';
+import { Template, PartyConfiguration, FormFieldDefinition } from '@/types/template';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
+import PartyConfigDialog from '@/components/template/PartyConfigDialog';
+import PartyAssignmentPanel from '@/components/template/PartyAssignmentPanel';
 
 interface EditTemplateDialogProps {
     open: boolean;
@@ -59,6 +61,13 @@ export default function EditTemplateDialog({
     const [documentUrl, setDocumentUrl] = useState('');
     const [documentLoaded, setDocumentLoaded] = useState(false);
 
+    // Multi-party configuration state
+    const [parties, setParties] = useState<PartyConfiguration[]>([]);
+    const [showPartyConfigDialog, setShowPartyConfigDialog] = useState(false);
+    const [formFields, setFormFields] = useState<FormFieldDefinition[]>([]);
+    const [selectedFieldName, setSelectedFieldName] = useState<string | null>(null);
+    const [showPartyPanel, setShowPartyPanel] = useState(true);
+
     // Load categories and pre-fill form on mount
     useEffect(() => {
         if (open) {
@@ -75,6 +84,12 @@ export default function EditTemplateDialog({
             setShowNewCategoryInput(false);
             setCurrentStep(1); // Always start at step 1
             setDocumentUrl('');
+
+            // Load existing parties and form fields
+            setParties(template.parties || []);
+            setFormFields(template.formFields || []);
+            setSelectedFieldName(null);
+            setShowPartyPanel(true);
         }
     }, [open, template]);
 
@@ -138,6 +153,69 @@ export default function EditTemplateDialog({
             setShowNewCategoryInput(false);
         } else {
             setError(result.message);
+        }
+    };
+
+    // Handle party configuration save
+    const handlePartiesSave = (newParties: PartyConfiguration[]) => {
+        console.log('[EDIT-TEMPLATE] Parties configured:', newParties);
+        setParties(newParties);
+    };
+
+    // Handle party assignment to a field
+    const handlePartySelected = (partyId: string) => {
+        if (!selectedFieldName || !pdfViewerRef.current) return;
+
+        const party = parties.find(p => p.id === partyId);
+        if (!party) return;
+
+        console.log(`[EDIT-TEMPLATE] Assigning field "${selectedFieldName}" to party "${partyId}" (${party.label})`);
+
+        // Call the viewer method to assign the field to the party
+        const success = pdfViewerRef.current.assignFieldToParty(
+            selectedFieldName,
+            partyId,
+            party.label,
+            party.color
+        );
+
+        if (success) {
+            // Update local form fields state
+            setFormFields(prev => prev.map(f =>
+                f.name === selectedFieldName
+                    ? { ...f, assignedParty: partyId, partyLabel: party.label }
+                    : f
+            ));
+            setSelectedFieldName(null); // Clear selection after assignment
+        }
+    };
+
+    // Handle field selection (when user clicks on a field in the PDF)
+    const handleFieldChange = (fieldName: string, value: any) => {
+        console.log(`[EDIT-TEMPLATE] Field changed: ${fieldName}`);
+        // When a field is selected/focused, set it as the selected field for party assignment
+        if (parties.length > 0) {
+            setSelectedFieldName(fieldName);
+        }
+    };
+
+    // Handle party highlighting
+    const handleHighlightParty = (partyId: string | null) => {
+        if (pdfViewerRef.current) {
+            pdfViewerRef.current.highlightPartyFields(partyId);
+        }
+    };
+
+    // Refresh form fields list from viewer (called when fields are added/removed)
+    const refreshFormFields = async () => {
+        if (pdfViewerRef.current) {
+            try {
+                const fields = await pdfViewerRef.current.exportFormFieldsWithParty();
+                setFormFields(fields as FormFieldDefinition[]);
+                console.log(`[EDIT-TEMPLATE] Refreshed ${fields.length} form fields`);
+            } catch (e) {
+                console.warn('[EDIT-TEMPLATE] Failed to refresh form fields:', e);
+            }
         }
     };
 
@@ -232,7 +310,7 @@ export default function EditTemplateDialog({
             console.log('📤 Starting template update with new architecture (BINARY-SAFE)...');
 
             let xfdfData: string = '';
-            let formFields: any[] = [];
+            let exportedFormFields: any[] = [];
 
             // Start with selected file (if new) or null (if keeping existing)
             let fileToUpload: File | Blob | null = selectedFile;
@@ -261,10 +339,32 @@ export default function EditTemplateDialog({
                     throw new Error('Failed to prepare document for update.');
                 }
 
-                // 3. Export form fields
+                // 3. Export form fields with party assignments
                 try {
-                    formFields = await pdfViewerRef.current.exportFormFields();
-                    console.log(`  ✓ Extracted ${formFields.length} form fields`);
+                    exportedFormFields = await pdfViewerRef.current.exportFormFields();
+                    console.log(`  ✓ Extracted ${exportedFormFields.length} form fields`);
+
+                    // Get party assignments from the viewer and merge with form fields
+                    if (parties.length > 0) {
+                        const partyAssignments = pdfViewerRef.current.getAllFieldPartyAssignments();
+                        console.log(`  ✓ Party assignments:`, partyAssignments);
+
+                        // Merge party assignments into form fields
+                        exportedFormFields = exportedFormFields.map(field => {
+                            const assignment = partyAssignments[field.name];
+                            if (assignment) {
+                                // Look up party color from parties array
+                                const party = parties.find(p => p.id === assignment.partyId);
+                                return {
+                                    ...field,
+                                    assignedParty: assignment.partyId,
+                                    partyLabel: assignment.partyLabel,
+                                    partyColor: party?.color || '',
+                                };
+                            }
+                            return field;
+                        });
+                    }
                 } catch (e) {
                     console.warn('Failed to export form fields:', e);
                 }
@@ -272,15 +372,17 @@ export default function EditTemplateDialog({
 
             // Update template using templateService.updateTemplate
             console.log('💾 Updating template via Service...');
+            console.log(`  - Parties: ${parties.length}`);
 
             // Build update data
             const updateData: any = {
                 name: templateName.trim(),
                 description: description.trim(),
                 category: selectedCategory,
-                formFields: formFields,
-                hasFormFields: formFields.length > 0,
-                xfdfData: xfdfData
+                formFields: exportedFormFields,
+                hasFormFields: exportedFormFields.length > 0,
+                xfdfData: xfdfData,
+                parties: parties.length > 0 ? parties : undefined,  // ✅ Include parties if configured
             };
 
             // Only add file stuff if we have a file to upload (either new selected file OR modified blob)
@@ -325,6 +427,13 @@ export default function EditTemplateDialog({
             setShowNewCategoryInput(false);
             setError('');
             setSuccess('');
+
+            // Reset party state
+            setParties([]);
+            setFormFields([]);
+            setSelectedFieldName(null);
+            setShowPartyPanel(true);
+            setShowPartyConfigDialog(false);
 
             // Cleanup
             if (selectedFile && documentUrl) {
@@ -823,47 +932,89 @@ export default function EditTemplateDialog({
                 <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                     {/* Error Alert */}
                     {error && (
-                        <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError('')}>
+                        <Alert severity="error" sx={{ mb: 1, mx: 1 }} onClose={() => setError('')}>
                             {error}
                         </Alert>
                     )}
 
-                    {/* Full-Screen PDF Viewer */}
-                    {documentUrl ? (
-                        <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                            <PDFViewerContainer
-                                ref={pdfViewerRef}
-                                documentUrl={documentUrl}
-                                isReadOnly={false}
-                                canAddFormFields={true}
-                                onDocumentModified={() => {
-                                    console.log('📝 Template modified by user (fields added/changed)');
-                                    setPdfModified(true);
+                    {/* Main Content Area */}
+                    <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                        {/* Full-Screen PDF Viewer */}
+                        {documentUrl ? (
+                            <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                                <PDFViewerContainer
+                                    ref={pdfViewerRef}
+                                    documentUrl={documentUrl}
+                                    isReadOnly={false}
+                                    canAddFormFields={true}
+                                    onDocumentModified={() => {
+                                        console.log('📝 Template modified by user (fields added/changed)');
+                                        if (!pdfModified) {
+                                            setPdfModified(true);
+                                        }
+                                        // Refresh form fields when document is modified (field added/removed)
+                                        refreshFormFields();
+                                    }}
+                                    initialToolbarGroup="toolbarGroup-Forms"
+                                    onDocumentLoaded={() => {
+                                        setDocumentLoaded(true);
+                                        // Refresh form fields when document loads
+                                        setTimeout(refreshFormFields, 500);
+                                    }}
+                                    onError={(err) => setError(err)}
+                                    initialXfdf={selectedFile ? undefined : template.xfdfData}
+                                    formFields={selectedFile ? undefined : template.formFields}
+                                    parties={parties}
+                                    enablePartyAssignment={parties.length > 0}
+                                    onFieldChange={handleFieldChange}
+                                    onPartyAssigned={(fieldName, partyId, partyLabel) => {
+                                        console.log(`[EDIT-TEMPLATE] Field "${fieldName}" assigned to "${partyLabel}"`);
+                                        refreshFormFields();
+                                    }}
+                                    onFieldsWithPartyExported={(fields) => {
+                                        setFormFields(fields as FormFieldDefinition[]);
+                                    }}
+                                />
+                            </Box>
+                        ) : (
+                            <Box
+                                sx={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    bgcolor: 'grey.50'
                                 }}
-                                initialToolbarGroup="toolbarGroup-Forms"
-                                onDocumentLoaded={() => setDocumentLoaded(true)}
-                                onError={(err) => setError(err)}
-                                initialXfdf={selectedFile ? undefined : template.xfdfData}
-                                formFields={selectedFile ? undefined : template.formFields}
+                            >
+                                <Typography variant="h6" color="text.secondary">
+                                    No document loaded
+                                </Typography>
+                            </Box>
+                        )}
+
+                        {/* Party Assignment Panel - Show when parties are configured */}
+                        {parties.length > 0 && showPartyPanel && documentLoaded && (
+                            <PartyAssignmentPanel
+                                parties={parties}
+                                formFields={formFields}
+                                selectedFieldName={selectedFieldName}
+                                onPartySelected={handlePartySelected}
+                                onFieldSelected={(fieldName) => setSelectedFieldName(fieldName)}
+                                onHighlightParty={handleHighlightParty}
+                                onConfigureParties={() => setShowPartyConfigDialog(true)}
                             />
-                        </Box>
-                    ) : (
-                        <Box
-                            sx={{
-                                flex: 1,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                bgcolor: 'grey.50'
-                            }}
-                        >
-                            <Typography variant="h6" color="text.secondary">
-                                No document loaded
-                            </Typography>
-                        </Box>
-                    )}
+                        )}
+                    </Box>
                 </Box>
             )}
+
+            {/* Party Configuration Dialog */}
+            <PartyConfigDialog
+                open={showPartyConfigDialog}
+                onClose={() => setShowPartyConfigDialog(false)}
+                onSave={handlePartiesSave}
+                initialParties={parties}
+            />
         </BaseDialog>
     );
 }

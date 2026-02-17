@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Box,
@@ -13,6 +13,7 @@ import {
     alpha,
     Divider,
     AlertColor,
+    Tooltip,
 } from '@mui/material';
 import { ArrowBack, ArrowForward } from '@mui/icons-material';
 import BaseDialog from '@/components/common/BaseDialog';
@@ -25,7 +26,8 @@ import { templateService } from '@/services/templateService';
 import { contractService } from '@/services/contractService';
 import { apiService } from '@/services/apiService';
 import { authService } from '@/services/authService';
-import { Template } from '@/types/template';
+import { Template, PartyConfiguration } from '@/types/template';
+import { validatePartyFields } from '@/utils/partyValidation';
 import dayjs from 'dayjs';
 import { ContractStatus } from '@/types/contract';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
@@ -123,6 +125,45 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
             [fieldName]: value?.toString() || ''
         }));
     };
+
+    // Party validation: detect partially filled parties
+    // If the user has started filling fields for a party, ALL fields for that party must be completed
+    const partyValidationWarning = useMemo(() => {
+        if (!selectedTemplate?.formFields || !selectedTemplate?.parties) return null;
+
+        const formFields = selectedTemplate.formFields;
+        const parties = selectedTemplate.parties;
+
+        const partialParties: { party: PartyConfiguration; filled: number; total: number; missing: string[] }[] = [];
+
+        for (const party of parties) {
+            const result = validatePartyFields(party.id, formFields, filledFieldValues);
+            // Check if user started filling but didn't complete ALL fields for this party
+            // We check filledCount vs totalCount (not just required fields) because
+            // the rule is: once you touch any field of a party, you must fill them all
+            if (result.filledCount > 0 && result.filledCount < result.totalCount) {
+                // Find names of unfilled fields (regardless of required flag)
+                const partyFields = formFields.filter(f => f.assignedParty === party.id);
+                const unfilledFields = partyFields
+                    .filter(f => {
+                        const val = filledFieldValues[f.name];
+                        return !val || val.toString().trim() === '';
+                    })
+                    .map(f => f.name);
+
+                partialParties.push({
+                    party,
+                    filled: result.filledCount,
+                    total: result.totalCount,
+                    missing: unfilledFields,
+                });
+            }
+        }
+
+        return partialParties.length > 0 ? partialParties : null;
+    }, [filledFieldValues, selectedTemplate]);
+
+    const hasPartialParty = !!partyValidationWarning;
 
     const handleSave = async () => {
         if (!selectedTemplate) {
@@ -400,7 +441,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
         setCurrentStep(2);
     };
 
-    const canSave = selectedTemplate && contractTitle.trim() && clientName.trim() && documentLoaded;
+    const canSave = selectedTemplate && contractTitle.trim() && clientName.trim() && documentLoaded && !hasPartialParty;
 
     // Step 1: Contract Details Actions
     const step1Actions = (
@@ -444,27 +485,31 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 Back to Details
             </Button>
 
-            <Button
-                onClick={handleSave}
-                variant="contained"
-                disabled={!canSave || saving}
-                sx={{
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    px: 2,
-                    py: 0.6,
-                    borderRadius: 2,
-                    minWidth: 150,
-                    bgcolor: 'primary.main',
-                    boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
-                    '&:hover': {
-                        bgcolor: 'primary.dark',
-                        boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
-                    },
-                }}
-            >
-                {saving ? 'Saving...' : 'Save Contract'}
-            </Button>
+            <Tooltip title={hasPartialParty ? 'Complete all fields for the party you started' : ''} arrow>
+                <span>
+                    <Button
+                        onClick={handleSave}
+                        variant="contained"
+                        disabled={!canSave || saving}
+                        sx={{
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            px: 2,
+                            py: 0.6,
+                            borderRadius: 2,
+                            minWidth: 150,
+                            bgcolor: 'primary.main',
+                            boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
+                            '&:hover': {
+                                bgcolor: 'primary.dark',
+                                boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
+                            },
+                        }}
+                    >
+                        {saving ? 'Saving...' : 'Save Contract'}
+                    </Button>
+                </span>
+            </Tooltip>
 
             <Button
                 variant="contained"
@@ -718,6 +763,27 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                     {error && (
                         <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError('')}>
                             {error}
+                        </Alert>
+                    )}
+
+                    {/* Party Validation Warning */}
+                    {partyValidationWarning && (
+                        <Alert severity="warning" sx={{ mb: 1, py: 0.5 }}>
+                            <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                                Complete all fields for the party you started filling:
+                            </Typography>
+                            {partyValidationWarning.map(({ party, filled, total, missing }) => (
+                                <Box key={party.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                    <Chip
+                                        label={party.label}
+                                        size="small"
+                                        sx={{ bgcolor: party.color, color: '#fff', fontWeight: 600, minWidth: 32 }}
+                                    />
+                                    <Typography variant="caption">
+                                        {filled}/{total} fields filled — missing: {missing.join(', ')}
+                                    </Typography>
+                                </Box>
+                            ))}
                         </Alert>
                     )}
 

@@ -30,6 +30,21 @@ export interface FormFieldDefinition {
     // Other properties
     options?: string[];        // Options for dropdown/radio fields
     label?: string;            // Human-readable label
+
+    // Multi-party assignment (Phase 3)
+    assignedParty?: string;    // Party ID: "party_1", "party_2", etc. or "unassigned"
+    partyLabel?: string;       // Human-readable party label: "Buyer", "Seller", "Witness"
+}
+
+/**
+ * Party Configuration
+ * Defines a party that can be assigned to fill specific fields
+ */
+export interface PartyConfiguration {
+    id: string;                // Unique party ID: "party_1", "party_2", etc.
+    label: string;             // Human-readable label: "Buyer", "Seller", "Witness"
+    color: string;             // Hex color for visual distinction: "#4CAF50"
+    order: number;             // Signing order (1 = first to sign, 2 = second, etc.)
 }
 
 /**
@@ -64,6 +79,9 @@ export interface Template {
     docxBase64?: string; // Original DOCX file as base64
     formFields?: FormFieldDefinition[]; // PDF form fields created in form builder
     hasFormFields?: boolean;   // Quick check if template has form fields
+
+    // Multi-party configuration
+    parties?: PartyConfiguration[];  // Defined parties for this template
 }
 
 export interface Category {
@@ -82,6 +100,8 @@ export interface UploadTemplateData {
     fileName: string;
     xfdfData?: string;
     formFields?: any[];
+    // Multi-party configuration
+    parties?: PartyConfiguration[];
 }
 
 export interface CreateCategoryData {

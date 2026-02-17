@@ -23,8 +23,12 @@ import ArrowBack from '@mui/icons-material/ArrowBack';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import { authService } from '@/services/authService';
-import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
-import { resolve } from 'path';
+import PDFViewerContainer, { PDFViewerHandle, FormFieldDefinitionWithParty } from '@/components/viewer/PDFViewerContainer';
+import PartyConfigDialog from '@/components/template/PartyConfigDialog';
+import PartyAssignmentPanel from '@/components/template/PartyAssignmentPanel';
+import { PartyConfiguration, FormFieldDefinition } from '@/types/template';
+import { createDefaultParties, groupFieldsByParty } from '@/utils/partyValidation';
+import GroupIcon from '@mui/icons-material/Group';
 
 interface UploadTemplateDialogProps {
     open: boolean;
@@ -53,6 +57,13 @@ export default function UploadTemplateDialog({
     const [success, setSuccess] = useState('');
     const [documentUrl, setDocumentUrl] = useState(''); // For PDFViewerContainer
     const [documentLoaded, setDocumentLoaded] = useState(false);
+
+    // Multi-party configuration state
+    const [parties, setParties] = useState<PartyConfiguration[]>([]);
+    const [showPartyConfigDialog, setShowPartyConfigDialog] = useState(false);
+    const [formFields, setFormFields] = useState<FormFieldDefinition[]>([]);
+    const [selectedFieldName, setSelectedFieldName] = useState<string | null>(null);
+    const [showPartyPanel, setShowPartyPanel] = useState(true);
 
     // Load categories on mount
     useEffect(() => {
@@ -168,6 +179,69 @@ export default function UploadTemplateDialog({
         setDocumentLoaded(false);
     };
 
+    // Handle party configuration save
+    const handlePartiesSave = (newParties: PartyConfiguration[]) => {
+        console.log('[UPLOAD-TEMPLATE] Parties configured:', newParties);
+        setParties(newParties);
+    };
+
+    // Handle party assignment to a field
+    const handlePartySelected = (partyId: string) => {
+        if (!selectedFieldName || !pdfViewerRef.current) return;
+
+        const party = parties.find(p => p.id === partyId);
+        if (!party) return;
+
+        console.log(`[UPLOAD-TEMPLATE] Assigning field "${selectedFieldName}" to party "${partyId}" (${party.label})`);
+
+        // Call the viewer method to assign the field to the party
+        const success = pdfViewerRef.current.assignFieldToParty(
+            selectedFieldName,
+            partyId,
+            party.label,
+            party.color
+        );
+
+        if (success) {
+            // Update local form fields state
+            setFormFields(prev => prev.map(f =>
+                f.name === selectedFieldName
+                    ? { ...f, assignedParty: partyId, partyLabel: party.label }
+                    : f
+            ));
+            setSelectedFieldName(null); // Clear selection after assignment
+        }
+    };
+
+    // Handle field selection (when user clicks on a field in the PDF)
+    const handleFieldChange = (fieldName: string, value: any) => {
+        console.log(`[UPLOAD-TEMPLATE] Field changed: ${fieldName}`);
+        // When a field is selected/focused, set it as the selected field for party assignment
+        if (parties.length > 0) {
+            setSelectedFieldName(fieldName);
+        }
+    };
+
+    // Handle party highlighting
+    const handleHighlightParty = (partyId: string | null) => {
+        if (pdfViewerRef.current) {
+            pdfViewerRef.current.highlightPartyFields(partyId);
+        }
+    };
+
+    // Refresh form fields list from viewer
+    const refreshFormFields = async () => {
+        if (pdfViewerRef.current) {
+            try {
+                const fields = await pdfViewerRef.current.exportFormFieldsWithParty();
+                setFormFields(fields as FormFieldDefinition[]);
+                console.log(`[UPLOAD-TEMPLATE] Refreshed ${fields.length} form fields`);
+            } catch (e) {
+                console.warn('[UPLOAD-TEMPLATE] Failed to refresh form fields:', e);
+            }
+        }
+    };
+
 
     // State for modification tracking
     const [pdfModified, setPdfModified] = useState(false);
@@ -264,12 +338,24 @@ export default function UploadTemplateDialog({
                     throw new Error('Failed to prepare document for upload.');
                 }
 
-                // 2. Export form field metadata
+                // 2. Export form field metadata (including party assignments)
                 try {
-                    formFields = await pdfViewerRef.current.exportFormFields();
-                    console.log(`  ✓ Extracted ${formFields.length} form field definitions`);
+                    const exportedFields = await pdfViewerRef.current.exportFormFieldsWithParty();
+                    formFields = exportedFields;
+                    console.log(`  ✓ Extracted ${formFields.length} form field definitions with party assignments`);
+
+                    // Log party assignments for debugging
+                    const partyAssignments = pdfViewerRef.current.getAllFieldPartyAssignments();
+                    console.log('  ✓ Party assignments:', partyAssignments);
                 } catch (e) {
                     console.warn('Failed to export form fields metadata:', e);
+                    // Fallback to basic export
+                    try {
+                        formFields = await pdfViewerRef.current.exportFormFields();
+                        console.log(`  ✓ Fallback: Extracted ${formFields.length} form field definitions`);
+                    } catch (e2) {
+                        console.warn('Fallback export also failed:', e2);
+                    }
                 }
 
                 // 3. If PDF was modified, use the blob from the export
@@ -298,6 +384,8 @@ export default function UploadTemplateDialog({
 
 
             console.log('💾 Saving template via Service...');
+            console.log(`  - Parties: ${parties.length}`);
+            console.log(`  - Form fields: ${formFields.length}`);
             const savedTemplate = await templateService.saveTemplate({
                 name: templateName.trim(),
                 description: description.trim(),
@@ -306,6 +394,7 @@ export default function UploadTemplateDialog({
                 file: fileToUpload,   // ✅ Pass File/Blob directly
                 xfdfData: xfdfData,   // ✅ Pass XFDF string
                 formFields: formFields,
+                parties: parties.length > 0 ? parties : undefined,  // ✅ Include parties if configured
             }, currentUser.email);
 
             console.log('✅ Template saved successfully!', savedTemplate.template?.id);
@@ -344,6 +433,11 @@ export default function UploadTemplateDialog({
             setError('');
             setSuccess('');
             setPdfModified(false); // Reset modification state
+            // Reset party state
+            setParties([]);
+            setFormFields([]);
+            setSelectedFieldName(null);
+            setShowPartyPanel(true);
             if (documentUrl) {
                 URL.revokeObjectURL(documentUrl);
                 setDocumentUrl('');
@@ -393,6 +487,18 @@ export default function UploadTemplateDialog({
                 }}
             >
                 Back
+            </Button>
+            <Button
+                onClick={() => setShowPartyConfigDialog(true)}
+                variant="outlined"
+                sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    px: 2,
+                    py: 0.5,
+                }}
+            >
+                {parties.length > 0 ? `${parties.length} Parties` : 'Configure Parties'}
             </Button>
             <Button
                 onClick={handleSubmit}
@@ -807,47 +913,90 @@ export default function UploadTemplateDialog({
                 <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                     {/* Error Alert */}
                     {error && (
-                        <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError('')}>
+                        <Alert severity="error" sx={{ mb: 1, mx: 1 }} onClose={() => setError('')}>
                             {error}
                         </Alert>
                     )}
 
-                    {/* Full-Screen PDF Viewer */}
-                    {documentUrl ? (
-                        <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                            <PDFViewerContainer
-                                ref={pdfViewerRef}
-                                documentUrl={documentUrl}
-                                isReadOnly={false}
-                                initialToolbarGroup="toolbarGroup-Forms"
-                                onDocumentLoaded={() => setDocumentLoaded(true)}
-                                onError={(msg) => setError(msg)}
-                                onSave={handleAutoSave}
-                                onDocumentModified={() => {
-                                    if (!pdfModified) {
-                                        console.log('📝 PDF Modified - will upload binary blob instead of original file');
-                                        setPdfModified(true);
-                                    }
+                    {/* Main content area with PDF Viewer and Party Panel */}
+                    <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+                        {/* PDF Viewer */}
+                        {documentUrl ? (
+                            <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                                <PDFViewerContainer
+                                    ref={pdfViewerRef}
+                                    documentUrl={documentUrl}
+                                    isReadOnly={false}
+                                    initialToolbarGroup="toolbarGroup-Forms"
+                                    parties={parties}
+                                    enablePartyAssignment={parties.length > 0}
+                                    onDocumentLoaded={() => {
+                                        setDocumentLoaded(true);
+                                        // Refresh form fields when document loads
+                                        setTimeout(refreshFormFields, 500);
+                                    }}
+                                    onError={(msg) => setError(msg)}
+                                    onSave={handleAutoSave}
+                                    onDocumentModified={() => {
+                                        if (!pdfModified) {
+                                            console.log('📝 PDF Modified - will upload binary blob instead of original file');
+                                            setPdfModified(true);
+                                        }
+                                        // Refresh form fields when document is modified
+                                        refreshFormFields();
+                                    }}
+                                    onFieldChange={handleFieldChange}
+                                    onPartyAssigned={(fieldName, partyId, partyLabel) => {
+                                        console.log(`[UPLOAD-TEMPLATE] Field "${fieldName}" assigned to "${partyLabel}"`);
+                                        refreshFormFields();
+                                    }}
+                                    onFieldsWithPartyExported={(fields) => {
+                                        setFormFields(fields as FormFieldDefinition[]);
+                                    }}
+                                />
+                            </Box>
+                        ) : (
+                            <Box
+                                sx={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    bgcolor: 'grey.50'
                                 }}
+                            >
+                                <Typography variant="h6" color="text.secondary">
+                                    No document loaded
+                                </Typography>
+                            </Box>
+                        )}
+
+                        {/* Party Assignment Panel - Show when parties are configured */}
+                        {parties.length > 0 && showPartyPanel && documentLoaded && (
+                            <PartyAssignmentPanel
+                                parties={parties}
+                                formFields={formFields}
+                                selectedFieldName={selectedFieldName}
+                                onPartySelected={handlePartySelected}
+                                onFieldSelected={(fieldName) => {
+                                    console.log(`[UPLOAD-TEMPLATE] Field selected from panel: ${fieldName}`);
+                                    setSelectedFieldName(fieldName);
+                                }}
+                                onConfigureParties={() => setShowPartyConfigDialog(true)}
+                                onHighlightParty={handleHighlightParty}
                             />
-                        </Box>
-                    ) : (
-                        <Box
-                            sx={{
-                                flex: 1,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                bgcolor: 'grey.50'
-                            }}
-                        >
-                            <Typography variant="h6" color="text.secondary">
-                                No document loaded
-                            </Typography>
-                        </Box>
-                    )}
+                        )}
+                    </Box>
                 </Box>
             )}
+
+            {/* Party Configuration Dialog */}
+            <PartyConfigDialog
+                open={showPartyConfigDialog}
+                onClose={() => setShowPartyConfigDialog(false)}
+                onSave={handlePartiesSave}
+                initialParties={parties}
+            />
         </BaseDialog>
     );
 }
