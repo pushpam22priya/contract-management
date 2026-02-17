@@ -106,6 +106,7 @@ export default function PartyAssignmentPanel({
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
+                border: '1px solid #e0e0e0',
             }}
         >
             {/* Header */}
@@ -340,18 +341,6 @@ export default function PartyAssignmentPanel({
                         </>
                     )}
                 </List>
-            </Box>
-
-            {/* Footer */}
-            <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<Settings />}
-                    onClick={onConfigureParties}
-                >
-                    Manage Parties
-                </Button>
             </Box>
         </Paper>
     );
