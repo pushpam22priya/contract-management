@@ -74,7 +74,7 @@ export interface PDFViewerHandle {
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, formFields }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const [loading, setLoading] = useState(true);
@@ -112,6 +112,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         // ✅ Multi-party field assignment storage
         // Maps fieldName -> { partyId, partyLabel, partyColor }
         const fieldPartyAssignmentsRef = useRef<Map<string, { partyId: string; partyLabel: string; partyColor: string }>>(new Map());
+
+        // ✅ Track signature annotation ID -> field name mapping for deletion tracking
+        // When a signature is added, we store annotationId -> fieldName
+        // When deleted, we look up which field to clear
+        const signatureAnnotationToFieldRef = useRef<Map<string, string>>(new Map());
 
         const effectiveReadOnly = isReadOnly ?? readOnly;
 
@@ -1096,6 +1101,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                 // Capture value for export
                                 capturedFieldValuesRef.current.set(field.name, fieldName);
+
+                                // Notify parent of signature field change (for party validation tracking)
+                                if (onFieldChange) {
+                                    onFieldChange(field.name, 'signed');
+                                }
                             }
 
                             // Store in capture ref for export
@@ -1609,6 +1619,19 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                     console.log(`🖊️ [MANUAL SIGN] Signature saved, widgets: ${Array.isArray(signatureWidgets) ? signatureWidgets.length : 1}`);
 
+                                    // Notify parent of signature field change (for party validation tracking)
+                                    if (onFieldChange) {
+                                        const widgets = Array.isArray(signatureWidgets) ? signatureWidgets : [signatureWidgets];
+                                        widgets.forEach((widget: any) => {
+                                            const fieldName = widget?.fieldName || widget?.getField?.()?.name;
+                                            if (fieldName) {
+                                                capturedFieldValuesRef.current.set(fieldName, 'signed');
+                                                onFieldChange(fieldName, 'signed');
+                                                console.log(`📝 [SIGNATURE TRACK] Notified parent: ${fieldName} = signed`);
+                                            }
+                                        });
+                                    }
+
                                     // ✅ Check for "Sign All" opportunity after signature is fully applied
                                     if (!isApplyingSignAllRef.current && onSignatureAppliedRef.current) {
                                         setTimeout(() => {
@@ -1652,40 +1675,101 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             type: annot.constructor?.name,
                                             subject: annot.Subject
                                         });
+
+                                        // Find which SignatureWidgetAnnotation this signature was applied to
+                                        // by matching page number and spatial overlap
+                                        if (onFieldChange) {
+                                            try {
+                                                const sigPage = annot.PageNumber;
+                                                const sigRect = annot.getRect?.();
+                                                if (sigRect && sigPage) {
+                                                    const allAnnots = Core.annotationManager.getAnnotationsList();
+                                                    const sigWidgets = allAnnots.filter((a: any) =>
+                                                        a instanceof Core.Annotations.SignatureWidgetAnnotation &&
+                                                        a.PageNumber === sigPage
+                                                    );
+
+                                                    for (const widget of sigWidgets) {
+                                                        const wRect = (widget as any).getRect?.();
+                                                        if (!wRect) continue;
+
+                                                        // Check if the signature overlaps the widget
+                                                        const overlaps =
+                                                            sigRect.x1 < wRect.x2 && sigRect.x2 > wRect.x1 &&
+                                                            sigRect.y1 < wRect.y2 && sigRect.y2 > wRect.y1;
+
+                                                        if (overlaps) {
+                                                            const field = (widget as any).getField?.();
+                                                            const fieldName = field?.name || (widget as any).fieldName;
+                                                            if (fieldName && capturedFieldValuesRef.current.get(fieldName) !== 'signed') {
+                                                                capturedFieldValuesRef.current.set(fieldName, 'signed');
+                                                                // ✅ Store mapping: annotation ID → field name (for delete tracking)
+                                                                const annotId = annot.Id || (annot as any).getId?.();
+                                                                if (annotId) {
+                                                                    signatureAnnotationToFieldRef.current.set(annotId, fieldName);
+                                                                    console.log(`📝 [SIGNATURE TRACK] Mapped annotation ${annotId} → ${fieldName}`);
+                                                                }
+                                                                onFieldChange(fieldName, 'signed');
+                                                                console.log(`📝 [SIGNATURE TRACK] Signature added on widget: ${fieldName} = signed`);
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            } catch (e) {
+                                                console.warn('⚠️ [SIGNATURE TRACK] Error matching signature to widget:', e);
+                                            }
+                                        }
                                     } else if (action === 'delete') {
                                         // ✅ FIX: When a signature is deleted, restore the widget visibility
                                         console.log(`🗑️ [SIGNATURE DELETE] Signature deleted, restoring widget`);
 
-                                        // Find all signature widgets and clear linked annotation reference
-                                        const allAnnotations = Core.annotationManager.getAnnotationsList();
-                                        const signatureWidgets = allAnnotations.filter((a: any) =>
-                                            a instanceof Core.Annotations.SignatureWidgetAnnotation
-                                        );
+                                        // ✅ FIXED: Use annotation ID → field name mapping to find which field to clear
+                                        const deletedAnnotId = annot.Id || (annot as any).getId?.();
+                                        const mappedFieldName = deletedAnnotId ? signatureAnnotationToFieldRef.current.get(deletedAnnotId) : null;
 
-                                        signatureWidgets.forEach((widget: any) => {
-                                            const linkedAnnot = (widget as any).annot;
-                                            if (linkedAnnot && linkedAnnot.Id === annot.Id) {
-                                                try {
-                                                    // Clear the linked annotation reference
-                                                    (widget as any).annot = null;
+                                        if (mappedFieldName) {
+                                            console.log(`📝 [SIGNATURE DELETE] Found mapped field: ${mappedFieldName} for annotation ${deletedAnnotId}`);
 
-                                                    // Clear field value
-                                                    const field = widget.getField?.();
-                                                    if (field) {
-                                                        field.setValue('');
-                                                        field.flags.ReadOnly = false;
-                                                        if (field.commit) {
-                                                            try { field.commit('', widget); } catch (e) { /* ok */ }
-                                                        }
-                                                    }
+                                            // Clear from captured values
+                                            capturedFieldValuesRef.current.delete(mappedFieldName);
+                                            signatureAnnotationToFieldRef.current.delete(deletedAnnotId);
 
-                                                    Core.annotationManager.updateAnnotation(widget);
-                                                    console.log(`✅ [SIGNATURE DELETE] Cleared widget link: ${widget.fieldName || 'unknown'}`);
-                                                } catch (e) {
-                                                    console.warn('⚠️ [SIGNATURE DELETE] Could not clear widget:', e);
-                                                }
+                                            // Notify parent that signature was removed (for party validation tracking)
+                                            if (onFieldChange) {
+                                                onFieldChange(mappedFieldName, '');
+                                                console.log(`📝 [SIGNATURE TRACK] Notified parent: ${mappedFieldName} = cleared`);
                                             }
-                                        });
+
+                                            // Find and restore the widget
+                                            const allAnnotations = Core.annotationManager.getAnnotationsList();
+                                            const signatureWidgets = allAnnotations.filter((a: any) =>
+                                                a instanceof Core.Annotations.SignatureWidgetAnnotation
+                                            );
+
+                                            signatureWidgets.forEach((widget: any) => {
+                                                const field = widget.getField?.();
+                                                const widgetFieldName = widget.fieldName || field?.name;
+                                                if (widgetFieldName === mappedFieldName) {
+                                                    try {
+                                                        // Clear field value
+                                                        if (field) {
+                                                            field.setValue('');
+                                                            field.flags.ReadOnly = false;
+                                                            if (field.commit) {
+                                                                try { field.commit('', widget); } catch (e) { /* ok */ }
+                                                            }
+                                                        }
+                                                        Core.annotationManager.updateAnnotation(widget);
+                                                        console.log(`✅ [SIGNATURE DELETE] Cleared widget: ${widgetFieldName}`);
+                                                    } catch (e) {
+                                                        console.warn('⚠️ [SIGNATURE DELETE] Could not clear widget:', e);
+                                                    }
+                                                }
+                                            });
+                                        } else {
+                                            console.log(`⚠️ [SIGNATURE DELETE] No mapping found for annotation ${deletedAnnotId}`);
+                                        }
 
                                         // Remove from captured signatures
                                         capturedSignatureAnnotationsRef.current.delete(annotId);
@@ -1945,6 +2029,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         const stringValue = String(value);
                                         capturedFieldValuesRef.current.set(field.name, stringValue);
                                         console.log(`📝 [VALUE CAPTURE] Captured field value: ${field.name} = "${stringValue}" (total: ${capturedFieldValuesRef.current.size})`);
+
+                                        // Notify parent component of field value change (for party validation tracking)
+                                        if (onFieldChange) {
+                                            onFieldChange(field.name, value);
+                                        }
                                     }
 
                                     // ✅ NEW: Update field metadata when value changes
