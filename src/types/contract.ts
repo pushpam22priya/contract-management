@@ -47,6 +47,30 @@ export interface SigningSequenceEntry {
 }
 
 /**
+ * External signer for multi-party signature flow
+ */
+export interface ExternalSigner {
+    email: string;             // Signer's email
+    name?: string;             // Signer's name (optional)
+    partyId: string;           // Which party they are assigned to fill
+    partyLabel: string;        // Party label for display
+    token: string;             // Unique signing token
+    status: 'pending' | 'viewed' | 'completed';
+    sentAt: string;            // When the signing request was sent
+    viewedAt?: string;         // When they first opened the link
+    completedAt?: string;      // When they submitted their changes
+}
+
+/**
+ * Signature status for multi-party flow
+ */
+export type SignatureFlowStatus =
+    | 'draft'                  // Contract created, not sent for signatures
+    | 'pending_signatures'     // Sent to external parties, waiting for completions
+    | 'all_completed'          // All parties have completed their fields
+    | 'finalized';             // Contractor has finalized and emails sent
+
+/**
  * Status of a signing request
  */
 export type SigningRequestStatus = 'pending' | 'viewed' | 'signed' | 'expired' | 'cancelled';
@@ -141,13 +165,47 @@ export interface Contract {
     createdBy: string;
     updatedAt?: string;
 
-    // External signature tracking
+    // External signature tracking (legacy - single signer)
     externalSigningToken?: string;      // Token used in signing URL (for quick lookup)
     externalSigningUrl?: string;        // Full signing URL sent to client
     externalSigningSentAt?: string;     // When the signature request was sent
 
     // Consolidated signing request (replaces separate signature_requests collection)
     signingRequest?: SigningRequest;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MULTI-PARTY SIGNATURE FLOW
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Multi-party flow status
+    signatureFlowStatus?: SignatureFlowStatus;
+
+    // Version number for optimistic locking (prevents concurrent edit conflicts)
+    version?: number;
+
+    // External signers (one per party that's assigned to an external client)
+    externalSigners?: ExternalSigner[];
+
+    // Which party the contractor fills (if any)
+    contractorParty?: string;
+
+    // Party configurations (copied from template)
+    parties?: PartyConfiguration[];
+
+    // Track which parties have completed their fields
+    partyCompletions?: {
+        partyId: string;
+        partyLabel: string;
+        status: 'pending' | 'completed';
+        completedBy?: string;        // Email of who completed
+        completedByName?: string;    // Name of who completed
+        completedAt?: string;        // When completed
+        isContractor?: boolean;      // True if completed by contractor
+    }[];
+
+    // When the contract was finalized (all signatures complete, emails sent)
+    finalizedAt?: string;
+    finalizedBy?: string;
 }
 
 /**

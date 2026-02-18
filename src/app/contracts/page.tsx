@@ -15,7 +15,9 @@ import { Contract, ContractStatus } from '@/types/contract';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { authService } from '@/services/authService';
 import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
+import MultiPartySignatureDialog from '@/components/contracts/MultiPartySignatureDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
+import { submitForMultiPartySignature, SignatureRecipient } from '@/services/externalSignatureService';
 import { AlertColor } from '@mui/material';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
@@ -55,6 +57,9 @@ export default function ContractsPage() {
     // Signature Dialog State
     const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
     const [contractForSignature, setContractForSignature] = useState<Contract | null>(null);
+
+    // Multi-Party Signature Dialog State
+    const [multiPartyDialogOpen, setMultiPartyDialogOpen] = useState(false);
 
     // Snackbar state
     const [snackbar, setSnackbar] = useState({
@@ -216,7 +221,24 @@ export default function ContractsPage() {
         if (!contract) return;
 
         setContractForSignature(contract);
-        setSignatureDialogOpen(true);
+
+        // Check if contract has multiple parties with fields
+        const partiesWithFields = (contract.parties || []).filter((party: any) => {
+            return (contract.formFields || []).some((field: any) => field.assignedParty === party.id);
+        });
+
+        console.log(`📋 [ContractsPage] Share contract: ${contract.id}`);
+        console.log(`   Parties with fields: ${partiesWithFields.length}`);
+
+        if (partiesWithFields.length > 1) {
+            // Multiple parties - use multi-party dialog
+            console.log(`   Using multi-party dialog`);
+            setMultiPartyDialogOpen(true);
+        } else {
+            // Single party or no parties - use legacy dialog
+            console.log(`   Using legacy single-signer dialog`);
+            setSignatureDialogOpen(true);
+        }
     };
 
 
@@ -252,6 +274,55 @@ export default function ContractsPage() {
             console.error('❌ [ContractsPage] Failed to send signature request:', result.message);
             showNotification(result.message, 'error');
             return { success: false };
+        }
+    };
+
+    /**
+     * Handle multi-party signature submission
+     */
+    const handleMultiPartySignatureSubmit = async (
+        recipients: SignatureRecipient[],
+        contractorParty?: string
+    ) => {
+        console.log('📝 [ContractsPage] Handling multi-party signature submit...');
+        console.log('   Contract:', contractForSignature?.id);
+        console.log('   Recipients:', recipients.length);
+        console.log('   Contractor party:', contractorParty);
+
+        if (!contractForSignature) {
+            console.error('❌ [ContractsPage] No contract selected for signature');
+            return { success: false, error: 'No contract selected' };
+        }
+
+        // Get current user for sender name
+        const currentUser = authService.getCurrentUser();
+        const senderName = currentUser?.email || 'Contract System';
+
+        console.log('   Sender:', senderName);
+
+        try {
+            const result = await submitForMultiPartySignature(
+                contractForSignature,
+                recipients,
+                senderName,
+                contractorParty
+            );
+
+            if (result.success) {
+                console.log('✅ [ContractsPage] Multi-party signature requests sent successfully');
+                const emailCount = result.signers?.filter(s => s.emailSent).length || 0;
+                showNotification(`Signature requests sent to ${emailCount} recipient(s)`, 'success');
+                loadContracts();  // Reload to show updated status
+            } else {
+                console.error('❌ [ContractsPage] Failed to send multi-party signature requests:', result.error);
+                showNotification(result.error || 'Failed to send signature requests', 'error');
+            }
+
+            return result;
+        } catch (error: any) {
+            console.error('❌ [ContractsPage] Error in multi-party signature submit:', error);
+            showNotification(error.message || 'An unexpected error occurred', 'error');
+            return { success: false, error: error.message };
         }
     };
 
@@ -454,6 +525,16 @@ export default function ContractsPage() {
                     onClose={() => setSignatureDialogOpen(false)}
                     onSubmit={handleSignatureSubmit}
                     contractTitle={contractForSignature?.title}
+                />
+
+                {/* Multi-Party Signature Dialog */}
+                <MultiPartySignatureDialog
+                    open={multiPartyDialogOpen}
+                    onClose={() => setMultiPartyDialogOpen(false)}
+                    onSubmit={handleMultiPartySignatureSubmit}
+                    contractTitle={contractForSignature?.title}
+                    parties={contractForSignature?.parties || []}
+                    formFields={contractForSignature?.formFields}
                 />
 
                 <NotificationSnackbar

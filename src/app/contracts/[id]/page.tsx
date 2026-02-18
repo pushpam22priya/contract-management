@@ -9,16 +9,28 @@ import {
     Tooltip,
     Chip,
     Fade,
+    Button,
+    Paper,
+    Alert,
+    CircularProgress,
+    Divider,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import SendIcon from '@mui/icons-material/Send';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
 import AppLayout from '@/components/layout/AppLayout';
 import ContractInformation from '@/components/contracts/ContractInformation';
 import ContractDetailsPanel from '@/components/contracts/ContractDetailsPanel';
 import { contractService } from '@/services/contractService';
+import { apiService } from '@/services/apiService';
 import { templateService } from '@/services/templateService';
+import { sendFinalizedContractEmails } from '@/services/externalSignatureService';
+import { authService } from '@/services/authService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { Document } from '@/components/contracts/ContractDetailsPanel';
 
@@ -36,6 +48,11 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const [contractTemplate, setContractTemplate] = useState<any | null>(null); // New state for template
     const [viewerOpen, setViewerOpen] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
+
+    // Multi-party finalization state
+    const [finalizing, setFinalizing] = useState(false);
+    const [finalizeError, setFinalizeError] = useState<string | null>(null);
+    const [finalizeSuccess, setFinalizeSuccess] = useState(false);
 
     // --- ROBUST DATA FETCHING LOGIC ---
     useEffect(() => {
@@ -216,6 +233,126 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const handleEdit = () => console.log('Edit contract:', contract?.id);
     const handleDownload = () => console.log('Download contract:', contract?.id);
     const handleDelete = () => console.log('Delete contract:', contract?.id);
+
+    /**
+     * Handle finalizing the contract after all parties have completed
+     */
+    const handleFinalize = async () => {
+        if (!contract) return;
+
+        console.log('🏁 [ContractViewPage] Finalizing contract:', contract.id);
+        setFinalizing(true);
+        setFinalizeError(null);
+
+        try {
+            const currentUser = authService.getCurrentUser();
+            const finalizedBy = currentUser?.email || 'system';
+            const finalizedByName = currentUser?.email || 'System';
+
+            // Call finalize API
+            const response = await fetch(`/api/contracts/${contract.id}/finalize`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    finalizedBy,
+                    finalizedByName,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to finalize contract');
+            }
+
+            console.log('✅ [ContractViewPage] Contract finalized successfully');
+
+            // Send emails to all external signers
+            console.log('📧 [ContractViewPage] Sending finalized emails...');
+            const emailResult = await sendFinalizedContractEmails(contract, finalizedByName);
+
+            if (!emailResult.success) {
+                console.warn('⚠️ [ContractViewPage] Some emails failed:', emailResult.errors);
+            } else {
+                console.log(`✅ [ContractViewPage] Sent ${emailResult.sentCount} emails`);
+            }
+
+            setFinalizeSuccess(true);
+
+            // Refresh contract data
+            const updatedContract = await contractService.getContractById(contract.id);
+            if (updatedContract) {
+                setContract(updatedContract);
+            }
+
+        } catch (error: any) {
+            console.error('❌ [ContractViewPage] Finalize error:', error);
+            setFinalizeError(error.message || 'Failed to finalize contract');
+        } finally {
+            setFinalizing(false);
+        }
+    };
+
+    /**
+     * Check if this is a multi-party contract
+     */
+    const isMultiPartyContract = contract?.externalSigners && contract.externalSigners.length > 0;
+
+    /**
+     * Check if all external signers have completed
+     */
+    const allSignersCompleted = isMultiPartyContract &&
+        contract.externalSigners.every((signer: any) => signer.status === 'completed');
+
+    /**
+     * Check if contract can be finalized
+     */
+    const canFinalize = allSignersCompleted &&
+        contract?.signatureFlowStatus === 'all_completed';
+
+    /**
+     * Check if contract is already finalized
+     */
+    const isFinalized = contract?.signatureFlowStatus === 'finalized';
+
+    /**
+     * Save contract changes from PDF viewer
+     */
+    const handleSaveChanges = async (pdfBlob: Blob, xfdfString: string, fieldValues?: Record<string, string>, formFields?: any[]) => {
+        if (!contract) return;
+
+        try {
+            const arrayBuffer = await pdfBlob.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            const pdfBase64 = btoa(binary);
+
+            const result = await contractService.updateContractSignedPdf(contract.id, pdfBase64, xfdfString);
+
+            if (result.success) {
+                const metadataUpdates: Record<string, any> = {};
+                if (fieldValues && Object.keys(fieldValues).length > 0) {
+                    metadataUpdates.fieldValues = { ...(contract.fieldValues || {}), ...fieldValues };
+                }
+                if (formFields && formFields.length > 0) {
+                    metadataUpdates.formFields = formFields;
+                    metadataUpdates.hasFormFields = true;
+                }
+                if (Object.keys(metadataUpdates).length > 0) {
+                    await apiService.updateContractMetadata(contract.id, metadataUpdates);
+                }
+
+                // Refresh contract data
+                const updatedContract = await contractService.getContractById(contract.id);
+                if (updatedContract) setContract(updatedContract);
+            }
+        } catch (error) {
+            console.error('❌ Error saving contract:', error);
+        }
+    };
 
     // View Document Handler
     const handleViewDocument = (doc: Document) => {
@@ -423,6 +560,137 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         </Box>
                     </Box>
 
+                    {/* ═══════════════════════════════════════════════════════════════════════════ */}
+                    {/* MULTI-PARTY SIGNATURE STATUS */}
+                    {/* ═══════════════════════════════════════════════════════════════════════════ */}
+                    {isMultiPartyContract && (
+                        <Paper
+                            elevation={0}
+                            sx={{
+                                mt: 2,
+                                p: 2,
+                                border: '1px solid',
+                                borderColor: isFinalized ? 'success.light' : 'divider',
+                                borderRadius: 2,
+                                bgcolor: isFinalized ? 'success.50' : 'background.paper',
+                            }}
+                        >
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                                <Typography variant="subtitle1" fontWeight={600}>
+                                    {isFinalized ? '✅ Contract Finalized' : '📝 Multi-Party Signature Status'}
+                                </Typography>
+                                {isFinalized && contract.finalizedAt && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        Finalized on {new Date(contract.finalizedAt).toLocaleDateString()}
+                                    </Typography>
+                                )}
+                            </Box>
+
+                            {/* Party completion status list */}
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
+                                {contract.externalSigners?.map((signer: any, index: number) => (
+                                    <Box
+                                        key={signer.token || index}
+                                        sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 1,
+                                            p: 1.5,
+                                            borderRadius: 1.5,
+                                            bgcolor: signer.status === 'completed' ? 'success.50' : 'grey.100',
+                                            border: '1px solid',
+                                            borderColor: signer.status === 'completed' ? 'success.light' : 'grey.300',
+                                            minWidth: 200,
+                                        }}
+                                    >
+                                        {signer.status === 'completed' ? (
+                                            <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />
+                                        ) : (
+                                            <HourglassEmptyIcon sx={{ color: 'warning.main', fontSize: 20 }} />
+                                        )}
+                                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <Chip
+                                                    label={signer.partyLabel}
+                                                    size="small"
+                                                    sx={{
+                                                        bgcolor: contract.parties?.find((p: any) => p.id === signer.partyId)?.color || '#666',
+                                                        color: '#fff',
+                                                        fontWeight: 600,
+                                                        fontSize: '0.7rem',
+                                                        height: 20,
+                                                    }}
+                                                />
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        whiteSpace: 'nowrap',
+                                                    }}
+                                                >
+                                                    {signer.email}
+                                                </Typography>
+                                            </Box>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {signer.status === 'completed'
+                                                    ? `Completed ${signer.completedAt ? new Date(signer.completedAt).toLocaleDateString() : ''}`
+                                                    : 'Pending'
+                                                }
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                ))}
+                            </Box>
+
+                            <Divider sx={{ my: 2 }} />
+
+                            {/* Finalize section */}
+                            {!isFinalized && (
+                                <Box>
+                                    {canFinalize ? (
+                                        <Box>
+                                            <Alert severity="success" sx={{ mb: 2 }}>
+                                                <strong>All parties have completed!</strong> You can now finalize this contract.
+                                                Finalizing will mark the contract as active and send a copy to all signers.
+                                            </Alert>
+                                            {finalizeError && (
+                                                <Alert severity="error" sx={{ mb: 2 }}>
+                                                    {finalizeError}
+                                                </Alert>
+                                            )}
+                                            {finalizeSuccess && (
+                                                <Alert severity="success" sx={{ mb: 2 }}>
+                                                    Contract finalized successfully! Emails have been sent to all signers.
+                                                </Alert>
+                                            )}
+                                            <Button
+                                                variant="contained"
+                                                color="primary"
+                                                onClick={handleFinalize}
+                                                disabled={finalizing || finalizeSuccess}
+                                                startIcon={finalizing ? <CircularProgress size={20} color="inherit" /> : <DoneAllIcon />}
+                                                sx={{ fontWeight: 600 }}
+                                            >
+                                                {finalizing ? 'Finalizing...' : 'Finalize Contract'}
+                                            </Button>
+                                        </Box>
+                                    ) : (
+                                        <Alert severity="info">
+                                            Waiting for all parties to complete their fields before finalization.
+                                        </Alert>
+                                    )}
+                                </Box>
+                            )}
+
+                            {isFinalized && (
+                                <Alert severity="success" icon={<DoneAllIcon />}>
+                                    This contract has been finalized. All signers have received a copy.
+                                </Alert>
+                            )}
+                        </Paper>
+                    )}
+
                     {/* Content Grid: Contract Info + Details Panel */}
                     <Box
                         sx={{
@@ -526,31 +794,12 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 fileName={selectedDoc?.name || contract.title}
                 title={selectedDoc?.name || contract.title}
                 contractId={contract.id}
-                // ✅ CRITICAL FIX: Do NOT import XFDF when loading a saved contract PDF
-                // The PDF already has annotations embedded from previous saves.
-                // Importing XFDF causes "appearanceReference" errors because XFDF
-                // references appearance streams that are now baked into the PDF.
-                // Only pass XFDF when falling back to template (no saved contract PDF).
-                initialXfdf={(() => {
-                    // Skip XFDF if contract has its own saved PDF
-                    if (contract.signedPdfBase64 || contract.fileUrl || selectedDoc?.url) {
-                        console.log('📄 [ContractViewPage] Skipping XFDF - using saved contract PDF');
-                        return undefined;
-                    }
-                    // Only use XFDF when falling back to template
-                    console.log('📄 [ContractViewPage] Using XFDF - falling back to template');
-                    return contract.xfdfData;
-                })()}
-                formFields={(() => {
-                    // Same logic as XFDF - skip if using saved contract PDF
-                    if (contract.signedPdfBase64 || contract.fileUrl || selectedDoc?.url) {
-                        return undefined;
-                    }
-                    return contract.formFields;
-                })()}
+                // Always pass XFDF - the saved PDF may not embed form fields
+                initialXfdf={contract.xfdfData}
+                formFields={contract.formFields}
                 currentUserRole="contractor"
-                // ✅ NEW: Contract view page is always read-only
-                readOnly={true}
+                onSave={handleSaveChanges}
+                editableFieldMode="all"
             />
         </AppLayout>
     );

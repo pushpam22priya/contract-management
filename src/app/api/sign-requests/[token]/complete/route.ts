@@ -1,3 +1,12 @@
+/**
+ * API Route: PUT /api/sign-requests/[token]/complete
+ *
+ * Completes a signature request (external signer submitting their changes).
+ * Supports multi-party signature flow with:
+ * - Version checking (optimistic locking)
+ * - Party completion tracking
+ * - Auto-save vs final submit
+ */
 
 import { NextResponse, NextRequest } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
@@ -10,15 +19,19 @@ export async function PUT(
     try {
         const { token } = await params;
 
+        console.log(`📋 [SignComplete] Processing completion for token: ${token}`);
+
         // 1. Parse FormData
         const formData = await request.formData();
         const pdfFile = formData.get('pdf') as File;
         const xfdf = (formData.get('xfdf') as string) || '';
         const fieldValuesStr = (formData.get('fieldValues') as string) || '';
         const formFieldsStr = (formData.get('formFields') as string) || '';
-        const isAutoSave = formData.get('isAutoSave') === 'true'; // ✅ Check if this is auto-save
+        const isAutoSave = formData.get('isAutoSave') === 'true';
+        const signerName = (formData.get('signerName') as string) || '';
 
         if (!pdfFile) {
+            console.log(`❌ [SignComplete] No PDF file provided`);
             return NextResponse.json({ error: 'No PDF file provided' }, { status: 400 });
         }
 
@@ -27,6 +40,7 @@ export async function PUT(
         const buffer = Buffer.from(arrayBuffer);
 
         if (buffer.length === 0) {
+            console.log(`❌ [SignComplete] Empty PDF body`);
             return NextResponse.json({ error: 'Empty PDF body' }, { status: 400 });
         }
 
@@ -45,28 +59,61 @@ export async function PUT(
         // 2. Locate Request
         const signRequest = await db.collection('signature_requests').findOne({ token });
         if (!signRequest) {
+            console.log(`❌ [SignComplete] Invalid token: ${token}`);
             return NextResponse.json({ error: 'Invalid token' }, { status: 403 });
         }
 
+        console.log(`📋 [SignComplete] Found request for contract: ${signRequest.contractId}`);
+        console.log(`   Signer: ${signRequest.signerEmail}`);
+        console.log(`   Assigned Party: ${signRequest.assignedParty || 'none'}`);
+        console.log(`   Is Auto-Save: ${isAutoSave}`);
+
         // ✅ Only block if already signed AND this is not an auto-save
-        // Auto-save should still be able to save progress even if status is 'signed' (edge case)
         if ((signRequest.status === 'signed' || signRequest.status === 'cancelled') && !isAutoSave) {
+            console.log(`❌ [SignComplete] Request no longer pending (status: ${signRequest.status})`);
             return NextResponse.json({ error: 'Request no longer pending' }, { status: 400 });
+        }
+
+        // 3. Fetch existing contract for version checking and merging
+        const existingContract = await db.collection('contracts').findOne(
+            { _id: new ObjectId(signRequest.contractId) },
+            { projection: { fieldValues: 1, formFields: 1, version: 1, partyCompletions: 1, externalSigners: 1, signatureFlowStatus: 1, parties: 1 } }
+        );
+
+        if (!existingContract) {
+            console.log(`❌ [SignComplete] Contract not found: ${signRequest.contractId}`);
+            return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
+        }
+
+        // 4. VERSION CHECK (Optimistic Locking) - Only for final submit, not auto-save
+        const contractVersion = existingContract.version || 0;
+        const requestVersion = signRequest.contractVersion;
+
+        if (!isAutoSave && requestVersion !== undefined && requestVersion !== contractVersion) {
+            console.log(`⚠️ [SignComplete] Version mismatch! Request: ${requestVersion}, Contract: ${contractVersion}`);
+            return NextResponse.json({
+                error: 'Document has been modified by another party. Please reload and try again.',
+                code: 'VERSION_MISMATCH',
+                currentVersion: contractVersion
+            }, { status: 409 });
         }
 
         const now = new Date().toISOString();
 
-        // ✅ AUTO-SAVE vs FINAL SUBMIT handling
+        // ═══════════════════════════════════════════════════════════════════════════
+        // AUTO-SAVE HANDLING
+        // ═══════════════════════════════════════════════════════════════════════════
         if (isAutoSave) {
-            // 3a. Auto-save: Only save progress, don't change status
-            console.log('💾 [AUTO-SAVE] Saving external signer progress (not marking as signed)');
+            console.log('💾 [SignComplete] Auto-save: Saving progress without marking as completed');
 
             await db.collection('signature_requests').updateOne(
                 { token },
                 {
                     $set: {
                         lastSavedAt: now,
-                        savedXfdf: xfdf // Save XFDF progress separately
+                        savedXfdf: xfdf,
+                        // Sync version so final submit won't hit VERSION_MISMATCH
+                        contractVersion: contractVersion
                     },
                     $push: {
                         events: { type: 'auto-saved', at: now }
@@ -74,17 +121,12 @@ export async function PUT(
                 } as any
             );
 
-            // Update contract PDF and XFDF without changing status
+            // Update contract PDF and XFDF without changing status or incrementing version
             const contractUpdate: Record<string, any> = {
                 pdf: buffer,
                 xfdfData: xfdf,
+                updatedAt: now,
             };
-
-            // Merge field values
-            const existingContract = await db.collection('contracts').findOne(
-                { _id: new ObjectId(signRequest.contractId) },
-                { projection: { fieldValues: 1 } }
-            );
 
             if (fieldValues) {
                 contractUpdate.fieldValues = {
@@ -98,10 +140,16 @@ export async function PUT(
                 { $set: contractUpdate }
             );
 
+            console.log(`✅ [SignComplete] Auto-save completed`);
             return NextResponse.json({ success: true, message: 'Progress saved' });
         }
 
-        // 3b. Final Submit: Update Request Status to signed
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FINAL SUBMIT HANDLING
+        // ═══════════════════════════════════════════════════════════════════════════
+        console.log('✍️ [SignComplete] Final submit: Marking as completed');
+
+        // Update signature request status
         await db.collection('signature_requests').updateOne(
             { token },
             {
@@ -116,24 +164,16 @@ export async function PUT(
             } as any
         );
 
-        // 4. Update Original Contract with Signed PDF
-        // ✅ FIX: Also persist fieldValues and formFields like contract creation does
+        // Build contract update
         const contractUpdate: Record<string, any> = {
-            status: 'signed',
             pdf: buffer,
-            signedDate: now,
             xfdfData: xfdf,
-            'signer.status': 'signed',
-            'signer.signedAt': now,
+            updatedAt: now,
+            // Increment version for optimistic locking
+            version: contractVersion + 1,
         };
 
-        // Fetch existing contract to merge field values and form fields
-        const existingContract = await db.collection('contracts').findOne(
-            { _id: new ObjectId(signRequest.contractId) },
-            { projection: { fieldValues: 1, formFields: 1 } }
-        );
-
-        // Merge client's field values with existing contract field values
+        // Merge field values
         if (fieldValues) {
             contractUpdate.fieldValues = {
                 ...(existingContract?.fieldValues || {}),
@@ -141,19 +181,17 @@ export async function PUT(
             };
         }
 
-        // ✅ FIX: Merge formFields instead of overwriting to preserve fields from contract creation
+        // Merge formFields
         if (formFields && formFields.length > 0) {
             const existingFormFields = existingContract?.formFields || [];
-
-            // Create a map of existing fields by name for quick lookup
             const existingFieldsMap = new Map<string, any>();
+
             for (const field of existingFormFields) {
                 if (field.name) {
                     existingFieldsMap.set(field.name, field);
                 }
             }
 
-            // Update existing fields with signer's changes, add new fields
             for (const signerField of formFields) {
                 if (signerField.name) {
                     existingFieldsMap.set(signerField.name, {
@@ -163,8 +201,83 @@ export async function PUT(
                 }
             }
 
-            // Convert map back to array
             contractUpdate.formFields = Array.from(existingFieldsMap.values());
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // MULTI-PARTY: Update party completion tracking
+        // ═══════════════════════════════════════════════════════════════════════════
+        const assignedParty = signRequest.assignedParty;
+
+        if (assignedParty) {
+            console.log(`🏷️ [SignComplete] Updating party completion for: ${assignedParty}`);
+
+            // Update externalSigners status
+            const externalSigners = existingContract.externalSigners || [];
+            const updatedSigners = externalSigners.map((signer: any) => {
+                if (signer.token === token) {
+                    return {
+                        ...signer,
+                        status: 'completed',
+                        completedAt: now,
+                    };
+                }
+                return signer;
+            });
+            contractUpdate.externalSigners = updatedSigners;
+
+            // Update partyCompletions
+            const partyCompletions = existingContract.partyCompletions || [];
+            let partyFound = false;
+
+            const updatedCompletions = partyCompletions.map((pc: any) => {
+                if (pc.partyId === assignedParty) {
+                    partyFound = true;
+                    return {
+                        ...pc,
+                        status: 'completed',
+                        completedBy: signRequest.signerEmail,
+                        completedByName: signerName || signRequest.signerName || signRequest.signerEmail,
+                        completedAt: now,
+                        isContractor: false,
+                    };
+                }
+                return pc;
+            });
+
+            // If party wasn't in completions yet, add it
+            if (!partyFound) {
+                const partyConfig = (existingContract.parties || []).find((p: any) => p.id === assignedParty);
+                updatedCompletions.push({
+                    partyId: assignedParty,
+                    partyLabel: partyConfig?.label || signRequest.assignedPartyLabel || assignedParty,
+                    status: 'completed',
+                    completedBy: signRequest.signerEmail,
+                    completedByName: signerName || signRequest.signerName || signRequest.signerEmail,
+                    completedAt: now,
+                    isContractor: false,
+                });
+            }
+
+            contractUpdate.partyCompletions = updatedCompletions;
+
+            // Check if all parties are now complete
+            const allSigners = updatedSigners;
+            const allCompleted = allSigners.length > 0 && allSigners.every((s: any) => s.status === 'completed');
+
+            if (allCompleted && existingContract.signatureFlowStatus === 'pending_signatures') {
+                console.log(`🎉 [SignComplete] All external signers have completed!`);
+                contractUpdate.signatureFlowStatus = 'all_completed';
+            }
+
+            console.log(`✅ [SignComplete] Party ${assignedParty} marked as completed`);
+        } else {
+            // Legacy single-signer flow
+            console.log(`📝 [SignComplete] Legacy flow: Updating signer status`);
+            contractUpdate.status = 'signed';
+            contractUpdate.signedDate = now;
+            contractUpdate['signer.status'] = 'signed';
+            contractUpdate['signer.signedAt'] = now;
         }
 
         await db.collection('contracts').updateOne(
@@ -172,10 +285,41 @@ export async function PUT(
             { $set: contractUpdate }
         );
 
-        return NextResponse.json({ success: true, message: 'Signature completed' });
+        // ═══════════════════════════════════════════════════════════════════════════
+        // MULTI-PARTY: Update other pending signature requests with new version
+        // ═══════════════════════════════════════════════════════════════════════════
+        // This ensures other parties in the same multi-party flow won't get VERSION_MISMATCH
+        // when they submit after this party completes.
+        const newVersion = contractVersion + 1;
+
+        if (assignedParty) {
+            const updateResult = await db.collection('signature_requests').updateMany(
+                {
+                    contractId: signRequest.contractId,
+                    token: { $ne: token },  // Don't update the current one
+                    status: 'pending'       // Only update pending requests
+                },
+                {
+                    $set: { contractVersion: newVersion }
+                }
+            );
+
+            if (updateResult.modifiedCount > 0) {
+                console.log(`🔄 [SignComplete] Updated ${updateResult.modifiedCount} other pending signature requests to version ${newVersion}`);
+            }
+        }
+
+        console.log(`✅ [SignComplete] Signature completed successfully`);
+        console.log(`   New version: ${newVersion}`);
+
+        return NextResponse.json({
+            success: true,
+            message: 'Signature completed',
+            newVersion
+        });
 
     } catch (error: any) {
-        console.error('Signature completion failed:', error);
+        console.error('❌ [SignComplete] Error:', error);
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }

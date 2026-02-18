@@ -17,7 +17,6 @@ import { CheckCircle, Error, Save, Download, Close } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
 import { SignatureRequest } from '@/types/signature';
 import { PartyConfiguration } from '@/types/template';
-import { validatePartyFields } from '@/utils/partyValidation';
 import {
     getSignatureRequestData,
     completeExternalSignature
@@ -79,22 +78,22 @@ export default function PublicSigningPage() {
     // ✅ Party validation: detect partially filled parties
     // If the external signer fills any field of a party, ALL fields for that party must be completed
     // Note: Fields already filled by contractor are in signatureRequest.fieldValues and are read-only
+    // MULTI-PARTY: If signer has an assignedParty, only validate that party
     const partyValidationWarning = useMemo(() => {
         if (!signatureRequest?.formFields || !signatureRequest?.parties) return null;
 
         const formFields = signatureRequest.formFields;
-        const parties = signatureRequest.parties as PartyConfiguration[];
+        const allParties = signatureRequest.parties as PartyConfiguration[];
         const prefilledValues = signatureRequest.fieldValues || {};
 
-        // Merge pre-filled values with newly filled values
-        // Pre-filled values are read-only, so we only track new changes
-        const allFieldValues = { ...prefilledValues, ...filledFieldValues };
+        // MULTI-PARTY: If signer has assigned party, only validate that party
+        const partiesToValidate = signatureRequest.assignedParty
+            ? allParties.filter(p => p.id === signatureRequest.assignedParty)
+            : allParties;
 
         const partialParties: { party: PartyConfiguration; filled: number; total: number; missing: string[] }[] = [];
 
-        for (const party of parties) {
-            const result = validatePartyFields(party.id, formFields, allFieldValues);
-
+        for (const party of partiesToValidate) {
             // Get fields for this party that the external signer CAN fill (empty fields only)
             const partyFields = formFields.filter((f: any) => f.assignedParty === party.id);
             const editableFields = partyFields.filter((f: any) => {
@@ -218,6 +217,7 @@ export default function PublicSigningPage() {
     useEffect(() => {
         const loadData = async () => {
             try {
+                console.log(`📋 [PublicSigningPage] Loading signature request for token: ${token}`);
                 const result = await getSignatureRequestData(token);
 
                 if (!result.success || !result.data) {
@@ -227,6 +227,14 @@ export default function PublicSigningPage() {
                 }
 
                 const data = result.data;
+
+                console.log(`📋 [PublicSigningPage] Loaded request:`, {
+                    contractId: data.contractId,
+                    contractTitle: data.contractTitle,
+                    assignedParty: data.assignedParty || 'none',
+                    assignedPartyLabel: data.assignedPartyLabel || 'N/A',
+                    status: data.status,
+                });
 
                 if (new Date(data.expiresAt) < new Date()) {
                     setError('This signing link has expired. Please request a new one.');
@@ -250,6 +258,38 @@ export default function PublicSigningPage() {
 
         if (token) loadData();
     }, [token]);
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════════
+     * MULTI-PARTY: Determine editable parties for this signer
+     * ═══════════════════════════════════════════════════════════════════════════
+     * If assignedParty is set, the signer can only edit fields assigned to that party.
+     * Otherwise (legacy single-signer flow), they can edit all fields.
+     */
+    const editableParties = useMemo(() => {
+        if (!signatureRequest) return undefined;
+
+        // If this signer has an assigned party, they can only edit that party's fields
+        if (signatureRequest.assignedParty) {
+            console.log(`🏷️ [PublicSigningPage] Multi-party mode: Signer can only edit party "${signatureRequest.assignedParty}"`);
+            return [signatureRequest.assignedParty];
+        }
+
+        // Legacy flow - can edit all fields (return undefined to not restrict)
+        console.log(`📝 [PublicSigningPage] Legacy mode: Signer can edit all fields`);
+        return undefined;
+    }, [signatureRequest]);
+
+    /**
+     * Get the assigned party configuration for display
+     */
+    const assignedPartyConfig = useMemo(() => {
+        if (!signatureRequest?.assignedParty || !signatureRequest?.parties) return null;
+
+        return signatureRequest.parties.find(
+            (p: PartyConfiguration) => p.id === signatureRequest.assignedParty
+        ) || null;
+    }, [signatureRequest]);
 
     /**
      * Handle signature submission
@@ -419,9 +459,24 @@ export default function PublicSigningPage() {
                 alignItems: 'center',
                 flexShrink: 0
             }}>
-                <Typography variant="body1" color='#fff' fontWeight={500}>
-                    {signatureRequest?.contractTitle}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="body1" color='#fff' fontWeight={500}>
+                        {signatureRequest?.contractTitle}
+                    </Typography>
+                    {/* Show assigned party badge for multi-party flow */}
+                    {assignedPartyConfig && (
+                        <Chip
+                            label={`Your fields: ${assignedPartyConfig.label}`}
+                            size="small"
+                            sx={{
+                                bgcolor: assignedPartyConfig.color || '#666',
+                                color: '#fff',
+                                fontWeight: 600,
+                                fontSize: '0.75rem',
+                            }}
+                        />
+                    )}
+                </Box>
                 <Tooltip
                     title={hasPartialParty ? 'Complete all fields for the party you started filling' : ''}
                     arrow
@@ -463,6 +518,8 @@ export default function PublicSigningPage() {
                         onFieldChange={handleFieldChange}
                         showAnnotationNavigation={true}
                         onSignatureApplied={handleSignatureApplied}
+                        // ✅ MULTI-PARTY: Restrict editing to assigned party's fields only
+                        editableParties={editableParties}
                     />
                 )}
 

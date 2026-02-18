@@ -4,6 +4,9 @@
  * Fetches signing request data from the contract document.
  * Also supports backward compatibility with old signature_requests collection.
  * Used by the public signing page to load contract details.
+ *
+ * Multi-party support: Returns assignedParty info so the signing page
+ * can restrict editing to only the assigned party's fields.
  */
 
 import { NextResponse } from 'next/server';
@@ -57,6 +60,8 @@ export async function GET(
                 fieldValues: contract.fieldValues,
                 xfdfData: contract.xfdfData,
                 parties: contract.parties,  // ✅ Include parties for external signer validation
+                // Multi-party fields (may not exist for legacy contracts)
+                version: contract.version,
             };
 
             return NextResponse.json({
@@ -65,44 +70,56 @@ export async function GET(
             });
         }
 
-        // BACKWARD COMPATIBILITY: Check old signature_requests collection
-        console.log(`⚠️ [SignRequest GET] Contract not found with embedded signingRequest, checking legacy collection...`);
+        // MULTI-PARTY FLOW: Check signature_requests collection
+        console.log(`🔍 [SignRequest GET] Checking signature_requests collection...`);
 
-        const legacyRequest = await db.collection('signature_requests').findOne({ token });
+        const signatureRequest = await db.collection('signature_requests').findOne({ token });
 
-        if (!legacyRequest) {
+        if (!signatureRequest) {
             console.log(`❌ [SignRequest GET] No request found with token: ${token}`);
             return NextResponse.json({ success: false, error: 'Request not found' }, { status: 404 });
         }
 
-        console.log(`✅ [SignRequest GET] Found legacy signature request for contract: ${legacyRequest.contractId}`);
+        console.log(`✅ [SignRequest GET] Found signature request for contract: ${signatureRequest.contractId}`);
+        if (signatureRequest.assignedParty) {
+            console.log(`🏷️ [SignRequest GET] Assigned party: ${signatureRequest.assignedParty} (${signatureRequest.assignedPartyLabel})`);
+        }
 
-        // Fetch the contract for additional data
-        let legacyContract = null;
+        // Fetch the contract for additional data (always get latest version)
+        let linkedContract = null;
         try {
-            legacyContract = await db.collection('contracts').findOne(
-                { _id: new ObjectId(legacyRequest.contractId) },
+            linkedContract = await db.collection('contracts').findOne(
+                { _id: new ObjectId(signatureRequest.contractId) },
                 { projection: { pdf: 0 } }
             );
         } catch (e) {
-            console.warn(`⚠️ [SignRequest GET] Could not fetch contract for legacy request`);
+            console.warn(`⚠️ [SignRequest GET] Could not fetch contract for request`);
         }
 
-        // Return data in expected format (combining legacy request with contract data)
-        const responseData = {
-            ...legacyRequest,
-            id: legacyRequest._id.toString(),
+        // Return data in expected format (combining request with contract data)
+        const responseData: Record<string, any> = {
+            ...signatureRequest,
+            id: signatureRequest._id.toString(),
             _id: undefined,
-            // Override with contract data if available
-            ...(legacyContract && {
-                contractTitle: legacyContract.title || legacyRequest.contractTitle,
-                contractDescription: legacyContract.description || legacyRequest.contractDescription,
-                formFields: legacyContract.formFields || legacyRequest.formFields,
-                fieldValues: legacyContract.fieldValues || legacyRequest.fieldValues,
-                xfdfData: legacyContract.xfdfData || legacyRequest.xfdfData,
-                hasFormFields: legacyContract.hasFormFields ?? legacyRequest.hasFormFields,
-                parties: legacyContract.parties,  // ✅ Include parties for external signer validation
-            })
+            // Override with contract data if available (always use latest from contract)
+            ...(linkedContract && {
+                contractTitle: linkedContract.title || signatureRequest.contractTitle,
+                contractDescription: linkedContract.description || signatureRequest.contractDescription,
+                formFields: linkedContract.formFields || signatureRequest.formFields,
+                fieldValues: linkedContract.fieldValues || signatureRequest.fieldValues,
+                xfdfData: linkedContract.xfdfData || signatureRequest.xfdfData,
+                hasFormFields: linkedContract.hasFormFields ?? signatureRequest.hasFormFields,
+                parties: linkedContract.parties,
+                // Multi-party fields
+                version: linkedContract.version,
+                signatureFlowStatus: linkedContract.signatureFlowStatus,
+                externalSigners: linkedContract.externalSigners,
+                partyCompletions: linkedContract.partyCompletions,
+            }),
+            // Always include party assignment from the request itself
+            assignedParty: signatureRequest.assignedParty,
+            assignedPartyLabel: signatureRequest.assignedPartyLabel,
+            contractVersion: signatureRequest.contractVersion,
         };
 
         return NextResponse.json({

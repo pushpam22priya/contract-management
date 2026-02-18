@@ -52,6 +52,17 @@ export interface SignatureRequest {
     fieldValues: Record<string, string>;
     parties?: PartyConfiguration[];  // ✅ Party configurations for validation
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MULTI-PARTY SIGNATURE FIELDS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Which party this signer is assigned to fill
+    assignedParty?: string;       // Party ID (e.g., "party_2")
+    assignedPartyLabel?: string;  // Party label for display (e.g., "P2")
+
+    // Contract version when this request was created (for optimistic locking)
+    contractVersion?: number;
+
     // Filled after signing
     signedAt?: string;
     signedXfdf?: string;          // XFDF with signature
