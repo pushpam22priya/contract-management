@@ -56,6 +56,7 @@ export async function GET(
                 formFields: contract.formFields,
                 fieldValues: contract.fieldValues,
                 xfdfData: contract.xfdfData,
+                parties: contract.parties,  // ✅ Include parties for external signer validation
             };
 
             return NextResponse.json({
@@ -100,6 +101,7 @@ export async function GET(
                 fieldValues: legacyContract.fieldValues || legacyRequest.fieldValues,
                 xfdfData: legacyContract.xfdfData || legacyRequest.xfdfData,
                 hasFormFields: legacyContract.hasFormFields ?? legacyRequest.hasFormFields,
+                parties: legacyContract.parties,  // ✅ Include parties for external signer validation
             })
         };
 

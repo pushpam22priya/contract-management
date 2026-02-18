@@ -1849,42 +1849,6 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             }
 
                             // ══════════════════════════════════════════════════════════════════
-                            // FIELD EDITABILITY: Apply field-level read-only logic
-                            // ══════════════════════════════════════════════════════════════════
-                            const editableFieldMode = (instance as any).editableFieldMode;
-                            if (editableFieldMode === 'empty-only' && !effectiveReadOnly) {
-                                console.log('🔒 [FIELD EDITABILITY] Setting filled fields to read-only (empty-only mode)');
-
-                                const fieldManager = Core.annotationManager.getFieldManager();
-                                const fields = fieldManager.getFields() || [];
-                                const fieldsArray = Array.isArray(fields) ? fields : Array.from(fields);
-
-                                let filledFieldsCount = 0;
-                                let emptyFieldsCount = 0;
-
-                                fieldsArray.forEach((field: any) => {
-                                    const fieldValue = field.getValue ? field.getValue() : field.value;
-                                    const hasValue = fieldValue && fieldValue.toString().trim() !== '';
-
-                                    if (hasValue) {
-                                        // Field has a value - make it read-only
-                                        field.flags.ReadOnly = true;
-                                        filledFieldsCount++;
-                                    } else {
-                                        // Field is empty - make it editable
-                                        field.flags.ReadOnly = false;
-                                        emptyFieldsCount++;
-                                    }
-                                });
-
-                                console.log(`✅ [FIELD EDITABILITY] Set ${filledFieldsCount} filled fields to read-only, ${emptyFieldsCount} empty fields editable`);
-                            } else if (editableFieldMode === 'none' || effectiveReadOnly) {
-                                console.log('🔒 [FIELD EDITABILITY] Setting all fields to read-only (none mode or global read-only)');
-                            } else {
-                                console.log('✏️ [FIELD EDITABILITY] All fields editable (all mode)');
-                            }
-
-                            // ══════════════════════════════════════════════════════════════════
                             // MULTI-PARTY FIELD EDITABILITY
                             // If editableParties is provided, only those parties' fields are editable
                             // ══════════════════════════════════════════════════════════════════
