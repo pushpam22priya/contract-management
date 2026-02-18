@@ -660,9 +660,14 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                         console.log(`📊 [EXPORT] Reconciling ${fieldsArray.length} fields from FieldManager`);
 
+                        // ✅ Build a Set of current field names from FieldManager (source of truth)
+                        const currentFieldNames = new Set<string>();
+
                         fieldsArray.forEach((field: any) => {
                             const fieldName = field.name;
                             if (!fieldName) return;
+
+                            currentFieldNames.add(fieldName);
 
                             const currentValue = field.getValue ? field.getValue() : field.value || '';
                             const widgets = field.widgets || [];
@@ -703,6 +708,21 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     lastUpdated: new Date().toISOString(),
                                 });
                             }
+                        });
+
+                        // ✅ CLEANUP: Remove fields from store that no longer exist in PDF
+                        // This ensures deleted fields don't persist in exports
+                        const fieldsToRemove: string[] = [];
+                        fieldMetadataStoreRef.current.forEach((_, fieldName) => {
+                            if (!currentFieldNames.has(fieldName)) {
+                                fieldsToRemove.push(fieldName);
+                            }
+                        });
+                        fieldsToRemove.forEach(fieldName => {
+                            fieldMetadataStoreRef.current.delete(fieldName);
+                            // Also clean up party assignments for deleted fields
+                            fieldPartyAssignmentsRef.current.delete(fieldName);
+                            console.log(`🗑️ [RECONCILE] Removed deleted field: ${fieldName}`);
                         });
 
                         console.log(`✅ [RECONCILE] After reconciliation: ${fieldMetadataStoreRef.current.size} fields in store`);
@@ -2068,6 +2088,12 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                     capturedFieldValuesRef.current.delete(fieldName);
                                                     console.log(`🗑️ [VALUE CAPTURE] Removed captured value for: ${fieldName}`);
                                                 }
+
+                                                // Also remove party assignment for deleted field
+                                                if (fieldName && fieldPartyAssignmentsRef.current.has(fieldName)) {
+                                                    fieldPartyAssignmentsRef.current.delete(fieldName);
+                                                    console.log(`🗑️ [PARTY ASSIGN] Removed party assignment for: ${fieldName}`);
+                                                }
                                             } catch (e) {
                                                 console.error('❌ [FIELD METADATA] Error deleting field:', e);
                                             }
@@ -2223,21 +2249,40 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             }
 
                             // ✅ Restore party assignments from formFields prop
+                            // Only restore for fields that actually exist in the current PDF
                             if (formFields && formFields.length > 0) {
                                 console.log(`🏷️ [PARTY] Restoring party assignments from ${formFields.length} form fields`);
+
+                                // Build a Set of current field names from PDF
+                                const currentPdfFieldNames = new Set<string>();
+                                const fieldManager = Core.annotationManager.getFieldManager();
+                                const allFields = fieldManager.getFields() || [];
+                                const fieldsArray = Array.isArray(allFields) ? allFields : Array.from(allFields);
+                                fieldsArray.forEach((f: any) => {
+                                    if (f.name) currentPdfFieldNames.add(f.name);
+                                });
+                                console.log(`🏷️ [PARTY] Current PDF has ${currentPdfFieldNames.size} fields`);
+
                                 let restoredCount = 0;
+                                let skippedCount = 0;
                                 formFields.forEach((field: any) => {
                                     if (field.assignedParty && field.assignedParty !== 'unassigned') {
-                                        fieldPartyAssignmentsRef.current.set(field.name, {
-                                            partyId: field.assignedParty,
-                                            partyLabel: field.partyLabel || '',
-                                            partyColor: field.partyColor || ''
-                                        });
-                                        restoredCount++;
-                                        console.log(`🏷️ [PARTY] Restored: ${field.name} → ${field.assignedParty}`);
+                                        // Only restore if field exists in PDF
+                                        if (currentPdfFieldNames.has(field.name)) {
+                                            fieldPartyAssignmentsRef.current.set(field.name, {
+                                                partyId: field.assignedParty,
+                                                partyLabel: field.partyLabel || '',
+                                                partyColor: field.partyColor || ''
+                                            });
+                                            restoredCount++;
+                                            console.log(`🏷️ [PARTY] Restored: ${field.name} → ${field.assignedParty}`);
+                                        } else {
+                                            skippedCount++;
+                                            console.log(`🏷️ [PARTY] Skipped (field not in PDF): ${field.name}`);
+                                        }
                                     }
                                 });
-                                console.log(`🏷️ [PARTY] Restored ${restoredCount} party assignments`);
+                                console.log(`🏷️ [PARTY] Restored ${restoredCount} party assignments, skipped ${skippedCount} (fields not in PDF)`);
                             }
 
                             console.log('✅ Setting loading to false');
