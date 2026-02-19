@@ -24,6 +24,22 @@ function calculateDynamicStatus(contract: any): { status: ContractStatus; expire
         ContractStatus.REJECTED
     ];
 
+    // If contract has been sent for signatures, override status dynamically
+    if (contract.signatureFlowStatus === 'pending_signatures' || contract.signatureFlowStatus === 'all_completed') {
+        let expiresInDays = contract.expiresInDays || 0;
+        if (contract.endDate) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const endDate = new Date(contract.endDate);
+            endDate.setHours(0, 0, 0, 0);
+            expiresInDays = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        }
+        const dynamicStatus = contract.signatureFlowStatus === 'all_completed'
+            ? ContractStatus.SIGNED_BY_EVERYONE
+            : ContractStatus.WAITING_FOR_SIGNATURE;
+        return { status: dynamicStatus, expiresInDays };
+    }
+
     // If contract is still in workflow, don't change status
     if (workflowStatuses.includes(contract.status)) {
         // Calculate expiresInDays based on endDate if available

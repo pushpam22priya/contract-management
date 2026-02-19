@@ -800,6 +800,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 currentUserRole="contractor"
                 onSave={handleSaveChanges}
                 editableFieldMode="all"
+                showAnnotationNavigation={true}
+                parties={contract.parties}
             />
         </AppLayout>
     );

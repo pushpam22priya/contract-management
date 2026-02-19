@@ -28,6 +28,8 @@ import {
     ListItemText,
     ListItemSecondaryAction,
     Paper,
+    Checkbox,
+    ListItemIcon,
 } from '@mui/material';
 import {
     Email,
@@ -38,28 +40,34 @@ import {
     Delete,
     Person,
     Warning,
+    BusinessCenter,
+    Groups,
+    Info,
+    Description,
 } from '@mui/icons-material';
 import BaseDialog from '@/components/common/BaseDialog';
 import { PartyConfiguration } from '@/types/template';
+import { ExternalSigner } from '@/types/contract';
 import { SignatureRecipient, MultiPartySubmitResult } from '@/services/externalSignatureService';
 
 interface MultiPartySignatureDialogProps {
     open: boolean;
     onClose: () => void;
     onSubmit: (
-        recipients: SignatureRecipient[],
-        contractorParty?: string
+        recipients: SignatureRecipient[]
     ) => Promise<MultiPartySubmitResult>;
     contractTitle?: string;
     parties: PartyConfiguration[];
     formFields?: any[];  // To check which parties have fields
+    existingSigners?: ExternalSigner[];  // Previously sent signers
+    fieldValues?: Record<string, string>;  // Current field values to detect filled parties
 }
 
 interface RecipientEntry {
     id: string;
     email: string;
     name: string;
-    partyId: string;
+    partyIds: string[];  // Multiple parties per signer
 }
 
 const MultiPartySignatureDialog = ({
@@ -69,13 +77,14 @@ const MultiPartySignatureDialog = ({
     contractTitle,
     parties,
     formFields = [],
+    existingSigners = [],
+    fieldValues = {},
 }: MultiPartySignatureDialogProps) => {
     // Form state
     const [recipients, setRecipients] = useState<RecipientEntry[]>([]);
-    const [contractorParty, setContractorParty] = useState<string>('');
     const [newEmail, setNewEmail] = useState('');
     const [newName, setNewName] = useState('');
-    const [newPartyId, setNewPartyId] = useState('');
+    const [newPartyIds, setNewPartyIds] = useState<string[]>([]);
 
     // UI state
     const [loading, setLoading] = useState(false);
@@ -94,18 +103,38 @@ const MultiPartySignatureDialog = ({
 
     console.log('   Parties with fields:', partiesWithFields.map(p => p.label).join(', '));
 
-    // Get available parties for external signers (excluding contractor party)
+    // Get party IDs already assigned to existing (previously sent) signers
+    const existingPartyIds = existingSigners.flatMap(s => {
+        if (Array.isArray(s.partyId)) return s.partyId;
+        return s.partyId ? [s.partyId] : [];
+    });
+
+    // Detect parties whose fields are ALL filled by the contractor
+    const contractorFilledPartyIds = partiesWithFields
+        .filter(party => {
+            // Skip parties already sent to external signers
+            if (existingPartyIds.includes(party.id)) return false;
+            // Get all fields for this party
+            const partyFields = formFields.filter(f => f.assignedParty === party.id);
+            if (partyFields.length === 0) return false;
+            // Check if ALL fields have non-empty values
+            return partyFields.every(f => {
+                const val = fieldValues[f.name];
+                return val !== undefined && val !== null && val !== '';
+            });
+        })
+        .map(p => p.id);
+
+    // Available parties = have fields, not already sent, not already filled by contractor
     const availablePartiesForSigners = partiesWithFields.filter(
-        p => p.id !== contractorParty
+        p => !existingPartyIds.includes(p.id) && !contractorFilledPartyIds.includes(p.id)
     );
 
-    // Get parties already assigned to recipients
-    const assignedPartyIds = recipients.map(r => r.partyId);
+    // Get parties already assigned to NEW recipients (flatten all partyIds)
+    const assignedPartyIds = recipients.flatMap(r => r.partyIds);
 
-    // Get unassigned parties (for warnings)
-    const unassignedParties = partiesWithFields.filter(
-        p => p.id !== contractorParty && !assignedPartyIds.includes(p.id)
-    );
+    // All assigned (existing + new)
+    const allAssignedPartyIds = [...existingPartyIds, ...assignedPartyIds];
 
     /**
      * Validate email format
@@ -119,7 +148,7 @@ const MultiPartySignatureDialog = ({
      * Add a new recipient
      */
     const handleAddRecipient = () => {
-        console.log('➕ [MultiPartySignatureDialog] Adding recipient:', newEmail, newPartyId);
+        console.log('➕ [MultiPartySignatureDialog] Adding recipient:', newEmail, newPartyIds);
 
         if (!newEmail.trim()) {
             setError('Please enter an email address');
@@ -131,14 +160,16 @@ const MultiPartySignatureDialog = ({
             return;
         }
 
-        if (!newPartyId) {
-            setError('Please select a party for this signer');
+        if (newPartyIds.length === 0) {
+            setError('Please select at least one party for this signer');
             return;
         }
 
-        // Check if party is already assigned
-        if (assignedPartyIds.includes(newPartyId)) {
-            setError('This party is already assigned to another signer');
+        // Check if any selected party is already assigned to another signer
+        const alreadyAssigned = newPartyIds.filter(pid => assignedPartyIds.includes(pid));
+        if (alreadyAssigned.length > 0) {
+            const labels = alreadyAssigned.map(pid => parties.find(p => p.id === pid)?.label || pid).join(', ');
+            setError(`Party ${labels} is already assigned to another signer`);
             return;
         }
 
@@ -148,22 +179,20 @@ const MultiPartySignatureDialog = ({
             return;
         }
 
-        const party = parties.find(p => p.id === newPartyId);
-
         setRecipients([
             ...recipients,
             {
                 id: `recipient_${Date.now()}`,
                 email: newEmail.trim(),
                 name: newName.trim(),
-                partyId: newPartyId,
+                partyIds: newPartyIds,
             }
         ]);
 
         // Reset inputs
         setNewEmail('');
         setNewName('');
-        setNewPartyId('');
+        setNewPartyIds([]);
         setError(null);
 
         console.log('✅ [MultiPartySignatureDialog] Recipient added');
@@ -183,7 +212,6 @@ const MultiPartySignatureDialog = ({
     const handleSubmit = async () => {
         console.log('📤 [MultiPartySignatureDialog] Submit clicked');
         console.log('   Recipients:', recipients.length);
-        console.log('   Contractor party:', contractorParty);
 
         if (recipients.length === 0) {
             setError('Please add at least one recipient');
@@ -195,19 +223,21 @@ const MultiPartySignatureDialog = ({
 
         try {
             const signatureRecipients: SignatureRecipient[] = recipients.map(r => {
-                const party = parties.find(p => p.id === r.partyId);
+                const partyLabels = r.partyIds.map(pid => {
+                    const party = parties.find(p => p.id === pid);
+                    return party?.label || pid;
+                });
                 return {
                     email: r.email,
                     name: r.name || undefined,
-                    partyId: r.partyId,
-                    partyLabel: party?.label || r.partyId,
+                    partyId: r.partyIds,
+                    partyLabel: partyLabels,
                 };
             });
 
             console.log('📤 [MultiPartySignatureDialog] Calling onSubmit...');
             const submitResult = await onSubmit(
-                signatureRecipients,
-                contractorParty || undefined
+                signatureRecipients
             );
 
             if (submitResult.success) {
@@ -240,10 +270,9 @@ const MultiPartySignatureDialog = ({
     const handleClose = () => {
         console.log('🚪 [MultiPartySignatureDialog] Closing dialog');
         setRecipients([]);
-        setContractorParty('');
         setNewEmail('');
         setNewName('');
-        setNewPartyId('');
+        setNewPartyIds([]);
         setError(null);
         setSuccess(false);
         setResult(null);
@@ -270,7 +299,7 @@ const MultiPartySignatureDialog = ({
     return (
         <BaseDialog
             open={open}
-            onClose={loading ? () => {} : handleClose}
+            onClose={loading ? () => { } : handleClose}
             title={success ? 'Signature Requests Sent!' : 'Send for Signatures'}
             maxWidth="md"
             actions={
@@ -297,7 +326,7 @@ const MultiPartySignatureDialog = ({
         >
             {/* Contract Title */}
             {contractTitle && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     Contract: <strong>{contractTitle}</strong>
                 </Typography>
             )}
@@ -305,7 +334,7 @@ const MultiPartySignatureDialog = ({
             {/* Success State */}
             {success && result ? (
                 <Box>
-                    <Alert severity="success" icon={<CheckCircle />} sx={{ mb: 3 }}>
+                    <Alert severity="success" icon={<CheckCircle />} sx={{ mb: 2 }}>
                         Signature requests have been sent to {result.signers?.length} recipient(s)
                     </Alert>
 
@@ -362,213 +391,290 @@ const MultiPartySignatureDialog = ({
             ) : (
                 /* Input State */
                 <Box>
-                    <Typography variant="body2" sx={{ mb: 3 }}>
-                        Add external signers and assign each one to a party. Each signer will only be able
-                        to fill the fields assigned to their party.
-                    </Typography>
 
                     {/* Error Alert */}
                     {error && (
-                        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+                        <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError(null)}>
                             {error}
                         </Alert>
                     )}
-
-                    {/* Contractor Party Selection */}
-                    <Box sx={{ mb: 3 }}>
-                        <FormControl fullWidth size="small">
-                            <InputLabel>Your Party (Contractor fills)</InputLabel>
-                            <Select
-                                value={contractorParty}
-                                onChange={(e) => setContractorParty(e.target.value)}
-                                label="Your Party (Contractor fills)"
-                            >
-                                <MenuItem value="">
-                                    <em>None - External signers fill all parties</em>
-                                </MenuItem>
-                                {partiesWithFields.map((party) => (
-                                    <MenuItem
-                                        key={party.id}
-                                        value={party.id}
-                                        disabled={assignedPartyIds.includes(party.id)}
-                                    >
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <Chip
-                                                label={party.label}
-                                                size="small"
-                                                sx={{
-                                                    bgcolor: party.color,
-                                                    color: '#fff',
-                                                    fontWeight: 600,
-                                                    minWidth: 32,
-                                                }}
-                                            />
-                                            <Typography variant="body2">
-                                                {party.label} (I will fill these fields)
-                                            </Typography>
-                                        </Box>
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-                    </Box>
-
-                    <Divider sx={{ my: 2 }} />
-
-                    {/* Add Recipient Form */}
-                    <Typography variant="subtitle2" sx={{ mb: 2 }}>
-                        External Signers
-                    </Typography>
-
-                    <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-                        <TextField
-                            size="small"
-                            label="Email"
-                            type="email"
-                            value={newEmail}
-                            onChange={(e) => setNewEmail(e.target.value)}
-                            placeholder="client@example.com"
-                            sx={{ flex: '1 1 200px', minWidth: 200 }}
-                            disabled={loading}
-                        />
-                        <TextField
-                            size="small"
-                            label="Name (optional)"
-                            value={newName}
-                            onChange={(e) => setNewName(e.target.value)}
-                            placeholder="Client Name"
-                            sx={{ flex: '1 1 150px', minWidth: 150 }}
-                            disabled={loading}
-                        />
-                        <FormControl size="small" sx={{ flex: '1 1 150px', minWidth: 150 }}>
-                            <InputLabel>Party</InputLabel>
-                            <Select
-                                value={newPartyId}
-                                onChange={(e) => setNewPartyId(e.target.value)}
-                                label="Party"
-                                disabled={loading}
-                            >
-                                {availablePartiesForSigners.map((party) => (
-                                    <MenuItem
-                                        key={party.id}
-                                        value={party.id}
-                                        disabled={assignedPartyIds.includes(party.id)}
-                                    >
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <Chip
-                                                label={party.label}
-                                                size="small"
-                                                sx={{
-                                                    bgcolor: party.color,
-                                                    color: '#fff',
-                                                    fontWeight: 600,
-                                                    minWidth: 32,
-                                                }}
-                                            />
-                                        </Box>
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-                        <Button
-                            variant="outlined"
-                            onClick={handleAddRecipient}
-                            disabled={loading || !newEmail || !newPartyId}
-                            startIcon={<Add />}
-                            sx={{ height: 40 }}
-                        >
-                            Add
-                        </Button>
-                    </Box>
-
-                    {/* Recipients List */}
-                    {recipients.length > 0 ? (
-                        <Paper variant="outlined" sx={{ mb: 2 }}>
-                            <List dense>
-                                {recipients.map((recipient, index) => (
-                                    <ListItem
-                                        key={recipient.id}
-                                        divider={index < recipients.length - 1}
-                                    >
-                                        <Chip
-                                            label={getPartyLabel(recipient.partyId)}
-                                            size="small"
-                                            sx={{
-                                                bgcolor: getPartyColor(recipient.partyId),
-                                                color: '#fff',
-                                                fontWeight: 600,
-                                                mr: 2,
-                                                minWidth: 40,
-                                            }}
-                                        />
-                                        <ListItemText
-                                            primary={recipient.email}
-                                            secondary={recipient.name || 'No name provided'}
-                                        />
-                                        <ListItemSecondaryAction>
-                                            <IconButton
-                                                edge="end"
-                                                onClick={() => handleRemoveRecipient(recipient.id)}
-                                                disabled={loading}
-                                                size="small"
-                                            >
-                                                <Delete />
-                                            </IconButton>
-                                        </ListItemSecondaryAction>
-                                    </ListItem>
-                                ))}
-                            </List>
-                        </Paper>
-                    ) : (
+                    {/* ── Contractor-Filled & Existing Signers (compact) ── */}
+                    {(contractorFilledPartyIds.length > 0 || existingSigners.length > 0) && (
                         <Paper
-                            variant="outlined"
+                            elevation={0}
                             sx={{
-                                p: 3,
-                                mb: 2,
-                                textAlign: 'center',
-                                bgcolor: 'grey.50',
+                                mb: 1,
+                                px: 1.5,
+                                py: 1,
+                                borderRadius: 2,
+                                bgcolor: '#eff9ffff',
+                                border: '1px solid',
+                                borderColor: 'grey.200',
+                                maxHeight: '120px',
+                                overflowY: 'auto',
                             }}
                         >
-                            <Person sx={{ fontSize: 40, color: 'grey.400', mb: 1 }} />
-                            <Typography variant="body2" color="text.secondary">
-                                No recipients added yet. Add signers above.
-                            </Typography>
+                            {/* Filled by You row */}
+                            {contractorFilledPartyIds.length > 0 && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
+                                    <BusinessCenter sx={{ color: 'primary.main', fontSize: 16 }} />
+                                    <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', minWidth: 70 }}>
+                                        Filled by you
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                        {contractorFilledPartyIds.map(pid => (
+                                            <Chip key={pid} label={getPartyLabel(pid)} size="small"
+                                                sx={{ bgcolor: getPartyColor(pid), color: '#fff', fontWeight: 600, height: 20, fontSize: '0.7rem' }}
+                                            />
+                                        ))}
+                                    </Box>
+                                </Box>
+                            )}
+
+                            {/* Existing signers rows */}
+                            {existingSigners.map((signer, index) => {
+                                const signerPartyIds = Array.isArray(signer.partyId) ? signer.partyId : [signer.partyId];
+                                return (
+                                    <Box key={signer.token} sx={{
+                                        display: 'flex', alignItems: 'center', gap: 1, py: 0.5,
+                                        borderTop: (contractorFilledPartyIds.length > 0 || index > 0) ? '1px solid' : 'none',
+                                        borderColor: 'grey.200',
+                                    }}>
+                                        <Email sx={{ color: 'primary.main', fontSize: 16 }} />
+                                        <Box sx={{ display: 'flex', gap: 0.4, mr: 0.5 }}>
+                                            {signerPartyIds.map(pid => (
+                                                <Chip key={pid} label={getPartyLabel(pid)} size="small"
+                                                    sx={{ bgcolor: getPartyColor(pid), color: '#fff', fontWeight: 600, height: 20, fontSize: '0.7rem' }}
+                                                />
+                                            ))}
+                                        </Box>
+                                        <Typography variant="caption" sx={{ fontWeight: 500, flexGrow: 1 }} noWrap>
+                                            {signer.email}
+                                        </Typography>
+                                        <Chip
+                                            label={signer.status}
+                                            size="small"
+                                            sx={{
+                                                textTransform: 'capitalize', height: 20, fontSize: '0.65rem', fontWeight: 600,
+                                                bgcolor: signer.status === 'completed' ? '#e8f5e9' : signer.status === 'viewed' ? '#e3f2fd' : '#fff3e0',
+                                                color: signer.status === 'completed' ? '#2e7d32' : signer.status === 'viewed' ? '#1565c0' : '#e65100',
+                                            }}
+                                        />
+                                    </Box>
+                                );
+                            })}
                         </Paper>
                     )}
 
-                    {/* Unassigned Parties Warning */}
-                    {unassignedParties.length > 0 && (
-                        <Alert severity="warning" icon={<Warning />} sx={{ mt: 2 }}>
-                            <Box component="div" sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
-                                <Typography variant="body2" component="span">
-                                    The following parties have fields but no signer assigned:
+                    {/* ── Add New Signers ── */}
+                    {availablePartiesForSigners.length > 0 ? (
+                        <Paper
+                            elevation={0}
+                            sx={{
+                                p: 2,
+                                borderRadius: 2,
+                                bgcolor: '#f6faf6',
+                                border: '1px solid',
+                                borderColor: 'grey.200',
+                            }}
+                        >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                                <Groups sx={{ color: '#2e7d32', fontSize: 20 }} />
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                                    {existingSigners.length > 0 ? 'Add More Signers' : 'External Signers'}
                                 </Typography>
-                                {unassignedParties.map((p) => (
+                                {recipients.length > 0 && (
                                     <Chip
-                                        key={p.id}
-                                        label={p.label}
+                                        label={recipients.length}
                                         size="small"
                                         sx={{
-                                            bgcolor: p.color,
+                                            ml: 'auto',
+                                            bgcolor: '#2e7d32',
                                             color: '#fff',
-                                            fontWeight: 600,
-                                            height: 20,
-                                            fontSize: '0.7rem',
+                                            fontWeight: 700,
                                         }}
                                     />
-                                ))}
+                                )}
                             </Box>
-                        </Alert>
-                    )}
 
-                    {/* Info Text */}
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-                        Each signer will receive an email with a unique link. They can fill and sign
-                        their assigned fields without creating an account.
-                    </Typography>
+                            <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                                <TextField
+                                    size="small"
+                                    label="Email"
+                                    type="email"
+                                    value={newEmail}
+                                    onChange={(e) => setNewEmail(e.target.value)}
+                                    placeholder="client@example.com"
+                                    sx={{ flex: '1 1 200px', minWidth: 200, '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                                    disabled={loading}
+                                />
+                                <TextField
+                                    size="small"
+                                    label="Name (optional)"
+                                    value={newName}
+                                    onChange={(e) => setNewName(e.target.value)}
+                                    placeholder="Client Name"
+                                    sx={{ flex: '1 1 150px', minWidth: 150, '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                                    disabled={loading}
+                                />
+                                <FormControl size="small" sx={{ flex: '1 1 200px', minWidth: 200 }}>
+                                    <InputLabel>Parties</InputLabel>
+                                    <Select
+                                        multiple
+                                        value={newPartyIds}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            setNewPartyIds(typeof value === 'string' ? value.split(',') : value);
+                                        }}
+                                        label="Parties"
+                                        disabled={loading}
+                                        sx={{ bgcolor: '#fff' }}
+                                        renderValue={(selected) => (
+                                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                                {selected.map((id) => (
+                                                    <Chip
+                                                        key={id}
+                                                        label={getPartyLabel(id)}
+                                                        size="small"
+                                                        onDelete={() => setNewPartyIds(prev => prev.filter(p => p !== id))}
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        sx={{
+                                                            bgcolor: getPartyColor(id),
+                                                            color: '#fff',
+                                                            fontWeight: 600,
+                                                            height: 20,
+                                                            '& .MuiChip-deleteIcon': { color: 'rgba(255,255,255,0.7)', '&:hover': { color: '#fff' } },
+                                                        }}
+                                                    />
+                                                ))}
+                                            </Box>
+                                        )}
+                                    >
+                                        {availablePartiesForSigners.map((party) => (
+                                            <MenuItem
+                                                key={party.id}
+                                                value={party.id}
+                                                disabled={assignedPartyIds.includes(party.id)}
+                                            >
+                                                <Checkbox checked={newPartyIds.includes(party.id)} size="small" />
+                                                <Chip
+                                                    label={party.label}
+                                                    size="small"
+                                                    sx={{
+                                                        bgcolor: party.color,
+                                                        color: '#fff',
+                                                        fontWeight: 600,
+                                                        minWidth: 32,
+                                                    }}
+                                                />
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                                <Button
+                                    variant="outlined"
+                                    onClick={handleAddRecipient}
+                                    disabled={loading || !newEmail || newPartyIds.length === 0}
+                                    startIcon={<Add />}
+                                    sx={{ height: 40, borderColor: '#2e7d32', color: '#2e7d32', '&:hover': { borderColor: '#1b5e20', bgcolor: '#e8f5e9' } }}
+                                >
+                                    Add
+                                </Button>
+                            </Box>
+
+                            {recipients.length > 0 ? (
+                                <Paper variant="outlined" sx={{ mb: 2, bgcolor: '#fff', borderRadius: 1.5 }}>
+                                    <List dense>
+                                        {recipients.map((recipient, index) => (
+                                            <ListItem
+                                                key={recipient.id}
+                                                divider={index < recipients.length - 1}
+                                                sx={{ '&:hover': { bgcolor: 'grey.50' }, transition: 'background-color 0.15s' }}
+                                            >
+                                                <Box sx={{ display: 'flex', gap: 0.5, mr: 2, flexWrap: 'wrap' }}>
+                                                    {recipient.partyIds.map(pid => (
+                                                        <Chip
+                                                            key={pid}
+                                                            label={getPartyLabel(pid)}
+                                                            size="small"
+                                                            sx={{
+                                                                bgcolor: getPartyColor(pid),
+                                                                color: '#fff',
+                                                                fontWeight: 600,
+                                                                minWidth: 32,
+                                                            }}
+                                                        />
+                                                    ))}
+                                                </Box>
+                                                <ListItemText
+                                                    primary={recipient.email}
+                                                    secondary={recipient.name || 'No name provided'}
+                                                    primaryTypographyProps={{ fontWeight: 500 }}
+                                                />
+                                                <ListItemSecondaryAction>
+                                                    <IconButton
+                                                        edge="end"
+                                                        onClick={() => handleRemoveRecipient(recipient.id)}
+                                                        disabled={loading}
+                                                        size="small"
+                                                        sx={{ color: 'error.light', '&:hover': { color: 'error.main', bgcolor: 'error.50' } }}
+                                                    >
+                                                        <Delete />
+                                                    </IconButton>
+                                                </ListItemSecondaryAction>
+                                            </ListItem>
+                                        ))}
+                                    </List>
+                                </Paper>
+                            ) : (
+                                <Paper
+                                    variant="outlined"
+                                    sx={{
+                                        p: 2,
+                                        mb: 2,
+                                        textAlign: 'center',
+                                        bgcolor: '#fff',
+                                        borderStyle: 'dashed',
+                                        borderColor: 'grey.300',
+                                        borderRadius: 2,
+                                    }}
+                                >
+                                    <Groups sx={{ fontSize: 44, color: 'grey.300', mb: 1 }} />
+                                    <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                        No recipients added yet
+                                    </Typography>
+                                    <Typography variant="caption" color="text.disabled">
+                                        Add external signers using the form above
+                                    </Typography>
+                                </Paper>
+                            )}
+                        </Paper>
+                    ) : existingSigners.length > 0 ? (
+                        <Paper
+                            elevation={0}
+                            sx={{
+                                p: 2,
+                                borderRadius: 2,
+                                textAlign: 'center',
+                                bgcolor: '#f6faf6',
+                                border: '1px solid',
+                                borderColor: 'grey.200',
+                            }}
+                        >
+                            <CheckCircle sx={{ fontSize: 36, color: 'primary.main', mb: 1 }} />
+                            <Typography variant="body2" fontWeight={600} color="text.primary">
+                                All parties have been assigned
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Every party with fields has a signer assigned.
+                            </Typography>
+                        </Paper>
+                    ) : null}
+
                 </Box>
-            )}
-        </BaseDialog>
+            )
+            }
+        </BaseDialog >
     );
 };
 

@@ -52,8 +52,8 @@ export interface SigningSequenceEntry {
 export interface ExternalSigner {
     email: string;             // Signer's email
     name?: string;             // Signer's name (optional)
-    partyId: string;           // Which party they are assigned to fill
-    partyLabel: string;        // Party label for display
+    partyId: string | string[];  // Which party/parties they are assigned to fill
+    partyLabel: string | string[];  // Party label(s) for display
     token: string;             // Unique signing token
     status: 'pending' | 'viewed' | 'completed';
     sentAt: string;            // When the signing request was sent
@@ -106,6 +106,7 @@ export enum ContractStatus {
     REVIEWED = 'reviewed',       // Reviews done, waiting for approval
     APPROVED = 'approved',       // Gate: Approved, ready for signature
     WAITING_FOR_SIGNATURE = 'waiting_for_signature',
+    SIGNED_BY_EVERYONE = 'signed_by_everyone', // All external signers completed
     SIGNED = 'signed',           // Signed (future start date)
     ACTIVE = 'active',           // Signed + Started
     EXPIRING = 'expiring',       // Active + fading
@@ -186,8 +187,8 @@ export interface Contract {
     // External signers (one per party that's assigned to an external client)
     externalSigners?: ExternalSigner[];
 
-    // Which party the contractor fills (if any)
-    contractorParty?: string;
+    // Which party/parties the contractor fills (if any)
+    contractorParty?: string | string[];
 
     // Party configurations (copied from template)
     parties?: PartyConfiguration[];

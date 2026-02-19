@@ -268,6 +268,7 @@ export async function PUT(
             if (allCompleted && existingContract.signatureFlowStatus === 'pending_signatures') {
                 console.log(`🎉 [SignComplete] All external signers have completed!`);
                 contractUpdate.signatureFlowStatus = 'all_completed';
+                contractUpdate.status = 'signed_by_everyone';
             }
 
             console.log(`✅ [SignComplete] Party ${assignedParty} marked as completed`);

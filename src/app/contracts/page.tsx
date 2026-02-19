@@ -32,6 +32,7 @@ const statusOptions = [
     { label: 'Expiring', value: ContractStatus.EXPIRING },
     { label: 'Approved', value: ContractStatus.APPROVED },
     { label: 'Waiting for Signature', value: ContractStatus.WAITING_FOR_SIGNATURE },
+    { label: 'Signed by Everyone', value: ContractStatus.SIGNED_BY_EVERYONE },
     { label: 'Signed', value: ContractStatus.SIGNED },
     { label: 'Expired', value: ContractStatus.EXPIRED },
 ];
@@ -161,6 +162,7 @@ export default function ContractsPage() {
                     return [
                         ContractStatus.APPROVED,
                         ContractStatus.WAITING_FOR_SIGNATURE,
+                        ContractStatus.SIGNED_BY_EVERYONE,
                         ContractStatus.SIGNED,
                         ContractStatus.ACTIVE,
                         ContractStatus.EXPIRING,
@@ -281,13 +283,11 @@ export default function ContractsPage() {
      * Handle multi-party signature submission
      */
     const handleMultiPartySignatureSubmit = async (
-        recipients: SignatureRecipient[],
-        contractorParty?: string
+        recipients: SignatureRecipient[]
     ) => {
         console.log('📝 [ContractsPage] Handling multi-party signature submit...');
         console.log('   Contract:', contractForSignature?.id);
         console.log('   Recipients:', recipients.length);
-        console.log('   Contractor party:', contractorParty);
 
         if (!contractForSignature) {
             console.error('❌ [ContractsPage] No contract selected for signature');
@@ -304,8 +304,7 @@ export default function ContractsPage() {
             const result = await submitForMultiPartySignature(
                 contractForSignature,
                 recipients,
-                senderName,
-                contractorParty
+                senderName
             );
 
             if (result.success) {
@@ -313,6 +312,16 @@ export default function ContractsPage() {
                 const emailCount = result.signers?.filter(s => s.emailSent).length || 0;
                 showNotification(`Signature requests sent to ${emailCount} recipient(s)`, 'success');
                 loadContracts();  // Reload to show updated status
+                // Refresh the contract data so dialog shows updated externalSigners
+                try {
+                    const refreshRes = await fetch(`/api/contracts/${contractForSignature.id}`);
+                    if (refreshRes.ok) {
+                        const refreshed = await refreshRes.json();
+                        setContractForSignature(refreshed);
+                    }
+                } catch (e) {
+                    console.warn('Could not refresh contract data:', e);
+                }
             } else {
                 console.error('❌ [ContractsPage] Failed to send multi-party signature requests:', result.error);
                 showNotification(result.error || 'Failed to send signature requests', 'error');
@@ -535,6 +544,8 @@ export default function ContractsPage() {
                     contractTitle={contractForSignature?.title}
                     parties={contractForSignature?.parties || []}
                     formFields={contractForSignature?.formFields}
+                    existingSigners={contractForSignature?.externalSigners}
+                    fieldValues={contractForSignature?.fieldValues}
                 />
 
                 <NotificationSnackbar

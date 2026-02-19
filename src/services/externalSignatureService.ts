@@ -29,8 +29,8 @@ const API_BASE = '/api';
 export interface SignatureRecipient {
     email: string;
     name?: string;
-    partyId: string;       // Which party they fill
-    partyLabel: string;    // Display label (e.g., "P2", "Buyer")
+    partyId: string[];       // Which parties they fill (array for multi-party per signer)
+    partyLabel: string[];    // Display labels (e.g., ["P2", "P3"])
 }
 
 /**
@@ -179,34 +179,63 @@ export const submitForExternalSignature = async (
 export const submitForMultiPartySignature = async (
     contract: Contract,
     recipients: SignatureRecipient[],
-    senderName: string,
-    contractorParty?: string  // Which party the contractor will fill
+    senderName: string
 ): Promise<MultiPartySubmitResult> => {
     console.log('🚀 [MultiPartySignature] Starting multi-party submission...');
     console.log(`   Contract: ${contract.id} - ${contract.title}`);
     console.log(`   Recipients: ${recipients.length}`);
-    console.log(`   Contractor party: ${contractorParty || 'none'}`);
 
     try {
         const expiresAt = calculateExpiryDate();
         const now = new Date().toISOString();
         const signers: MultiPartySubmitResult['signers'] = [];
-        const externalSigners: ExternalSigner[] = [];
-        const partyCompletions: any[] = [];
+
+        // Carry forward existing signers from previous submissions
+        const existingSigners: ExternalSigner[] = contract.externalSigners || [];
+        const newExternalSigners: ExternalSigner[] = [];
+
+        // Carry forward existing party completions
+        const existingPartyCompletions: any[] = (contract as any).partyCompletions || [];
+        const existingCompletionMap = new Map(existingPartyCompletions.map(pc => [pc.partyId, pc]));
 
         // Initialize partyCompletions for all parties
         const parties = contract.parties || [];
-        for (const party of parties) {
-            const isContractorParty = party.id === contractorParty;
-            const recipientForParty = recipients.find(r => r.partyId === party.id);
+        // Build a map of partyId -> recipient email for NEW recipients
+        const partyToRecipient = new Map<string, string>();
+        for (const r of recipients) {
+            for (const pid of r.partyId) {
+                partyToRecipient.set(pid, r.email);
+            }
+        }
 
-            partyCompletions.push({
-                partyId: party.id,
-                partyLabel: party.label,
-                status: 'pending',
-                isContractor: isContractorParty,
-                assignedTo: isContractorParty ? 'contractor' : recipientForParty?.email,
-            });
+        // Build merged partyCompletions: keep existing entries, add/update for new recipients
+        const partyCompletions: any[] = [];
+        for (const party of parties) {
+            const existing = existingCompletionMap.get(party.id);
+            const newRecipientEmail = partyToRecipient.get(party.id);
+
+            if (newRecipientEmail) {
+                // This party is being assigned in this submission
+                partyCompletions.push({
+                    partyId: party.id,
+                    partyLabel: party.label,
+                    status: 'pending',
+                    isContractor: false,
+                    assignedTo: newRecipientEmail,
+                });
+            } else if (existing) {
+                // Keep existing entry from a previous submission
+                partyCompletions.push(existing);
+            } else {
+                // Party not assigned to anyone yet
+                partyCompletions.push({
+                    partyId: party.id,
+                    partyLabel: party.label,
+                    status: 'pending',
+                    isContractor: false,
+                    assignedTo: null,
+                });
+            }
         }
 
         // Get current contract version (for optimistic locking)
@@ -214,7 +243,7 @@ export const submitForMultiPartySignature = async (
 
         // Process each recipient
         for (const recipient of recipients) {
-            console.log(`📧 [MultiPartySignature] Processing: ${recipient.email} → ${recipient.partyLabel}`);
+            console.log(`📧 [MultiPartySignature] Processing: ${recipient.email} → ${recipient.partyLabel.join(', ')}`);
 
             const token = generateToken();
             const signingUrl = generateSigningUrl(token);
@@ -281,15 +310,15 @@ export const submitForMultiPartySignature = async (
             // Track signer
             signers.push({
                 email: recipient.email,
-                partyId: recipient.partyId,
-                partyLabel: recipient.partyLabel,
+                partyId: recipient.partyId[0],  // Use first party for display compat
+                partyLabel: recipient.partyLabel[0],
                 token,
                 signingUrl,
                 emailSent,
             });
 
-            // Add to externalSigners array
-            externalSigners.push({
+            // Add to new externalSigners array
+            newExternalSigners.push({
                 email: recipient.email,
                 name: recipient.name,
                 partyId: recipient.partyId,
@@ -306,10 +335,11 @@ export const submitForMultiPartySignature = async (
         console.log(`📝 [MultiPartySignature] Updating contract with tracking data...`);
 
         const contractUpdate = {
+            status: 'waiting_for_signature',
             signatureFlowStatus: 'pending_signatures',
             // Keep version unchanged - signature requests have this version for validation
-            externalSigners,
-            contractorParty: contractorParty || null,
+            externalSigners: [...existingSigners, ...newExternalSigners],
+            contractorParty: null,
             partyCompletions,
             updatedAt: now,
         };

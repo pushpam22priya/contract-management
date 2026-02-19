@@ -1918,7 +1918,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                 };
                                                 const [r, g, b] = hexToRgb(partyColor);
                                                 (annot as any).StrokeColor = new Core.Annotations.Color(r, g, b, 1);
-                                                (annot as any).StrokeThickness = 3;
+                                                (annot as any).StrokeThickness = 1;
                                             } catch (e) {
                                                 // Ignore color errors
                                             }

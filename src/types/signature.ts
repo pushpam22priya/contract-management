@@ -56,9 +56,9 @@ export interface SignatureRequest {
     // MULTI-PARTY SIGNATURE FIELDS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // Which party this signer is assigned to fill
-    assignedParty?: string;       // Party ID (e.g., "party_2")
-    assignedPartyLabel?: string;  // Party label for display (e.g., "P2")
+    // Which party/parties this signer is assigned to fill
+    assignedParty?: string | string[];       // Party ID(s) (e.g., "party_2" or ["party_2", "party_3"])
+    assignedPartyLabel?: string | string[];  // Party label(s) for display (e.g., "P2" or ["P2", "P3"])
 
     // Contract version when this request was created (for optimistic locking)
     contractVersion?: number;

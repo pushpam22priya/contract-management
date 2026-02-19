@@ -86,9 +86,14 @@ export default function PublicSigningPage() {
         const allParties = signatureRequest.parties as PartyConfiguration[];
         const prefilledValues = signatureRequest.fieldValues || {};
 
-        // MULTI-PARTY: If signer has assigned party, only validate that party
+        // MULTI-PARTY: If signer has assigned party/parties, only validate those
         const partiesToValidate = signatureRequest.assignedParty
-            ? allParties.filter(p => p.id === signatureRequest.assignedParty)
+            ? (() => {
+                const ids = Array.isArray(signatureRequest.assignedParty)
+                    ? signatureRequest.assignedParty
+                    : [signatureRequest.assignedParty];
+                return allParties.filter(p => ids.includes(p.id));
+            })()
             : allParties;
 
         const partialParties: { party: PartyConfiguration; filled: number; total: number; missing: string[] }[] = [];
@@ -269,10 +274,14 @@ export default function PublicSigningPage() {
     const editableParties = useMemo(() => {
         if (!signatureRequest) return undefined;
 
-        // If this signer has an assigned party, they can only edit that party's fields
+        // If this signer has an assigned party/parties, they can only edit those fields
         if (signatureRequest.assignedParty) {
-            console.log(`🏷️ [PublicSigningPage] Multi-party mode: Signer can only edit party "${signatureRequest.assignedParty}"`);
-            return [signatureRequest.assignedParty];
+            // Normalize to array (backward compat with single string)
+            const parties = Array.isArray(signatureRequest.assignedParty)
+                ? signatureRequest.assignedParty
+                : [signatureRequest.assignedParty];
+            console.log(`🏷️ [PublicSigningPage] Multi-party mode: Signer can only edit parties: ${parties.join(', ')}`);
+            return parties;
         }
 
         // Legacy flow - can edit all fields (return undefined to not restrict)
@@ -281,14 +290,19 @@ export default function PublicSigningPage() {
     }, [signatureRequest]);
 
     /**
-     * Get the assigned party configuration for display
+     * Get the assigned party configuration(s) for display
      */
-    const assignedPartyConfig = useMemo(() => {
-        if (!signatureRequest?.assignedParty || !signatureRequest?.parties) return null;
+    const assignedPartyConfigs = useMemo(() => {
+        if (!signatureRequest?.assignedParty || !signatureRequest?.parties) return [];
 
-        return signatureRequest.parties.find(
-            (p: PartyConfiguration) => p.id === signatureRequest.assignedParty
-        ) || null;
+        // Normalize to array
+        const partyIds = Array.isArray(signatureRequest.assignedParty)
+            ? signatureRequest.assignedParty
+            : [signatureRequest.assignedParty];
+
+        return partyIds
+            .map(pid => signatureRequest.parties?.find((p: PartyConfiguration) => p.id === pid))
+            .filter(Boolean) as PartyConfiguration[];
     }, [signatureRequest]);
 
     /**
@@ -342,7 +356,8 @@ export default function PublicSigningPage() {
                 setCompleted(true);
 
                 // Send signed copy email to the client (fire-and-forget)
-                if (signatureRequest?.signerEmail) {
+                // Skip for multi-party flow - the contractor will send finalized emails
+                if (signatureRequest?.signerEmail && !signatureRequest?.assignedParty) {
                     const signerName = signatureRequest.signerName ||
                         signatureRequest.signerEmail.split('@')[0];
                     const downloadUrl = `${window.location.origin}/api/sign-requests/${token}/download`;
@@ -397,17 +412,17 @@ export default function PublicSigningPage() {
     }
 
     // Download the signed PDF
-    const handleDownloadSignedPdf = () => {
-        if (!signedPdfBlob) return;
-        const url = URL.createObjectURL(signedPdfBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${signatureRequest?.contractTitle || 'signed_contract'}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
+    // const handleDownloadSignedPdf = () => {
+    //     if (!signedPdfBlob) return;
+    //     const url = URL.createObjectURL(signedPdfBlob);
+    //     const a = document.createElement('a');
+    //     a.href = url;
+    //     a.download = `${signatureRequest?.contractTitle || 'signed_contract'}.pdf`;
+    //     document.body.appendChild(a);
+    //     a.click();
+    //     document.body.removeChild(a);
+    //     URL.revokeObjectURL(url);
+    // };
 
     // Completed state
     if (completed) {
@@ -420,9 +435,9 @@ export default function PublicSigningPage() {
                         Thank you for signing "{signatureRequest?.contractTitle}". The contract has been updated.
                     </Typography>
                     <Typography color="text.secondary" sx={{ mb: 3 }}>
-                        You will get the signed document by email.
+                        You will get the signed document by email, once everyone has signed.
                     </Typography>
-                    {signedPdfBlob && (
+                    {/* {signedPdfBlob && (
                         <Button
                             variant="contained"
                             startIcon={<Download />}
@@ -438,7 +453,7 @@ export default function PublicSigningPage() {
                         >
                             Download
                         </Button>
-                    )}
+                    )} */}
                     <Alert severity="success">You can close this window now.</Alert>
                 </Paper>
             </Box>
@@ -463,18 +478,23 @@ export default function PublicSigningPage() {
                     <Typography variant="body1" color='#fff' fontWeight={500}>
                         {signatureRequest?.contractTitle}
                     </Typography>
-                    {/* Show assigned party badge for multi-party flow */}
-                    {assignedPartyConfig && (
-                        <Chip
-                            label={`Your fields: ${assignedPartyConfig.label}`}
-                            size="small"
-                            sx={{
-                                bgcolor: assignedPartyConfig.color || '#666',
-                                color: '#fff',
-                                fontWeight: 600,
-                                fontSize: '0.75rem',
-                            }}
-                        />
+                    {/* Show assigned party badge(s) for multi-party flow */}
+                    {assignedPartyConfigs.length > 0 && (
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            {assignedPartyConfigs.map(config => (
+                                <Chip
+                                    key={config.id}
+                                    label={`Your fields: ${config.label}`}
+                                    size="small"
+                                    sx={{
+                                        bgcolor: config.color || '#666',
+                                        color: '#fff',
+                                        fontWeight: 600,
+                                        fontSize: '0.75rem',
+                                    }}
+                                />
+                            ))}
+                        </Box>
                     )}
                 </Box>
                 <Tooltip

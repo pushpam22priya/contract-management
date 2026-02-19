@@ -58,12 +58,39 @@ export async function POST(
 
         const now = new Date().toISOString();
 
-        // 3. Update contract status
+        // 3. Calculate date-based status
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const startDate = contract.startDate ? new Date(contract.startDate) : null;
+        const endDate = contract.endDate ? new Date(contract.endDate) : null;
+        if (startDate) startDate.setHours(0, 0, 0, 0);
+        if (endDate) endDate.setHours(0, 0, 0, 0);
+
+        let finalStatus = 'active'; // default
+        if (endDate && today > endDate) {
+            finalStatus = 'expired';
+        } else if (endDate) {
+            const daysLeft = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            if (daysLeft <= 30) {
+                finalStatus = 'expiring';
+            } else if (startDate && today < startDate) {
+                finalStatus = 'signed';
+            } else {
+                finalStatus = 'active';
+            }
+        } else if (startDate && today < startDate) {
+            finalStatus = 'signed';
+        }
+
+        console.log(`📊 [Finalize] Calculated status: ${finalStatus} (start: ${contract.startDate}, end: ${contract.endDate})`);
+
+        // 4. Update contract status
         const updateResult = await db.collection('contracts').updateOne(
             { _id: new ObjectId(id) },
             {
                 $set: {
-                    status: 'active',
+                    status: finalStatus,
                     signatureFlowStatus: 'finalized',
                     finalizedAt: now,
                     finalizedBy: finalizedBy,
@@ -77,7 +104,7 @@ export async function POST(
             console.log(`⚠️ [Finalize] No changes made to contract`);
         }
 
-        console.log(`✅ [Finalize] Contract status updated to 'active'`);
+        console.log(`✅ [Finalize] Contract status updated to '${finalStatus}'`);
 
         // 4. Collect email recipients for the response
         // (Actual email sending will be handled by the frontend using emailService)
