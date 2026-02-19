@@ -269,7 +269,6 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 value: contractValue || 'N/A',
                 category: selectedTemplate.category,
                 expiresInDays: expiresInDays,
-                status: ContractStatus.DRAFT,
                 templateId: selectedTemplate.id,
                 templateName: selectedTemplate.name,
                 content: selectedTemplate.content || '',
@@ -297,7 +296,10 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 console.log('✅ Contract metadata updated');
             } else {
                 // First save: CREATE new contract
-                const result = await contractService.createContract(contractData);
+                const result = await contractService.createContract({
+                    ...contractData,
+                    status: ContractStatus.DRAFT,
+                });
                 if (result.success && result.contract) {
                     activeContractId = result.contract.id;
                     setContractId(activeContractId);
@@ -422,6 +424,11 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
         setPendingAction(null);
     };
 
+    const handleUnsavedClose = () => {
+        setShowUnsavedDialog(false);
+        setPendingAction(null);
+    };
+
     const handleNextStep = () => {
         // Validation before proceeding to Step 2
         if (!selectedTemplate) {
@@ -514,7 +521,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
             <Button
                 variant="contained"
                 onClick={handleReviewClick}
-                disabled={!contractId || saving}
+                disabled={!contractId || saving || !canSave}
                 sx={{
                     textTransform: 'none',
                     fontWeight: 600,
@@ -535,7 +542,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
             <Button
                 variant="contained"
                 onClick={handleSignatureClick}
-                disabled={!contractId || saving}
+                disabled={!contractId || saving || !canSave}
                 sx={{
                     textTransform: 'none',
                     fontWeight: 600,
@@ -561,269 +568,269 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
 
     return (
         <>
-        <BaseDialog
-            open={open}
-            onClose={handleCloseAttempt}
-            title={currentStep === 1 ? "Create Contract - Step 1: Contract Details" : `Create Contract - Step 2: Edit Document`}
-            maxWidth={currentStep === 1 ? "md" : "xl"}
-            fullWidth
-            fullScreen={currentStep === 2}
-            noPadding={currentStep === 2}
-            actions={dialogActions}
-            disableEnforceFocus={true}
-            disableBackdropClick={false}
-        >
-            {/* STEP 1: Contract Details Form */}
-            {currentStep === 1 && (
-                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    {/* Error Alert */}
-                    {error && (
-                        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-                            {error}
-                        </Alert>
-                    )}
-                    {/* Success Alert */}
-                    {success && (
-                        <Alert severity="success" sx={{ mb: 2 }}>
-                            {success}
-                        </Alert>
-                    )}
+            <BaseDialog
+                open={open}
+                onClose={handleCloseAttempt}
+                title={currentStep === 1 ? "Create Contract - Step 1: Contract Details" : `Create Contract - Step 2: Edit Document`}
+                maxWidth={currentStep === 1 ? "md" : "xl"}
+                fullWidth
+                fullScreen={currentStep === 2}
+                noPadding={currentStep === 2}
+                actions={dialogActions}
+                disableEnforceFocus={true}
+                disableBackdropClick={false}
+            >
+                {/* STEP 1: Contract Details Form */}
+                {currentStep === 1 && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        {/* Error Alert */}
+                        {error && (
+                            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+                                {error}
+                            </Alert>
+                        )}
+                        {/* Success Alert */}
+                        {success && (
+                            <Alert severity="success" sx={{ mb: 2 }}>
+                                {success}
+                            </Alert>
+                        )}
 
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-                        {/* Template Selection */}
-                        <Autocomplete
-                            value={selectedTemplate}
-                            onChange={(_event, newValue) => {
-                                setSelectedTemplate(newValue);
-                                setDocumentLoaded(false);
-                            }}
-                            options={templates}
-                            getOptionLabel={(option) => option.name}
-                            loading={loadingTemplates}
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    label="Select Template"
-                                    placeholder="Choose a template..."
-                                    required
-                                    sx={{
-                                        '& .MuiOutlinedInput-root': {
-                                            padding: '4px',
-                                        },
-
-                                    }}
-                                />
-                            )}
-                            renderOption={(props, option) => {
-                                const { key, ...otherProps } = props as any;
-                                return (
-                                    <li key={key} {...otherProps}>
-                                        <Box>
-                                            <Typography variant="body2" fontWeight={600}>{option.name}</Typography>
-                                            <Typography variant="caption" color="text.secondary">
-                                                {option.category}
-                                            </Typography>
-                                        </Box>
-                                    </li>
-                                );
-                            }}
-                        />
-
-                        {/* Selected Template Info */}
-                        {selectedTemplate && (
-                            <Box
-                                sx={{
-                                    p: 0.5,
-                                    px: 1,
-                                    bgcolor: alpha('#0f766e', 0.05),
-                                    borderRadius: 2,
-                                    border: '1px solid',
-                                    borderColor: alpha('#0f766e', 0.2),
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+                            {/* Template Selection */}
+                            <Autocomplete
+                                value={selectedTemplate}
+                                onChange={(_event, newValue) => {
+                                    setSelectedTemplate(newValue);
+                                    setDocumentLoaded(false);
                                 }}
-                            >
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                                    <Typography variant="body1" fontWeight={600} color="primary">
-                                        {selectedTemplate.name}
-                                    </Typography>
-                                    <Chip
-                                        label={selectedTemplate.category}
-                                        size="small"
+                                options={templates}
+                                getOptionLabel={(option) => option.name}
+                                loading={loadingTemplates}
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        label="Select Template"
+                                        placeholder="Choose a template..."
+                                        required
                                         sx={{
-                                            bgcolor: 'primary.main',
-                                            color: 'white',
+                                            '& .MuiOutlinedInput-root': {
+                                                padding: '4px',
+                                            },
+
                                         }}
                                     />
+                                )}
+                                renderOption={(props, option) => {
+                                    const { key, ...otherProps } = props as any;
+                                    return (
+                                        <li key={key} {...otherProps}>
+                                            <Box>
+                                                <Typography variant="body2" fontWeight={600}>{option.name}</Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {option.category}
+                                                </Typography>
+                                            </Box>
+                                        </li>
+                                    );
+                                }}
+                            />
+
+                            {/* Selected Template Info */}
+                            {selectedTemplate && (
+                                <Box
+                                    sx={{
+                                        p: 0.5,
+                                        px: 1,
+                                        bgcolor: alpha('#0f766e', 0.05),
+                                        borderRadius: 2,
+                                        border: '1px solid',
+                                        borderColor: alpha('#0f766e', 0.2),
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                    }}
+                                >
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                                        <Typography variant="body1" fontWeight={600} color="primary">
+                                            {selectedTemplate.name}
+                                        </Typography>
+                                        <Chip
+                                            label={selectedTemplate.category}
+                                            size="small"
+                                            sx={{
+                                                bgcolor: 'primary.main',
+                                                color: 'white',
+                                            }}
+                                        />
+                                    </Box>
                                 </Box>
+                            )}
+                        </Box>
+
+                        <Divider sx={{ my: 1 }} />
+
+                        <Typography variant="h6" gutterBottom>Contract Information</Typography>
+
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mb: 2 }}>
+                            <TextField
+                                label="Contract Title"
+                                value={contractTitle}
+                                onChange={(e) => setContractTitle(e.target.value)}
+                                required
+                                placeholder="e.g., Software License Agreement"
+                                sx={{
+                                    '& .MuiInputBase-input': {
+                                        padding: '10px 12px',
+                                    },
+                                    // Adjust floating label position when focused/filled
+                                    '& .MuiInputLabel-root': {
+                                        transform: 'translate(14px, 10px) scale(1)',
+                                    },
+                                    // Adjust floating label when shrunk (focused or has value)
+                                    '& .MuiInputLabel-root.MuiInputLabel-shrink': {
+                                        transform: 'translate(14px, -9px) scale(0.75)',
+                                    },
+                                }}
+
+                            />
+                            <TextField
+                                label="Client Name"
+                                value={clientName}
+                                onChange={(e) => setClientName(e.target.value)}
+                                required
+                                placeholder="e.g., ABC Corp"
+                                sx={{
+                                    '& .MuiInputBase-input': {
+                                        padding: '10px 12px',
+                                    },
+                                    // Adjust floating label position when focused/filled
+                                    '& .MuiInputLabel-root': {
+                                        transform: 'translate(14px, 10px) scale(1)',
+                                    },
+                                    // Adjust floating label when shrunk (focused or has value)
+                                    '& .MuiInputLabel-root.MuiInputLabel-shrink': {
+                                        transform: 'translate(14px, -9px) scale(0.75)',
+                                    },
+                                }}
+
+                            />
+                        </Box>
+
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                            <TextField
+                                label="Start Date"
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => {
+                                    const newStartDate = e.target.value;
+                                    setStartDate(newStartDate);
+                                    if (newStartDate) {
+                                        // Auto-set End Date to 1 year from Start Date
+                                        setEndDate(dayjs(newStartDate).add(1, 'year').format('YYYY-MM-DD'));
+                                    }
+                                }}
+                                InputLabelProps={{ shrink: true }}
+                                sx={{
+                                    '& .MuiInputBase-input': {
+                                        padding: '10px 12px',
+                                    }
+                                }}
+                            />
+                            <TextField
+                                label="End Date"
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                InputLabelProps={{ shrink: true }}
+                                sx={{
+                                    '& .MuiInputBase-input': {
+                                        padding: '10px 12px',
+                                    }
+                                }}
+                            />
+                        </Box>
+
+                        <TextField
+                            label="Description"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            multiline
+                            rows={3}
+                            placeholder="Optional description..."
+                            sx={{ mt: 2 }}
+                        />
+                    </Box>
+                )}
+
+                {/* STEP 2: Full-Screen PDF Editor */}
+                {currentStep === 2 && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                        {/* Error Alert */}
+                        {error && (
+                            <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError('')}>
+                                {error}
+                            </Alert>
+                        )}
+
+                        {/* Party Validation Warning */}
+                        {partyValidationWarning && (
+                            <Alert severity="warning" sx={{ mb: 1, py: 0.5 }}>
+                                <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                                    Complete all fields for the party you started filling:
+                                </Typography>
+                                {partyValidationWarning.map(({ party, filled, total, missing }) => (
+                                    <Box key={party.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                        <Chip
+                                            label={party.label}
+                                            size="small"
+                                            sx={{ bgcolor: party.color, color: '#fff', fontWeight: 600, minWidth: 32 }}
+                                        />
+                                        <Typography variant="caption">
+                                            {filled}/{total} fields filled — missing: {missing.join(', ')}
+                                        </Typography>
+                                    </Box>
+                                ))}
+                            </Alert>
+                        )}
+
+                        {/* Full-Screen PDF Viewer */}
+                        {selectedTemplate ? (
+                            <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                                <PDFViewerContainer
+                                    ref={pdfViewerRef}
+                                    documentUrl={selectedTemplate.fileData || selectedTemplate.fileUrl}
+                                    initialXfdf={selectedTemplate?.xfdfData}
+                                    formFields={selectedTemplate?.formFields}
+                                    readOnly={false}
+                                    currentUserRole="contractor"
+                                    canAddFormFields={true}
+                                    toolbarMode="forms"
+                                    defaultToolbar="view"
+                                    onFieldChange={handleFieldChange}
+                                    onDocumentLoaded={() => setDocumentLoaded(true)}
+                                    showAnnotationNavigation={true}
+                                    onError={(err) => setError(err)}
+                                />
+                            </Box>
+                        ) : (
+                            <Box
+                                sx={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    bgcolor: 'grey.50'
+                                }}
+                            >
+                                <Typography variant="h6" color="text.secondary">
+                                    No Template Selected
+                                </Typography>
                             </Box>
                         )}
                     </Box>
-
-                    <Divider sx={{ my: 1 }} />
-
-                    <Typography variant="h6" gutterBottom>Contract Information</Typography>
-
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mb: 2 }}>
-                        <TextField
-                            label="Contract Title"
-                            value={contractTitle}
-                            onChange={(e) => setContractTitle(e.target.value)}
-                            required
-                            placeholder="e.g., Software License Agreement"
-                            sx={{
-                                '& .MuiInputBase-input': {
-                                    padding: '10px 12px',
-                                },
-                                // Adjust floating label position when focused/filled
-                                '& .MuiInputLabel-root': {
-                                    transform: 'translate(14px, 10px) scale(1)',
-                                },
-                                // Adjust floating label when shrunk (focused or has value)
-                                '& .MuiInputLabel-root.MuiInputLabel-shrink': {
-                                    transform: 'translate(14px, -9px) scale(0.75)',
-                                },
-                            }}
-
-                        />
-                        <TextField
-                            label="Client Name"
-                            value={clientName}
-                            onChange={(e) => setClientName(e.target.value)}
-                            required
-                            placeholder="e.g., ABC Corp"
-                            sx={{
-                                '& .MuiInputBase-input': {
-                                    padding: '10px 12px',
-                                },
-                                // Adjust floating label position when focused/filled
-                                '& .MuiInputLabel-root': {
-                                    transform: 'translate(14px, 10px) scale(1)',
-                                },
-                                // Adjust floating label when shrunk (focused or has value)
-                                '& .MuiInputLabel-root.MuiInputLabel-shrink': {
-                                    transform: 'translate(14px, -9px) scale(0.75)',
-                                },
-                            }}
-
-                        />
-                    </Box>
-
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
-                        <TextField
-                            label="Start Date"
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => {
-                                const newStartDate = e.target.value;
-                                setStartDate(newStartDate);
-                                if (newStartDate) {
-                                    // Auto-set End Date to 1 year from Start Date
-                                    setEndDate(dayjs(newStartDate).add(1, 'year').format('YYYY-MM-DD'));
-                                }
-                            }}
-                            InputLabelProps={{ shrink: true }}
-                            sx={{
-                                '& .MuiInputBase-input': {
-                                    padding: '10px 12px',
-                                }
-                            }}
-                        />
-                        <TextField
-                            label="End Date"
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                            sx={{
-                                '& .MuiInputBase-input': {
-                                    padding: '10px 12px',
-                                }
-                            }}
-                        />
-                    </Box>
-
-                    <TextField
-                        label="Description"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        multiline
-                        rows={3}
-                        placeholder="Optional description..."
-                        sx={{ mt: 2 }}
-                    />
-                </Box>
-            )}
-
-            {/* STEP 2: Full-Screen PDF Editor */}
-            {currentStep === 2 && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                    {/* Error Alert */}
-                    {error && (
-                        <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError('')}>
-                            {error}
-                        </Alert>
-                    )}
-
-                    {/* Party Validation Warning */}
-                    {partyValidationWarning && (
-                        <Alert severity="warning" sx={{ mb: 1, py: 0.5 }}>
-                            <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
-                                Complete all fields for the party you started filling:
-                            </Typography>
-                            {partyValidationWarning.map(({ party, filled, total, missing }) => (
-                                <Box key={party.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                                    <Chip
-                                        label={party.label}
-                                        size="small"
-                                        sx={{ bgcolor: party.color, color: '#fff', fontWeight: 600, minWidth: 32 }}
-                                    />
-                                    <Typography variant="caption">
-                                        {filled}/{total} fields filled — missing: {missing.join(', ')}
-                                    </Typography>
-                                </Box>
-                            ))}
-                        </Alert>
-                    )}
-
-                    {/* Full-Screen PDF Viewer */}
-                    {selectedTemplate ? (
-                        <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                            <PDFViewerContainer
-                                ref={pdfViewerRef}
-                                documentUrl={selectedTemplate.fileData || selectedTemplate.fileUrl}
-                                initialXfdf={selectedTemplate?.xfdfData}
-                                formFields={selectedTemplate?.formFields}
-                                readOnly={false}
-                                currentUserRole="contractor"
-                                canAddFormFields={true}
-                                toolbarMode="forms"
-                                defaultToolbar="view"
-                                onFieldChange={handleFieldChange}
-                                onDocumentLoaded={() => setDocumentLoaded(true)}
-                                showAnnotationNavigation={true}
-                                onError={(err) => setError(err)}
-                            />
-                        </Box>
-                    ) : (
-                        <Box
-                            sx={{
-                                flex: 1,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                bgcolor: 'grey.50'
-                            }}
-                        >
-                            <Typography variant="h6" color="text.secondary">
-                                No Template Selected
-                            </Typography>
-                        </Box>
-                    )}
-                </Box>
-            )}
-        </BaseDialog>
+                )}
+            </BaseDialog>
 
             {/* Unsaved Changes Confirmation Dialog */}
             <ConfirmationDialog
@@ -832,6 +839,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 message="Do you want to save changes?"
                 onYes={handleUnsavedYes}
                 onNo={handleUnsavedNo}
+                onClose={handleUnsavedClose}
                 loading={saving}
             />
 

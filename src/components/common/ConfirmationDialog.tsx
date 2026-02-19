@@ -9,6 +9,7 @@ interface ConfirmationDialogProps {
     message: string;
     onYes: () => void;
     onNo: () => void;
+    onClose?: () => void;
     loading?: boolean;
 }
 
@@ -18,12 +19,13 @@ export default function ConfirmationDialog({
     message,
     onYes,
     onNo,
+    onClose,
     loading = false,
 }: ConfirmationDialogProps) {
     return (
         <BaseDialog
             open={open}
-            onClose={onNo}
+            onClose={onClose || onNo}
             title={title}
             maxWidth="xs"
             actions={

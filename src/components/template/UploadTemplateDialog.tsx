@@ -213,6 +213,45 @@ export default function UploadTemplateDialog({
         }
     };
 
+    // Handle multi-select assignment
+    const handleMultipleFieldsAssign = (fieldNames: string[], partyId: string) => {
+        if (!pdfViewerRef.current) return;
+        const party = parties.find(p => p.id === partyId);
+        if (!party) return;
+
+        console.log(`[UPLOAD-TEMPLATE] Assigning ${fieldNames.length} fields to party "${partyId}" (${party.label})`);
+
+        const assignedNames: string[] = [];
+        fieldNames.forEach(fieldName => {
+            const success = pdfViewerRef.current!.assignFieldToParty(fieldName, partyId, party.label, party.color);
+            if (success) assignedNames.push(fieldName);
+        });
+
+        if (assignedNames.length > 0) {
+            setFormFields(prev => prev.map(f =>
+                assignedNames.includes(f.name)
+                    ? { ...f, assignedParty: partyId, partyLabel: party.label }
+                    : f
+            ));
+            setSelectedFieldName(null);
+        }
+    };
+
+    // Handle unassign field from party
+    const handleFieldUnassigned = (fieldName: string) => {
+        if (!pdfViewerRef.current) return;
+        console.log(`[UPLOAD-TEMPLATE] Unassigning field "${fieldName}"`);
+
+        const success = pdfViewerRef.current.assignFieldToParty(fieldName, 'unassigned', '', '');
+        if (success) {
+            setFormFields(prev => prev.map(f =>
+                f.name === fieldName
+                    ? { ...f, assignedParty: undefined, partyLabel: undefined }
+                    : f
+            ));
+        }
+    };
+
     // Handle field selection (when user clicks on a field in the PDF)
     const handleFieldChange = (fieldName: string, value: any) => {
         console.log(`[UPLOAD-TEMPLATE] Field changed: ${fieldName}`);
@@ -984,6 +1023,8 @@ export default function UploadTemplateDialog({
                                 }}
                                 onConfigureParties={() => setShowPartyConfigDialog(true)}
                                 onHighlightParty={handleHighlightParty}
+                                onMultipleFieldsAssign={handleMultipleFieldsAssign}
+                                onFieldUnassigned={handleFieldUnassigned}
                             />
                         )}
                     </Box>

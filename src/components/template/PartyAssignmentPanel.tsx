@@ -17,6 +17,7 @@ import {
     IconButton,
     Collapse,
     Alert,
+    Checkbox,
 } from '@mui/material';
 import {
     Person,
@@ -30,6 +31,7 @@ import {
     ExpandLess,
     Settings,
     Warning,
+    Close,
 } from '@mui/icons-material';
 import { PartyConfiguration, FormFieldDefinition } from '@/types/template';
 import { groupFieldsByParty } from '@/utils/partyValidation';
@@ -45,6 +47,8 @@ interface PartyAssignmentPanelProps {
     onFieldSelected: (fieldName: string) => void;  // NEW: Allow selecting field from panel
     onConfigureParties: () => void;
     onHighlightParty: (partyId: string | null) => void;
+    onMultipleFieldsAssign?: (fieldNames: string[], partyId: string) => void;
+    onFieldUnassigned?: (fieldName: string) => void;
 }
 
 // Get icon for field type
@@ -73,9 +77,13 @@ export default function PartyAssignmentPanel({
     onFieldSelected,
     onConfigureParties,
     onHighlightParty,
+    onMultipleFieldsAssign,
+    onFieldUnassigned,
 }: PartyAssignmentPanelProps) {
     const [expandedParty, setExpandedParty] = useState<string | null>('unassigned'); // Start with unassigned expanded
     const [hoveredParty, setHoveredParty] = useState<string | null>(null);
+    const [selectedFieldIds, setSelectedFieldIds] = useState<string[]>([]);
+    const [dragOverParty, setDragOverParty] = useState<string | null>(null);
 
     // Group fields by party
     const fieldsByParty = groupFieldsByParty(formFields);
@@ -83,6 +91,23 @@ export default function PartyAssignmentPanel({
     // Get unassigned field count
     const unassignedFields = fieldsByParty['unassigned'] || [];
     const hasUnassignedFields = unassignedFields.length > 0;
+
+    // Multi-select checkbox handlers
+    const handleCheckboxToggle = (fieldName: string) => {
+        setSelectedFieldIds(prev =>
+            prev.includes(fieldName)
+                ? prev.filter(f => f !== fieldName)
+                : [...prev, fieldName]
+        );
+    };
+
+    const handleSelectAll = () => {
+        if (selectedFieldIds.length === unassignedFields.length) {
+            setSelectedFieldIds([]);
+        } else {
+            setSelectedFieldIds(unassignedFields.map(f => f.name));
+        }
+    };
 
     // Handle party hover for highlighting
     const handlePartyHover = (partyId: string | null) => {
@@ -92,9 +117,72 @@ export default function PartyAssignmentPanel({
 
     // Handle party selection for field assignment
     const handleAssignToParty = (partyId: string) => {
+        // Multi-select mode: assign all selected fields
+        if (selectedFieldIds.length > 0 && onMultipleFieldsAssign) {
+            console.log(`${LOG_PREFIX} Assigning ${selectedFieldIds.length} fields to party: ${partyId}`);
+            onMultipleFieldsAssign(selectedFieldIds, partyId);
+            setSelectedFieldIds([]);
+            return;
+        }
+        // Single-field mode
         if (!selectedFieldName) return;
         console.log(`${LOG_PREFIX} Assigning selected field to party: ${partyId}`);
         onPartySelected(partyId);
+    };
+
+    // Handle unassign field from party
+    const handleUnassignField = (fieldName: string) => {
+        console.log(`${LOG_PREFIX} Unassigning field: ${fieldName}`);
+        setSelectedFieldIds(prev => prev.filter(f => f !== fieldName));
+        onFieldUnassigned?.(fieldName);
+    };
+
+    // Drag-and-drop handlers
+    const handleDragStart = (e: React.DragEvent, fieldName: string) => {
+        // If the dragged field is part of a multi-select, drag all selected
+        const fieldsToDrag = selectedFieldIds.includes(fieldName) && selectedFieldIds.length > 1
+            ? selectedFieldIds
+            : [fieldName];
+        e.dataTransfer.setData('application/field-names', JSON.stringify(fieldsToDrag));
+        e.dataTransfer.effectAllowed = 'move';
+        console.log(`${LOG_PREFIX} Drag started: ${fieldsToDrag.join(', ')}`);
+    };
+
+    const handleDragOver = (e: React.DragEvent, partyId: string) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDragOverParty(partyId);
+    };
+
+    const handleDragLeave = () => {
+        setDragOverParty(null);
+    };
+
+    const handleDrop = (e: React.DragEvent, partyId: string) => {
+        e.preventDefault();
+        setDragOverParty(null);
+        const data = e.dataTransfer.getData('application/field-names');
+        if (!data) return;
+
+        try {
+            const fieldNames: string[] = JSON.parse(data);
+            console.log(`${LOG_PREFIX} Dropped ${fieldNames.length} field(s) on party: ${partyId}`);
+            if (fieldNames.length > 1 && onMultipleFieldsAssign) {
+                onMultipleFieldsAssign(fieldNames, partyId);
+                setSelectedFieldIds([]);
+            } else if (fieldNames.length === 1) {
+                // Use single-field assign by temporarily selecting and assigning
+                onFieldSelected(fieldNames[0]);
+                // Directly call onPartySelected after setting the field
+                // We need to use onMultipleFieldsAssign for reliability
+                if (onMultipleFieldsAssign) {
+                    onMultipleFieldsAssign(fieldNames, partyId);
+                }
+                setSelectedFieldIds(prev => prev.filter(f => f !== fieldNames[0]));
+            }
+        } catch (err) {
+            console.error(`${LOG_PREFIX} Drop parse error:`, err);
+        }
     };
 
     return (
@@ -122,7 +210,13 @@ export default function PartyAssignmentPanel({
                     </Tooltip>
                 </Box>
 
-                {selectedFieldName ? (
+                {selectedFieldIds.length > 0 ? (
+                    <Alert severity="info" sx={{ mt: 1, py: 0 }}>
+                        <Typography variant="body2">
+                            {selectedFieldIds.length} field(s) selected. Click a party to assign.
+                        </Typography>
+                    </Alert>
+                ) : selectedFieldName ? (
                     <Alert severity="info" sx={{ mt: 1, py: 0 }}>
                         <Typography variant="body2">
                             Select a party to assign: <strong>{selectedFieldName}</strong>
@@ -135,194 +229,262 @@ export default function PartyAssignmentPanel({
                 )}
             </Box>
 
-            {/* Unassigned warning */}
-            {hasUnassignedFields && (
-                <Alert
-                    severity="warning"
-                    icon={<Warning fontSize="small" />}
-                    sx={{ mx: 2, mt: 1, py: 0.5 }}
-                >
-                    <Typography variant="body2">
-                        {unassignedFields.length} unassigned field(s)
-                    </Typography>
-                </Alert>
-            )}
-
             {/* Party List */}
-            <Box sx={{ flex: 1, overflow: 'auto', p: 1 }}>
-                <List dense disablePadding>
-                    {parties.map((party) => {
-                        const partyFields = fieldsByParty[party.id] || [];
-                        const isExpanded = expandedParty === party.id;
+            <Box>
+                {/* Party scroll container */}
+                <Box sx={{
+                    maxHeight: 160,
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                }}>
+                    <List dense disablePadding>
+                        {parties.map((party) => {
+                            const partyFields = fieldsByParty[party.id] || [];
+                            const isExpanded = expandedParty === party.id;
 
-                        return (
-                            <Box key={party.id}>
-                                <ListItem
-                                    sx={{
-                                        borderRadius: 1,
-                                        mb: 0.5,
-                                        bgcolor: hoveredParty === party.id ? 'action.hover' : 'transparent',
-                                        border: selectedFieldName ? '2px dashed' : '2px solid transparent',
-                                        borderColor: selectedFieldName ? party.color : 'transparent',
-                                        cursor: selectedFieldName ? 'pointer' : 'default',
-                                        transition: 'all 0.2s',
-                                        '&:hover': {
-                                            bgcolor: 'action.hover',
-                                        },
-                                    }}
-                                    onClick={() => selectedFieldName && handleAssignToParty(party.id)}
-                                    onMouseEnter={() => handlePartyHover(party.id)}
-                                    onMouseLeave={() => handlePartyHover(null)}
-                                >
-                                    <ListItemIcon sx={{ minWidth: 36 }}>
-                                        <Badge
-                                            badgeContent={partyFields.length}
-                                            color="primary"
-                                            sx={{
-                                                '& .MuiBadge-badge': {
-                                                    bgcolor: party.color,
-                                                    color: 'white',
-                                                },
-                                            }}
-                                        >
-                                            <Person sx={{ color: party.color }} />
-                                        </Badge>
-                                    </ListItemIcon>
-
-                                    <ListItemText
-                                        primary={
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Typography variant="body2" fontWeight="medium">
-                                                    {party.label}
-                                                </Typography>
-                                                <Chip
-                                                    label={`Order ${party.order}`}
-                                                    size="small"
-                                                    sx={{
-                                                        height: 18,
-                                                        fontSize: '0.65rem',
+                            return (
+                                <Box key={party.id}>
+                                    <ListItem
+                                        sx={{
+                                            borderRadius: 1,
+                                            // mb: 0.5,
+                                            bgcolor: dragOverParty === party.id
+                                                ? `${party.color}20`
+                                                : hoveredParty === party.id ? 'action.hover' : 'transparent',
+                                            border: dragOverParty === party.id
+                                                ? `2px solid ${party.color}`
+                                                : (selectedFieldName || selectedFieldIds.length > 0) ? '2px dashed' : '2px solid transparent',
+                                            borderColor: dragOverParty === party.id
+                                                ? party.color
+                                                : (selectedFieldName || selectedFieldIds.length > 0) ? party.color : 'transparent',
+                                            cursor: (selectedFieldName || selectedFieldIds.length > 0) ? 'pointer' : 'default',
+                                            transition: 'all 0.2s',
+                                            transform: dragOverParty === party.id ? 'scale(1.02)' : 'scale(1)',
+                                            '&:hover': {
+                                                bgcolor: 'action.hover',
+                                            },
+                                        }}
+                                        onClick={() => (selectedFieldName || selectedFieldIds.length > 0) && handleAssignToParty(party.id)}
+                                        onMouseEnter={() => handlePartyHover(party.id)}
+                                        onMouseLeave={() => handlePartyHover(null)}
+                                        onDragOver={(e) => handleDragOver(e, party.id)}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={(e) => handleDrop(e, party.id)}
+                                    >
+                                        <ListItemIcon sx={{ minWidth: 36 }}>
+                                            <Badge
+                                                badgeContent={partyFields.length}
+                                                color="primary"
+                                                sx={{
+                                                    '& .MuiBadge-badge': {
                                                         bgcolor: party.color,
                                                         color: 'white',
-                                                    }}
-                                                />
-                                            </Box>
-                                        }
-                                        secondary={`${partyFields.length} field(s)`}
-                                    />
-
-                                    {partyFields.length > 0 && (
-                                        <IconButton
-                                            size="small"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setExpandedParty(isExpanded ? null : party.id);
-                                            }}
-                                        >
-                                            {isExpanded ? <ExpandLess /> : <ExpandMore />}
-                                        </IconButton>
-                                    )}
-                                </ListItem>
-
-                                {/* Expanded field list */}
-                                <Collapse in={isExpanded}>
-                                    <Box sx={{ pl: 4, pr: 1, pb: 1 }}>
-                                        {partyFields.map((field) => (
-                                            <Box
-                                                key={field.name}
-                                                sx={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 1,
-                                                    py: 0.5,
-                                                    px: 1,
-                                                    borderRadius: 0.5,
-                                                    bgcolor: 'background.default',
-                                                    mb: 0.5,
+                                                    },
                                                 }}
                                             >
-                                                {getFieldTypeIcon(field.type)}
-                                                <Typography variant="caption" noWrap sx={{ flex: 1 }}>
-                                                    {field.label || field.name}
-                                                </Typography>
-                                                <Chip
-                                                    label={field.type}
-                                                    size="small"
-                                                    sx={{ height: 16, fontSize: '0.6rem' }}
-                                                />
-                                            </Box>
-                                        ))}
-                                    </Box>
-                                </Collapse>
-                            </Box>
-                        );
-                    })}
+                                                <Person sx={{ color: party.color }} />
+                                            </Badge>
+                                        </ListItemIcon>
 
-                    {/* Unassigned fields section */}
-                    {hasUnassignedFields && (
-                        <>
-                            <Divider sx={{ my: 1 }} />
-                            <ListItem
-                                sx={{
-                                    borderRadius: 1,
-                                    bgcolor: hoveredParty === 'unassigned' ? 'action.hover' : 'transparent',
-                                }}
-                                onMouseEnter={() => handlePartyHover('unassigned')}
-                                onMouseLeave={() => handlePartyHover(null)}
+                                        <ListItemText
+                                            primary={
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <Typography variant="body2" fontWeight="medium">
+                                                        {party.label}
+                                                    </Typography>
+                                                    <Chip
+                                                        label={`Order ${party.order}`}
+                                                        size="small"
+                                                        sx={{
+                                                            height: 18,
+                                                            fontSize: '0.65rem',
+                                                            bgcolor: party.color,
+                                                            color: 'white',
+                                                        }}
+                                                    />
+                                                </Box>
+                                            }
+                                            secondary={`${partyFields.length} field(s)`}
+                                        />
+
+                                        {partyFields.length > 0 && (
+                                            <IconButton
+                                                size="small"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setExpandedParty(isExpanded ? null : party.id);
+                                                }}
+                                            >
+                                                {isExpanded ? <ExpandLess /> : <ExpandMore />}
+                                            </IconButton>
+                                        )}
+                                    </ListItem>
+
+                                    {/* Expanded field list */}
+                                    <Collapse in={isExpanded}>
+                                        <Box sx={{ pl: 4, pr: 1, pb: 1 }}>
+                                            {partyFields.map((field) => (
+                                                <Box
+                                                    key={field.name}
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 1,
+                                                        py: 0.5,
+                                                        px: 1,
+                                                        borderRadius: 0.5,
+                                                        bgcolor: 'background.default',
+                                                        mb: 0.5,
+                                                    }}
+                                                >
+                                                    {getFieldTypeIcon(field.type)}
+                                                    <Typography variant="caption" noWrap sx={{ flex: 1 }}>
+                                                        {field.label || field.name}
+                                                    </Typography>
+                                                    <Chip
+                                                        label={field.type}
+                                                        size="small"
+                                                        sx={{ height: 16, fontSize: '0.6rem' }}
+                                                    />
+                                                    {onFieldUnassigned && (
+                                                        <Tooltip title="Remove from Party">
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUnassignField(field.name);
+                                                                }}
+                                                                sx={{
+                                                                    p: 0.25,
+                                                                    color: 'text.secondary',
+                                                                    '&:hover': { color: 'error.main' },
+                                                                }}
+                                                            >
+                                                                <Close sx={{ fontSize: 14 }} />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    )}
+                                                </Box>
+                                            ))}
+                                        </Box>
+                                    </Collapse>
+                                </Box>
+                            );
+                        })}
+                    </List>
+                </Box>
+
+                {/* Unassigned fields section */}
+                {hasUnassignedFields && (
+                    <>
+                        <Divider sx={{ my: 1 }} />
+                        <ListItem
+                            sx={{
+                                borderRadius: 1,
+                                bgcolor: hoveredParty === 'unassigned' ? 'action.hover' : 'transparent',
+                            }}
+                            onMouseEnter={() => handlePartyHover('unassigned')}
+                            onMouseLeave={() => handlePartyHover(null)}
+                        >
+                            <ListItemIcon sx={{ minWidth: 36 }}>
+                                <Badge badgeContent={unassignedFields.length} color="warning">
+                                    <Warning color="warning" />
+                                </Badge>
+                            </ListItemIcon>
+                            <ListItemText
+                                sx={{ paddingTop: 0, paddingBottom: 0 }}
+                                primary="Unassigned"
+                            // secondary={`${unassignedFields.length} field(s) need assignment`}
+                            />
+                            <IconButton
+                                size="small"
+                                onClick={() => setExpandedParty(expandedParty === 'unassigned' ? null : 'unassigned')}
                             >
-                                <ListItemIcon sx={{ minWidth: 36 }}>
-                                    <Badge badgeContent={unassignedFields.length} color="warning">
-                                        <Warning color="warning" />
-                                    </Badge>
-                                </ListItemIcon>
-                                <ListItemText
-                                    primary="Unassigned"
-                                    secondary={`${unassignedFields.length} field(s) need assignment`}
-                                />
-                                <IconButton
-                                    size="small"
-                                    onClick={() => setExpandedParty(expandedParty === 'unassigned' ? null : 'unassigned')}
-                                >
-                                    {expandedParty === 'unassigned' ? <ExpandLess /> : <ExpandMore />}
-                                </IconButton>
-                            </ListItem>
+                                {expandedParty === 'unassigned' ? <ExpandLess /> : <ExpandMore />}
+                            </IconButton>
+                        </ListItem>
 
-                            <Collapse in={expandedParty === 'unassigned'}>
-                                <Box sx={{ pl: 2, pr: 1, pb: 1 }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                                        Click a field, then click a party to assign:
+                        <Collapse in={expandedParty === 'unassigned'}>
+                            <Box sx={{
+                                maxHeight: 200,
+                                overflowY: 'auto',
+                                overflowX: 'hidden',
+                                pl: 2,
+                                pr: 1,
+                                pb: 1,
+                            }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                    <Checkbox
+                                        size="small"
+                                        checked={unassignedFields.length > 0 && selectedFieldIds.length === unassignedFields.length}
+                                        indeterminate={selectedFieldIds.length > 0 && selectedFieldIds.length < unassignedFields.length}
+                                        onChange={handleSelectAll}
+                                        sx={{ p: 0.25, mr: 0.5 }}
+                                    />
+                                    <Typography variant="caption" color="text.secondary">
+                                        {selectedFieldIds.length > 0
+                                            ? `${selectedFieldIds.length} selected — click a party to assign`
+                                            : 'Select All'}
                                     </Typography>
-                                    {unassignedFields.map((field) => (
+                                </Box>
+                                {unassignedFields.map((field) => {
+                                    const isChecked = selectedFieldIds.includes(field.name);
+                                    const isSelected = selectedFieldName === field.name;
+                                    return (
                                         <Box
                                             key={field.name}
-                                            onClick={() => {
-                                                console.log(`${LOG_PREFIX} Field selected from panel: ${field.name}`);
-                                                onFieldSelected(field.name);
-                                            }}
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, field.name)}
                                             sx={{
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                gap: 1,
+                                                gap: 0.5,
                                                 py: 0.75,
-                                                px: 1.5,
+                                                px: 1,
                                                 borderRadius: 1,
-                                                bgcolor: selectedFieldName === field.name ? 'primary.main' : 'warning.light',
-                                                color: selectedFieldName === field.name ? 'white' : 'inherit',
+                                                bgcolor: isChecked ? 'primary.light' : isSelected ? 'primary.main' : 'warning.light',
+                                                color: (isChecked || isSelected) ? 'white' : 'inherit',
                                                 mb: 0.5,
-                                                cursor: 'pointer',
-                                                border: selectedFieldName === field.name ? '2px solid' : '2px solid transparent',
-                                                borderColor: selectedFieldName === field.name ? 'primary.dark' : 'transparent',
+                                                cursor: 'grab',
+                                                border: (isChecked || isSelected) ? '2px solid' : '2px solid transparent',
+                                                borderColor: isChecked ? 'primary.main' : isSelected ? 'primary.dark' : 'transparent',
                                                 transition: 'all 0.2s',
                                                 '&:hover': {
-                                                    bgcolor: selectedFieldName === field.name ? 'primary.dark' : 'warning.main',
+                                                    bgcolor: isChecked ? 'primary.main' : isSelected ? 'primary.dark' : 'warning.main',
                                                     transform: 'scale(1.02)',
+                                                },
+                                                '&:active': {
+                                                    cursor: 'grabbing',
                                                 },
                                             }}
                                         >
-                                            {getFieldTypeIcon(field.type)}
-                                            <Typography variant="body2" fontWeight={selectedFieldName === field.name ? 'bold' : 'normal'} noWrap sx={{ flex: 1 }}>
-                                                {field.label || field.name}
-                                            </Typography>
-                                            {selectedFieldName === field.name && (
+                                            <Checkbox
+                                                size="small"
+                                                checked={isChecked}
+                                                onChange={(e) => {
+                                                    e.stopPropagation();
+                                                    handleCheckboxToggle(field.name);
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                                sx={{
+                                                    p: 0.25,
+                                                    color: (isChecked || isSelected) ? 'white' : 'inherit',
+                                                    '&.Mui-checked': { color: 'white' },
+                                                }}
+                                            />
+                                            <Box
+                                                sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, overflow: 'hidden' }}
+                                                onClick={() => {
+                                                    console.log(`${LOG_PREFIX} Field selected from panel: ${field.name}`);
+                                                    onFieldSelected(field.name);
+                                                }}
+                                            >
+                                                {getFieldTypeIcon(field.type)}
+                                                <Typography variant="body2" fontWeight={(isChecked || isSelected) ? 'bold' : 'normal'} noWrap sx={{ flex: 1 }}>
+                                                    {field.label || field.name}
+                                                </Typography>
+                                            </Box>
+                                            {isSelected && !isChecked && (
                                                 <Chip
                                                     label="Selected"
                                                     size="small"
@@ -335,12 +497,12 @@ export default function PartyAssignmentPanel({
                                                 />
                                             )}
                                         </Box>
-                                    ))}
-                                </Box>
-                            </Collapse>
-                        </>
-                    )}
-                </List>
+                                    );
+                                })}
+                            </Box>
+                        </Collapse>
+                    </>
+                )}
             </Box>
         </Paper>
     );
