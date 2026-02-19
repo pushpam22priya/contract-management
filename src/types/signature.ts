@@ -9,6 +9,8 @@
 * for API response compatibility with the signing page.
 */
 
+import { PartyConfiguration } from './template';
+
 /**
 * Represents signature request data returned to the signing page.
 * This is now derived from the contract document.
@@ -48,6 +50,18 @@ export interface SignatureRequest {
     hasFormFields?: boolean;      // Quick check if contract has form fields
     formFields: any[];            // Form field definitions
     fieldValues: Record<string, string>;
+    parties?: PartyConfiguration[];  // ✅ Party configurations for validation
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MULTI-PARTY SIGNATURE FIELDS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Which party/parties this signer is assigned to fill
+    assignedParty?: string | string[];       // Party ID(s) (e.g., "party_2" or ["party_2", "party_3"])
+    assignedPartyLabel?: string | string[];  // Party label(s) for display (e.g., "P2" or ["P2", "P3"])
+
+    // Contract version when this request was created (for optimistic locking)
+    contractVersion?: number;
 
     // Filled after signing
     signedAt?: string;

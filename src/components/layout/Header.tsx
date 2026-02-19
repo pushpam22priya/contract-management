@@ -40,7 +40,7 @@ export default function Header() {
                 zIndex: (theme) => theme.zIndex.drawer + 1,
             }}
         >
-            <Toolbar sx={{ justifyContent: 'space-between' }}>
+            <Toolbar sx={{ justifyContent: 'space-between', minHeight: '50px !important' }}>
                 {/* Left: Logo + Name */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <Box

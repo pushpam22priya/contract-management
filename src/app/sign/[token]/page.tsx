@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import {
     Box,
@@ -9,10 +9,14 @@ import {
     Alert,
     Button,
     Paper,
+    Tooltip,
+    IconButton,
+    Chip,
 } from '@mui/material';
-import { CheckCircle, Error, Save, Download } from '@mui/icons-material';
+import { CheckCircle, Error, Save, Download, Close } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
 import { SignatureRequest } from '@/types/signature';
+import { PartyConfiguration } from '@/types/template';
 import {
     getSignatureRequestData,
     completeExternalSignature
@@ -56,12 +60,138 @@ export default function PublicSigningPage() {
     const [emptySignFieldCount, setEmptySignFieldCount] = useState(0);
     const [hasDeclinedSignAll, setHasDeclinedSignAll] = useState(false);
 
+    // Track if user dismissed the party validation warning popup
+    const [dismissedPartyWarning, setDismissedPartyWarning] = useState(false);
+
+    // Draggable popup state
+    const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number } | null>(null);
+
     const handleFieldChange = (fieldName: string, value: any) => {
         setFilledFieldValues(prev => ({
             ...prev,
             [fieldName]: value?.toString() || ''
         }));
     };
+
+    // ✅ Party validation: detect partially filled parties
+    // If the external signer fills any field of a party, ALL fields for that party must be completed
+    // Note: Fields already filled by contractor are in signatureRequest.fieldValues and are read-only
+    // MULTI-PARTY: If signer has an assignedParty, only validate that party
+    const partyValidationWarning = useMemo(() => {
+        if (!signatureRequest?.formFields || !signatureRequest?.parties) return null;
+
+        const formFields = signatureRequest.formFields;
+        const allParties = signatureRequest.parties as PartyConfiguration[];
+        const prefilledValues = signatureRequest.fieldValues || {};
+
+        // MULTI-PARTY: If signer has assigned party/parties, only validate those
+        const partiesToValidate = signatureRequest.assignedParty
+            ? (() => {
+                const ids = Array.isArray(signatureRequest.assignedParty)
+                    ? signatureRequest.assignedParty
+                    : [signatureRequest.assignedParty];
+                return allParties.filter(p => ids.includes(p.id));
+            })()
+            : allParties;
+
+        const partialParties: { party: PartyConfiguration; filled: number; total: number; missing: string[] }[] = [];
+
+        for (const party of partiesToValidate) {
+            // Get fields for this party that the external signer CAN fill (empty fields only)
+            const partyFields = formFields.filter((f: any) => f.assignedParty === party.id);
+            const editableFields = partyFields.filter((f: any) => {
+                const prefilledVal = prefilledValues[f.name];
+                // Field is editable if it wasn't pre-filled by contractor
+                return !prefilledVal || prefilledVal.toString().trim() === '';
+            });
+
+            // Count how many editable fields the signer has filled
+            const filledEditableCount = editableFields.filter((f: any) => {
+                const val = filledFieldValues[f.name];
+                return val && val.toString().trim() !== '';
+            }).length;
+
+            // If signer has started filling editable fields but not all of them
+            if (filledEditableCount > 0 && filledEditableCount < editableFields.length) {
+                const unfilledFields = editableFields
+                    .filter((f: any) => {
+                        const val = filledFieldValues[f.name];
+                        return !val || val.toString().trim() === '';
+                    })
+                    .map((f: any) => f.label || f.name);
+
+                partialParties.push({
+                    party,
+                    filled: filledEditableCount,
+                    total: editableFields.length,
+                    missing: unfilledFields,
+                });
+            }
+        }
+
+        return partialParties.length > 0 ? partialParties : null;
+    }, [filledFieldValues, signatureRequest]);
+
+    const hasPartialParty = !!partyValidationWarning;
+
+    // Reset dismissed state when warning content changes (user fills more fields)
+    useEffect(() => {
+        if (partyValidationWarning) {
+            setDismissedPartyWarning(false);
+        }
+    }, [JSON.stringify(partyValidationWarning)]);
+
+    // Drag handlers for warning popup
+    const handleDragStart = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        dragStartRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+            posX: popupPosition?.x ?? rect.left,
+            posY: popupPosition?.y ?? rect.top,
+        };
+        setIsDragging(true);
+    };
+
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!dragStartRef.current) return;
+            const dx = e.clientX - dragStartRef.current.x;
+            const dy = e.clientY - dragStartRef.current.y;
+            setPopupPosition({
+                x: dragStartRef.current.posX + dx,
+                y: dragStartRef.current.posY + dy,
+            });
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+            dragStartRef.current = null;
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
+
+    // ✅ Merge fieldValues into formFields for party validation
+    const formFieldsWithValues = useMemo(() => {
+        if (!signatureRequest?.formFields) return [];
+
+        const fieldValues = signatureRequest.fieldValues || {};
+        return signatureRequest.formFields.map((field: any) => ({
+            ...field,
+            value: fieldValues[field.name] || field.value || ''
+        }));
+    }, [signatureRequest]);
 
     // ✅ Called when a signature is applied to a field - shows "Sign All" prompt
     const handleSignatureApplied = (data: { emptySignatureFieldCount: number }) => {
@@ -92,6 +222,7 @@ export default function PublicSigningPage() {
     useEffect(() => {
         const loadData = async () => {
             try {
+                console.log(`📋 [PublicSigningPage] Loading signature request for token: ${token}`);
                 const result = await getSignatureRequestData(token);
 
                 if (!result.success || !result.data) {
@@ -101,6 +232,14 @@ export default function PublicSigningPage() {
                 }
 
                 const data = result.data;
+
+                console.log(`📋 [PublicSigningPage] Loaded request:`, {
+                    contractId: data.contractId,
+                    contractTitle: data.contractTitle,
+                    assignedParty: data.assignedParty || 'none',
+                    assignedPartyLabel: data.assignedPartyLabel || 'N/A',
+                    status: data.status,
+                });
 
                 if (new Date(data.expiresAt) < new Date()) {
                     setError('This signing link has expired. Please request a new one.');
@@ -124,6 +263,47 @@ export default function PublicSigningPage() {
 
         if (token) loadData();
     }, [token]);
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════════
+     * MULTI-PARTY: Determine editable parties for this signer
+     * ═══════════════════════════════════════════════════════════════════════════
+     * If assignedParty is set, the signer can only edit fields assigned to that party.
+     * Otherwise (legacy single-signer flow), they can edit all fields.
+     */
+    const editableParties = useMemo(() => {
+        if (!signatureRequest) return undefined;
+
+        // If this signer has an assigned party/parties, they can only edit those fields
+        if (signatureRequest.assignedParty) {
+            // Normalize to array (backward compat with single string)
+            const parties = Array.isArray(signatureRequest.assignedParty)
+                ? signatureRequest.assignedParty
+                : [signatureRequest.assignedParty];
+            console.log(`🏷️ [PublicSigningPage] Multi-party mode: Signer can only edit parties: ${parties.join(', ')}`);
+            return parties;
+        }
+
+        // Legacy flow - can edit all fields (return undefined to not restrict)
+        console.log(`📝 [PublicSigningPage] Legacy mode: Signer can edit all fields`);
+        return undefined;
+    }, [signatureRequest]);
+
+    /**
+     * Get the assigned party configuration(s) for display
+     */
+    const assignedPartyConfigs = useMemo(() => {
+        if (!signatureRequest?.assignedParty || !signatureRequest?.parties) return [];
+
+        // Normalize to array
+        const partyIds = Array.isArray(signatureRequest.assignedParty)
+            ? signatureRequest.assignedParty
+            : [signatureRequest.assignedParty];
+
+        return partyIds
+            .map(pid => signatureRequest.parties?.find((p: PartyConfiguration) => p.id === pid))
+            .filter(Boolean) as PartyConfiguration[];
+    }, [signatureRequest]);
 
     /**
      * Handle signature submission
@@ -176,7 +356,8 @@ export default function PublicSigningPage() {
                 setCompleted(true);
 
                 // Send signed copy email to the client (fire-and-forget)
-                if (signatureRequest?.signerEmail) {
+                // Skip for multi-party flow - the contractor will send finalized emails
+                if (signatureRequest?.signerEmail && !signatureRequest?.assignedParty) {
                     const signerName = signatureRequest.signerName ||
                         signatureRequest.signerEmail.split('@')[0];
                     const downloadUrl = `${window.location.origin}/api/sign-requests/${token}/download`;
@@ -231,17 +412,17 @@ export default function PublicSigningPage() {
     }
 
     // Download the signed PDF
-    const handleDownloadSignedPdf = () => {
-        if (!signedPdfBlob) return;
-        const url = URL.createObjectURL(signedPdfBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${signatureRequest?.contractTitle || 'signed_contract'}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
+    // const handleDownloadSignedPdf = () => {
+    //     if (!signedPdfBlob) return;
+    //     const url = URL.createObjectURL(signedPdfBlob);
+    //     const a = document.createElement('a');
+    //     a.href = url;
+    //     a.download = `${signatureRequest?.contractTitle || 'signed_contract'}.pdf`;
+    //     document.body.appendChild(a);
+    //     a.click();
+    //     document.body.removeChild(a);
+    //     URL.revokeObjectURL(url);
+    // };
 
     // Completed state
     if (completed) {
@@ -254,9 +435,9 @@ export default function PublicSigningPage() {
                         Thank you for signing "{signatureRequest?.contractTitle}". The contract has been updated.
                     </Typography>
                     <Typography color="text.secondary" sx={{ mb: 3 }}>
-                        You will get the signed document by email.
+                        You will get the signed document by email, once everyone has signed.
                     </Typography>
-                    {signedPdfBlob && (
+                    {/* {signedPdfBlob && (
                         <Button
                             variant="contained"
                             startIcon={<Download />}
@@ -272,7 +453,7 @@ export default function PublicSigningPage() {
                         >
                             Download
                         </Button>
-                    )}
+                    )} */}
                     <Alert severity="success">You can close this window now.</Alert>
                 </Paper>
             </Box>
@@ -293,44 +474,136 @@ export default function PublicSigningPage() {
                 alignItems: 'center',
                 flexShrink: 0
             }}>
-                <Typography variant="body1" color='#fff' fontWeight={500}>
-                    {signatureRequest?.contractTitle}
-                </Typography>
-                <Button
-                    variant="contained"
-                    size="small"
-                    startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <Save />}
-                    onClick={handleSubmitSignature}
-                    disabled={submitting}
-                    sx={{
-                        bgcolor: 'white',
-                        color: 'primary.main',
-                        '&:hover': { bgcolor: 'grey.100' },
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        py: 0.5
-                    }}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="body1" color='#fff' fontWeight={500}>
+                        {signatureRequest?.contractTitle}
+                    </Typography>
+                    {/* Show assigned party badge(s) for multi-party flow */}
+                    {assignedPartyConfigs.length > 0 && (
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            {assignedPartyConfigs.map(config => (
+                                <Chip
+                                    key={config.id}
+                                    label={`Your fields: ${config.label}`}
+                                    size="small"
+                                    sx={{
+                                        bgcolor: config.color || '#666',
+                                        color: '#fff',
+                                        fontWeight: 600,
+                                        fontSize: '0.75rem',
+                                    }}
+                                />
+                            ))}
+                        </Box>
+                    )}
+                </Box>
+                <Tooltip
+                    title={hasPartialParty ? 'Complete all fields for the party you started filling' : ''}
+                    arrow
                 >
-                    {submitting ? 'Submitting...' : 'Submit Signature'}
-                </Button>
+                    <span>
+                        <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <Save />}
+                            onClick={handleSubmitSignature}
+                            disabled={submitting || hasPartialParty}
+                            sx={{
+                                bgcolor: 'white',
+                                color: 'primary.main',
+                                '&:hover': { bgcolor: 'grey.100' },
+                                '&:disabled': { bgcolor: 'grey.300', color: 'grey.500' },
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                py: 0.5
+                            }}
+                        >
+                            {submitting ? 'Submitting...' : 'Submit Signature'}
+                        </Button>
+                    </span>
+                </Tooltip>
             </Box>
 
             {/* Full-Screen PDF Viewer */}
-            <Box sx={{ flex: 1, overflow: 'hidden' }}>
+            <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
                 {signatureRequest && (
                     <PDFViewerContainer
                         ref={pdfViewerRef}
                         documentUrl={`/api/sign-requests/${token}/file`}
                         initialXfdf={signatureRequest.xfdfData}
-                        formFields={signatureRequest.formFields}
+                        formFields={formFieldsWithValues}
                         clientSigningMode={true}
                         readOnly={false}
                         currentUserRole="client"
                         onFieldChange={handleFieldChange}
-                        editableFieldMode="empty-only"
                         showAnnotationNavigation={true}
                         onSignatureApplied={handleSignatureApplied}
+                        // ✅ MULTI-PARTY: Restrict editing to assigned party's fields only
+                        editableParties={editableParties}
                     />
+                )}
+
+                {/* Party Validation Warning Popup */}
+                {partyValidationWarning && !dismissedPartyWarning && (
+                    <Box
+                        sx={{
+                            ...(popupPosition ? {
+                                top: popupPosition.y,
+                                left: popupPosition.x,
+                                transform: 'none',
+                                position: 'fixed',
+                            } : {
+                                position: 'absolute',
+                                top: 8,
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                            }),
+                            zIndex: 1000,
+                            maxWidth: '90%',
+                            minWidth: 300,
+                        }}
+                    >
+                        <Alert
+                            severity="warning"
+                            sx={{
+                                py: 0.5,
+                                boxShadow: 3,
+                                borderRadius: 2,
+                                pr: 5,
+                                cursor: isDragging ? 'grabbing' : 'grab',
+                                userSelect: 'none',
+                            }}
+                            onMouseDown={handleDragStart}
+                            action={
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setDismissedPartyWarning(true)}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    sx={{ position: 'absolute', top: 4, right: 4 }}
+                                >
+                                    <Close fontSize="small" />
+                                </IconButton>
+                            }
+                        >
+                            <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                                Complete all fields for the party you started filling:
+                            </Typography>
+                            <Box sx={{ maxHeight: 100, overflowY: 'auto' }}>
+                                {partyValidationWarning.map(({ party, filled, total, missing }) => (
+                                    <Box key={party.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                        <Chip
+                                            label={party.label}
+                                            size="small"
+                                            sx={{ bgcolor: party.color, color: '#fff', fontWeight: 600, minWidth: 32 }}
+                                        />
+                                        <Typography variant="caption">
+                                            {filled}/{total} fields filled — missing: {missing.join(', ')}
+                                        </Typography>
+                                    </Box>
+                                ))}
+                            </Box>
+                        </Alert>
+                    </Box>
                 )}
             </Box>
         </Box>

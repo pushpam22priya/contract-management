@@ -14,8 +14,9 @@ import {
     Divider,
     AlertColor,
     Tooltip,
+    IconButton,
 } from '@mui/material';
-import { ArrowBack, ArrowForward } from '@mui/icons-material';
+import { Save, ArrowBack, ArrowForward, Close } from '@mui/icons-material';
 import BaseDialog from '@/components/common/BaseDialog';
 import ConfirmationDialog from '@/components/common/ConfirmationDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
@@ -86,6 +87,14 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
     // Explanation: This stores the values user enters in form fields (e.g., {"client_name": "John Doe"})
     // These values are specific to THIS contract only - template remains unchanged
     const [filledFieldValues, setFilledFieldValues] = useState<Record<string, string>>({});
+
+    // Track if user dismissed the party validation warning popup
+    const [dismissedPartyWarning, setDismissedPartyWarning] = useState(false);
+
+    // Draggable popup state
+    const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number } | null>(null);
 
     // Load templates when dialog opens
     useEffect(() => {
@@ -164,6 +173,52 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
     }, [filledFieldValues, selectedTemplate]);
 
     const hasPartialParty = !!partyValidationWarning;
+
+    // Reset dismissed state when warning content changes (user fills more fields)
+    useEffect(() => {
+        if (partyValidationWarning) {
+            setDismissedPartyWarning(false);
+        }
+    }, [JSON.stringify(partyValidationWarning)]);
+
+    // Drag handlers for warning popup
+    const handleDragStart = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        dragStartRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+            posX: popupPosition?.x ?? rect.left,
+            posY: popupPosition?.y ?? rect.top,
+        };
+        setIsDragging(true);
+    };
+
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!dragStartRef.current) return;
+            const dx = e.clientX - dragStartRef.current.x;
+            const dy = e.clientY - dragStartRef.current.y;
+            setPopupPosition({
+                x: dragStartRef.current.posX + dx,
+                y: dragStartRef.current.posY + dy,
+            });
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+            dragStartRef.current = null;
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
 
     const handleSave = async () => {
         if (!selectedTemplate) {
@@ -245,12 +300,27 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
             let exportedFormFields = await pdfViewerRef.current?.exportFormFields();
 
             // ✅ CRITICAL FIX: Sync values from filledFieldValues into exportedFormFields
+            // AND preserve party assignments from template.formFields
             // The exportFormFields() method might return initial/empty values if not fully synced
+            // and doesn't include party assignment info - that's only in the template
             if (exportedFormFields) {
-                exportedFormFields = exportedFormFields.map(field => ({
-                    ...field,
-                    value: filledFieldValues[field.name] || field.value || ''
-                }));
+                const templateFieldsMap = new Map(
+                    (selectedTemplate.formFields || []).map((f: any) => [f.name, f])
+                );
+                exportedFormFields = exportedFormFields.map(field => {
+                    const templateField = templateFieldsMap.get(field.name);
+                    return {
+                        ...field,
+                        value: filledFieldValues[field.name] || field.value || '',
+                        // ✅ Preserve party assignment from template
+                        assignedParty: templateField?.assignedParty || field.assignedParty,
+                        partyLabel: templateField?.partyLabel || field.partyLabel,
+                        partyColor: templateField?.partyColor || field.partyColor,
+                    };
+                });
+                console.log('📝 [Contract Creation] Form fields with party assignments:',
+                    exportedFormFields.map(f => ({ name: f.name, assignedParty: f.assignedParty }))
+                );
             }
 
             // Calculate dates if not provided
@@ -269,6 +339,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 value: contractValue || 'N/A',
                 category: selectedTemplate.category,
                 expiresInDays: expiresInDays,
+                status: ContractStatus.DRAFT,
                 templateId: selectedTemplate.id,
                 templateName: selectedTemplate.name,
                 content: selectedTemplate.content || '',
@@ -281,6 +352,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 xfdfData: finalXfdf,         // ✅ Use finalXfdf (preserves template signatures)
                 formFields: exportedFormFields, // Save field definitions
                 hasFormFields: (exportedFormFields?.length ?? 0) > 0 || selectedTemplate.hasFormFields || false, // ✅ Use template flag or check fields
+                parties: selectedTemplate.parties,  // ✅ Include parties for external signer validation
             };
 
             let activeContractId = contractId;
@@ -296,10 +368,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 console.log('✅ Contract metadata updated');
             } else {
                 // First save: CREATE new contract
-                const result = await contractService.createContract({
-                    ...contractData,
-                    status: ContractStatus.DRAFT,
-                });
+                const result = await contractService.createContract(contractData);
                 if (result.success && result.contract) {
                     activeContractId = result.contract.id;
                     setContractId(activeContractId);
@@ -773,30 +842,9 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                             </Alert>
                         )}
 
-                        {/* Party Validation Warning */}
-                        {partyValidationWarning && (
-                            <Alert severity="warning" sx={{ mb: 1, py: 0.5 }}>
-                                <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
-                                    Complete all fields for the party you started filling:
-                                </Typography>
-                                {partyValidationWarning.map(({ party, filled, total, missing }) => (
-                                    <Box key={party.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                                        <Chip
-                                            label={party.label}
-                                            size="small"
-                                            sx={{ bgcolor: party.color, color: '#fff', fontWeight: 600, minWidth: 32 }}
-                                        />
-                                        <Typography variant="caption">
-                                            {filled}/{total} fields filled — missing: {missing.join(', ')}
-                                        </Typography>
-                                    </Box>
-                                ))}
-                            </Alert>
-                        )}
-
                         {/* Full-Screen PDF Viewer */}
                         {selectedTemplate ? (
-                            <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                            <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
                                 <PDFViewerContainer
                                     ref={pdfViewerRef}
                                     documentUrl={selectedTemplate.fileData || selectedTemplate.fileUrl}
@@ -812,6 +860,69 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                                     showAnnotationNavigation={true}
                                     onError={(err) => setError(err)}
                                 />
+
+                                {/* Party Validation Warning Popup */}
+                                {partyValidationWarning && !dismissedPartyWarning && (
+                                    <Box
+                                        sx={{
+                                            ...(popupPosition ? {
+                                                position: 'fixed',
+                                                top: popupPosition.y,
+                                                left: popupPosition.x,
+                                                transform: 'none',
+                                            } : {
+                                                position: 'absolute',
+                                                top: 8,
+                                                left: '50%',
+                                                transform: 'translateX(-50%)',
+                                            }),
+                                            zIndex: 1000,
+                                            maxWidth: '90%',
+                                            minWidth: 300,
+                                        }}
+                                    >
+                                        <Alert
+                                            severity="warning"
+                                            sx={{
+                                                py: 0.5,
+                                                boxShadow: 3,
+                                                borderRadius: 2,
+                                                pr: 5,
+                                                cursor: isDragging ? 'grabbing' : 'grab',
+                                                userSelect: 'none',
+                                            }}
+                                            onMouseDown={handleDragStart}
+                                            action={
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => setDismissedPartyWarning(true)}
+                                                    onMouseDown={(e) => e.stopPropagation()}
+                                                    sx={{ position: 'absolute', top: 4, right: 4 }}
+                                                >
+                                                    <Close fontSize="small" />
+                                                </IconButton>
+                                            }
+                                        >
+                                            <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                                                Complete all fields for the party you started filling:
+                                            </Typography>
+                                            <Box sx={{ maxHeight: 100, overflowY: 'auto' }}>
+                                                {partyValidationWarning.map(({ party, filled, total, missing }) => (
+                                                    <Box key={party.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                                        <Chip
+                                                            label={party.label}
+                                                            size="small"
+                                                            sx={{ bgcolor: party.color, color: '#fff', fontWeight: 600, minWidth: 32 }}
+                                                        />
+                                                        <Typography variant="caption">
+                                                            {filled}/{total} fields filled — missing: {missing.join(', ')}
+                                                        </Typography>
+                                                    </Box>
+                                                ))}
+                                            </Box>
+                                        </Alert>
+                                    </Box>
+                                )}
                             </Box>
                         ) : (
                             <Box

@@ -49,6 +49,8 @@ const ContractCard = ({
                 return 'Approved';
             case ContractStatus.WAITING_FOR_SIGNATURE:
                 return 'Waiting for Signature';
+            case ContractStatus.SIGNED_BY_EVERYONE:
+                return 'Signed by Everyone';
             case ContractStatus.DRAFT:
                 return 'Draft';
             case ContractStatus.SIGNED:
@@ -86,6 +88,8 @@ const ContractCard = ({
                 return { bg: '#d1fae5', color: '#065f46', border: '#34d399' };
             case ContractStatus.WAITING_FOR_SIGNATURE:
                 return { bg: '#fff9c4', color: '#f57f17', border: '#fff176' };
+            case ContractStatus.SIGNED_BY_EVERYONE:
+                return { bg: '#e3f2fd', color: '#1565c0', border: '#90caf9' };
             case ContractStatus.DRAFT:
             default:
                 return { bg: '#f3f4f6', color: '#374151', border: '#d1d5db' };
@@ -117,7 +121,8 @@ const ContractCard = ({
 
         // Contract variant: only show for APPROVED or WAITING_FOR_SIGNATURE (for signature requests)
         return contract.status === ContractStatus.APPROVED ||
-            contract.status === ContractStatus.WAITING_FOR_SIGNATURE;
+            contract.status === ContractStatus.WAITING_FOR_SIGNATURE ||
+            contract.status === ContractStatus.SIGNED_BY_EVERYONE;
     };
 
     /**

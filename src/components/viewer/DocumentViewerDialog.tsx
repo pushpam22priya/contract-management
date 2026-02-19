@@ -2,11 +2,14 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
-import { Box, Button } from '@mui/material';
+import { Box, Button, Alert, Typography, Chip, IconButton, Tooltip } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
+import { Close } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import BaseDialog from '@/components/common/BaseDialog';
+import { validatePartyFields } from '@/utils/partyValidation';
+import { PartyConfiguration } from '@/types/template';
 
 // Dynamically import viewers
 const DocumentViewer = dynamic(() => import('./DocumentViewer'), {
@@ -72,6 +75,7 @@ interface DocumentViewerDialogProps {
     canAddFormFields?: boolean;
     editableFieldMode?: 'all' | 'empty-only' | 'none';
     showAnnotationNavigation?: boolean; // ✅ Show floating navigation button for annotations
+    parties?: any[]; // ✅ Party configurations for validation
 }
 
 export default function DocumentViewerDialog({
@@ -95,7 +99,8 @@ export default function DocumentViewerDialog({
     currentUserRole,
     canAddFormFields = false,
     editableFieldMode = 'all',
-    showAnnotationNavigation = false
+    showAnnotationNavigation = false,
+    parties,
 }: DocumentViewerDialogProps) {
 
 
@@ -105,7 +110,47 @@ export default function DocumentViewerDialog({
 
 
     // Track field changes during client signing (same pattern as CreateContractDialog)
-    const [filledFieldValues, setFilledFieldValues] = useState<Record<string, string>>({});
+    // ✅ CRITICAL FIX: Initialize with existing field values from formFields
+    // so that pre-filled fields (from a previously saved contract) are recognized
+    const [filledFieldValues, setFilledFieldValues] = useState<Record<string, string>>(() => {
+        if (!formFields) return {};
+        const initial: Record<string, string> = {};
+        formFields.forEach((field: any) => {
+            if (field.value && field.value.toString().trim() !== '') {
+                initial[field.name] = field.value.toString();
+            }
+        });
+        console.log(`📋 [DocumentViewerDialog] Initialized filledFieldValues from ${Object.keys(initial).length} pre-filled formFields`);
+        return initial;
+    });
+
+    // ✅ CRITICAL FIX: Reset all transient state when dialog reopens
+    // If user closed without saving, discard in-session edits and re-seed from formFields
+    useEffect(() => {
+        if (open) {
+            const initial: Record<string, string> = {};
+            if (formFields) {
+                formFields.forEach((field: any) => {
+                    if (field.value && field.value.toString().trim() !== '') {
+                        initial[field.name] = field.value.toString();
+                    }
+                });
+            }
+            setFilledFieldValues(initial);
+            setDismissedPartyWarning(false);
+            setPopupPosition(null);
+            setSignatureCommitted(false);
+            console.log(`🔄 [DocumentViewerDialog] Dialog opened — reset state with ${Object.keys(initial).length} pre-filled values`);
+        }
+    }, [open]);
+
+    // Track if user dismissed the party validation warning popup
+    const [dismissedPartyWarning, setDismissedPartyWarning] = useState(false);
+
+    // Draggable popup state
+    const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number } | null>(null);
 
     // Handle form field changes
     const handleFieldChange = (fieldName: string, value: any) => {
@@ -123,6 +168,83 @@ export default function DocumentViewerDialog({
             [fieldName]: value?.toString() || ''
         }));
     };
+
+    // ✅ Party validation: detect partially filled parties (same pattern as CreateContractDialog)
+    const partyValidationWarning = useMemo(() => {
+        if (!formFields || !parties) return null;
+
+        const partialParties: { party: PartyConfiguration; filled: number; total: number; missing: string[] }[] = [];
+
+        for (const party of parties) {
+            const result = validatePartyFields(party.id, formFields, filledFieldValues);
+            if (result.filledCount > 0 && result.filledCount < result.totalCount) {
+                const partyFields = formFields.filter((f: any) => f.assignedParty === party.id);
+                const unfilledFields = partyFields
+                    .filter((f: any) => {
+                        const val = filledFieldValues[f.name];
+                        return !val || val.toString().trim() === '';
+                    })
+                    .map((f: any) => f.name);
+
+                partialParties.push({
+                    party,
+                    filled: result.filledCount,
+                    total: result.totalCount,
+                    missing: unfilledFields,
+                });
+            }
+        }
+
+        return partialParties.length > 0 ? partialParties : null;
+    }, [filledFieldValues, formFields, parties]);
+
+    const hasPartialParty = !!partyValidationWarning;
+
+    // Reset dismissed state when warning content changes (user fills more fields)
+    useEffect(() => {
+        if (partyValidationWarning) {
+            setDismissedPartyWarning(false);
+        }
+    }, [JSON.stringify(partyValidationWarning)]);
+
+    // Drag handlers for warning popup
+    const handleDragStart = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        dragStartRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+            posX: popupPosition?.x ?? rect.left,
+            posY: popupPosition?.y ?? rect.top,
+        };
+        setIsDragging(true);
+    };
+
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!dragStartRef.current) return;
+            const dx = e.clientX - dragStartRef.current.x;
+            const dy = e.clientY - dragStartRef.current.y;
+            setPopupPosition({
+                x: dragStartRef.current.posX + dx,
+                y: dragStartRef.current.posY + dy,
+            });
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+            dragStartRef.current = null;
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
 
 
     // Log form fields when component mounts/updates
@@ -205,19 +327,23 @@ export default function DocumentViewerDialog({
 
     // Action buttons for dialog footer
     // ✅ Show save button if onSave callback is provided
-    // Note: xfdfString check removed - we now save full PDFs regardless
+    // ✅ Disable save when party fields are partially filled
     const dialogActions = (
         <>
             {onSave && (
-                <Button
-                    variant="contained"
-                    startIcon={<SaveIcon />}
-                    onClick={handleSaveClick}
-                    disabled={saving || (clientSigningMode && !signatureCommitted)}
-                    sx={{py: 0.6}}
-                >
-                    {saving ? 'Saving...' : 'Save Changes'}
-                </Button>
+                <Tooltip title={hasPartialParty ? 'Complete all fields for the party you started' : ''} arrow>
+                    <span>
+                        <Button
+                            variant="contained"
+                            startIcon={<SaveIcon />}
+                            onClick={handleSaveClick}
+                            disabled={saving || hasPartialParty || (clientSigningMode && !signatureCommitted)}
+                            sx={{ py: 0.6 }}
+                        >
+                            {saving ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                    </span>
+                </Tooltip>
             )}
         </>
     );
@@ -234,7 +360,7 @@ export default function DocumentViewerDialog({
             actions={dialogActions}
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
                     <PDFViewerContainer
                         ref={pdfViewerRef}
                         documentUrl={fileUrl || ""}
@@ -250,6 +376,69 @@ export default function DocumentViewerDialog({
                         editableFieldMode={editableFieldMode}
                         showAnnotationNavigation={showAnnotationNavigation}
                     />
+
+                    {/* ✅ Party Validation Warning Popup (same as CreateContractDialog) */}
+                    {partyValidationWarning && !dismissedPartyWarning && (
+                        <Box
+                            sx={{
+                                ...(popupPosition ? {
+                                    position: 'fixed',
+                                    top: popupPosition.y,
+                                    left: popupPosition.x,
+                                    transform: 'none',
+                                } : {
+                                    position: 'absolute',
+                                    top: 8,
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                }),
+                                zIndex: 1000,
+                                maxWidth: '90%',
+                                minWidth: 300,
+                            }}
+                        >
+                            <Alert
+                                severity="warning"
+                                sx={{
+                                    py: 0.5,
+                                    boxShadow: 3,
+                                    borderRadius: 2,
+                                    pr: 5,
+                                    cursor: isDragging ? 'grabbing' : 'grab',
+                                    userSelect: 'none',
+                                }}
+                                onMouseDown={handleDragStart}
+                                action={
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => setDismissedPartyWarning(true)}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        sx={{ position: 'absolute', top: 4, right: 4 }}
+                                    >
+                                        <Close fontSize="small" />
+                                    </IconButton>
+                                }
+                            >
+                                <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                                    Complete all fields for the party you started filling:
+                                </Typography>
+                                <Box sx={{ maxHeight: 100, overflowY: 'auto' }}>
+                                    {partyValidationWarning.map(({ party, filled, total, missing }) => (
+                                        <Box key={party.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                            <Chip
+                                                label={party.label}
+                                                size="small"
+                                                sx={{ bgcolor: party.color, color: '#fff', fontWeight: 600, minWidth: 32 }}
+                                            />
+                                            <Typography variant="caption">
+                                                {filled}/{total} fields filled — missing: {missing.join(', ')}
+                                            </Typography>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </Alert>
+                        </Box>
+                    )}
                 </Box>
             </Box>
         </BaseDialog>
