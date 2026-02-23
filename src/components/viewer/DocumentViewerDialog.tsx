@@ -375,6 +375,7 @@ export default function DocumentViewerDialog({
                         canAddFormFields={canAddFormFields}
                         editableFieldMode={editableFieldMode}
                         showAnnotationNavigation={showAnnotationNavigation}
+                        silentPositionRestore={readOnly || editableFieldMode === 'empty-only'}
                     />
 
                     {/* ✅ Party Validation Warning Popup (same as CreateContractDialog) */}

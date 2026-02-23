@@ -26,6 +26,9 @@ interface PDFViewerContainerProps {
     initialToolbarGroup?: string; // ✅ New prop for controlling initial toolbar
     showAnnotationNavigation?: boolean; // ✅ Show floating navigation button for annotations
     onSignatureApplied?: (data: { emptySignatureFieldCount: number }) => void; // ✅ Callback when a signature is applied to a field
+    onPrefilledFieldModified?: () => void; // ✅ Callback when a pre-filled field/signature is modified or moved
+    onSignaturePositionRestored?: () => void; // ✅ Callback when a signature position is restored (for showing warning without refresh)
+    silentPositionRestore?: boolean; // ✅ If true, restore signature positions silently without showing warning
 
     // Multi-party field assignment props
     parties?: PartyConfiguration[];           // Available parties for field assignment
@@ -66,6 +69,8 @@ export interface PDFViewerHandle {
     setToolMode: (mode: string) => void;
     switchToViewMode: () => Promise<boolean>;
     applySignatureToAllEmptyFields: () => Promise<number>;
+    clearField: (fieldName: string) => boolean;
+    restoreFieldValue: (fieldName: string, value: string) => boolean; // Restore a field to a specific value
     // Multi-party field assignment methods
     assignFieldToParty: (fieldName: string, partyId: string, partyLabel: string, partyColor: string) => boolean;
     getFieldPartyAssignment: (fieldName: string) => { partyId: string; partyLabel: string } | null;
@@ -74,7 +79,7 @@ export interface PDFViewerHandle {
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const [loading, setLoading] = useState(true);
@@ -105,6 +110,14 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         // We capture values in fieldChanged listener and re-apply before export
         const capturedFieldValuesRef = useRef<Map<string, string>>(new Map());
 
+        // ✅ Store original positions of pre-filled signature annotations
+        // Used to restore position if external user tries to drag them
+        const prefilledSignaturePositionsRef = useRef<Map<string, { X: number; Y: number; Width: number; Height: number; PageNumber: number }>>(new Map());
+
+        // ✅ Store pre-filled signature annotation objects for restoration if deleted
+        // Maps annotationId -> { xfdf: string, annotType: string } so we can restore if user tries to delete
+        const prefilledSignatureDataRef = useRef<Map<string, { xfdf: string; annotType: string }>>(new Map());
+
         // ✅ Refs for "Sign All" feature
         const onSignatureAppliedRef = useRef<((data: { emptySignatureFieldCount: number }) => void) | undefined>(undefined);
         const isApplyingSignAllRef = useRef(false);
@@ -118,6 +131,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         // When deleted, we look up which field to clear
         const signatureAnnotationToFieldRef = useRef<Map<string, string>>(new Map());
 
+        // ✅ Document should be read-only if explicitly requested (e.g., Reviewers and Approvers)
         const effectiveReadOnly = isReadOnly ?? readOnly;
 
         // Keep onSignatureApplied ref updated for use in event handlers
@@ -1445,6 +1459,177 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     return [];
                 }
             },
+
+            /**
+             * Clear a specific field's value (for both text and signature fields)
+             */
+            clearField: (fieldName: string): boolean => {
+                console.log(`🧹 [CLEAR FIELD] Attempting to clear field: ${fieldName}`);
+
+                if (!viewerInstance.current) {
+                    console.warn(`🧹 [CLEAR FIELD] Viewer not initialized`);
+                    return false;
+                }
+
+                try {
+                    const { Core } = viewerInstance.current;
+                    const annotationManager = Core.annotationManager;
+                    const fieldManager = annotationManager.getFieldManager();
+                    const allFields = fieldManager.getFields() || [];
+                    const fieldsArray = Array.isArray(allFields) ? allFields : Array.from(allFields);
+
+                    // Find the field by name
+                    const field = fieldsArray.find((f: any) => f.name === fieldName);
+
+                    if (!field) {
+                        console.warn(`🧹 [CLEAR FIELD] Field not found: ${fieldName}`);
+                        return false;
+                    }
+
+                    // Clear the field value
+                    if (field.setValue && typeof field.setValue === 'function') {
+                        field.setValue('');
+                        console.log(`✅ [CLEAR FIELD] Cleared text field value: ${fieldName}`);
+                    }
+
+                    // For signature fields, also clear associated annotations
+                    const allAnnotations = annotationManager.getAnnotationsList();
+                    const annotationsToDelete: any[] = [];
+                    let signatureWidgetAnnot: any = null;
+
+                    allAnnotations.forEach((annot: any) => {
+                        const annotFieldName = annot.getField?.()?.name || (annot as any).fieldName;
+
+                        if (annotFieldName === fieldName) {
+                            // If it's a signature widget, mark it and find linked annotation
+                            if (annot instanceof Core.Annotations.SignatureWidgetAnnotation) {
+                                signatureWidgetAnnot = annot;
+                                const linkedAnnotation = (annot as any).annot;
+                                if (linkedAnnotation) {
+                                    annotationsToDelete.push(linkedAnnotation);
+                                    console.log(`🧹 [CLEAR FIELD] Found linked annotation to delete: ${linkedAnnotation.Id}`);
+                                }
+                            }
+                        }
+                    });
+
+                    // Also find any FreeHand or Stamp annotations that overlap with the signature widget
+                    if (signatureWidgetAnnot) {
+                        const widgetBounds = {
+                            x1: signatureWidgetAnnot.X,
+                            y1: signatureWidgetAnnot.Y,
+                            x2: signatureWidgetAnnot.X + signatureWidgetAnnot.Width,
+                            y2: signatureWidgetAnnot.Y + signatureWidgetAnnot.Height,
+                            page: signatureWidgetAnnot.PageNumber
+                        };
+
+                        allAnnotations.forEach((annot: any) => {
+                            const isSignatureAnnot =
+                                annot instanceof Core.Annotations.FreeHandAnnotation ||
+                                annot instanceof Core.Annotations.StampAnnotation;
+
+                            if (isSignatureAnnot && annot.PageNumber === widgetBounds.page) {
+                                // Check if this annotation overlaps with the widget bounds
+                                const annotBounds = {
+                                    x1: annot.X,
+                                    y1: annot.Y,
+                                    x2: annot.X + annot.Width,
+                                    y2: annot.Y + annot.Height
+                                };
+
+                                // Simple overlap check
+                                const overlaps = !(
+                                    annotBounds.x2 < widgetBounds.x1 ||
+                                    annotBounds.x1 > widgetBounds.x2 ||
+                                    annotBounds.y2 < widgetBounds.y1 ||
+                                    annotBounds.y1 > widgetBounds.y2
+                                );
+
+                                if (overlaps && !annotationsToDelete.includes(annot)) {
+                                    annotationsToDelete.push(annot);
+                                    console.log(`🧹 [CLEAR FIELD] Found overlapping signature annotation to delete: ${annot.Id}`);
+                                }
+                            }
+                        });
+                    }
+
+                    // Delete all found signature annotations
+                    if (annotationsToDelete.length > 0) {
+                        annotationsToDelete.forEach(annot => {
+                            annotationManager.deleteAnnotation(annot, { imported: false });
+                            // Also remove from captured signatures
+                            capturedSignatureAnnotationsRef.current.delete(annot.Id);
+                        });
+                        console.log(`✅ [CLEAR FIELD] Deleted ${annotationsToDelete.length} signature annotation(s) for: ${fieldName}`);
+                    }
+
+                    // Redraw the widget to show the cleared state
+                    if (signatureWidgetAnnot) {
+                        annotationManager.redrawAnnotation(signatureWidgetAnnot);
+                    }
+
+                    // Clear from captured values
+                    capturedFieldValuesRef.current.delete(fieldName);
+
+                    return true;
+                } catch (error) {
+                    console.error(`❌ [CLEAR FIELD] Error clearing field ${fieldName}:`, error);
+                    return false;
+                }
+            },
+
+            /**
+             * Restore a specific field's value to a given value
+             * Used for reverting pre-filled fields back to their original values
+             */
+            restoreFieldValue: (fieldName: string, value: string): boolean => {
+                console.log(`🔄 [RESTORE FIELD] Attempting to restore field: ${fieldName} to value: "${value}"`);
+
+                if (!viewerInstance.current) {
+                    console.warn(`🔄 [RESTORE FIELD] Viewer not initialized`);
+                    return false;
+                }
+
+                try {
+                    const { Core } = viewerInstance.current;
+                    const annotationManager = Core.annotationManager;
+                    const fieldManager = annotationManager.getFieldManager();
+                    const allFields = fieldManager.getFields() || [];
+                    const fieldsArray = Array.isArray(allFields) ? allFields : Array.from(allFields);
+
+                    // Find the field by name
+                    const field = fieldsArray.find((f: any) => f.name === fieldName);
+
+                    if (!field) {
+                        console.warn(`🔄 [RESTORE FIELD] Field not found: ${fieldName}`);
+                        return false;
+                    }
+
+                    // Restore the field value
+                    if (field.setValue && typeof field.setValue === 'function') {
+                        field.setValue(value);
+                        console.log(`✅ [RESTORE FIELD] Restored field value: ${fieldName} = "${value}"`);
+                    }
+
+                    // Update captured values
+                    if (value) {
+                        capturedFieldValuesRef.current.set(fieldName, value);
+                    } else {
+                        capturedFieldValuesRef.current.delete(fieldName);
+                    }
+
+                    // Redraw the widget to show the restored value
+                    const widgets = field.widgets || [];
+                    if (widgets.length > 0) {
+                        annotationManager.redrawAnnotation(widgets[0]);
+                    }
+
+                    return true;
+                } catch (error) {
+                    console.error(`❌ [RESTORE FIELD] Error restoring field ${fieldName}:`, error);
+                    return false;
+                }
+            },
         }));
 
         // Initialize viewer once (on mount)
@@ -1588,9 +1773,18 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             }
                         }
 
-                        // ✅ Always show "Sign here" placeholder on signature fields
+                        // ✅ Only show "Sign here" placeholder on empty signature fields
                         if (signatureTool && signatureTool.setCustomCreateSignHereElementHandler) {
-                            signatureTool.setCustomCreateSignHereElementHandler((_widget: any) => {
+                            signatureTool.setCustomCreateSignHereElementHandler((widget: any) => {
+                                // Check if the signature field already has a value or is signed
+                                const field = widget?.getField?.();
+                                const isSigned = field?.getValue?.() || capturedFieldValuesRef.current.get(field?.name) === 'signed';
+
+                                if (isSigned) {
+                                    // If already signed, don't show the placeholder
+                                    return null;
+                                }
+
                                 const signHereElement = document.createElement('div');
                                 signHereElement.style.backgroundColor = '#E8F5E9';
                                 signHereElement.style.border = '2px dashed #4CAF50';
@@ -1606,7 +1800,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 signHereElement.textContent = 'Sign here';
                                 return signHereElement;
                             });
-                            console.log('✅ Custom sign here element handler configured (always visible)');
+                            console.log('✅ Custom sign here element handler configured (shows only when empty)');
                         }
 
                         // Listen for when signature is created/selected by user
@@ -1741,7 +1935,13 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             }
                                         }
                                     } else if (action === 'delete') {
-                                        // ✅ FIX: When a signature is deleted, restore the widget visibility
+                                        // ✅ Quick escape if this delete was triggered by our cleanup script
+                                        if (info?.source === 'cleanup_script') {
+                                            console.log(`🧹 [SIGNATURE DELETE] Ignoring annotation deletion (cleanup script)`);
+                                            return;
+                                        }
+
+                                        // ✅ FIX: When a signature is deleted by the user, restore the widget visibility
                                         console.log(`🗑️ [SIGNATURE DELETE] Signature deleted, restoring widget`);
 
                                         // ✅ FIXED: Use annotation ID → field name mapping to find which field to clear
@@ -1860,11 +2060,48 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     console.log('📥 [IMPORT] No existing annotations - importing XFDF...');
                                     console.log(`📥 [IMPORT] XFDF length: ${initialXfdf.length} chars`);
                                     console.log(`📥 [IMPORT] XFDF preview: ${initialXfdf.substring(0, 500)}...`);
-
                                     await Core.annotationManager.importAnnotations(initialXfdf);
-
                                     const importedCount = Core.annotationManager.getAnnotationsList().length;
                                     console.log(`✅ [IMPORT] XFDF imported successfully - ${importedCount} annotations loaded`);
+
+                                    // ✅ FIX: Cleanup duplicate signatures loaded from XFDF
+                                    // When a document is saved with `flatten: false`, both the Widget appearance
+                                    // AND the original FreeHand/Stamp annotations might be saved to XFDF.
+                                    // This causes the duplicate, draggable signatures.
+                                    const allAnnots = Core.annotationManager.getAnnotationsList();
+                                    const widgets = allAnnots.filter((a: any) =>
+                                        a instanceof Core.Annotations.WidgetAnnotation &&
+                                        (a.getField()?.type === 'Sig' || a.getField()?.type === 'signature')
+                                    );
+                                    const drawings = allAnnots.filter((a: any) =>
+                                        a instanceof Core.Annotations.FreeHandAnnotation ||
+                                        a instanceof Core.Annotations.StampAnnotation
+                                    );
+
+                                    let deletedCount = 0;
+                                    drawings.forEach((drawing: any) => {
+                                        const drawingRect = drawing.getRect();
+                                        // Find a signature widget that overlaps completely/heavily with this drawing
+                                        const overlappingWidget = widgets.find((w: any) => {
+                                            const wRect = w.getRect();
+                                            // 10px tolerance for overlap detection
+                                            const tolerance = 10;
+                                            return drawing.PageNumber === w.PageNumber &&
+                                                drawingRect.x1 >= wRect.x1 - tolerance &&
+                                                drawingRect.x2 <= wRect.x2 + tolerance &&
+                                                drawingRect.y1 >= wRect.y1 - tolerance &&
+                                                drawingRect.y2 <= wRect.y2 + tolerance;
+                                        });
+
+                                        if (overlappingWidget) {
+                                            Core.annotationManager.deleteAnnotation(drawing, { force: true, source: 'cleanup_script' } as any);
+                                            deletedCount++;
+                                        }
+                                    });
+
+                                    if (deletedCount > 0) {
+                                        console.log(`🧹 [CLEANUP] Removed ${deletedCount} duplicate FreeHand/Stamp annotations overlapping signature widgets`);
+                                    }
                                 }
                             }
 
@@ -1883,7 +2120,15 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 let readOnlyCount = 0;
 
                                 allAnnotations.forEach((annot: any) => {
-                                    if (!(annot instanceof Core.Annotations.WidgetAnnotation)) return;
+                                    if (!(annot instanceof Core.Annotations.WidgetAnnotation)) {
+                                        // ANY pre-existing drawings (signatures, stamps) from other parties
+                                        // should be completely locked down and uneditable for the external client.
+                                        annot.ReadOnly = true;
+                                        annot.Locked = true;
+                                        annot.LockedContents = true;
+                                        readOnlyCount++;
+                                        return;
+                                    }
 
                                     const field = annot.getField?.();
                                     const fieldName = field?.name || (annot as any).fieldName;
@@ -1893,15 +2138,17 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     const assignedParty = annot.getCustomData('assignedParty') || 'unassigned';
                                     const isEditableParty = editableParties.includes(assignedParty);
 
-                                    // Also check if field already has a value (filled fields stay read-only)
-                                    const fieldValue = field?.getValue?.() || '';
-                                    const hasValue = fieldValue && fieldValue.toString().trim() !== '';
+                                    // Also check if field already has a value (mostly for other parties' fields, but we allow current party to edit their own filled fields)
+                                    const fieldValue = field?.getValue?.();
 
-                                    if (isEditableParty && !hasValue) {
+                                    if (isEditableParty) {
                                         // This party's field is editable
                                         if (field?.flags) {
                                             (field.flags as any).ReadOnly = false;
                                         }
+                                        annot.ReadOnly = false;
+                                        annot.Locked = false;
+                                        annot.LockedContents = false;
                                         (annot as any).Opacity = 1;
 
                                         // Visual indicator: highlight editable fields
@@ -1926,10 +2173,13 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         editableCount++;
                                         console.log(`🏷️ [MULTI-PARTY] Field "${fieldName}" (${assignedParty}): EDITABLE`);
                                     } else {
-                                        // Not this party's field or already filled - make read-only
+                                        // Not this party's field or already filled - make completely read-only
                                         if (field?.flags) {
                                             (field.flags as any).ReadOnly = true;
                                         }
+                                        annot.ReadOnly = true;
+                                        annot.Locked = true;
+                                        annot.LockedContents = true;
                                         (annot as any).Opacity = 0.6;
                                         readOnlyCount++;
                                         console.log(`🏷️ [MULTI-PARTY] Field "${fieldName}" (${assignedParty}): READ-ONLY`);
@@ -1951,14 +2201,354 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                 // Redraw all annotations to reflect visual changes
                                 annotationManager.drawAnnotationsFromList(allAnnotations);
+
+                                // ✅ Bruteforce CSS: Inject styles into iframe to prevent pointer events on read-only text fields
+                                try {
+                                    const iframeDoc = viewerInstance.current.iframeWindow?.document;
+                                    if (iframeDoc) {
+                                        // Remove old injected style if it exists
+                                        const oldStyle = iframeDoc.getElementById('party-readonly-styles');
+                                        if (oldStyle) oldStyle.remove();
+
+                                        const styleEl = iframeDoc.createElement('style');
+                                        styleEl.id = 'party-readonly-styles';
+
+                                        // CSS selectors for specific field names that shouldn't be interacted with
+                                        const readonlyFieldSelectors = allAnnotations
+                                            .filter((a: any) => a instanceof Core.Annotations.WidgetAnnotation)
+                                            .filter((annot: any) => {
+                                                const assignedParty = annot.getCustomData('assignedParty') || 'unassigned';
+                                                return !(editableParties.includes(assignedParty));
+                                            })
+                                            .map((annot: any) => {
+                                                const fieldName = annot.getField?.()?.name || annot.fieldName;
+                                                // Apryse wraps widgets in divs matching the field name
+                                                return `div[data-name="${fieldName}"]`;
+                                            })
+                                            .filter(Boolean);
+
+                                        if (readonlyFieldSelectors.length > 0) {
+                                            styleEl.innerHTML = `
+                                                ${readonlyFieldSelectors.join(', ')} {
+                                                    pointer-events: none !important;
+                                                }
+                                            `;
+                                            iframeDoc.head.appendChild(styleEl);
+                                            console.log(`🔒 Bruteforce CSS injected for ${readonlyFieldSelectors.length} read-only fields`);
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.warn('⚠️ Could not apply party-specific CSS pointer-events:', e);
+                                }
+                            }
+
+                            // ✅ CRITICAL: Capture initial positions of ALL signature annotations (pre-filled)
+                            // This allows us to restore positions if external users try to drag them
+                            // Apply for: 1) External signers (editableParties), 2) Contract viewers (silentPositionRestore)
+                            if ((editableParties && editableParties.length > 0) || silentPositionRestore) {
+                                const captureSignaturePositions = async () => {
+                                    console.log('📍 [POSITION LOCK] Capturing initial positions of pre-filled signatures...');
+                                    const allAnnotations = Core.annotationManager.getAnnotationsList();
+                                    let capturedCount = 0;
+
+                                    for (const annot of allAnnotations) {
+                                        // Check if this is a signature-related annotation (FreeHand or Stamp)
+                                        const isSignatureAnnot =
+                                            annot instanceof Core.Annotations.FreeHandAnnotation ||
+                                            annot instanceof Core.Annotations.StampAnnotation;
+
+                                        // Also check for signature widgets (with or without linked annotations)
+                                        const isSignatureWidget = annot instanceof Core.Annotations.SignatureWidgetAnnotation;
+                                        const linkedAnnotation = isSignatureWidget ? (annot as any).annot : null;
+
+                                        // ✅ Capture SignatureWidgetAnnotation position (the widget itself can be dragged)
+                                        if (isSignatureWidget) {
+                                            const widgetId = annot.Id;
+                                            const field = annot.getField?.();
+                                            const hasSignature = linkedAnnotation || (field?.getValue?.() && field.getValue().toString().trim() !== '');
+
+                                            // Only capture widgets that have signatures (pre-filled)
+                                            if (hasSignature && !prefilledSignaturePositionsRef.current.has(widgetId)) {
+                                                const position = {
+                                                    X: annot.X,
+                                                    Y: annot.Y,
+                                                    Width: annot.Width,
+                                                    Height: annot.Height,
+                                                    PageNumber: annot.PageNumber
+                                                };
+
+                                                prefilledSignaturePositionsRef.current.set(widgetId, position);
+                                                console.log(`📍 [POSITION LOCK] Captured signature WIDGET ${widgetId} (has signature):`, position);
+                                                capturedCount++;
+                                            }
+
+                                            // Also capture the linked annotation if exists
+                                            if (linkedAnnotation) {
+                                                const linkedId = linkedAnnotation.Id;
+
+                                                if (!prefilledSignaturePositionsRef.current.has(linkedId)) {
+                                                    const position = {
+                                                        X: linkedAnnotation.X,
+                                                        Y: linkedAnnotation.Y,
+                                                        Width: linkedAnnotation.Width,
+                                                        Height: linkedAnnotation.Height,
+                                                        PageNumber: linkedAnnotation.PageNumber
+                                                    };
+
+                                                    prefilledSignaturePositionsRef.current.set(linkedId, position);
+
+                                                    // ✅ Also capture XFDF data for restoration if deleted
+                                                    try {
+                                                        const xfdfString = await Core.annotationManager.exportAnnotations({ annotList: [linkedAnnotation] });
+                                                        prefilledSignatureDataRef.current.set(linkedId, {
+                                                            xfdf: xfdfString,
+                                                            annotType: linkedAnnotation instanceof Core.Annotations.FreeHandAnnotation ? 'FreeHand' : 'Stamp'
+                                                        });
+                                                        console.log(`📍 [POSITION LOCK] Captured linked signature annotation ${linkedId} with XFDF data`);
+                                                    } catch (e) {
+                                                        console.warn(`⚠️ [POSITION LOCK] Could not capture XFDF for ${linkedId}:`, e);
+                                                    }
+
+                                                    capturedCount++;
+                                                }
+                                            }
+                                        } else if (isSignatureAnnot) {
+                                            // For standalone signature drawings (FreeHand or Stamp)
+                                            const annotId = annot.Id;
+
+                                            // Only capture if not already in our map
+                                            if (!prefilledSignaturePositionsRef.current.has(annotId)) {
+                                                const position = {
+                                                    X: annot.X,
+                                                    Y: annot.Y,
+                                                    Width: annot.Width,
+                                                    Height: annot.Height,
+                                                    PageNumber: annot.PageNumber
+                                                };
+
+                                                prefilledSignaturePositionsRef.current.set(annotId, position);
+
+                                                // ✅ Also capture XFDF data for restoration if deleted
+                                                try {
+                                                    const xfdfString = await Core.annotationManager.exportAnnotations({ annotList: [annot] });
+                                                    prefilledSignatureDataRef.current.set(annotId, {
+                                                        xfdf: xfdfString,
+                                                        annotType: annot instanceof Core.Annotations.FreeHandAnnotation ? 'FreeHand' : 'Stamp'
+                                                    });
+                                                    console.log(`📍 [POSITION LOCK] Captured signature annotation ${annotId} with XFDF data`);
+                                                } catch (e) {
+                                                    console.warn(`⚠️ [POSITION LOCK] Could not capture XFDF for ${annotId}:`, e);
+                                                }
+
+                                                capturedCount++;
+                                            }
+                                        }
+                                    }
+
+                                    console.log(`✅ [POSITION LOCK] Captured ${capturedCount} new positions (total: ${prefilledSignaturePositionsRef.current.size})`);
+                                };
+
+                                // Initial capture (run immediately)
+                                captureSignaturePositions();
+
+                                // Also capture after delays to catch late-loading signatures
+                                // Some signatures may load asynchronously from XFDF
+                                setTimeout(() => {
+                                    console.log('📍 [POSITION LOCK] Delayed capture check (500ms)...');
+                                    captureSignaturePositions();
+                                }, 500);
+
+                                setTimeout(() => {
+                                    console.log('📍 [POSITION LOCK] Delayed capture check (1500ms)...');
+                                    captureSignaturePositions();
+                                }, 1500);
+
+                                setTimeout(() => {
+                                    console.log('📍 [POSITION LOCK] Delayed capture check (3000ms)...');
+                                    captureSignaturePositions();
+                                }, 3000);
+
+                                // ✅ Add listener to detect and prevent signature position changes
+                                Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string, info: any) => {
+                                    // Handle position changes (drag)
+                                    if (action === 'modify') {
+                                        annotations.forEach((annot: any) => {
+                                            const annotId = annot.Id;
+                                            const isSignatureWidget = annot instanceof Core.Annotations.SignatureWidgetAnnotation;
+                                            const isSignatureAnnot =
+                                                annot instanceof Core.Annotations.FreeHandAnnotation ||
+                                                annot instanceof Core.Annotations.StampAnnotation;
+
+                                            // Log for debugging
+                                            if (isSignatureWidget || isSignatureAnnot) {
+                                                console.log(`🔍 [POSITION LOCK] Checking annotation ${annotId} (isWidget: ${isSignatureWidget}, isSignature: ${isSignatureAnnot})`);
+                                                console.log(`   Captured positions: ${Array.from(prefilledSignaturePositionsRef.current.keys()).join(', ')}`);
+                                            }
+
+                                            const originalPosition = prefilledSignaturePositionsRef.current.get(annotId);
+
+                                            if (originalPosition) {
+                                                // Check if position has changed
+                                                const hasPositionChanged =
+                                                    Math.abs(annot.X - originalPosition.X) > 0.01 ||
+                                                    Math.abs(annot.Y - originalPosition.Y) > 0.01 ||
+                                                    annot.PageNumber !== originalPosition.PageNumber;
+
+                                                if (hasPositionChanged) {
+                                                    console.log(`🚫 [POSITION LOCK] Detected unauthorized position change for annotation ${annotId}`);
+                                                    console.log(`   Old: (${originalPosition.X}, ${originalPosition.Y}) Page ${originalPosition.PageNumber}`);
+                                                    console.log(`   New: (${annot.X}, ${annot.Y}) Page ${annot.PageNumber}`);
+
+                                                    // Restore original position
+                                                    annot.X = originalPosition.X;
+                                                    annot.Y = originalPosition.Y;
+                                                    annot.Width = originalPosition.Width;
+                                                    annot.Height = originalPosition.Height;
+                                                    annot.PageNumber = originalPosition.PageNumber;
+
+                                                    // Redraw to show restored position
+                                                    Core.annotationManager.redrawAnnotation(annot);
+
+                                                    // Trigger callback to show warning (only if not in silent mode)
+                                                    // Use onSignaturePositionRestored for better UX (shows warning without refresh)
+                                                    if (!silentPositionRestore) {
+                                                        if (onSignaturePositionRestored) {
+                                                            onSignaturePositionRestored();
+                                                        } else if (onPrefilledFieldModified) {
+                                                            // Fallback to old callback if new one not provided
+                                                            onPrefilledFieldModified();
+                                                        }
+                                                    }
+
+                                                    console.log(`✅ [POSITION LOCK] Restored annotation ${annotId} to original position ${silentPositionRestore ? '(silent)' : '(with warning)'}`);
+                                                }
+                                            } else if (isSignatureWidget || isSignatureAnnot) {
+                                                // Not in our captured list - might be user's own signature or late-loaded
+                                                console.log(`⚠️ [POSITION LOCK] Annotation ${annotId} not in captured list (may be user's own signature)`);
+                                            }
+                                        });
+                                    }
+
+                                    // ✅ Handle deletion of pre-filled signatures - restore them
+                                    if (action === 'delete') {
+                                        // Skip if this deletion was triggered by our own restoration code
+                                        if (info?.source === 'restore_prefilled') return;
+
+                                        annotations.forEach(async (annot: any) => {
+                                            const annotId = annot.Id;
+                                            const savedData = prefilledSignatureDataRef.current.get(annotId);
+
+                                            if (savedData) {
+                                                console.log(`🚫 [DELETE LOCK] Detected deletion of pre-filled signature annotation ${annotId}`);
+
+                                                // Restore the annotation from XFDF
+                                                try {
+                                                    await Core.annotationManager.importAnnotations(savedData.xfdf);
+                                                    console.log(`✅ [DELETE LOCK] Restored pre-filled signature annotation ${annotId}`);
+
+                                                    // Trigger callback to show warning (only if not in silent mode)
+                                                    if (!silentPositionRestore) {
+                                                        if (onSignaturePositionRestored) {
+                                                            onSignaturePositionRestored();
+                                                        } else if (onPrefilledFieldModified) {
+                                                            onPrefilledFieldModified();
+                                                        }
+                                                    }
+                                                } catch (e) {
+                                                    console.error(`❌ [DELETE LOCK] Failed to restore annotation ${annotId}:`, e);
+                                                }
+                                            }
+                                        });
+                                    }
+
+                                    // ✅ Handle 'add' action - capture any late-loaded pre-filled signatures (from XFDF import)
+                                    if (action === 'add' && info?.imported) {
+                                        annotations.forEach(async (annot: any) => {
+                                            const isSignatureWidget = annot instanceof Core.Annotations.SignatureWidgetAnnotation;
+                                            const isSignatureAnnot =
+                                                annot instanceof Core.Annotations.FreeHandAnnotation ||
+                                                annot instanceof Core.Annotations.StampAnnotation;
+
+                                            if (isSignatureWidget) {
+                                                const widgetId = annot.Id;
+                                                const linkedAnnotation = (annot as any).annot;
+                                                const field = annot.getField?.();
+                                                const hasSignature = linkedAnnotation || (field?.getValue?.() && field.getValue().toString().trim() !== '');
+
+                                                if (hasSignature && !prefilledSignaturePositionsRef.current.has(widgetId)) {
+                                                    const position = {
+                                                        X: annot.X,
+                                                        Y: annot.Y,
+                                                        Width: annot.Width,
+                                                        Height: annot.Height,
+                                                        PageNumber: annot.PageNumber
+                                                    };
+                                                    prefilledSignaturePositionsRef.current.set(widgetId, position);
+                                                    console.log(`📍 [LATE CAPTURE] Captured imported signature widget ${widgetId}:`, position);
+                                                }
+                                            } else if (isSignatureAnnot) {
+                                                const annotId = annot.Id;
+                                                if (!prefilledSignaturePositionsRef.current.has(annotId)) {
+                                                    const position = {
+                                                        X: annot.X,
+                                                        Y: annot.Y,
+                                                        Width: annot.Width,
+                                                        Height: annot.Height,
+                                                        PageNumber: annot.PageNumber
+                                                    };
+                                                    prefilledSignaturePositionsRef.current.set(annotId, position);
+
+                                                    // Also capture XFDF for deletion restoration
+                                                    try {
+                                                        const xfdfString = await Core.annotationManager.exportAnnotations({ annotList: [annot] });
+                                                        prefilledSignatureDataRef.current.set(annotId, {
+                                                            xfdf: xfdfString,
+                                                            annotType: annot instanceof Core.Annotations.FreeHandAnnotation ? 'FreeHand' : 'Stamp'
+                                                        });
+                                                        console.log(`📍 [LATE CAPTURE] Captured imported signature annotation ${annotId} with XFDF`);
+                                                    } catch (e) {
+                                                        console.log(`📍 [LATE CAPTURE] Captured imported signature annotation ${annotId} (no XFDF)`);
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+                                });
                             }
 
                             if (effectiveReadOnly) {
                                 console.log('🔒 Setting read-only mode');
                                 const annotations = Core.annotationManager.getAnnotationsList();
                                 annotations.forEach((annot: any) => {
+                                    if (annot.getField) {
+                                        const field = annot.getField();
+                                        if (field?.flags) {
+                                            (field.flags as any).ReadOnly = true;
+                                        }
+                                    }
                                     annot.ReadOnly = true;
+                                    annot.Locked = true;
+                                    annot.LockedContents = true;
                                 });
+
+                                // ✅ Force redraw so WebViewer removes interactive HTML inputs
+                                Core.annotationManager.drawAnnotationsFromList(annotations);
+
+                                // ✅ Completely lock down the UI and prevent interaction
+                                if (Core.annotationManager.enableReadOnlyMode) {
+                                    Core.annotationManager.enableReadOnlyMode();
+                                }
+
+                                // ✅ Bruteforce: Prevent all clicks/typing on the iframe's inner document
+                                try {
+                                    const iframe = viewerInstance.current.iframeWindow?.document;
+                                    if (iframe && iframe.body) {
+                                        iframe.body.style.pointerEvents = 'none';
+                                        console.log('🔒 Bruteforce applied pointer-events: none to viewer iframe');
+                                    }
+                                } catch (e) {
+                                    console.warn('⚠️ Could not apply pointer-events to iframe:', e);
+                                }
 
                                 instance.UI.disableElements([
                                     'toolbarGroup-Shapes',
@@ -1968,6 +2558,83 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     'contextMenuPopup',
                                     'notesPanel',
                                 ]);
+
+                                // ✅ BACKUP: Capture signature positions for silent restoration
+                                // Even though read-only mode prevents interaction, we add this as a safety net
+                                const captureReadOnlySignatures = () => {
+                                    console.log('📍 [READ-ONLY LOCK] Capturing signature positions for silent restoration...');
+                                    const allAnnotations = Core.annotationManager.getAnnotationsList();
+                                    let capturedCount = 0;
+
+                                    allAnnotations.forEach((annot: any) => {
+                                        const isSignatureAnnot =
+                                            annot instanceof Core.Annotations.FreeHandAnnotation ||
+                                            annot instanceof Core.Annotations.StampAnnotation;
+
+                                        const isSignatureWidget = annot instanceof Core.Annotations.SignatureWidgetAnnotation;
+                                        const linkedAnnotation = isSignatureWidget ? (annot as any).annot : null;
+
+                                        if (isSignatureAnnot && !prefilledSignaturePositionsRef.current.has(annot.Id)) {
+                                            prefilledSignaturePositionsRef.current.set(annot.Id, {
+                                                X: annot.X,
+                                                Y: annot.Y,
+                                                Width: annot.Width,
+                                                Height: annot.Height,
+                                                PageNumber: annot.PageNumber
+                                            });
+                                            capturedCount++;
+                                        } else if (linkedAnnotation && !prefilledSignaturePositionsRef.current.has(linkedAnnotation.Id)) {
+                                            prefilledSignaturePositionsRef.current.set(linkedAnnotation.Id, {
+                                                X: linkedAnnotation.X,
+                                                Y: linkedAnnotation.Y,
+                                                Width: linkedAnnotation.Width,
+                                                Height: linkedAnnotation.Height,
+                                                PageNumber: linkedAnnotation.PageNumber
+                                            });
+                                            capturedCount++;
+                                        }
+                                    });
+
+                                    console.log(`✅ [READ-ONLY LOCK] Captured ${capturedCount} signature positions (total: ${prefilledSignaturePositionsRef.current.size})`);
+                                };
+
+                                // Capture immediately
+                                captureReadOnlySignatures();
+
+                                // Delayed capture for late-loading signatures
+                                setTimeout(() => {
+                                    console.log('📍 [READ-ONLY LOCK] Delayed capture check...');
+                                    captureReadOnlySignatures();
+                                }, 1000);
+
+                                // ✅ Add silent restoration listener for read-only mode
+                                Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string) => {
+                                    if (action !== 'modify') return;
+
+                                    annotations.forEach((annot: any) => {
+                                        const originalPosition = prefilledSignaturePositionsRef.current.get(annot.Id);
+
+                                        if (originalPosition) {
+                                            const hasPositionChanged =
+                                                annot.X !== originalPosition.X ||
+                                                annot.Y !== originalPosition.Y ||
+                                                annot.PageNumber !== originalPosition.PageNumber;
+
+                                            if (hasPositionChanged) {
+                                                console.log(`🔒 [READ-ONLY LOCK] Silently restoring signature position for ${annot.Id}`);
+
+                                                annot.X = originalPosition.X;
+                                                annot.Y = originalPosition.Y;
+                                                annot.Width = originalPosition.Width;
+                                                annot.Height = originalPosition.Height;
+                                                annot.PageNumber = originalPosition.PageNumber;
+
+                                                Core.annotationManager.redrawAnnotation(annot);
+                                                console.log(`✅ [READ-ONLY LOCK] Silently restored signature to original position`);
+                                            }
+                                        }
+                                    });
+                                });
                             } else {
                                 // ══════════════════════════════════════════════════════════════════
                                 // AUTO-SAVE: Set up change listeners (only if not read-only)
@@ -2200,22 +2867,62 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                 // ✅ NEW: Listen for signature signed event
                                 // This fires when a signature is placed in a signature field
-                                try {
-                                    Core.annotationManager.addEventListener('annotationSelected', (annotations: any) => {
-                                        if (!annotations || annotations.length === 0) return;
+                                let isDeselecting = false;
+                                Core.annotationManager.addEventListener('annotationSelected', (annotations: any) => {
+                                    if (!annotations || annotations.length === 0 || isDeselecting) return;
 
-                                        annotations.forEach((annot: any) => {
+                                    annotations.forEach((annot: any) => {
+                                        let shouldLock = false;
+
+                                        // Determine if this is a signature widget or a drawn signature (FreeHand/Stamp)
+                                        // from another party that shouldn't be touched.
+                                        if (editableParties && editableParties.length > 0) {
+                                            if (annot instanceof Core.Annotations.WidgetAnnotation) {
+                                                const assignedParty = annot.getCustomData('assignedParty') || 'unassigned';
+                                                // Lock if it belongs to someone else
+                                                if (!editableParties.includes(assignedParty)) {
+                                                    shouldLock = true;
+                                                }
+                                            } else if (
+                                                annot instanceof Core.Annotations.FreeHandAnnotation ||
+                                                annot instanceof Core.Annotations.StampAnnotation ||
+                                                (annot.Subject && annot.Subject.includes('Signature'))
+                                            ) {
+                                                // For non-widget signatures (FreeHand/Stamp), we need to know if this was just drawn by the current user
+                                                // Or if it was loaded from previous signers.
+                                                // If it's old, we stored 'ReadOnly=true' in the initial load hook.
+                                                if (annot.ReadOnly || annot.Locked) {
+                                                    shouldLock = true;
+                                                }
+                                            }
+                                        }
+
+                                        if (shouldLock) {
+                                            console.log(`🔒 [SECURITY] Auto-deselecting locked annotation: ${(annot as any).fieldName || annot.subject || 'unknown'}`);
+                                            // Deselect the annotation forcefully
+                                            isDeselecting = true;
+                                            Core.annotationManager.deselectAnnotation(annot);
+                                            isDeselecting = false;
+
+                                            // If it's a widget, blur the underlying HTML node so cursor doesn't appear
+                                            if (annot instanceof Core.Annotations.WidgetAnnotation) {
+                                                try {
+                                                    const el = (annot as any).element || (annot as any).elementRef?.current;
+                                                    if (el && typeof el.blur === 'function') el.blur();
+                                                } catch (e) {
+                                                    // ignore
+                                                }
+                                            }
+                                        } else {
                                             if (annot instanceof Core.Annotations.SignatureWidgetAnnotation) {
                                                 const field = (annot as any).getField?.();
                                                 const hasValue = field?.getValue?.();
                                                 console.log(`🖊️ [SIGNATURE SELECTED] Widget: ${(annot as any).fieldName || 'unknown'}, ` +
                                                     `HasValue: ${!!hasValue}`);
                                             }
-                                        });
+                                        }
                                     });
-                                } catch (e) {
-                                    console.warn('⚠️ Could not add signature selected listener:', e);
-                                }
+                                });
 
                                 console.log('✅ [AUTO-SAVE] Change listeners registered');
                             }
@@ -2429,8 +3136,36 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                 if (effectiveReadOnly) {
                     annotations.forEach((annot: any) => {
+                        if (annot.getField) {
+                            const field = annot.getField();
+                            if (field?.flags) {
+                                (field.flags as any).ReadOnly = true;
+                            }
+                        }
                         annot.ReadOnly = true;
+                        annot.Locked = true;
+                        annot.LockedContents = true;
                     });
+
+                    // ✅ Force redraw so WebViewer removes interactive HTML inputs
+                    annotationManager.drawAnnotationsFromList(annotations);
+
+                    // ✅ Completely lock down the UI and prevent interaction
+                    if (annotationManager.enableReadOnlyMode) {
+                        annotationManager.enableReadOnlyMode();
+                    }
+
+                    // ✅ Bruteforce: Prevent all clicks/typing on the iframe's inner document
+                    try {
+                        const iframe = viewerInstance.current.iframeWindow?.document;
+                        if (iframe && iframe.body) {
+                            iframe.body.style.pointerEvents = 'none';
+                            console.log('🔒 Bruteforce applied pointer-events: none to viewer iframe');
+                        }
+                    } catch (e) {
+                        console.warn('⚠️ Could not apply pointer-events to iframe:', e);
+                    }
+
                     viewerInstance.current.UI.disableElements([
                         'toolbarGroup-Shapes',
                         'toolbarGroup-Edit',
@@ -2441,8 +3176,56 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     ]);
                 } else {
                     annotations.forEach((annot: any) => {
-                        annot.ReadOnly = false;
+                        let shouldUnlock = true;
+
+                        // ✅ CRITICAL FIX: If multi-party signing is active, do not blindly unlock other parties' fields!
+                        if (editableParties && editableParties.length > 0) {
+                            if (annot instanceof viewerInstance.current.Core.Annotations.WidgetAnnotation) {
+                                const assignedParty = annot.getCustomData('assignedParty') || 'unassigned';
+
+                                if (!editableParties.includes(assignedParty)) {
+                                    shouldUnlock = false; // Keep it locked
+                                }
+                            } else {
+                                // Ink / Signatures from previous signers 
+                                if (annot.ReadOnly || annot.Locked) {
+                                    shouldUnlock = false;
+                                }
+                            }
+                        }
+
+                        if (shouldUnlock) {
+                            if (annot.getField) {
+                                const field = annot.getField();
+                                if (field?.flags) {
+                                    (field.flags as any).ReadOnly = false;
+                                }
+                            }
+                            annot.ReadOnly = false;
+                            annot.Locked = false;
+                            annot.LockedContents = false;
+                        }
                     });
+
+                    // ✅ Force redraw so WebViewer adds back interactive HTML inputs
+                    annotationManager.drawAnnotationsFromList(annotations);
+
+                    // ✅ Unlock the UI
+                    if (annotationManager.disableReadOnlyMode) {
+                        annotationManager.disableReadOnlyMode();
+                    }
+
+                    // ✅ Restore pointer events
+                    try {
+                        const iframe = viewerInstance.current.iframeWindow?.document;
+                        if (iframe && iframe.body) {
+                            iframe.body.style.pointerEvents = 'auto';
+                            console.log('🔓 Bruteforce restored pointer-events to auto');
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+
                     viewerInstance.current.UI.enableElements([
                         'toolbarGroup-Shapes',
                         'toolbarGroup-Edit',

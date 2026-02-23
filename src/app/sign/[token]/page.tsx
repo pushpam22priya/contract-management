@@ -55,6 +55,10 @@ export default function PublicSigningPage() {
     // Track field changes
     const [filledFieldValues, setFilledFieldValues] = useState<Record<string, string>>({});
 
+    // ✅ Store initial field values (captured when page loads) for comparison
+    const initialFieldValuesRef = useRef<Record<string, string>>({});
+    const [initialValuesCapture, setInitialValuesCaptured] = useState(false);
+
     // ✅ "Sign All" dialog state
     const [showSignAllDialog, setShowSignAllDialog] = useState(false);
     const [emptySignFieldCount, setEmptySignFieldCount] = useState(0);
@@ -63,17 +67,111 @@ export default function PublicSigningPage() {
     // Track if user dismissed the party validation warning popup
     const [dismissedPartyWarning, setDismissedPartyWarning] = useState(false);
 
+    // ✅ Wrong party warning - shows when user tries to edit another party's field (empty or pre-filled)
+    // Also shows when user tries to drag a pre-filled signature
+    const [showWrongPartyWarning, setShowWrongPartyWarning] = useState(false);
+
+    // ✅ Track which fields were pre-filled (had values when page loaded)
+    const prefilledFieldNamesRef = useRef<Set<string>>(new Set());
+
+    // ✅ Track if user has interacted with the document (clicked/focused on a field)
+    const userHasInteractedRef = useRef(false);
+
     // Draggable popup state
     const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number } | null>(null);
 
+    // Get the user's assigned party label(s) for display
+    const userPartyLabels = useMemo(() => {
+        if (!signatureRequest?.assignedParty || !signatureRequest?.parties) return '';
+        const partyIds = Array.isArray(signatureRequest.assignedParty)
+            ? signatureRequest.assignedParty
+            : [signatureRequest.assignedParty];
+        const labels = partyIds
+            .map(id => signatureRequest.parties?.find((p: PartyConfiguration) => p.id === id)?.label)
+            .filter(Boolean);
+        return labels.join(', ');
+    }, [signatureRequest]);
+
     const handleFieldChange = (fieldName: string, value: any) => {
+        const newValue = value?.toString() || '';
+
+        // ✅ Check if user is editing another party's field - show warning (only after user interaction)
+        // This handles BOTH empty and pre-filled fields belonging to other parties
+        if (userHasInteractedRef.current && signatureRequest?.formFields && signatureRequest?.assignedParty) {
+            const field = signatureRequest.formFields.find((f: any) => f.name === fieldName);
+            if (field?.assignedParty) {
+                const userPartyIds = Array.isArray(signatureRequest.assignedParty)
+                    ? signatureRequest.assignedParty
+                    : [signatureRequest.assignedParty];
+
+                // If this field belongs to a different party, restore to original value and show warning
+                if (!userPartyIds.includes(field.assignedParty)) {
+                    setShowWrongPartyWarning(true);
+
+                    // Get the original value (may be empty or pre-filled)
+                    const originalValue = initialFieldValuesRef.current[fieldName] || '';
+
+                    // Restore the field value in state to original
+                    setFilledFieldValues(prev => ({
+                        ...prev,
+                        [fieldName]: originalValue
+                    }));
+
+                    // Restore the field in the PDF viewer to original value
+                    if (originalValue) {
+                        // If field was pre-filled, restore to that value
+                        if (pdfViewerRef.current?.restoreFieldValue) {
+                            pdfViewerRef.current.restoreFieldValue(fieldName, originalValue);
+                        }
+                    } else {
+                        // If field was empty, clear it
+                        if (pdfViewerRef.current?.clearField) {
+                            pdfViewerRef.current.clearField(fieldName);
+                        }
+                    }
+
+                    return; // Exit early, don't save the wrong party's value
+                }
+            }
+        }
+
+        // Always save the value (for comparison logic)
         setFilledFieldValues(prev => ({
             ...prev,
             [fieldName]: value?.toString() || ''
         }));
     };
+
+    // ✅ Check if ANY other party field has been modified from initial values
+    const hasModifiedOtherPartyFields = useMemo(() => {
+        if (!signatureRequest?.formFields || !signatureRequest?.assignedParty || !initialValuesCapture) {
+            return false;
+        }
+
+        const userPartyIds = Array.isArray(signatureRequest.assignedParty)
+            ? signatureRequest.assignedParty
+            : [signatureRequest.assignedParty];
+
+        // Check all fields that belong to OTHER parties
+        for (const field of signatureRequest.formFields) {
+            if (!field.assignedParty || userPartyIds.includes(field.assignedParty)) {
+                continue; // Skip user's own party fields
+            }
+
+            // This is another party's field - compare current value with initial
+            const initialValue = initialFieldValuesRef.current[field.name] || '';
+            const currentValue = filledFieldValues[field.name] || '';
+
+            if (currentValue !== initialValue) {
+                console.log(`⚠️ [OTHER PARTY MODIFIED] Field "${field.name}" changed: "${initialValue}" → "${currentValue}"`);
+                return true; // Found a modified other party field
+            }
+        }
+
+        return false; // All other party fields match initial values
+    }, [filledFieldValues, signatureRequest, initialValuesCapture]);
 
     // ✅ Party validation: detect partially filled parties
     // If the external signer fills any field of a party, ALL fields for that party must be completed
@@ -135,6 +233,50 @@ export default function PublicSigningPage() {
     }, [filledFieldValues, signatureRequest]);
 
     const hasPartialParty = !!partyValidationWarning;
+
+    // ✅ Check if client has filled ALL their assigned fields (required to submit)
+    const { hasFilledAllAssignedFields, unfilledFieldCount, totalAssignedFieldCount } = useMemo(() => {
+        if (!signatureRequest?.formFields || !signatureRequest?.assignedParty) {
+            // Legacy mode (no assigned party) - allow submit
+            return { hasFilledAllAssignedFields: true, unfilledFieldCount: 0, totalAssignedFieldCount: 0 };
+        }
+
+        const formFields = signatureRequest.formFields;
+        const prefilledValues = signatureRequest.fieldValues || {};
+
+        // Get the user's assigned party IDs
+        const userPartyIds = Array.isArray(signatureRequest.assignedParty)
+            ? signatureRequest.assignedParty
+            : [signatureRequest.assignedParty];
+
+        // Get all fields assigned to the user's party that they need to fill
+        const userFields = formFields.filter((f: any) =>
+            f.assignedParty && userPartyIds.includes(f.assignedParty)
+        );
+
+        // Filter to only editable fields (not pre-filled by contractor)
+        const editableUserFields = userFields.filter((f: any) => {
+            const prefilledVal = prefilledValues[f.name];
+            return !prefilledVal || prefilledVal.toString().trim() === '';
+        });
+
+        // Count how many of these fields are filled
+        const filledCount = editableUserFields.filter((f: any) => {
+            const val = filledFieldValues[f.name];
+            return val && val.toString().trim() !== '';
+        }).length;
+
+        const unfilled = editableUserFields.length - filledCount;
+        const allFilled = unfilled === 0;
+
+        console.log(`📋 [SUBMIT CHECK] User fields: ${editableUserFields.length}, Filled: ${filledCount}, Unfilled: ${unfilled}`);
+
+        return {
+            hasFilledAllAssignedFields: allFilled,
+            unfilledFieldCount: unfilled,
+            totalAssignedFieldCount: editableUserFields.length
+        };
+    }, [filledFieldValues, signatureRequest]);
 
     // Reset dismissed state when warning content changes (user fills more fields)
     useEffect(() => {
@@ -251,6 +393,45 @@ export default function PublicSigningPage() {
                     setCompleted(true);
                 }
 
+                // ✅ Capture initial field values for comparison (to detect other party modifications)
+                const initialValues: Record<string, string> = {};
+                const prefilledNames = new Set<string>();
+
+                if (data.fieldValues) {
+                    Object.entries(data.fieldValues).forEach(([key, val]) => {
+                        const strVal = val?.toString() || '';
+                        initialValues[key] = strVal;
+                        // Track fields that have non-empty values (pre-filled)
+                        if (strVal.trim() !== '') {
+                            prefilledNames.add(key);
+                        }
+                    });
+                }
+                // Also check formFields for pre-filled values (e.g., signature fields with 'signed')
+                if (data.formFields) {
+                    data.formFields.forEach((field: any) => {
+                        if (!(field.name in initialValues)) {
+                            initialValues[field.name] = '';
+                        }
+                        // Check if field has a value in formFields
+                        const fieldVal = field.value?.toString() || '';
+                        if (fieldVal.trim() !== '') {
+                            prefilledNames.add(field.name);
+                            initialValues[field.name] = fieldVal;
+                        }
+                    });
+                }
+
+                initialFieldValuesRef.current = initialValues;
+                prefilledFieldNamesRef.current = prefilledNames;
+                console.log('✅ [PRE-FILLED] Fields that were pre-filled:', Array.from(prefilledNames));
+
+                // ✅ Pre-populate filledFieldValues with initial values so comparison works correctly
+                setFilledFieldValues({ ...initialValues });
+
+                setInitialValuesCaptured(true);
+                console.log('✅ [INITIAL VALUES] Captured initial field values:', initialValues);
+
                 setSignatureRequest(data);
                 setLoading(false);
 
@@ -315,10 +496,9 @@ export default function PublicSigningPage() {
         setSubmitting(true);
 
         try {
-            // ✅ CRITICAL FIX: Use flatten: true to permanently embed signature in PDF
-            // Pass empty {} to exportAnnotations - values are already in the PDF
-            // Without flattening, signature appearance data is lost during XFDF import/export cycles
-            const exportResult = await pdfViewerRef.current?.exportAnnotations({}, { flatten: true });
+            // ✅ FIX: Use flatten: false to keep form fields editable.
+            // Passing { flatten: false } prevents signature and fields from being permanently embedded
+            const exportResult = await pdfViewerRef.current?.exportAnnotations({}, { flatten: false });
 
             if (!exportResult || !exportResult.blob) {
                 setError('Failed to capture signature. Please try again.');
@@ -498,7 +678,15 @@ export default function PublicSigningPage() {
                     )}
                 </Box>
                 <Tooltip
-                    title={hasPartialParty ? 'Complete all fields for the party you started filling' : ''}
+                    title={
+                        hasModifiedOtherPartyFields
+                            ? 'You modified fields not assigned to you. Restore them to submit.'
+                            : !hasFilledAllAssignedFields
+                                ? `Please fill all your assigned fields (${unfilledFieldCount} remaining)`
+                                : hasPartialParty
+                                    ? 'Complete all fields for the party you started filling'
+                                    : ''
+                    }
                     arrow
                 >
                     <span>
@@ -507,7 +695,7 @@ export default function PublicSigningPage() {
                             size="small"
                             startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <Save />}
                             onClick={handleSubmitSignature}
-                            disabled={submitting || hasPartialParty}
+                            disabled={submitting || !hasFilledAllAssignedFields || hasPartialParty || hasModifiedOtherPartyFields}
                             sx={{
                                 bgcolor: 'white',
                                 color: 'primary.main',
@@ -525,7 +713,10 @@ export default function PublicSigningPage() {
             </Box>
 
             {/* Full-Screen PDF Viewer */}
-            <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+            <Box
+                sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}
+                onClick={() => { userHasInteractedRef.current = true; }}
+            >
                 {signatureRequest && (
                     <PDFViewerContainer
                         ref={pdfViewerRef}
@@ -538,9 +729,57 @@ export default function PublicSigningPage() {
                         onFieldChange={handleFieldChange}
                         showAnnotationNavigation={true}
                         onSignatureApplied={handleSignatureApplied}
+                        // ✅ When user drags a pre-filled signature, show wrong party warning (position is auto-restored)
+                        onSignaturePositionRestored={() => setShowWrongPartyWarning(true)}
                         // ✅ MULTI-PARTY: Restrict editing to assigned party's fields only
                         editableParties={editableParties}
                     />
+                )}
+
+                {/* ✅ Wrong Party Warning Dialog - shows when user edits another party's field or drags a pre-filled signature */}
+                {showWrongPartyWarning && (
+                    <Box
+                        sx={{
+                            position: 'fixed',
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            zIndex: 1100,
+                            maxWidth: 420,
+                            minWidth: 340,
+                        }}
+                    >
+                        <Alert
+                            severity="warning"
+                            sx={{
+                                py: 2,
+                                px: 2.5,
+                                boxShadow: 8,
+                                borderRadius: 2,
+                                border: '2px solid',
+                                borderColor: 'warning.main',
+                            }}
+                        >
+                            <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+                                Wrong Party Field
+                            </Typography>
+                            <Typography variant="body1" sx={{ mb: 2 }}>
+                                You are assigned to fill fields as <strong>{userPartyLabels}</strong>.
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                                Your changes have been automatically reverted. Please only fill the fields that belong to your assigned party.
+                            </Typography>
+                            <Button
+                                fullWidth
+                                variant="contained"
+                                color="warning"
+                                onClick={() => setShowWrongPartyWarning(false)}
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                            >
+                                I Understand
+                            </Button>
+                        </Alert>
+                    </Box>
                 )}
 
                 {/* Party Validation Warning Popup */}
