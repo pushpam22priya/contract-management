@@ -2257,12 +2257,63 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             annot instanceof Core.Annotations.FreeHandAnnotation ||
                                             annot instanceof Core.Annotations.StampAnnotation;
 
-                                        // Also check for signature widgets with linked annotations
+                                        // Also check for signature widgets (with or without linked annotations)
                                         const isSignatureWidget = annot instanceof Core.Annotations.SignatureWidgetAnnotation;
                                         const linkedAnnotation = isSignatureWidget ? (annot as any).annot : null;
 
-                                        if (isSignatureAnnot) {
-                                            // For signature drawings, check if they're locked OR if they exist (pre-filled)
+                                        // ✅ Capture SignatureWidgetAnnotation position (the widget itself can be dragged)
+                                        if (isSignatureWidget) {
+                                            const widgetId = annot.Id;
+                                            const field = annot.getField?.();
+                                            const hasSignature = linkedAnnotation || (field?.getValue?.() && field.getValue().toString().trim() !== '');
+
+                                            // Only capture widgets that have signatures (pre-filled)
+                                            if (hasSignature && !prefilledSignaturePositionsRef.current.has(widgetId)) {
+                                                const position = {
+                                                    X: annot.X,
+                                                    Y: annot.Y,
+                                                    Width: annot.Width,
+                                                    Height: annot.Height,
+                                                    PageNumber: annot.PageNumber
+                                                };
+
+                                                prefilledSignaturePositionsRef.current.set(widgetId, position);
+                                                console.log(`📍 [POSITION LOCK] Captured signature WIDGET ${widgetId} (has signature):`, position);
+                                                capturedCount++;
+                                            }
+
+                                            // Also capture the linked annotation if exists
+                                            if (linkedAnnotation) {
+                                                const linkedId = linkedAnnotation.Id;
+
+                                                if (!prefilledSignaturePositionsRef.current.has(linkedId)) {
+                                                    const position = {
+                                                        X: linkedAnnotation.X,
+                                                        Y: linkedAnnotation.Y,
+                                                        Width: linkedAnnotation.Width,
+                                                        Height: linkedAnnotation.Height,
+                                                        PageNumber: linkedAnnotation.PageNumber
+                                                    };
+
+                                                    prefilledSignaturePositionsRef.current.set(linkedId, position);
+
+                                                    // ✅ Also capture XFDF data for restoration if deleted
+                                                    try {
+                                                        const xfdfString = await Core.annotationManager.exportAnnotations({ annotList: [linkedAnnotation] });
+                                                        prefilledSignatureDataRef.current.set(linkedId, {
+                                                            xfdf: xfdfString,
+                                                            annotType: linkedAnnotation instanceof Core.Annotations.FreeHandAnnotation ? 'FreeHand' : 'Stamp'
+                                                        });
+                                                        console.log(`📍 [POSITION LOCK] Captured linked signature annotation ${linkedId} with XFDF data`);
+                                                    } catch (e) {
+                                                        console.warn(`⚠️ [POSITION LOCK] Could not capture XFDF for ${linkedId}:`, e);
+                                                    }
+
+                                                    capturedCount++;
+                                                }
+                                            }
+                                        } else if (isSignatureAnnot) {
+                                            // For standalone signature drawings (FreeHand or Stamp)
                                             const annotId = annot.Id;
 
                                             // Only capture if not already in our map
@@ -2291,49 +2342,31 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                                 capturedCount++;
                                             }
-                                        } else if (linkedAnnotation) {
-                                            // Capture the linked annotation (actual signature drawing) position
-                                            const linkedId = linkedAnnotation.Id;
-
-                                            if (!prefilledSignaturePositionsRef.current.has(linkedId)) {
-                                                const position = {
-                                                    X: linkedAnnotation.X,
-                                                    Y: linkedAnnotation.Y,
-                                                    Width: linkedAnnotation.Width,
-                                                    Height: linkedAnnotation.Height,
-                                                    PageNumber: linkedAnnotation.PageNumber
-                                                };
-
-                                                prefilledSignaturePositionsRef.current.set(linkedId, position);
-
-                                                // ✅ Also capture XFDF data for restoration if deleted
-                                                try {
-                                                    const xfdfString = await Core.annotationManager.exportAnnotations({ annotList: [linkedAnnotation] });
-                                                    prefilledSignatureDataRef.current.set(linkedId, {
-                                                        xfdf: xfdfString,
-                                                        annotType: linkedAnnotation instanceof Core.Annotations.FreeHandAnnotation ? 'FreeHand' : 'Stamp'
-                                                    });
-                                                    console.log(`📍 [POSITION LOCK] Captured linked signature annotation ${linkedId} with XFDF data`);
-                                                } catch (e) {
-                                                    console.warn(`⚠️ [POSITION LOCK] Could not capture XFDF for ${linkedId}:`, e);
-                                                }
-
-                                                capturedCount++;
-                                            }
                                         }
                                     }
 
                                     console.log(`✅ [POSITION LOCK] Captured ${capturedCount} new positions (total: ${prefilledSignaturePositionsRef.current.size})`);
                                 };
 
-                                // Initial capture
+                                // Initial capture (run immediately)
                                 captureSignaturePositions();
 
-                                // Also capture after a short delay to catch any late-loading signatures
+                                // Also capture after delays to catch late-loading signatures
+                                // Some signatures may load asynchronously from XFDF
                                 setTimeout(() => {
-                                    console.log('📍 [POSITION LOCK] Delayed capture check...');
+                                    console.log('📍 [POSITION LOCK] Delayed capture check (500ms)...');
                                     captureSignaturePositions();
-                                }, 1000);
+                                }, 500);
+
+                                setTimeout(() => {
+                                    console.log('📍 [POSITION LOCK] Delayed capture check (1500ms)...');
+                                    captureSignaturePositions();
+                                }, 1500);
+
+                                setTimeout(() => {
+                                    console.log('📍 [POSITION LOCK] Delayed capture check (3000ms)...');
+                                    captureSignaturePositions();
+                                }, 3000);
 
                                 // ✅ Add listener to detect and prevent signature position changes
                                 Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string, info: any) => {
@@ -2341,13 +2374,24 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     if (action === 'modify') {
                                         annotations.forEach((annot: any) => {
                                             const annotId = annot.Id;
+                                            const isSignatureWidget = annot instanceof Core.Annotations.SignatureWidgetAnnotation;
+                                            const isSignatureAnnot =
+                                                annot instanceof Core.Annotations.FreeHandAnnotation ||
+                                                annot instanceof Core.Annotations.StampAnnotation;
+
+                                            // Log for debugging
+                                            if (isSignatureWidget || isSignatureAnnot) {
+                                                console.log(`🔍 [POSITION LOCK] Checking annotation ${annotId} (isWidget: ${isSignatureWidget}, isSignature: ${isSignatureAnnot})`);
+                                                console.log(`   Captured positions: ${Array.from(prefilledSignaturePositionsRef.current.keys()).join(', ')}`);
+                                            }
+
                                             const originalPosition = prefilledSignaturePositionsRef.current.get(annotId);
 
                                             if (originalPosition) {
                                                 // Check if position has changed
                                                 const hasPositionChanged =
-                                                    annot.X !== originalPosition.X ||
-                                                    annot.Y !== originalPosition.Y ||
+                                                    Math.abs(annot.X - originalPosition.X) > 0.01 ||
+                                                    Math.abs(annot.Y - originalPosition.Y) > 0.01 ||
                                                     annot.PageNumber !== originalPosition.PageNumber;
 
                                                 if (hasPositionChanged) {
@@ -2378,6 +2422,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                                     console.log(`✅ [POSITION LOCK] Restored annotation ${annotId} to original position ${silentPositionRestore ? '(silent)' : '(with warning)'}`);
                                                 }
+                                            } else if (isSignatureWidget || isSignatureAnnot) {
+                                                // Not in our captured list - might be user's own signature or late-loaded
+                                                console.log(`⚠️ [POSITION LOCK] Annotation ${annotId} not in captured list (may be user's own signature)`);
                                             }
                                         });
                                     }
@@ -2409,6 +2456,59 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                     }
                                                 } catch (e) {
                                                     console.error(`❌ [DELETE LOCK] Failed to restore annotation ${annotId}:`, e);
+                                                }
+                                            }
+                                        });
+                                    }
+
+                                    // ✅ Handle 'add' action - capture any late-loaded pre-filled signatures (from XFDF import)
+                                    if (action === 'add' && info?.imported) {
+                                        annotations.forEach(async (annot: any) => {
+                                            const isSignatureWidget = annot instanceof Core.Annotations.SignatureWidgetAnnotation;
+                                            const isSignatureAnnot =
+                                                annot instanceof Core.Annotations.FreeHandAnnotation ||
+                                                annot instanceof Core.Annotations.StampAnnotation;
+
+                                            if (isSignatureWidget) {
+                                                const widgetId = annot.Id;
+                                                const linkedAnnotation = (annot as any).annot;
+                                                const field = annot.getField?.();
+                                                const hasSignature = linkedAnnotation || (field?.getValue?.() && field.getValue().toString().trim() !== '');
+
+                                                if (hasSignature && !prefilledSignaturePositionsRef.current.has(widgetId)) {
+                                                    const position = {
+                                                        X: annot.X,
+                                                        Y: annot.Y,
+                                                        Width: annot.Width,
+                                                        Height: annot.Height,
+                                                        PageNumber: annot.PageNumber
+                                                    };
+                                                    prefilledSignaturePositionsRef.current.set(widgetId, position);
+                                                    console.log(`📍 [LATE CAPTURE] Captured imported signature widget ${widgetId}:`, position);
+                                                }
+                                            } else if (isSignatureAnnot) {
+                                                const annotId = annot.Id;
+                                                if (!prefilledSignaturePositionsRef.current.has(annotId)) {
+                                                    const position = {
+                                                        X: annot.X,
+                                                        Y: annot.Y,
+                                                        Width: annot.Width,
+                                                        Height: annot.Height,
+                                                        PageNumber: annot.PageNumber
+                                                    };
+                                                    prefilledSignaturePositionsRef.current.set(annotId, position);
+
+                                                    // Also capture XFDF for deletion restoration
+                                                    try {
+                                                        const xfdfString = await Core.annotationManager.exportAnnotations({ annotList: [annot] });
+                                                        prefilledSignatureDataRef.current.set(annotId, {
+                                                            xfdf: xfdfString,
+                                                            annotType: annot instanceof Core.Annotations.FreeHandAnnotation ? 'FreeHand' : 'Stamp'
+                                                        });
+                                                        console.log(`📍 [LATE CAPTURE] Captured imported signature annotation ${annotId} with XFDF`);
+                                                    } catch (e) {
+                                                        console.log(`📍 [LATE CAPTURE] Captured imported signature annotation ${annotId} (no XFDF)`);
+                                                    }
                                                 }
                                             }
                                         });
