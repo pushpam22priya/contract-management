@@ -10,7 +10,7 @@ import {
     Alert,
     InputAdornment,
 } from '@mui/material';
-import { Email, Send, CheckCircle, ContentCopy } from '@mui/icons-material';
+import { Email, Send, CheckCircle, ContentCopy, Check } from '@mui/icons-material';
 import BaseDialog from '@/components/common/BaseDialog';
 
 interface SubmitForSignatureDialogProps {
@@ -38,6 +38,7 @@ const SubmitForSignatureDialog = ({
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
     const [signingUrl, setSigningUrl] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
 
     console.log('🖥️ [SubmitForSignatureDialog] Rendered, open:', open);
 
@@ -98,6 +99,8 @@ const SubmitForSignatureDialog = ({
         if (signingUrl) {
             await navigator.clipboard.writeText(signingUrl);
             console.log('📋 [SubmitForSignatureDialog] URL copied to clipboard');
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
         }
     };
 
@@ -197,10 +200,11 @@ const SubmitForSignatureDialog = ({
                                 </Typography>
                                 <Button
                                     size="small"
-                                    startIcon={<ContentCopy />}
+                                    startIcon={copied ? <Check /> : <ContentCopy />}
                                     onClick={handleCopyUrl}
+                                    color={copied ? 'success' : 'primary'}
                                 >
-                                    Copy
+                                    {copied ? 'Copied' : 'Copy'}
                                 </Button>
                             </Box>
                         </Box>

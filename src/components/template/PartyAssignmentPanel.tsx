@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -81,9 +81,23 @@ export default function PartyAssignmentPanel({
     onFieldUnassigned,
 }: PartyAssignmentPanelProps) {
     const [expandedParty, setExpandedParty] = useState<string | null>('unassigned'); // Start with unassigned expanded
+    const [partiesSectionExpanded, setPartiesSectionExpanded] = useState(true);
     const [hoveredParty, setHoveredParty] = useState<string | null>(null);
     const [selectedFieldIds, setSelectedFieldIds] = useState<string[]>([]);
+    const [manuallyUncheckedIds, setManuallyUncheckedIds] = useState<string[]>([]);
     const [dragOverParty, setDragOverParty] = useState<string | null>(null);
+
+    // Auto-add each newly selected field (from PDF click) into selectedFieldIds
+    // so multiple fields accumulate as checked without replacing the previous one.
+    // Also clear it from manuallyUncheckedIds so highlighting is restored.
+    useEffect(() => {
+        if (selectedFieldName) {
+            setManuallyUncheckedIds(prev => prev.filter(f => f !== selectedFieldName));
+            setSelectedFieldIds(prev =>
+                prev.includes(selectedFieldName) ? prev : [...prev, selectedFieldName]
+            );
+        }
+    }, [selectedFieldName]);
 
     // Group fields by party
     const fieldsByParty = groupFieldsByParty(formFields);
@@ -94,11 +108,17 @@ export default function PartyAssignmentPanel({
 
     // Multi-select checkbox handlers
     const handleCheckboxToggle = (fieldName: string) => {
-        setSelectedFieldIds(prev =>
-            prev.includes(fieldName)
-                ? prev.filter(f => f !== fieldName)
-                : [...prev, fieldName]
-        );
+        setSelectedFieldIds(prev => {
+            if (prev.includes(fieldName)) {
+                // User explicitly unchecked — remember this so isSelected styling is suppressed
+                setManuallyUncheckedIds(mu => [...mu, fieldName]);
+                return prev.filter(f => f !== fieldName);
+            } else {
+                // User re-checked — clear from manually unchecked
+                setManuallyUncheckedIds(mu => mu.filter(f => f !== fieldName));
+                return [...prev, fieldName];
+            }
+        });
     };
 
     const handleSelectAll = () => {
@@ -219,7 +239,7 @@ export default function PartyAssignmentPanel({
                 ) : selectedFieldName ? (
                     <Alert severity="info" sx={{ mt: 1, py: 0 }}>
                         <Typography variant="body2">
-                            Select a party to assign: <strong>{selectedFieldName}</strong>
+                           
                         </Typography>
                     </Alert>
                 ) : (
@@ -231,6 +251,31 @@ export default function PartyAssignmentPanel({
 
             {/* Party List */}
             <Box>
+                {/* Parties header */}
+                <ListItem
+                    sx={{
+                        borderRadius: 1,
+                        bgcolor: 'transparent',
+                    }}
+                >
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                        <Badge badgeContent={parties.length} color="primary">
+                            <Person color="action" />
+                        </Badge>
+                    </ListItemIcon>
+                    <ListItemText
+                        sx={{ paddingTop: 0, paddingBottom: 0 }}
+                        primary="Parties"
+                    />
+                    <IconButton
+                        size="small"
+                        onClick={() => setPartiesSectionExpanded(prev => !prev)}
+                    >
+                        {partiesSectionExpanded ? <ExpandLess /> : <ExpandMore />}
+                    </IconButton>
+                </ListItem>
+
+                <Collapse in={partiesSectionExpanded}>
                 {/* Party scroll container */}
                 <Box sx={{
                     maxHeight: 160,
@@ -373,6 +418,7 @@ export default function PartyAssignmentPanel({
                         })}
                     </List>
                 </Box>
+                </Collapse>
 
                 {/* Unassigned fields section */}
                 {hasUnassignedFields && (
@@ -429,7 +475,8 @@ export default function PartyAssignmentPanel({
                                 </Box>
                                 {unassignedFields.map((field) => {
                                     const isChecked = selectedFieldIds.includes(field.name);
-                                    const isSelected = selectedFieldName === field.name;
+                                    // isSelected is suppressed if the user explicitly unchecked this field
+                                    const isSelected = selectedFieldName === field.name && !manuallyUncheckedIds.includes(field.name);
                                     return (
                                         <Box
                                             key={field.name}

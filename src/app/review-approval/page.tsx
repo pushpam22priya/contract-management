@@ -418,28 +418,59 @@ export default function ReviewApprovalPage() {
                 {/* Tabs for Reviewer vs Approver */}
                 {currentUser && (
                     <>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 2 }}>
+                        {/* Tab bar — border spans full width */}
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'flex-end',
+                                borderBottom: '2px solid',
+                                borderColor: 'divider',
+                                mb: 2,
+                                flexWrap: 'wrap',
+                                gap: 1,
+                            }}
+                        >
                             <Tabs
                                 value={tabValue}
                                 onChange={handleTabChange}
                                 sx={{
-                                    borderBottom: 1,
-                                    borderColor: 'divider',
-                                    minHeight: 'auto',
+                                    minHeight: 40,
+                                    '& .MuiTabs-indicator': {
+                                        height: 3,
+                                        borderRadius: '3px 3px 0 0',
+                                        bgcolor: 'primary.main',
+                                    },
+                                    '& .MuiTab-root': {
+                                        minHeight: 40,
+                                        py: 0.5,
+                                    },
                                 }}
                             >
                                 <Tab
                                     label="My Tasks"
-                                    sx={{ textTransform: 'none', fontWeight: 600 }}
+                                    sx={{
+                                        textTransform: 'none',
+                                        fontWeight: 600,
+                                        fontSize: '0.95rem',
+                                        color: 'text.secondary',
+                                        '&.Mui-selected': { color: 'primary.main' },
+                                    }}
                                 />
                                 <Tab
                                     label="History"
-                                    sx={{ textTransform: 'none', fontWeight: 600 }}
+                                    sx={{
+                                        textTransform: 'none',
+                                        fontWeight: 600,
+                                        fontSize: '0.95rem',
+                                        color: 'text.secondary',
+                                        '&.Mui-selected': { color: 'primary.main' },
+                                    }}
                                 />
                             </Tabs>
 
                             {/* Filters */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 0.5 }}>
                                 {/* Role Filter */}
                                 <Autocomplete
                                     size="small"

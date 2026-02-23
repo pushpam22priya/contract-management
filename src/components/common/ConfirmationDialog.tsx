@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Typography, Box } from '@mui/material';
+import { Button, Typography, Box, Tooltip } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
 
 interface ConfirmationDialogProps {
@@ -11,6 +11,8 @@ interface ConfirmationDialogProps {
     onNo: () => void;
     onClose?: () => void;
     loading?: boolean;
+    disableYes?: boolean;
+    yesTooltip?: string;
 }
 
 export default function ConfirmationDialog({
@@ -21,6 +23,8 @@ export default function ConfirmationDialog({
     onNo,
     onClose,
     loading = false,
+    disableYes = false,
+    yesTooltip = '',
 }: ConfirmationDialogProps) {
     return (
         <BaseDialog
@@ -33,9 +37,13 @@ export default function ConfirmationDialog({
                     <Button onClick={onNo} disabled={loading}>
                         No
                     </Button>
-                    <Button variant="contained" onClick={onYes} disabled={loading}>
-                        {loading ? 'Saving...' : 'Yes'}
-                    </Button>
+                    <Tooltip title={disableYes ? yesTooltip : ''} arrow>
+                        <span>
+                            <Button variant="contained" onClick={onYes} disabled={loading || disableYes}>
+                                {loading ? 'Saving...' : 'Yes'}
+                            </Button>
+                        </span>
+                    </Tooltip>
                 </Box>
             }
         >

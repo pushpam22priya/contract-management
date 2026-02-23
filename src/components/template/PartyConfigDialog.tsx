@@ -2,10 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
     Button,
     TextField,
     Box,
@@ -14,7 +10,6 @@ import {
     List,
     ListItem,
     ListItemText,
-    ListItemSecondaryAction,
     Chip,
     Tooltip,
     Paper,
@@ -23,13 +18,10 @@ import {
     Add,
     Delete,
     Edit,
-    DragIndicator,
     ColorLens,
-    ArrowUpward,
-    ArrowDownward,
 } from '@mui/icons-material';
 import { PartyConfiguration } from '@/types/template';
-import { DEFAULT_PARTY_COLORS, getPartyColor } from '@/utils/partyValidation';
+import BaseDialog from '@/components/common/BaseDialog';
 
 // Debug logging
 const LOG_PREFIX = '[PARTY-CONFIG]';
@@ -55,6 +47,12 @@ const COLOR_PALETTE = [
     '#F44336', // Red
 ];
 
+// Returns the first color in COLOR_PALETTE not already used by any party
+function getNextAvailableColor(currentParties: PartyConfiguration[]): string {
+    const usedColors = new Set(currentParties.map(p => p.color));
+    return COLOR_PALETTE.find(c => !usedColors.has(c)) ?? COLOR_PALETTE[currentParties.length % COLOR_PALETTE.length];
+}
+
 export default function PartyConfigDialog({
     open,
     onClose,
@@ -73,6 +71,9 @@ export default function PartyConfigDialog({
             if (initialParties && initialParties.length > 0) {
                 console.log(`${LOG_PREFIX} Initializing with ${initialParties.length} parties`);
                 setParties([...initialParties]);
+                setNewPartyColor(getNextAvailableColor(initialParties));
+            } else {
+                setNewPartyColor(COLOR_PALETTE[0]);
             }
         }
     }, [open, initialParties]);
@@ -98,9 +99,11 @@ export default function PartyConfigDialog({
         };
 
         console.log(`${LOG_PREFIX} Adding party:`, newParty);
-        setParties([...parties, newParty]);
+        const updatedParties = [...parties, newParty];
+        setParties(updatedParties);
         setNewPartyLabel('');
-        setNewPartyColor(COLOR_PALETTE[parties.length % COLOR_PALETTE.length]);
+        // Auto-pick next available color for the next new party
+        setNewPartyColor(getNextAvailableColor(updatedParties));
     };
 
     // Remove a party
@@ -110,6 +113,8 @@ export default function PartyConfigDialog({
             .filter(p => p.id !== partyId)
             .map((p, idx) => ({ ...p, order: idx + 1 }));
         setParties(updatedParties);
+        // Recalculate next available color after removal
+        setNewPartyColor(getNextAvailableColor(updatedParties));
     };
 
     // Update party label
@@ -124,30 +129,13 @@ export default function PartyConfigDialog({
     // Update party color
     const handleUpdatePartyColor = (partyId: string, newColor: string) => {
         console.log(`${LOG_PREFIX} Updating party ${partyId} color to: ${newColor}`);
-        setParties(parties.map(p =>
+        const updatedParties = parties.map(p =>
             p.id === partyId ? { ...p, color: newColor } : p
-        ));
+        );
+        setParties(updatedParties);
         setShowColorPicker(null);
-    };
-
-    // Move party up in order
-    const handleMoveUp = (index: number) => {
-        if (index === 0) return;
-        const newParties = [...parties];
-        const temp = newParties[index];
-        newParties[index] = { ...newParties[index - 1], order: index + 1 };
-        newParties[index - 1] = { ...temp, order: index };
-        setParties(newParties);
-    };
-
-    // Move party down in order
-    const handleMoveDown = (index: number) => {
-        if (index === parties.length - 1) return;
-        const newParties = [...parties];
-        const temp = newParties[index];
-        newParties[index] = { ...newParties[index + 1], order: index + 1 };
-        newParties[index + 1] = { ...temp, order: index + 2 };
-        setParties(newParties);
+        // Recalculate next available color after color change
+        setNewPartyColor(getNextAvailableColor(updatedParties));
     };
 
     // Save and close
@@ -157,66 +145,39 @@ export default function PartyConfigDialog({
         onClose();
     };
 
+    const dialogActions = (
+        <>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button
+                variant="contained"
+                onClick={handleSave}
+                disabled={parties.length === 0}
+            >
+                Save Parties
+            </Button>
+        </>
+    );
+
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    Configure Parties
-                </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    Define the parties who will fill and sign fields in this template.
-                    The order determines the signing sequence.
-                </Typography>
-            </DialogTitle>
+        <BaseDialog
+            open={open}
+            onClose={onClose}
+            title="Configure Parties"
+            maxWidth="sm"
+            actions={dialogActions}
+        >
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }} >
 
-            <DialogContent>
-                {/* Party List */}
-                <Paper variant="outlined" sx={{ mb: 3, maxHeight: 300, overflow: 'auto' }}>
-                    {parties.length > 0 && <List dense>
-                        {parties.map((party, index) => (
-                            <ListItem
-                                key={party.id}
-                                sx={{
-                                    borderLeft: `4px solid ${party.color}`,
-                                    '&:hover': { bgcolor: 'action.hover' },
-                                }}
-                            >
-                                <DragIndicator sx={{ mr: 1, color: 'text.disabled' }} />
-
-                                <Chip
-                                    label={party.order}
-                                    size="small"
-                                    sx={{
-                                        mr: 1,
-                                        minWidth: 28,
-                                        bgcolor: party.color,
-                                        color: 'white',
-                                        fontWeight: 'bold',
-                                    }}
-                                />
-
-                                {editingParty?.id === party.id ? (
-                                    <TextField
-                                        size="small"
-                                        value={editingParty.label}
-                                        onChange={(e) => setEditingParty({ ...editingParty, label: e.target.value })}
-                                        onBlur={() => handleUpdatePartyLabel(party.id, editingParty.label)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                handleUpdatePartyLabel(party.id, editingParty.label);
-                                            }
-                                        }}
-                                        autoFocus
-                                        sx={{ flex: 1 }}
-                                    />
-                                ) : (
-                                    <ListItemText
-                                        primary={party.label}
-                                        secondary={`Fields assigned to ${party.label} will be filled in order ${party.order}`}
-                                    />
-                                )}
-
-                                <ListItemSecondaryAction>
+                You can assign fields after saving parties.
+            </Typography>
+            {/* Party List */}
+            <Paper variant="outlined" sx={{ mb: 3, maxHeight: 300, overflow: 'auto' }}>
+                {parties.length > 0 && <List dense>
+                    {parties.map((party) => (
+                        <ListItem
+                            key={party.id}
+                            secondaryAction={
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                     {/* Color picker */}
                                     <Tooltip title="Change color">
                                         <IconButton
@@ -237,32 +198,6 @@ export default function PartyConfigDialog({
                                         </IconButton>
                                     </Tooltip>
 
-                                    {/* Move up */}
-                                    <Tooltip title="Move up">
-                                        <span>
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => handleMoveUp(index)}
-                                                disabled={index === 0}
-                                            >
-                                                <ArrowUpward fontSize="small" />
-                                            </IconButton>
-                                        </span>
-                                    </Tooltip>
-
-                                    {/* Move down */}
-                                    <Tooltip title="Move down">
-                                        <span>
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => handleMoveDown(index)}
-                                                disabled={index === parties.length - 1}
-                                            >
-                                                <ArrowDownward fontSize="small" />
-                                            </IconButton>
-                                        </span>
-                                    </Tooltip>
-
                                     {/* Delete button */}
                                     <Tooltip title="Remove party">
                                         <span>
@@ -275,118 +210,136 @@ export default function PartyConfigDialog({
                                             </IconButton>
                                         </span>
                                     </Tooltip>
-                                </ListItemSecondaryAction>
-                            </ListItem>
-                        ))}
-                    </List>}
-                </Paper>
-
-                {/* Color picker popover */}
-                {showColorPicker && (
-                    <Paper
-                        elevation={4}
-                        sx={{
-                            p: 2,
-                            mb: 2,
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: 1,
-                            justifyContent: 'center',
-                        }}
-                    >
-                        <Typography variant="body2" sx={{ width: '100%', mb: 1, textAlign: 'center' }}>
-                            Select a color:
-                        </Typography>
-                        {COLOR_PALETTE.map((color) => (
-                            <Box
-                                key={color}
-                                onClick={() => handleUpdatePartyColor(showColorPicker, color)}
+                                </Box>
+                            }
+                            sx={{
+                                borderLeft: `4px solid ${party.color}`,
+                                '&:hover': { bgcolor: 'action.hover' },
+                            }}
+                        >
+                            <Chip
+                                label={party.order}
+                                size="small"
                                 sx={{
-                                    width: 32,
-                                    height: 32,
-                                    bgcolor: color,
-                                    borderRadius: 1,
-                                    cursor: 'pointer',
-                                    border: '2px solid',
-                                    borderColor: parties.find(p => p.id === showColorPicker)?.color === color
-                                        ? 'primary.main'
-                                        : 'transparent',
-                                    '&:hover': {
-                                        transform: 'scale(1.1)',
-                                    },
+                                    mr: 1,
+                                    minWidth: 28,
+                                    bgcolor: party.color,
+                                    color: 'white',
+                                    fontWeight: 'bold',
                                 }}
                             />
-                        ))}
-                    </Paper>
-                )}
 
-                {/* Add new party */}
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                    <Box
-                        onClick={() => {
-                            const currentIndex = COLOR_PALETTE.indexOf(newPartyColor);
-                            const nextIndex = (currentIndex + 1) % COLOR_PALETTE.length;
-                            setNewPartyColor(COLOR_PALETTE[nextIndex]);
-                        }}
-                        sx={{
-                            width: 40,
-                            height: 40,
-                            bgcolor: newPartyColor,
-                            borderRadius: 1,
-                            cursor: 'pointer',
-                            flexShrink: 0,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            '&:hover': {
-                                opacity: 0.8,
-                            },
-                        }}
-                    >
-                        <ColorLens sx={{ color: 'white' }} />
-                    </Box>
+                            {editingParty?.id === party.id ? (
+                                <TextField
+                                    size="small"
+                                    value={editingParty.label}
+                                    onChange={(e) => setEditingParty({ ...editingParty, label: e.target.value })}
+                                    onBlur={() => handleUpdatePartyLabel(party.id, editingParty.label)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            handleUpdatePartyLabel(party.id, editingParty.label);
+                                        }
+                                    }}
+                                    autoFocus
+                                    sx={{ flex: 1 }}
+                                />
+                            ) : (
+                                <ListItemText
+                                    primary={party.label}
+                                />
+                            )}
+                        </ListItem>
+                    ))}
+                </List>}
+            </Paper>
 
-                    <TextField
-                        fullWidth
-                        size="small"
-                        label="New Party Name"
-                        placeholder="e.g., Witness, Guarantor"
-                        value={newPartyLabel}
-                        onChange={(e) => setNewPartyLabel(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                handleAddParty();
-                            }
-                        }}
-                    />
+            {/* Color picker popover */}
+            {showColorPicker && (
+                <Paper
+                    elevation={4}
+                    sx={{
+                        p: 2,
+                        mb: 2,
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 1,
+                        justifyContent: 'center',
+                    }}
+                >
+                    <Typography variant="body2" sx={{ width: '100%', mb: 1, textAlign: 'center' }}>
+                        Select a color:
+                    </Typography>
+                    {COLOR_PALETTE.map((color) => {
+                        const isUsedByOther = parties.some(
+                            p => p.id !== showColorPicker && p.color === color
+                        );
+                        return (
+                            <Tooltip key={color} title={isUsedByOther ? 'Already used by another party' : ''}>
+                                <Box
+                                    onClick={() => !isUsedByOther && handleUpdatePartyColor(showColorPicker, color)}
+                                    sx={{
+                                        width: 32,
+                                        height: 32,
+                                        bgcolor: color,
+                                        borderRadius: 1,
+                                        cursor: isUsedByOther ? 'not-allowed' : 'pointer',
+                                        border: '2px solid',
+                                        borderColor: parties.find(p => p.id === showColorPicker)?.color === color
+                                            ? 'primary.main'
+                                            : 'transparent',
+                                        opacity: isUsedByOther ? 0.35 : 1,
+                                        '&:hover': {
+                                            transform: isUsedByOther ? 'none' : 'scale(1.1)',
+                                        },
+                                    }}
+                                />
+                            </Tooltip>
+                        );
+                    })}
+                </Paper>
+            )}
 
-                    <Button
-                        variant="contained"
-                        onClick={handleAddParty}
-                        disabled={!newPartyLabel.trim()}
-                        startIcon={<Add />}
-                        sx={{ flexShrink: 0 }}
-                    >
-                        Add
-                    </Button>
+            {/* Add new party */}
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                <Box
+                    sx={{
+                        width: 40,
+                        height: 40,
+                        bgcolor: newPartyColor,
+                        borderRadius: 1,
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
+                    <ColorLens sx={{ color: 'white' }} />
                 </Box>
 
-                {/* Info */}
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-                    After saving, you can assign fields to each party by selecting a field and choosing a party.
-                </Typography>
-            </DialogContent>
+                <TextField
+                    fullWidth
+                    size="small"
+                    label="New Party Name"
+                    placeholder="e.g., Witness, Guarantor"
+                    value={newPartyLabel}
+                    onChange={(e) => setNewPartyLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            handleAddParty();
+                        }
+                    }}
+                />
 
-            <DialogActions>
-                <Button onClick={onClose}>Cancel</Button>
                 <Button
                     variant="contained"
-                    onClick={handleSave}
-                    disabled={parties.length === 0}
+                    onClick={handleAddParty}
+                    disabled={!newPartyLabel.trim()}
+                    startIcon={<Add />}
+                    sx={{ flexShrink: 0 }}
                 >
-                    Save Parties
+                    Add
                 </Button>
-            </DialogActions>
-        </Dialog>
+            </Box>
+        </BaseDialog>
     );
 }

@@ -952,6 +952,8 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 onNo={handleUnsavedNo}
                 onClose={handleUnsavedClose}
                 loading={saving}
+                disableYes={!canSave}
+                yesTooltip={hasPartialParty ? 'Complete all fields for the party you started' : ''}
             />
 
             {/* Request Review Dialog */}
