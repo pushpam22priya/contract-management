@@ -799,7 +799,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 formFields={contract.formFields}
                 currentUserRole="contractor"
                 onSave={handleSaveChanges}
-                editableFieldMode="all"
+                readOnly={false}
+                editableFieldMode="empty-only"
                 showAnnotationNavigation={true}
                 parties={contract.parties}
             />
