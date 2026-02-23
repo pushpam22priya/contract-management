@@ -234,6 +234,50 @@ export default function PublicSigningPage() {
 
     const hasPartialParty = !!partyValidationWarning;
 
+    // ✅ Check if client has filled ALL their assigned fields (required to submit)
+    const { hasFilledAllAssignedFields, unfilledFieldCount, totalAssignedFieldCount } = useMemo(() => {
+        if (!signatureRequest?.formFields || !signatureRequest?.assignedParty) {
+            // Legacy mode (no assigned party) - allow submit
+            return { hasFilledAllAssignedFields: true, unfilledFieldCount: 0, totalAssignedFieldCount: 0 };
+        }
+
+        const formFields = signatureRequest.formFields;
+        const prefilledValues = signatureRequest.fieldValues || {};
+
+        // Get the user's assigned party IDs
+        const userPartyIds = Array.isArray(signatureRequest.assignedParty)
+            ? signatureRequest.assignedParty
+            : [signatureRequest.assignedParty];
+
+        // Get all fields assigned to the user's party that they need to fill
+        const userFields = formFields.filter((f: any) =>
+            f.assignedParty && userPartyIds.includes(f.assignedParty)
+        );
+
+        // Filter to only editable fields (not pre-filled by contractor)
+        const editableUserFields = userFields.filter((f: any) => {
+            const prefilledVal = prefilledValues[f.name];
+            return !prefilledVal || prefilledVal.toString().trim() === '';
+        });
+
+        // Count how many of these fields are filled
+        const filledCount = editableUserFields.filter((f: any) => {
+            const val = filledFieldValues[f.name];
+            return val && val.toString().trim() !== '';
+        }).length;
+
+        const unfilled = editableUserFields.length - filledCount;
+        const allFilled = unfilled === 0;
+
+        console.log(`📋 [SUBMIT CHECK] User fields: ${editableUserFields.length}, Filled: ${filledCount}, Unfilled: ${unfilled}`);
+
+        return {
+            hasFilledAllAssignedFields: allFilled,
+            unfilledFieldCount: unfilled,
+            totalAssignedFieldCount: editableUserFields.length
+        };
+    }, [filledFieldValues, signatureRequest]);
+
     // Reset dismissed state when warning content changes (user fills more fields)
     useEffect(() => {
         if (partyValidationWarning) {
@@ -637,9 +681,11 @@ export default function PublicSigningPage() {
                     title={
                         hasModifiedOtherPartyFields
                             ? 'You modified fields not assigned to you. Restore them to submit.'
-                            : hasPartialParty
-                                ? 'Complete all fields for the party you started filling'
-                                : ''
+                            : !hasFilledAllAssignedFields
+                                ? `Please fill all your assigned fields (${unfilledFieldCount} remaining)`
+                                : hasPartialParty
+                                    ? 'Complete all fields for the party you started filling'
+                                    : ''
                     }
                     arrow
                 >
@@ -649,7 +695,7 @@ export default function PublicSigningPage() {
                             size="small"
                             startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <Save />}
                             onClick={handleSubmitSignature}
-                            disabled={submitting || hasPartialParty || hasModifiedOtherPartyFields}
+                            disabled={submitting || !hasFilledAllAssignedFields || hasPartialParty || hasModifiedOtherPartyFields}
                             sx={{
                                 bgcolor: 'white',
                                 color: 'primary.main',
