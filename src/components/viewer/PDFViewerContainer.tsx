@@ -27,6 +27,7 @@ interface PDFViewerContainerProps {
     showAnnotationNavigation?: boolean; // ✅ Show floating navigation button for annotations
     onSignatureApplied?: (data: { emptySignatureFieldCount: number }) => void; // ✅ Callback when a signature is applied to a field
     onPrefilledFieldModified?: () => void; // ✅ Callback when a pre-filled field/signature is modified or moved
+    onSignaturePositionRestored?: () => void; // ✅ Callback when a signature position is restored (for showing warning without refresh)
     silentPositionRestore?: boolean; // ✅ If true, restore signature positions silently without showing warning
 
     // Multi-party field assignment props
@@ -69,6 +70,7 @@ export interface PDFViewerHandle {
     switchToViewMode: () => Promise<boolean>;
     applySignatureToAllEmptyFields: () => Promise<number>;
     clearField: (fieldName: string) => boolean;
+    restoreFieldValue: (fieldName: string, value: string) => boolean; // Restore a field to a specific value
     // Multi-party field assignment methods
     assignFieldToParty: (fieldName: string, partyId: string, partyLabel: string, partyColor: string) => boolean;
     getFieldPartyAssignment: (fieldName: string) => { partyId: string; partyLabel: string } | null;
@@ -77,7 +79,7 @@ export interface PDFViewerHandle {
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, silentPositionRestore = false, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const [loading, setLoading] = useState(true);
@@ -111,6 +113,10 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         // ✅ Store original positions of pre-filled signature annotations
         // Used to restore position if external user tries to drag them
         const prefilledSignaturePositionsRef = useRef<Map<string, { X: number; Y: number; Width: number; Height: number; PageNumber: number }>>(new Map());
+
+        // ✅ Store pre-filled signature annotation objects for restoration if deleted
+        // Maps annotationId -> { xfdf: string, annotType: string } so we can restore if user tries to delete
+        const prefilledSignatureDataRef = useRef<Map<string, { xfdf: string; annotType: string }>>(new Map());
 
         // ✅ Refs for "Sign All" feature
         const onSignatureAppliedRef = useRef<((data: { emptySignatureFieldCount: number }) => void) | undefined>(undefined);
@@ -1571,6 +1577,59 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     return false;
                 }
             },
+
+            /**
+             * Restore a specific field's value to a given value
+             * Used for reverting pre-filled fields back to their original values
+             */
+            restoreFieldValue: (fieldName: string, value: string): boolean => {
+                console.log(`🔄 [RESTORE FIELD] Attempting to restore field: ${fieldName} to value: "${value}"`);
+
+                if (!viewerInstance.current) {
+                    console.warn(`🔄 [RESTORE FIELD] Viewer not initialized`);
+                    return false;
+                }
+
+                try {
+                    const { Core } = viewerInstance.current;
+                    const annotationManager = Core.annotationManager;
+                    const fieldManager = annotationManager.getFieldManager();
+                    const allFields = fieldManager.getFields() || [];
+                    const fieldsArray = Array.isArray(allFields) ? allFields : Array.from(allFields);
+
+                    // Find the field by name
+                    const field = fieldsArray.find((f: any) => f.name === fieldName);
+
+                    if (!field) {
+                        console.warn(`🔄 [RESTORE FIELD] Field not found: ${fieldName}`);
+                        return false;
+                    }
+
+                    // Restore the field value
+                    if (field.setValue && typeof field.setValue === 'function') {
+                        field.setValue(value);
+                        console.log(`✅ [RESTORE FIELD] Restored field value: ${fieldName} = "${value}"`);
+                    }
+
+                    // Update captured values
+                    if (value) {
+                        capturedFieldValuesRef.current.set(fieldName, value);
+                    } else {
+                        capturedFieldValuesRef.current.delete(fieldName);
+                    }
+
+                    // Redraw the widget to show the restored value
+                    const widgets = field.widgets || [];
+                    if (widgets.length > 0) {
+                        annotationManager.redrawAnnotation(widgets[0]);
+                    }
+
+                    return true;
+                } catch (error) {
+                    console.error(`❌ [RESTORE FIELD] Error restoring field ${fieldName}:`, error);
+                    return false;
+                }
+            },
         }));
 
         // Initialize viewer once (on mount)
@@ -2187,12 +2246,12 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             // This allows us to restore positions if external users try to drag them
                             // Apply for: 1) External signers (editableParties), 2) Contract viewers (silentPositionRestore)
                             if ((editableParties && editableParties.length > 0) || silentPositionRestore) {
-                                const captureSignaturePositions = () => {
+                                const captureSignaturePositions = async () => {
                                     console.log('📍 [POSITION LOCK] Capturing initial positions of pre-filled signatures...');
                                     const allAnnotations = Core.annotationManager.getAnnotationsList();
                                     let capturedCount = 0;
 
-                                    allAnnotations.forEach((annot: any) => {
+                                    for (const annot of allAnnotations) {
                                         // Check if this is a signature-related annotation (FreeHand or Stamp)
                                         const isSignatureAnnot =
                                             annot instanceof Core.Annotations.FreeHandAnnotation ||
@@ -2217,7 +2276,19 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                 };
 
                                                 prefilledSignaturePositionsRef.current.set(annotId, position);
-                                                console.log(`📍 [POSITION LOCK] Captured signature annotation ${annotId}:`, position);
+
+                                                // ✅ Also capture XFDF data for restoration if deleted
+                                                try {
+                                                    const xfdfString = await Core.annotationManager.exportAnnotations({ annotList: [annot] });
+                                                    prefilledSignatureDataRef.current.set(annotId, {
+                                                        xfdf: xfdfString,
+                                                        annotType: annot instanceof Core.Annotations.FreeHandAnnotation ? 'FreeHand' : 'Stamp'
+                                                    });
+                                                    console.log(`📍 [POSITION LOCK] Captured signature annotation ${annotId} with XFDF data`);
+                                                } catch (e) {
+                                                    console.warn(`⚠️ [POSITION LOCK] Could not capture XFDF for ${annotId}:`, e);
+                                                }
+
                                                 capturedCount++;
                                             }
                                         } else if (linkedAnnotation) {
@@ -2234,11 +2305,23 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                 };
 
                                                 prefilledSignaturePositionsRef.current.set(linkedId, position);
-                                                console.log(`📍 [POSITION LOCK] Captured linked signature annotation ${linkedId}:`, position);
+
+                                                // ✅ Also capture XFDF data for restoration if deleted
+                                                try {
+                                                    const xfdfString = await Core.annotationManager.exportAnnotations({ annotList: [linkedAnnotation] });
+                                                    prefilledSignatureDataRef.current.set(linkedId, {
+                                                        xfdf: xfdfString,
+                                                        annotType: linkedAnnotation instanceof Core.Annotations.FreeHandAnnotation ? 'FreeHand' : 'Stamp'
+                                                    });
+                                                    console.log(`📍 [POSITION LOCK] Captured linked signature annotation ${linkedId} with XFDF data`);
+                                                } catch (e) {
+                                                    console.warn(`⚠️ [POSITION LOCK] Could not capture XFDF for ${linkedId}:`, e);
+                                                }
+
                                                 capturedCount++;
                                             }
                                         }
-                                    });
+                                    }
 
                                     console.log(`✅ [POSITION LOCK] Captured ${capturedCount} new positions (total: ${prefilledSignaturePositionsRef.current.size})`);
                                 };
@@ -2253,44 +2336,83 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 }, 1000);
 
                                 // ✅ Add listener to detect and prevent signature position changes
-                                Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string) => {
-                                    if (action !== 'modify') return;
+                                Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string, info: any) => {
+                                    // Handle position changes (drag)
+                                    if (action === 'modify') {
+                                        annotations.forEach((annot: any) => {
+                                            const annotId = annot.Id;
+                                            const originalPosition = prefilledSignaturePositionsRef.current.get(annotId);
 
-                                    annotations.forEach((annot: any) => {
-                                        const annotId = annot.Id;
-                                        const originalPosition = prefilledSignaturePositionsRef.current.get(annotId);
+                                            if (originalPosition) {
+                                                // Check if position has changed
+                                                const hasPositionChanged =
+                                                    annot.X !== originalPosition.X ||
+                                                    annot.Y !== originalPosition.Y ||
+                                                    annot.PageNumber !== originalPosition.PageNumber;
 
-                                        if (originalPosition) {
-                                            // Check if position has changed
-                                            const hasPositionChanged =
-                                                annot.X !== originalPosition.X ||
-                                                annot.Y !== originalPosition.Y ||
-                                                annot.PageNumber !== originalPosition.PageNumber;
+                                                if (hasPositionChanged) {
+                                                    console.log(`🚫 [POSITION LOCK] Detected unauthorized position change for annotation ${annotId}`);
+                                                    console.log(`   Old: (${originalPosition.X}, ${originalPosition.Y}) Page ${originalPosition.PageNumber}`);
+                                                    console.log(`   New: (${annot.X}, ${annot.Y}) Page ${annot.PageNumber}`);
 
-                                            if (hasPositionChanged) {
-                                                console.log(`🚫 [POSITION LOCK] Detected unauthorized position change for annotation ${annotId}`);
-                                                console.log(`   Old: (${originalPosition.X}, ${originalPosition.Y}) Page ${originalPosition.PageNumber}`);
-                                                console.log(`   New: (${annot.X}, ${annot.Y}) Page ${annot.PageNumber}`);
+                                                    // Restore original position
+                                                    annot.X = originalPosition.X;
+                                                    annot.Y = originalPosition.Y;
+                                                    annot.Width = originalPosition.Width;
+                                                    annot.Height = originalPosition.Height;
+                                                    annot.PageNumber = originalPosition.PageNumber;
 
-                                                // Restore original position
-                                                annot.X = originalPosition.X;
-                                                annot.Y = originalPosition.Y;
-                                                annot.Width = originalPosition.Width;
-                                                annot.Height = originalPosition.Height;
-                                                annot.PageNumber = originalPosition.PageNumber;
+                                                    // Redraw to show restored position
+                                                    Core.annotationManager.redrawAnnotation(annot);
 
-                                                // Redraw to show restored position
-                                                Core.annotationManager.redrawAnnotation(annot);
+                                                    // Trigger callback to show warning (only if not in silent mode)
+                                                    // Use onSignaturePositionRestored for better UX (shows warning without refresh)
+                                                    if (!silentPositionRestore) {
+                                                        if (onSignaturePositionRestored) {
+                                                            onSignaturePositionRestored();
+                                                        } else if (onPrefilledFieldModified) {
+                                                            // Fallback to old callback if new one not provided
+                                                            onPrefilledFieldModified();
+                                                        }
+                                                    }
 
-                                                // Trigger callback to show warning (only if not in silent mode)
-                                                if (onPrefilledFieldModified && !silentPositionRestore) {
-                                                    onPrefilledFieldModified();
+                                                    console.log(`✅ [POSITION LOCK] Restored annotation ${annotId} to original position ${silentPositionRestore ? '(silent)' : '(with warning)'}`);
                                                 }
-
-                                                console.log(`✅ [POSITION LOCK] Restored annotation ${annotId} to original position ${silentPositionRestore ? '(silent)' : '(with warning)'}`);
                                             }
-                                        }
-                                    });
+                                        });
+                                    }
+
+                                    // ✅ Handle deletion of pre-filled signatures - restore them
+                                    if (action === 'delete') {
+                                        // Skip if this deletion was triggered by our own restoration code
+                                        if (info?.source === 'restore_prefilled') return;
+
+                                        annotations.forEach(async (annot: any) => {
+                                            const annotId = annot.Id;
+                                            const savedData = prefilledSignatureDataRef.current.get(annotId);
+
+                                            if (savedData) {
+                                                console.log(`🚫 [DELETE LOCK] Detected deletion of pre-filled signature annotation ${annotId}`);
+
+                                                // Restore the annotation from XFDF
+                                                try {
+                                                    await Core.annotationManager.importAnnotations(savedData.xfdf);
+                                                    console.log(`✅ [DELETE LOCK] Restored pre-filled signature annotation ${annotId}`);
+
+                                                    // Trigger callback to show warning (only if not in silent mode)
+                                                    if (!silentPositionRestore) {
+                                                        if (onSignaturePositionRestored) {
+                                                            onSignaturePositionRestored();
+                                                        } else if (onPrefilledFieldModified) {
+                                                            onPrefilledFieldModified();
+                                                        }
+                                                    }
+                                                } catch (e) {
+                                                    console.error(`❌ [DELETE LOCK] Failed to restore annotation ${annotId}:`, e);
+                                                }
+                                            }
+                                        });
+                                    }
                                 });
                             }
 

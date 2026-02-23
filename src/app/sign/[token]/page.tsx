@@ -67,11 +67,9 @@ export default function PublicSigningPage() {
     // Track if user dismissed the party validation warning popup
     const [dismissedPartyWarning, setDismissedPartyWarning] = useState(false);
 
-    // ✅ Wrong party warning - shows when user tries to edit another party's field
+    // ✅ Wrong party warning - shows when user tries to edit another party's field (empty or pre-filled)
+    // Also shows when user tries to drag a pre-filled signature
     const [showWrongPartyWarning, setShowWrongPartyWarning] = useState(false);
-
-    // ✅ Pre-filled field modified warning - shows when user modifies a field that was already filled
-    const [showPrefilledModifiedWarning, setShowPrefilledModifiedWarning] = useState(false);
 
     // ✅ Track which fields were pre-filled (had values when page loaded)
     const prefilledFieldNamesRef = useRef<Set<string>>(new Set());
@@ -99,16 +97,8 @@ export default function PublicSigningPage() {
     const handleFieldChange = (fieldName: string, value: any) => {
         const newValue = value?.toString() || '';
 
-        // ✅ For pre-filled fields, only warn if user has interacted AND value differs from initial
-        if (userHasInteractedRef.current && prefilledFieldNamesRef.current.has(fieldName)) {
-            const initialValue = initialFieldValuesRef.current[fieldName] || '';
-            if (newValue !== initialValue) {
-                console.log(`⚠️ [PRE-FILLED MODIFIED] Field "${fieldName}" changed: "${initialValue}" → "${newValue}"`);
-                setShowPrefilledModifiedWarning(true);
-            }
-        }
-
         // ✅ Check if user is editing another party's field - show warning (only after user interaction)
+        // This handles BOTH empty and pre-filled fields belonging to other parties
         if (userHasInteractedRef.current && signatureRequest?.formFields && signatureRequest?.assignedParty) {
             const field = signatureRequest.formFields.find((f: any) => f.name === fieldName);
             if (field?.assignedParty) {
@@ -116,19 +106,30 @@ export default function PublicSigningPage() {
                     ? signatureRequest.assignedParty
                     : [signatureRequest.assignedParty];
 
-                // If this field belongs to a different party, clear the value and show warning
+                // If this field belongs to a different party, restore to original value and show warning
                 if (!userPartyIds.includes(field.assignedParty)) {
                     setShowWrongPartyWarning(true);
 
-                    // Clear the field value in state
+                    // Get the original value (may be empty or pre-filled)
+                    const originalValue = initialFieldValuesRef.current[fieldName] || '';
+
+                    // Restore the field value in state to original
                     setFilledFieldValues(prev => ({
                         ...prev,
-                        [fieldName]: ''
+                        [fieldName]: originalValue
                     }));
 
-                    // Clear the field in the PDF viewer
-                    if (pdfViewerRef.current?.clearField) {
-                        pdfViewerRef.current.clearField(fieldName);
+                    // Restore the field in the PDF viewer to original value
+                    if (originalValue) {
+                        // If field was pre-filled, restore to that value
+                        if (pdfViewerRef.current?.restoreFieldValue) {
+                            pdfViewerRef.current.restoreFieldValue(fieldName, originalValue);
+                        }
+                    } else {
+                        // If field was empty, clear it
+                        if (pdfViewerRef.current?.clearField) {
+                            pdfViewerRef.current.clearField(fieldName);
+                        }
                     }
 
                     return; // Exit early, don't save the wrong party's value
@@ -634,13 +635,11 @@ export default function PublicSigningPage() {
                 </Box>
                 <Tooltip
                     title={
-                        showPrefilledModifiedWarning
-                            ? 'You modified a pre-filled field. Please refresh the page.'
-                            : hasModifiedOtherPartyFields
-                                ? 'You modified fields not assigned to you. Restore them to submit.'
-                                : hasPartialParty
-                                    ? 'Complete all fields for the party you started filling'
-                                    : ''
+                        hasModifiedOtherPartyFields
+                            ? 'You modified fields not assigned to you. Restore them to submit.'
+                            : hasPartialParty
+                                ? 'Complete all fields for the party you started filling'
+                                : ''
                     }
                     arrow
                 >
@@ -650,7 +649,7 @@ export default function PublicSigningPage() {
                             size="small"
                             startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <Save />}
                             onClick={handleSubmitSignature}
-                            disabled={submitting || hasPartialParty || hasModifiedOtherPartyFields || showPrefilledModifiedWarning}
+                            disabled={submitting || hasPartialParty || hasModifiedOtherPartyFields}
                             sx={{
                                 bgcolor: 'white',
                                 color: 'primary.main',
@@ -684,14 +683,15 @@ export default function PublicSigningPage() {
                         onFieldChange={handleFieldChange}
                         showAnnotationNavigation={true}
                         onSignatureApplied={handleSignatureApplied}
-                        onPrefilledFieldModified={() => setShowPrefilledModifiedWarning(true)}
+                        // ✅ When user drags a pre-filled signature, show wrong party warning (position is auto-restored)
+                        onSignaturePositionRestored={() => setShowWrongPartyWarning(true)}
                         // ✅ MULTI-PARTY: Restrict editing to assigned party's fields only
                         editableParties={editableParties}
                     />
                 )}
 
-                {/* ✅ Wrong Party Warning Dialog - shows when user edits another party's field */}
-                {showWrongPartyWarning && !showPrefilledModifiedWarning && (
+                {/* ✅ Wrong Party Warning Dialog - shows when user edits another party's field or drags a pre-filled signature */}
+                {showWrongPartyWarning && (
                     <Box
                         sx={{
                             position: 'fixed',
@@ -721,7 +721,7 @@ export default function PublicSigningPage() {
                                 You are assigned to fill fields as <strong>{userPartyLabels}</strong>.
                             </Typography>
                             <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                                Please only fill the fields that belong to your assigned party.
+                                Your changes have been automatically reverted. Please only fill the fields that belong to your assigned party.
                             </Typography>
                             <Button
                                 fullWidth
@@ -731,52 +731,6 @@ export default function PublicSigningPage() {
                                 sx={{ textTransform: 'none', fontWeight: 600 }}
                             >
                                 I Understand
-                            </Button>
-                        </Alert>
-                    </Box>
-                )}
-
-                {/* ✅ Pre-filled Field Modified Warning - shows when user modifies a field that was already filled */}
-                {showPrefilledModifiedWarning && (
-                    <Box
-                        sx={{
-                            position: 'fixed',
-                            top: '50%',
-                            left: '50%',
-                            transform: 'translate(-50%, -50%)',
-                            zIndex: 1200,
-                            maxWidth: 420,
-                            minWidth: 340,
-                        }}
-                    >
-                        <Alert
-                            severity="error"
-                            sx={{
-                                py: 2,
-                                px: 2.5,
-                                boxShadow: 8,
-                                borderRadius: 2,
-                                border: '2px solid',
-                                borderColor: 'error.main',
-                            }}
-                        >
-                            <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
-                                Field Already Filled
-                            </Typography>
-                            <Typography variant="body1" sx={{ mb: 2 }}>
-                                You modified a field that was already filled by another party.
-                            </Typography>
-                            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                                Please refresh the page and try again. Only fill the empty fields assigned to you.
-                            </Typography>
-                            <Button
-                                fullWidth
-                                variant="contained"
-                                color="error"
-                                onClick={() => window.location.reload()}
-                                sx={{ textTransform: 'none', fontWeight: 600 }}
-                            >
-                                Refresh Page
                             </Button>
                         </Alert>
                     </Box>
