@@ -29,6 +29,7 @@ interface PDFViewerContainerProps {
     onPrefilledFieldModified?: () => void; // ✅ Callback when a pre-filled field/signature is modified or moved
     onSignaturePositionRestored?: () => void; // ✅ Callback when a signature position is restored (for showing warning without refresh)
     silentPositionRestore?: boolean; // ✅ If true, restore signature positions silently without showing warning
+    protectedPartyIds?: string[]; // ✅ Party IDs whose signatures should be protected from modification (e.g., client parties for contractor view)
 
     // Multi-party field assignment props
     parties?: PartyConfiguration[];           // Available parties for field assignment
@@ -79,7 +80,7 @@ export interface PDFViewerHandle {
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const [loading, setLoading] = useState(true);
@@ -118,6 +119,14 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         // Maps annotationId -> { xfdf: string, annotType: string } so we can restore if user tries to delete
         const prefilledSignatureDataRef = useRef<Map<string, { xfdf: string; annotType: string }>>(new Map());
 
+        // ✅ Store which party each signature annotation belongs to (for party-aware protection)
+        // Maps annotationId -> partyId (e.g., 'party_1', 'party_2')
+        const signatureAnnotationPartyRef = useRef<Map<string, string>>(new Map());
+
+        // ✅ Refs for protectedPartyIds and formFields to avoid stale closures
+        const protectedPartyIdsRef = useRef<string[]>([]);
+        const formFieldsRef = useRef<any[]>([]);
+
         // ✅ Refs for "Sign All" feature
         const onSignatureAppliedRef = useRef<((data: { emptySignatureFieldCount: number }) => void) | undefined>(undefined);
         const isApplyingSignAllRef = useRef(false);
@@ -142,6 +151,10 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
         // Keep onFieldChange ref updated for use in event handlers (avoids stale closure)
         onFieldChangeRef.current = onFieldChange;
+
+        // Keep protectedPartyIds and formFields refs updated for use in event handlers
+        protectedPartyIdsRef.current = protectedPartyIds || [];
+        formFieldsRef.current = formFields || [];
 
         // ✅ Helper: Switch toolbar group using the correct API for the UI version
         // WebViewer 11+ uses Modular UI by default, where setToolbarGroup is a Legacy API
@@ -1930,6 +1943,22 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                                 if (annotId) {
                                                                     signatureAnnotationToFieldRef.current.set(annotId, fieldName);
                                                                     console.log(`📝 [SIGNATURE TRACK] Mapped annotation ${annotId} → ${fieldName}`);
+
+                                                                    // ✅ Also capture XFDF data for restoration if deleted
+                                                                    // This ensures protected party signatures can be restored
+                                                                    if (!prefilledSignatureDataRef.current.has(annotId)) {
+                                                                        try {
+                                                                            Core.annotationManager.exportAnnotations({ annotList: [annot] }).then(xfdfString => {
+                                                                                prefilledSignatureDataRef.current.set(annotId, {
+                                                                                    xfdf: xfdfString,
+                                                                                    annotType: annot instanceof Core.Annotations.FreeHandAnnotation ? 'FreeHand' : 'Stamp'
+                                                                                });
+                                                                                console.log(`📍 [SIGNATURE TRACK] Captured XFDF for annotation ${annotId}`);
+                                                                            });
+                                                                        } catch (e) {
+                                                                            console.warn(`⚠️ [SIGNATURE TRACK] Could not capture XFDF for ${annotId}:`, e);
+                                                                        }
+                                                                    }
                                                                 }
                                                                 if (onFieldChangeRef.current) {
                                                                     onFieldChangeRef.current(fieldName, 'signed');
@@ -1952,7 +1981,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         }
 
                                         // ✅ FIX: When a signature is deleted by the user, restore the widget visibility
-                                        console.log(`🗑️ [SIGNATURE DELETE] Signature deleted, restoring widget`);
+                                        console.log(`🗑️ [SIGNATURE DELETE] Signature deleted, checking protection`);
 
                                         // ✅ FIXED: Use annotation ID → field name mapping to find which field to clear
                                         const deletedAnnotId = annot.Id || (annot as any).getId?.();
@@ -1960,6 +1989,60 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                         if (mappedFieldName) {
                                             console.log(`📝 [SIGNATURE DELETE] Found mapped field: ${mappedFieldName} for annotation ${deletedAnnotId}`);
+
+                                            // ✅ Check if this signature belongs to a protected party
+                                            let signatureParty: string | undefined;
+                                            if (formFieldsRef.current.length > 0) {
+                                                const formField = formFieldsRef.current.find((f: any) => f.name === mappedFieldName);
+                                                signatureParty = formField?.assignedParty;
+                                            }
+
+                                            // Determine if this is a protected party
+                                            let isProtectedParty: boolean;
+                                            if (protectedPartyIdsRef.current.length > 0) {
+                                                isProtectedParty = signatureParty ? protectedPartyIdsRef.current.includes(signatureParty) : false;
+                                            } else {
+                                                isProtectedParty = false; // No protected parties = allow all
+                                            }
+
+                                            // If protected, restore the signature annotation
+                                            if (isProtectedParty) {
+                                                console.log(`🛡️ [SIGNATURE DELETE] Protected party signature (${signatureParty}) - restoring`);
+
+                                                // Try to restore the annotation from prefilledSignatureDataRef
+                                                const savedData = prefilledSignatureDataRef.current.get(deletedAnnotId);
+                                                if (savedData) {
+                                                    // Use async IIFE to handle the promise
+                                                    (async () => {
+                                                        try {
+                                                            await Core.annotationManager.importAnnotations(savedData.xfdf);
+                                                            console.log(`✅ [SIGNATURE DELETE] Restored protected signature from XFDF`);
+                                                        } catch (e) {
+                                                            console.error(`❌ [SIGNATURE DELETE] Failed to restore from XFDF:`, e);
+                                                        }
+                                                    })();
+                                                } else {
+                                                    // No saved XFDF - try to restore field value to "signed" to keep state consistent
+                                                    console.log(`⚠️ [SIGNATURE DELETE] No XFDF data found for ${deletedAnnotId}, notifying parent to restore`);
+                                                    // Notify parent with special restore signal
+                                                    if (onFieldChangeRef.current) {
+                                                        // Restore the "signed" value to trigger DocumentViewerDialog protection
+                                                        onFieldChangeRef.current(mappedFieldName, 'signed');
+                                                    }
+                                                }
+
+                                                // Trigger warning callback (only if not in silent mode)
+                                                if (!silentPositionRestore) {
+                                                    if (onSignaturePositionRestored) {
+                                                        onSignaturePositionRestored();
+                                                    } else if (onPrefilledFieldModified) {
+                                                        onPrefilledFieldModified();
+                                                    }
+                                                }
+                                                return; // Exit early - don't clear the widget
+                                            }
+
+                                            console.log(`✅ [SIGNATURE DELETE] Own party signature (${signatureParty || 'none'}) - allowing deletion`);
 
                                             // Clear from captured values
                                             capturedFieldValuesRef.current.delete(mappedFieldName);
@@ -2275,7 +2358,15 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         if (isSignatureWidget) {
                                             const widgetId = annot.Id;
                                             const field = annot.getField?.();
+                                            const fieldName = field?.name || (field as any)?.getName?.();
                                             const hasSignature = linkedAnnotation || (field?.getValue?.() && field.getValue().toString().trim() !== '');
+
+                                            // ✅ Determine which party this signature belongs to
+                                            let assignedParty: string | undefined;
+                                            if (fieldName && formFieldsRef.current.length > 0) {
+                                                const formField = formFieldsRef.current.find((f: any) => f.name === fieldName);
+                                                assignedParty = formField?.assignedParty;
+                                            }
 
                                             // Only capture widgets that have signatures (pre-filled)
                                             if (hasSignature && !prefilledSignaturePositionsRef.current.has(widgetId)) {
@@ -2288,7 +2379,14 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                 };
 
                                                 prefilledSignaturePositionsRef.current.set(widgetId, position);
-                                                console.log(`📍 [POSITION LOCK] Captured signature WIDGET ${widgetId} (has signature):`, position);
+
+                                                // ✅ Store party assignment for this signature
+                                                if (assignedParty) {
+                                                    signatureAnnotationPartyRef.current.set(widgetId, assignedParty);
+                                                    console.log(`📍 [POSITION LOCK] Captured signature WIDGET ${widgetId} (party: ${assignedParty}):`, position);
+                                                } else {
+                                                    console.log(`📍 [POSITION LOCK] Captured signature WIDGET ${widgetId} (no party):`, position);
+                                                }
                                                 capturedCount++;
                                             }
 
@@ -2307,6 +2405,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                                     prefilledSignaturePositionsRef.current.set(linkedId, position);
 
+                                                    // ✅ Store party assignment for linked annotation too
+                                                    if (assignedParty) {
+                                                        signatureAnnotationPartyRef.current.set(linkedId, assignedParty);
+                                                    }
+
                                                     // ✅ Also capture XFDF data for restoration if deleted
                                                     try {
                                                         const xfdfString = await Core.annotationManager.exportAnnotations({ annotList: [linkedAnnotation] });
@@ -2314,7 +2417,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                             xfdf: xfdfString,
                                                             annotType: linkedAnnotation instanceof Core.Annotations.FreeHandAnnotation ? 'FreeHand' : 'Stamp'
                                                         });
-                                                        console.log(`📍 [POSITION LOCK] Captured linked signature annotation ${linkedId} with XFDF data`);
+                                                        console.log(`📍 [POSITION LOCK] Captured linked signature annotation ${linkedId} (party: ${assignedParty || 'none'}) with XFDF data`);
                                                     } catch (e) {
                                                         console.warn(`⚠️ [POSITION LOCK] Could not capture XFDF for ${linkedId}:`, e);
                                                     }
@@ -2398,6 +2501,32 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             const originalPosition = prefilledSignaturePositionsRef.current.get(annotId);
 
                                             if (originalPosition) {
+                                                // ✅ Check if this signature belongs to a protected party
+                                                // First try direct lookup, then fallback to field name lookup
+                                                let signatureParty = signatureAnnotationPartyRef.current.get(annotId);
+
+                                                // If party not found in direct map, try to look up via field name
+                                                if (!signatureParty) {
+                                                    const fieldName = signatureAnnotationToFieldRef.current.get(annotId);
+                                                    if (fieldName && formFieldsRef.current.length > 0) {
+                                                        const formField = formFieldsRef.current.find((f: any) => f.name === fieldName);
+                                                        signatureParty = formField?.assignedParty;
+                                                        console.log(`🔍 [POSITION LOCK] Looked up party for ${annotId} via field ${fieldName}: ${signatureParty || 'none'}`);
+                                                    }
+                                                }
+
+                                                // Determine if this is a protected party
+                                                // If protectedPartyIds is specified, only protect those parties
+                                                // If protectedPartyIds is empty/undefined, fall back to protecting all (backward compat)
+                                                let isProtectedParty: boolean;
+                                                if (protectedPartyIdsRef.current.length > 0) {
+                                                    // We have a list of protected parties - only protect if signature belongs to one
+                                                    isProtectedParty = signatureParty ? protectedPartyIdsRef.current.includes(signatureParty) : false;
+                                                } else {
+                                                    // No protected parties specified - protect all (backward compatibility)
+                                                    isProtectedParty = true;
+                                                }
+
                                                 // Check if position has changed
                                                 const hasPositionChanged =
                                                     Math.abs(annot.X - originalPosition.X) > 0.01 ||
@@ -2405,7 +2534,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                     annot.PageNumber !== originalPosition.PageNumber;
 
                                                 if (hasPositionChanged) {
-                                                    console.log(`🚫 [POSITION LOCK] Detected unauthorized position change for annotation ${annotId}`);
+                                                    // ✅ Always restore position for ALL pre-filled signatures
+                                                    // But only show warning for protected party signatures (client)
+                                                    console.log(`🔒 [POSITION LOCK] Restoring position for annotation ${annotId} (party: ${signatureParty || 'unknown'}, protected: ${isProtectedParty})`);
                                                     console.log(`   Old: (${originalPosition.X}, ${originalPosition.Y}) Page ${originalPosition.PageNumber}`);
                                                     console.log(`   New: (${annot.X}, ${annot.Y}) Page ${annot.PageNumber}`);
 
@@ -2419,9 +2550,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                     // Redraw to show restored position
                                                     Core.annotationManager.redrawAnnotation(annot);
 
-                                                    // Trigger callback to show warning (only if not in silent mode)
-                                                    // Use onSignaturePositionRestored for better UX (shows warning without refresh)
-                                                    if (!silentPositionRestore) {
+                                                    // Trigger callback to show warning ONLY for protected party signatures
+                                                    // Own party signatures are restored silently (no warning)
+                                                    if (isProtectedParty && !silentPositionRestore) {
                                                         if (onSignaturePositionRestored) {
                                                             onSignaturePositionRestored();
                                                         } else if (onPrefilledFieldModified) {
@@ -2430,7 +2561,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                         }
                                                     }
 
-                                                    console.log(`✅ [POSITION LOCK] Restored annotation ${annotId} to original position ${silentPositionRestore ? '(silent)' : '(with warning)'}`);
+                                                    console.log(`✅ [POSITION LOCK] Restored annotation ${annotId} to original position ${isProtectedParty ? '(protected party)' : '(own party - silent)'}`);
                                                 }
                                             } else if (isSignatureWidget || isSignatureAnnot) {
                                                 // Not in our captured list - might be user's own signature or late-loaded
@@ -2449,23 +2580,58 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             const savedData = prefilledSignatureDataRef.current.get(annotId);
 
                                             if (savedData) {
-                                                console.log(`🚫 [DELETE LOCK] Detected deletion of pre-filled signature annotation ${annotId}`);
+                                                // ✅ Check if this signature belongs to a protected party
+                                                // First try direct lookup, then fallback to field name lookup
+                                                let signatureParty = signatureAnnotationPartyRef.current.get(annotId);
 
-                                                // Restore the annotation from XFDF
-                                                try {
-                                                    await Core.annotationManager.importAnnotations(savedData.xfdf);
-                                                    console.log(`✅ [DELETE LOCK] Restored pre-filled signature annotation ${annotId}`);
-
-                                                    // Trigger callback to show warning (only if not in silent mode)
-                                                    if (!silentPositionRestore) {
-                                                        if (onSignaturePositionRestored) {
-                                                            onSignaturePositionRestored();
-                                                        } else if (onPrefilledFieldModified) {
-                                                            onPrefilledFieldModified();
-                                                        }
+                                                // If party not found in direct map, try to look up via field name
+                                                if (!signatureParty) {
+                                                    const fieldName = signatureAnnotationToFieldRef.current.get(annotId);
+                                                    if (fieldName && formFieldsRef.current.length > 0) {
+                                                        const formField = formFieldsRef.current.find((f: any) => f.name === fieldName);
+                                                        signatureParty = formField?.assignedParty;
+                                                        console.log(`🔍 [DELETE LOCK] Looked up party for ${annotId} via field ${fieldName}: ${signatureParty || 'none'}`);
                                                     }
-                                                } catch (e) {
-                                                    console.error(`❌ [DELETE LOCK] Failed to restore annotation ${annotId}:`, e);
+                                                }
+
+                                                // Determine if this is a protected party
+                                                // If protectedPartyIds is specified, only protect those parties
+                                                // If protectedPartyIds is empty/undefined, fall back to protecting all (backward compat)
+                                                let isProtectedParty: boolean;
+                                                if (protectedPartyIdsRef.current.length > 0) {
+                                                    // We have a list of protected parties - only protect if signature belongs to one
+                                                    isProtectedParty = signatureParty ? protectedPartyIdsRef.current.includes(signatureParty) : false;
+                                                } else {
+                                                    // No protected parties specified - protect all (backward compatibility)
+                                                    isProtectedParty = true;
+                                                }
+
+                                                if (isProtectedParty) {
+                                                    console.log(`🚫 [DELETE LOCK] Detected deletion of protected party signature annotation ${annotId} (party: ${signatureParty || 'unknown'}, protected: true)`);
+
+                                                    // Restore the annotation from XFDF
+                                                    try {
+                                                        await Core.annotationManager.importAnnotations(savedData.xfdf);
+                                                        console.log(`✅ [DELETE LOCK] Restored pre-filled signature annotation ${annotId}`);
+
+                                                        // Trigger callback to show warning (only if not in silent mode)
+                                                        if (!silentPositionRestore) {
+                                                            if (onSignaturePositionRestored) {
+                                                                onSignaturePositionRestored();
+                                                            } else if (onPrefilledFieldModified) {
+                                                                onPrefilledFieldModified();
+                                                            }
+                                                        }
+                                                    } catch (e) {
+                                                        console.error(`❌ [DELETE LOCK] Failed to restore annotation ${annotId}:`, e);
+                                                    }
+                                                } else {
+                                                    // ✅ Allow deleting signatures that belong to the user's own party
+                                                    console.log(`✅ [DELETE LOCK] Allowing deletion of own party signature annotation ${annotId} (party: ${signatureParty || 'unknown'})`);
+                                                    // Remove from our tracking maps
+                                                    prefilledSignaturePositionsRef.current.delete(annotId);
+                                                    prefilledSignatureDataRef.current.delete(annotId);
+                                                    signatureAnnotationPartyRef.current.delete(annotId);
                                                 }
                                             }
                                         });

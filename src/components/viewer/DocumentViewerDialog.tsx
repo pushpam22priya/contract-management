@@ -216,10 +216,9 @@ export default function DocumentViewerDialog({
         const initialValue = initialFieldValuesRef.current[fieldName] || '';
         const newValue = value?.toString() || '';
 
-        // ✅ Skip if this is just restoring/importing the same value (not a real user edit)
-        // This happens during XFDF import when signatures are loaded
-        if (newValue === initialValue || (initialValue && newValue === 'signed')) {
-            console.log(`📝 [DocumentViewerDialog] Skipping protection for ${fieldName} - value matches initial or is signature import`);
+        // ✅ Skip protection for signature imports (value 'signed' is only used during import/tracking)
+        // Also skip if value matches initial (restore/reload)
+        if (newValue === 'signed' || newValue === initialValue) {
             // Still update state for tracking
             setFilledFieldValues(prev => ({
                 ...prev,
@@ -228,20 +227,22 @@ export default function DocumentViewerDialog({
             return;
         }
 
-        // ✅ CONTRACTOR PROTECTION: Prevent contractor from editing client party fields
+        // ✅ CONTRACTOR PROTECTION: Prevent contractor from editing CLIENT party fields only
+        // Contractor CAN edit their own party fields (fields NOT assigned to external signers)
         const isContractor = currentUserRole === 'contractor';
         const hasClientParties = clientPartyIds.length > 0;
         const hasFormFields = !!formFields;
 
         if (isContractor && hasClientParties && hasFormFields) {
             const field = formFields.find((f: any) => f.name === fieldName);
-
-            // Check exact values and comparison
             const fieldParty = field?.assignedParty;
-            const includesResult = clientPartyIds.includes(fieldParty);
 
-            if (field?.assignedParty && includesResult) {
-                console.log(`🚫 [DocumentViewerDialog] BLOCKING! Contractor tried to edit client party field: ${fieldName} (party: ${field.assignedParty})`);
+            // Only block if field is assigned to a CLIENT party (party with external signer)
+            // Contractor CAN edit fields assigned to contractor parties or unassigned fields
+            const isClientPartyField = fieldParty && clientPartyIds.includes(fieldParty);
+
+            if (isClientPartyField) {
+                console.log(`🚫 [DocumentViewerDialog] BLOCKING! Contractor tried to edit client party field: ${fieldName} (party: ${fieldParty})`);
                 setShowWrongPartyWarning(true);
 
                 // Get the original value and restore it
@@ -482,6 +483,8 @@ export default function DocumentViewerDialog({
                         // ✅ For contractor: Show warning when signature position is restored (silent restore + warning)
                         silentPositionRestore={readOnly}
                         onSignaturePositionRestored={currentUserRole === 'contractor' && clientPartyIds.length > 0 ? () => setShowWrongPartyWarning(true) : undefined}
+                        // ✅ Pass client party IDs to protect only client signatures (contractor can edit their own)
+                        protectedPartyIds={currentUserRole === 'contractor' ? clientPartyIds : undefined}
                     />
 
                     {/* ✅ Party Validation Warning Popup (same as CreateContractDialog) */}
