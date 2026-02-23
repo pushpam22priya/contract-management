@@ -803,6 +803,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 editableFieldMode="empty-only"
                 showAnnotationNavigation={true}
                 parties={contract.parties}
+                // ✅ Pass external signers info so contractor can't edit client party fields
+                externalSigners={contract.externalSigners}
             />
         </AppLayout>
     );

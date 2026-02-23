@@ -122,6 +122,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         const onSignatureAppliedRef = useRef<((data: { emptySignatureFieldCount: number }) => void) | undefined>(undefined);
         const isApplyingSignAllRef = useRef(false);
 
+        // ✅ Ref for onFieldChange to avoid stale closure in event handlers
+        const onFieldChangeRef = useRef<((fieldName: string, value: any) => void) | undefined>(undefined);
+
         // ✅ Multi-party field assignment storage
         // Maps fieldName -> { partyId, partyLabel, partyColor }
         const fieldPartyAssignmentsRef = useRef<Map<string, { partyId: string; partyLabel: string; partyColor: string }>>(new Map());
@@ -136,6 +139,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
         // Keep onSignatureApplied ref updated for use in event handlers
         onSignatureAppliedRef.current = onSignatureApplied;
+
+        // Keep onFieldChange ref updated for use in event handlers (avoids stale closure)
+        onFieldChangeRef.current = onFieldChange;
 
         // ✅ Helper: Switch toolbar group using the correct API for the UI version
         // WebViewer 11+ uses Modular UI by default, where setToolbarGroup is a Legacy API
@@ -1137,8 +1143,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 capturedFieldValuesRef.current.set(field.name, fieldName);
 
                                 // Notify parent of signature field change (for party validation tracking)
-                                if (onFieldChange) {
-                                    onFieldChange(field.name, 'signed');
+                                if (onFieldChangeRef.current) {
+                                    onFieldChangeRef.current(field.name, 'signed');
                                 }
                             }
 
@@ -1840,7 +1846,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             const fieldName = widget?.fieldName || widget?.getField?.()?.name;
                                             if (fieldName) {
                                                 capturedFieldValuesRef.current.set(fieldName, 'signed');
-                                                onFieldChange(fieldName, 'signed');
+                                                if (onFieldChangeRef.current) {
+                                                    onFieldChangeRef.current(fieldName, 'signed');
+                                                }
                                                 console.log(`📝 [SIGNATURE TRACK] Notified parent: ${fieldName} = signed`);
                                             }
                                         });
@@ -1923,7 +1931,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                                     signatureAnnotationToFieldRef.current.set(annotId, fieldName);
                                                                     console.log(`📝 [SIGNATURE TRACK] Mapped annotation ${annotId} → ${fieldName}`);
                                                                 }
-                                                                onFieldChange(fieldName, 'signed');
+                                                                if (onFieldChangeRef.current) {
+                                                                    onFieldChangeRef.current(fieldName, 'signed');
+                                                                }
                                                                 console.log(`📝 [SIGNATURE TRACK] Signature added on widget: ${fieldName} = signed`);
                                                             }
                                                             break;
@@ -1956,8 +1966,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             signatureAnnotationToFieldRef.current.delete(deletedAnnotId);
 
                                             // Notify parent that signature was removed (for party validation tracking)
-                                            if (onFieldChange) {
-                                                onFieldChange(mappedFieldName, '');
+                                            if (onFieldChangeRef.current) {
+                                                onFieldChangeRef.current(mappedFieldName, '');
                                                 console.log(`📝 [SIGNATURE TRACK] Notified parent: ${mappedFieldName} = cleared`);
                                             }
 
@@ -2244,8 +2254,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                             // ✅ CRITICAL: Capture initial positions of ALL signature annotations (pre-filled)
                             // This allows us to restore positions if external users try to drag them
-                            // Apply for: 1) External signers (editableParties), 2) Contract viewers (silentPositionRestore)
-                            if ((editableParties && editableParties.length > 0) || silentPositionRestore) {
+                            // Apply for: 1) External signers (editableParties), 2) Contract viewers (silentPositionRestore), 3) Contractors (onSignaturePositionRestored)
+                            if ((editableParties && editableParties.length > 0) || silentPositionRestore || onSignaturePositionRestored) {
                                 const captureSignaturePositions = async () => {
                                     console.log('📍 [POSITION LOCK] Capturing initial positions of pre-filled signatures...');
                                     const allAnnotations = Core.annotationManager.getAnnotationsList();
@@ -2516,6 +2526,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 });
                             }
 
+                            console.log('🔍 [MODE CHECK] effectiveReadOnly:', effectiveReadOnly, 'readOnly:', readOnly, 'isReadOnly:', isReadOnly);
                             if (effectiveReadOnly) {
                                 console.log('🔒 Setting read-only mode');
                                 const annotations = Core.annotationManager.getAnnotationsList();
@@ -2640,6 +2651,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 // AUTO-SAVE: Set up change listeners (only if not read-only)
                                 // ══════════════════════════════════════════════════════════════════
                                 console.log('👂 [AUTO-SAVE] Setting up change listeners...');
+                                console.log('👂 [AUTO-SAVE] onFieldChange callback provided:', !!onFieldChange);
 
                                 // Listen for annotation changes (drawings, comments, form field widgets, etc.)
                                 Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string) => {
@@ -2673,6 +2685,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 // This fires when the VALUE of an existing field changes, not when field is created
                                 Core.annotationManager.addEventListener('fieldChanged', (field: any, value: any) => {
                                     console.log(`🔔 [FIELD CHANGED] Field VALUE changed: ${field?.name || 'unknown'} = ${value}`);
+                                    console.log(`🔔 [FIELD CHANGED] onFieldChangeRef.current available: ${!!onFieldChangeRef.current}`);
 
                                     // ✅ CRITICAL FIX: Capture the text field value immediately
                                     // field.getValue() may return empty at export time if blur hasn't been processed
@@ -2682,8 +2695,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         console.log(`📝 [VALUE CAPTURE] Captured field value: ${field.name} = "${stringValue}" (total: ${capturedFieldValuesRef.current.size})`);
 
                                         // Notify parent component of field value change (for party validation tracking)
-                                        if (onFieldChange) {
-                                            onFieldChange(field.name, value);
+                                        // Use ref to avoid stale closure issue
+                                        if (onFieldChangeRef.current) {
+                                            onFieldChangeRef.current(field.name, value);
                                         }
                                     }
 
