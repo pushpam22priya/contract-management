@@ -2,50 +2,16 @@ import { Category, CreateCategoryData } from '@/types/template';
 
 const CATEGORIES_STORAGE_KEY = 'cms_categories';
 
-// Default categories
-const DEFAULT_CATEGORIES: Category[] = [
-    {
-        id: 'cat_1',
-        name: 'Employment',
-        createdAt: new Date('2024-01-01').toISOString(),
-        createdBy: 'system',
-    },
-    {
-        id: 'cat_2',
-        name: 'Service',
-        createdAt: new Date('2024-01-01').toISOString(),
-        createdBy: 'system',
-    },
-    {
-        id: 'cat_3',
-        name: 'Sales',
-        createdAt: new Date('2024-01-01').toISOString(),
-        createdBy: 'system',
-    },
-    {
-        id: 'cat_4',
-        name: 'Lease',
-        createdAt: new Date('2024-01-01').toISOString(),
-        createdBy: 'system',
-    },
-    {
-        id: 'cat_5',
-        name: 'NDA',
-        createdAt: new Date('2024-01-01').toISOString(),
-        createdBy: 'system',
-    },
-];
-
 class CategoryService {
     /**
-     * Initialize default categories if not exists
+     * Initialize categories if not exists
      */
     private initializeCategories(): void {
         if (typeof window === 'undefined') return;
 
         const existing = localStorage.getItem(CATEGORIES_STORAGE_KEY);
         if (!existing) {
-            localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(DEFAULT_CATEGORIES));
+            localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify([]));
         }
     }
 
@@ -53,11 +19,11 @@ class CategoryService {
      * Get all categories from localStorage
      */
     getAllCategories(): Category[] {
-        if (typeof window === 'undefined') return DEFAULT_CATEGORIES;
+        if (typeof window === 'undefined') return [];
 
         this.initializeCategories();
         const categoriesData = localStorage.getItem(CATEGORIES_STORAGE_KEY);
-        return categoriesData ? JSON.parse(categoriesData) : DEFAULT_CATEGORIES;
+        return categoriesData ? JSON.parse(categoriesData) : [];
     }
 
     /**
@@ -151,14 +117,6 @@ class CategoryService {
             return {
                 success: false,
                 message: 'Category not found',
-            };
-        }
-
-        // Don't allow deleting default categories
-        if (categories[categoryIndex].createdBy === 'system') {
-            return {
-                success: false,
-                message: 'Cannot delete default categories',
             };
         }
 

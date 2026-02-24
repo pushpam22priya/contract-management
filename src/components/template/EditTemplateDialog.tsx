@@ -27,6 +27,8 @@ import { Template, PartyConfiguration, FormFieldDefinition } from '@/types/templ
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import PartyConfigDialog from '@/components/template/PartyConfigDialog';
 import PartyAssignmentPanel from '@/components/template/PartyAssignmentPanel';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { Category } from '@/types/template';
 
 interface EditTemplateDialogProps {
     open: boolean;
@@ -48,7 +50,7 @@ export default function EditTemplateDialog({
     const [templateName, setTemplateName] = useState('');
     const [description, setDescription] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-    const [categories, setCategories] = useState<string[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [newCategory, setNewCategory] = useState('');
     const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -72,7 +74,7 @@ export default function EditTemplateDialog({
     useEffect(() => {
         if (open) {
             const allCategories = categoryService.getAllCategories();
-            setCategories(allCategories.map(cat => cat.name));
+            setCategories(allCategories);
 
             // Pre-fill form with template data
             setTemplateName(template.name);
@@ -145,12 +147,29 @@ export default function EditTemplateDialog({
             currentUser.email
         );
 
-        if (result.success) {
-            const updatedCategories = [...categories, newCategory.trim()];
+        if (result.success && result.category) {
+            const updatedCategories = [...categories, result.category];
             setCategories(updatedCategories);
-            setSelectedCategory(newCategory.trim());
+            setSelectedCategory(result.category.name);
             setNewCategory('');
             setShowNewCategoryInput(false);
+        } else {
+            setError(result.message);
+        }
+    };
+
+    // Delete category
+    const handleDeleteCategory = async (e: React.MouseEvent, categoryId: string) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        const result = await categoryService.deleteCategory(categoryId);
+        if (result.success) {
+            const categoryToDelete = categories.find(c => c.id === categoryId);
+            if (categoryToDelete && selectedCategory === categoryToDelete.name) {
+                setSelectedCategory(null);
+            }
+            setCategories(prev => prev.filter(c => c.id !== categoryId));
         } else {
             setError(result.message);
         }
@@ -835,10 +854,11 @@ export default function EditTemplateDialog({
                                 <Autocomplete
                                     fullWidth
                                     options={categories}
-                                    value={selectedCategory}
+                                    value={categories.find(c => c.name === selectedCategory) || null}
                                     onChange={(event, newValue) => {
-                                        setSelectedCategory(newValue);
+                                        setSelectedCategory(newValue ? (typeof newValue === 'string' ? newValue : (newValue as Category).name) : null);
                                     }}
+                                    getOptionLabel={(option) => typeof option === 'string' ? option : (option as Category).name}
                                     renderInput={(params) => (
                                         <TextField
                                             {...params}
@@ -860,9 +880,9 @@ export default function EditTemplateDialog({
                                     renderOption={(props, option) => {
                                         const { key, ...otherProps } = props;
                                         return (
-                                            <li key={key} {...otherProps}>
+                                            <li key={key} {...otherProps} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                                                 <Chip
-                                                    label={option}
+                                                    label={option.name}
                                                     size="small"
                                                     sx={{
                                                         bgcolor: 'rgba(15, 118, 110, 0.08)',
@@ -870,6 +890,20 @@ export default function EditTemplateDialog({
                                                         fontWeight: 500,
                                                     }}
                                                 />
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => handleDeleteCategory(e, option.id)}
+                                                    sx={{
+                                                        ml: 1,
+                                                        color: 'text.secondary',
+                                                        '&:hover': {
+                                                            color: 'error.main',
+                                                            bgcolor: 'rgba(239, 68, 68, 0.08)',
+                                                        },
+                                                    }}
+                                                >
+                                                    <DeleteIcon fontSize="inherit" />
+                                                </IconButton>
                                             </li>
                                         );
                                     }}
