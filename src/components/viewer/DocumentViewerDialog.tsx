@@ -8,6 +8,7 @@ import { Close } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
 import { useRef, useState, useEffect, useMemo } from 'react';
 import BaseDialog from '@/components/common/BaseDialog';
+import ConfirmationDialog from '@/components/common/ConfirmationDialog';
 import { validatePartyFields } from '@/utils/partyValidation';
 import { PartyConfiguration } from '@/types/template';
 
@@ -113,6 +114,11 @@ export default function DocumentViewerDialog({
     // ✅ Wrong party warning for contractor - shows when contractor tries to edit client party field
     const [showWrongPartyWarning, setShowWrongPartyWarning] = useState(false);
 
+    // ✅ Unsaved changes confirmation dialog state
+    const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+    // Track values at last save to detect unsaved changes
+    const lastSavedValuesRef = useRef<Record<string, string>>({});
+
     // ✅ Calculate client party IDs (parties that have external signers assigned)
     const clientPartyIds = useMemo(() => {
         console.log(`📋 [DocumentViewerDialog] Computing clientPartyIds from externalSigners:`, externalSigners);
@@ -180,8 +186,11 @@ export default function DocumentViewerDialog({
             setPopupPosition(null);
             setSignatureCommitted(false);
             setShowWrongPartyWarning(false);
+            setShowUnsavedDialog(false);
             // ✅ Capture initial values for contractor protection (to restore if they edit client fields)
             initialFieldValuesRef.current = { ...initial };
+            // ✅ Track last saved values to detect unsaved changes
+            lastSavedValuesRef.current = { ...initial };
             // ✅ Reset user interaction flag - will be set to true after initial load completes
             userHasInteractedRef.current = false;
             // Set interaction flag after a delay to skip initial PDF load events
@@ -351,6 +360,55 @@ export default function DocumentViewerDialog({
         };
     }, [isDragging]);
 
+    // ✅ Check if there are unsaved changes (comparing current values to last saved values)
+    const hasUnsavedChanges = (): boolean => {
+        // Only track unsaved changes if onSave is provided (edit mode)
+        if (!onSave) return false;
+
+        const currentKeys = Object.keys(filledFieldValues);
+        const savedKeys = Object.keys(lastSavedValuesRef.current);
+
+        // Check if any new fields were filled
+        if (currentKeys.length !== savedKeys.length) return true;
+
+        // Check if any values changed
+        for (const key of currentKeys) {
+            if (filledFieldValues[key] !== lastSavedValuesRef.current[key]) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    // ✅ Handle close attempt - always show confirmation dialog when onSave is available (edit mode)
+    const handleCloseAttempt = () => {
+        if (onSave) {
+            // Edit mode: always show confirmation dialog
+            setShowUnsavedDialog(true);
+        } else {
+            // Read-only mode: close directly
+            onClose();
+        }
+    };
+
+    // ✅ Handle confirmation dialog: Yes - save and close
+    const handleUnsavedYes = async () => {
+        setShowUnsavedDialog(false);
+        await handleSaveClick();
+        onClose();
+    };
+
+    // ✅ Handle confirmation dialog: No - close without saving
+    const handleUnsavedNo = () => {
+        setShowUnsavedDialog(false);
+        onClose();
+    };
+
+    // ✅ Handle confirmation dialog: Cancel - stay in dialog
+    const handleUnsavedCancel = () => {
+        setShowUnsavedDialog(false);
+    };
 
     // Log form fields when component mounts/updates
     if (formFields && formFields.length > 0) {
@@ -419,8 +477,12 @@ export default function DocumentViewerDialog({
                     console.warn('⚠️ Could not clear signature store:', e);
                 }
 
-                // ✅ Close dialog after successful save
-                onClose();
+                // ✅ Update last saved values to track unsaved changes correctly
+                lastSavedValuesRef.current = { ...filledFieldValues };
+                console.log('📝 [DocumentViewerDialog] Updated lastSavedValuesRef after save');
+
+                // ✅ NOTE: Don't close dialog after saving - user can continue editing
+                // Dialog closes when user clicks the close button (with unsaved changes confirmation)
             }
 
         } catch (error) {
@@ -454,9 +516,10 @@ export default function DocumentViewerDialog({
     );
 
     return (
+        <>
         <BaseDialog
             open={open}
-            onClose={onClose}
+            onClose={handleCloseAttempt}
             title={title || fileName || 'Document Viewer'}
             maxWidth="lg"
             fullWidth
@@ -600,5 +663,17 @@ export default function DocumentViewerDialog({
                 </Box>
             </Box>
         </BaseDialog>
+
+        {/* ✅ Unsaved Changes Confirmation Dialog */}
+        <ConfirmationDialog
+            open={showUnsavedDialog}
+            title="Unsaved Changes"
+            message="Do you want to save changes?"
+            onYes={handleUnsavedYes}
+            onNo={handleUnsavedNo}
+            onClose={handleUnsavedCancel}
+            loading={saving}
+        />
+        </>
     );
 }
