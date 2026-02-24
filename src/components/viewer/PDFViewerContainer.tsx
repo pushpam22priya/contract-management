@@ -217,6 +217,58 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
             return formAnnotations;
         };
 
+        const flashHighlight = (Core: any, targetAnnot: any) => {
+            if (!targetAnnot || !Core) return;
+            try {
+                const annotationManager = Core.annotationManager;
+
+                // 1. Programmatically focus the field if possible
+                // This is crucial for text fields to show the interactive cursor and focus outline
+                try {
+                    const field = targetAnnot.getField?.();
+                    if (field && typeof field.setFocus === 'function') {
+                        field.setFocus();
+                    }
+                } catch (e) { /* ignore focus errors */ }
+
+                // 2. Create an EXTERNAL highlight border
+                // We make it slightly larger than the field so it's not covered by HTML overlays
+                const rect = targetAnnot.getRect();
+                const offset = 4; // 4px offset to ensure it's clearly outside
+
+                const highlight = new Core.Annotations.RectangleAnnotation();
+                highlight.PageNumber = targetAnnot.PageNumber;
+                highlight.X = rect.x1 - offset;
+                highlight.Y = rect.y1 - offset;
+                highlight.Width = (rect.x2 - rect.x1) + (offset * 2);
+                highlight.Height = (rect.y2 - rect.y1) + (offset * 2);
+
+                // Style: Hollow box with prominent blue border
+                highlight.FillColor = new Core.Annotations.Color(255, 255, 255, 0); // Transparent fill
+                highlight.StrokeColor = new Core.Annotations.Color(15, 76, 71, 1); // Solid blue border
+                highlight.StrokeThickness = 2;
+                highlight.Opacity = 1;
+
+                // Meta properties
+                highlight.Listable = false; // Don't show in comments panel
+                highlight.setCustomData('isTempHighlight', 'true');
+                highlight.NoZoom = false;
+
+                // Add to document
+                annotationManager.addAnnotation(highlight);
+                annotationManager.redrawAnnotation(highlight);
+
+                // Automatically remove after 2.5 seconds
+                setTimeout(() => {
+                    try {
+                        annotationManager.deleteAnnotation(highlight, { force: true });
+                    } catch (e) { /* ignore */ }
+                }, 600);
+            } catch (err) {
+                console.warn('⚠️ [NAV] Highlight flash failed:', err);
+            }
+        };
+
         // ✅ Helper: check if a signature widget is truly empty (no overlapping signature annotation)
         const isSignatureWidgetEmpty = (widget: any, allAnnotations: any[], Core: any): boolean => {
             // Check 1: Has linked annotation
@@ -3772,6 +3824,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         await new Promise(resolve => setTimeout(resolve, 50));
                                         annotationManager.jumpToAnnotation(firstAnnotation);
 
+                                        // ✅ FLASH HIGHLIGHT
+                                        flashHighlight(Core, firstAnnotation);
+
                                         setTimeout(() => {
                                             if (scrollContainer) scrollContainer.style.scrollBehavior = 'auto';
                                         }, 600);
@@ -3830,6 +3885,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     annotationManager.selectAnnotation(nextAnnotation);
                                     await new Promise(resolve => setTimeout(resolve, 50));
                                     annotationManager.jumpToAnnotation(nextAnnotation);
+
+                                    // ✅ FLASH HIGHLIGHT
+                                    flashHighlight(Core, nextAnnotation);
 
                                     setTimeout(() => {
                                         if (scrollContainer) scrollContainer.style.scrollBehavior = 'auto';
