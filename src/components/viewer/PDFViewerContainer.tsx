@@ -80,7 +80,7 @@ export interface PDFViewerHandle {
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const [loading, setLoading] = useState(true);
@@ -183,23 +183,36 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         };
 
         // ✅ Helper function to get form field annotations (accessible throughout component)
-        const getFormFieldAnnotations = (Core: any) => {
+        const getFormFieldAnnotations = (Core: any, allowedParties?: string[], role?: string) => {
             if (!Core?.annotationManager) return [];
 
             const annotationManager = Core.annotationManager;
             const allAnnotations = annotationManager.getAnnotationsList();
 
-            // Filter for widget annotations (form fields) and sort by page then position
-            const formAnnotations = allAnnotations
-                .filter((annot: any) => annot instanceof Core.Annotations.WidgetAnnotation)
-                .sort((a: any, b: any) => {
-                    // Sort by page number first
-                    if (a.PageNumber !== b.PageNumber) {
-                        return a.PageNumber - b.PageNumber;
-                    }
-                    // Then by Y position (top to bottom)
-                    return a.Y - b.Y;
+            // Filter for widget annotations (form fields)
+            let formAnnotations = allAnnotations.filter((annot: any) => annot instanceof Core.Annotations.WidgetAnnotation);
+
+            // ✅ PARTY FILTERING FOR EXTERNAL CLIENTS
+            // Only apply filtering if role is 'client' and we have specific parties allowed
+            if (role === 'client' && allowedParties && allowedParties.length > 0) {
+                console.log(`🔍 [NAV] Filtering annotations for client parties: [${allowedParties.join(', ')}]`);
+                formAnnotations = formAnnotations.filter((annot: any) => {
+                    const assignedParty = annot.getCustomData('assignedParty');
+                    // Include if field is assigned to one of the user's parties
+                    return assignedParty && allowedParties.includes(assignedParty);
                 });
+                console.log(`🔍 [NAV] Filtered down to ${formAnnotations.length} fields for parties [${allowedParties.join(', ')}]`);
+            }
+
+            // Sort by page then position
+            formAnnotations.sort((a: any, b: any) => {
+                // Sort by page number first
+                if (a.PageNumber !== b.PageNumber) {
+                    return a.PageNumber - b.PageNumber;
+                }
+                // Then by Y position (top to bottom)
+                return a.Y - b.Y;
+            });
 
             return formAnnotations;
         };
@@ -3370,7 +3383,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                             if (showAnnotationNavigation && !effectiveReadOnly) {
                                 console.log('🔍 [NAV] Initializing annotation navigation...');
-                                const formAnnotations = getFormFieldAnnotations(Core);
+                                const formAnnotations = getFormFieldAnnotations(Core, editableParties, currentUserRole);
                                 console.log('🔍 [NAV] Form annotations:', formAnnotations);
                                 setAnnotations(formAnnotations);
                                 setCurrentAnnotationIndex(0);
@@ -3734,7 +3747,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                 const { Core } = viewerInstance.current;
                                 const { documentViewer, annotationManager } = Core;
-                                const formAnnotations = getFormFieldAnnotations(Core);
+                                const formAnnotations = getFormFieldAnnotations(Core, editableParties, currentUserRole);
 
                                 if (formAnnotations.length === 0) return;
 
