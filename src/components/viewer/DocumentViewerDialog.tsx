@@ -482,7 +482,9 @@ export default function DocumentViewerDialog({
                         showAnnotationNavigation={showAnnotationNavigation}
                         // ✅ For contractor: Show warning when signature position is restored (silent restore + warning)
                         silentPositionRestore={readOnly}
-                        onSignaturePositionRestored={currentUserRole === 'contractor' && clientPartyIds.length > 0 ? () => setShowWrongPartyWarning(true) : undefined}
+                        // ✅ CRITICAL FIX: Always enable position tracking for contractors (removed clientPartyIds.length > 0 check)
+                        // This ensures ALL signatures (contractor's own + client's) are tracked back to their positions
+                        onSignaturePositionRestored={currentUserRole === 'contractor' ? () => setShowWrongPartyWarning(true) : undefined}
                         // ✅ Pass client party IDs to protect only client signatures (contractor can edit their own)
                         protectedPartyIds={currentUserRole === 'contractor' ? clientPartyIds : undefined}
                     />

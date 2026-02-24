@@ -2338,7 +2338,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             // ✅ CRITICAL: Capture initial positions of ALL signature annotations (pre-filled)
                             // This allows us to restore positions if external users try to drag them
                             // Apply for: 1) External signers (editableParties), 2) Contract viewers (silentPositionRestore), 3) Contractors (onSignaturePositionRestored)
-                            if ((editableParties && editableParties.length > 0) || silentPositionRestore || onSignaturePositionRestored) {
+                            // Also initialize if protectedPartyIds is provided (even if empty, allows future protection)
+                            if ((editableParties && editableParties.length > 0) || silentPositionRestore || onSignaturePositionRestored || protectedPartyIds !== undefined) {
                                 const captureSignaturePositions = async () => {
                                     console.log('📍 [POSITION LOCK] Capturing initial positions of pre-filled signatures...');
                                     const allAnnotations = Core.annotationManager.getAnnotationsList();
@@ -2482,6 +2483,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 }, 3000);
 
                                 // ✅ Add listener to detect and prevent signature position changes
+                                // Including cross-page drag tracking with deferred verification
                                 Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string, info: any) => {
                                     // Handle position changes (drag)
                                     if (action === 'modify') {
@@ -2515,44 +2517,74 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                     }
                                                 }
 
-                                                // Determine if this is a protected party
-                                                // If protectedPartyIds is specified, only protect those parties
-                                                // If protectedPartyIds is empty/undefined, fall back to protecting all (backward compat)
-                                                let isProtectedParty: boolean;
-                                                if (protectedPartyIdsRef.current.length > 0) {
-                                                    // We have a list of protected parties - only protect if signature belongs to one
-                                                    isProtectedParty = signatureParty ? protectedPartyIdsRef.current.includes(signatureParty) : false;
-                                                } else {
-                                                    // No protected parties specified - protect all (backward compatibility)
-                                                    isProtectedParty = true;
+                                                // ✅ ALL signatures are position-locked (will snap back to original position)
+                                                // But WARNING is only shown for CLIENT party signatures (protected parties)
+                                                // Determine if this is a CLIENT party signature for warning purposes
+                                                let isClientPartySignature = false;
+                                                if (protectedPartyIdsRef.current.length > 0 && signatureParty) {
+                                                    isClientPartySignature = protectedPartyIdsRef.current.includes(signatureParty);
                                                 }
+                                                // Note: Position restoration happens for ALL signatures, warning only for client party
 
-                                                // Check if position has changed
-                                                const hasPositionChanged =
-                                                    Math.abs(annot.X - originalPosition.X) > 0.01 ||
-                                                    Math.abs(annot.Y - originalPosition.Y) > 0.01 ||
-                                                    annot.PageNumber !== originalPosition.PageNumber;
+                                                // ✅ IMPROVED: Helper function to restore annotation position
+                                                const restoreAnnotationPosition = async () => {
+                                                    console.log(`🔒 [POSITION LOCK] Restoring position for annotation ${annotId} (party: ${signatureParty || 'unknown'})`);
+                                                    console.log(`   Original: (${originalPosition.X}, ${originalPosition.Y}) Page ${originalPosition.PageNumber}`);
+                                                    console.log(`   Current: (${annot.X}, ${annot.Y}) Page ${annot.PageNumber}`);
 
-                                                if (hasPositionChanged) {
-                                                    // ✅ Always restore position for ALL pre-filled signatures
-                                                    // But only show warning for protected party signatures (client)
-                                                    console.log(`🔒 [POSITION LOCK] Restoring position for annotation ${annotId} (party: ${signatureParty || 'unknown'}, protected: ${isProtectedParty})`);
-                                                    console.log(`   Old: (${originalPosition.X}, ${originalPosition.Y}) Page ${originalPosition.PageNumber}`);
-                                                    console.log(`   New: (${annot.X}, ${annot.Y}) Page ${annot.PageNumber}`);
-
-                                                    // Restore original position
+                                                    // Restore original position properties
                                                     annot.X = originalPosition.X;
                                                     annot.Y = originalPosition.Y;
                                                     annot.Width = originalPosition.Width;
                                                     annot.Height = originalPosition.Height;
                                                     annot.PageNumber = originalPosition.PageNumber;
 
-                                                    // Redraw to show restored position
+                                                    // Force redraw to update position
                                                     Core.annotationManager.redrawAnnotation(annot);
 
-                                                    // Trigger callback to show warning ONLY for protected party signatures
-                                                    // Own party signatures are restored silently (no warning)
-                                                    if (isProtectedParty && !silentPositionRestore) {
+                                                    // ✅ Re-capture the position after restoration in case the annotation ID changes
+                                                    // PDFTron's signature widget might delete and re-add the annotation
+                                                    setTimeout(async () => {
+                                                        // Find the signature annotation by field name
+                                                        const fieldName = signatureAnnotationToFieldRef.current.get(annotId);
+                                                        if (fieldName) {
+                                                            const allAnnots = Core.annotationManager.getAnnotationsList();
+                                                            const widgets = allAnnots.filter((a: any) =>
+                                                                a instanceof Core.Annotations.SignatureWidgetAnnotation &&
+                                                                a.getField?.()?.name === fieldName
+                                                            );
+
+                                                            for (const widget of widgets) {
+                                                                const linkedAnnot = (widget as any).annot;
+                                                                if (linkedAnnot && linkedAnnot.Id !== annotId) {
+                                                                    // New annotation was created, capture its position
+                                                                    console.log(`🔄 [POSITION LOCK] Annotation ID changed from ${annotId} to ${linkedAnnot.Id}, re-capturing`);
+
+                                                                    prefilledSignaturePositionsRef.current.set(linkedAnnot.Id, originalPosition);
+                                                                    signatureAnnotationToFieldRef.current.set(linkedAnnot.Id, fieldName);
+
+                                                                    if (signatureParty) {
+                                                                        signatureAnnotationPartyRef.current.set(linkedAnnot.Id, signatureParty);
+                                                                    }
+
+                                                                    // Capture XFDF for the new annotation
+                                                                    try {
+                                                                        const xfdfString = await Core.annotationManager.exportAnnotations({ annotList: [linkedAnnot] });
+                                                                        prefilledSignatureDataRef.current.set(linkedAnnot.Id, {
+                                                                            xfdf: xfdfString,
+                                                                            annotType: linkedAnnot instanceof Core.Annotations.FreeHandAnnotation ? 'FreeHand' : 'Stamp'
+                                                                        });
+                                                                    } catch (e) {
+                                                                        console.warn(`⚠️ [POSITION LOCK] Could not capture XFDF for new annotation:`, e);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }, 100);
+
+                                                    // ✅ Only show warning for CLIENT party signatures
+                                                    // Contractor's own signatures snap back silently (no warning)
+                                                    if (isClientPartySignature && !silentPositionRestore) {
                                                         if (onSignaturePositionRestored) {
                                                             onSignaturePositionRestored();
                                                         } else if (onPrefilledFieldModified) {
@@ -2561,7 +2593,58 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                         }
                                                     }
 
-                                                    console.log(`✅ [POSITION LOCK] Restored annotation ${annotId} to original position ${isProtectedParty ? '(protected party)' : '(own party - silent)'}`);
+                                                    console.log(`✅ [POSITION LOCK] Restored annotation ${annotId} to original position ${isClientPartySignature ? '(client party - warning shown)' : '(own party - silent)'}`);
+                                                };
+
+                                                // Check if position has changed (immediate check)
+                                                const hasPositionChanged =
+                                                    Math.abs(annot.X - originalPosition.X) > 0.01 ||
+                                                    Math.abs(annot.Y - originalPosition.Y) > 0.01 ||
+                                                    annot.PageNumber !== originalPosition.PageNumber;
+
+                                                if (hasPositionChanged) {
+                                                    // ✅ ALWAYS restore - ALL signatures are position-locked regardless of party
+                                                    console.log(`🔒 [POSITION LOCK] Signature moved - restoring ${annotId} (party: ${signatureParty || 'none'}, isClientParty: ${isClientPartySignature})`);
+                                                    restoreAnnotationPosition();
+
+                                                    // ✅ CRITICAL FIX: Deferred verification for cross-page drags
+                                                    // PageNumber might not be updated immediately during drag events
+                                                    // We schedule a deferred check to catch late page changes
+                                                    // Run deferred checks for ALL signatures
+                                                    if (true) {
+                                                        setTimeout(() => {
+                                                            const currentAnnot = Core.annotationManager.getAnnotationById(annotId);
+                                                            if (currentAnnot) {
+                                                                const stillChangedPage = currentAnnot.PageNumber !== originalPosition.PageNumber;
+                                                                const stillChangedPosition =
+                                                                    Math.abs(currentAnnot.X - originalPosition.X) > 0.01 ||
+                                                                    Math.abs(currentAnnot.Y - originalPosition.Y) > 0.01;
+
+                                                                if (stillChangedPage || stillChangedPosition) {
+                                                                    console.log(`⏰ [DEFERRED CHECK] Page/Position still different after ${50}ms, restoring again`);
+                                                                    console.log(`   Expected Page: ${originalPosition.PageNumber}, Current Page: ${currentAnnot.PageNumber}`);
+                                                                    restoreAnnotationPosition();
+                                                                }
+                                                            }
+                                                        }, 50); // Short delay to catch page number updates
+
+                                                        // ✅ Additional check after longer delay for stubborn cross-page drags
+                                                        setTimeout(() => {
+                                                            const currentAnnot = Core.annotationManager.getAnnotationById(annotId);
+                                                            if (currentAnnot) {
+                                                                const stillChangedPage = currentAnnot.PageNumber !== originalPosition.PageNumber;
+                                                                const stillChangedPosition =
+                                                                    Math.abs(currentAnnot.X - originalPosition.X) > 0.01 ||
+                                                                    Math.abs(currentAnnot.Y - originalPosition.Y) > 0.01;
+
+                                                                if (stillChangedPage || stillChangedPosition) {
+                                                                    console.log(`⏰ [DEFERRED CHECK] Page/Position still different after ${200}ms, final restoration`);
+                                                                    console.log(`   Expected Page: ${originalPosition.PageNumber}, Current Page: ${currentAnnot.PageNumber}`);
+                                                                    restoreAnnotationPosition();
+                                                                }
+                                                            }
+                                                        }, 200); // Longer delay for final verification
+                                                    }
                                                 }
                                             } else if (isSignatureWidget || isSignatureAnnot) {
                                                 // Not in our captured list - might be user's own signature or late-loaded
@@ -2594,51 +2677,29 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                     }
                                                 }
 
-                                                // Determine if this is a protected party
-                                                // If protectedPartyIds is specified, only protect those parties
-                                                // If protectedPartyIds is empty/undefined, fall back to protecting all (backward compat)
-                                                let isProtectedParty: boolean;
-                                                if (protectedPartyIdsRef.current.length > 0) {
-                                                    // We have a list of protected parties - only protect if signature belongs to one
-                                                    isProtectedParty = signatureParty ? protectedPartyIdsRef.current.includes(signatureParty) : false;
-                                                } else {
-                                                    // No protected parties specified - protect all (backward compatibility)
-                                                    isProtectedParty = true;
-                                                }
+                                                // ✅ For ALL signatures: Don't restore on delete, defer cleanup
+                                                // This allows cross-page drag detection (delete on page 1 → add on page 2)
+                                                // The add handler will restore to original position
+                                                console.log(`⏳ [DELETE LOCK] Signature deleted ${annotId} (party: ${signatureParty || 'unknown'}) - deferring cleanup for cross-page drag detection`);
 
-                                                if (isProtectedParty) {
-                                                    console.log(`🚫 [DELETE LOCK] Detected deletion of protected party signature annotation ${annotId} (party: ${signatureParty || 'unknown'}, protected: true)`);
-
-                                                    // Restore the annotation from XFDF
-                                                    try {
-                                                        await Core.annotationManager.importAnnotations(savedData.xfdf);
-                                                        console.log(`✅ [DELETE LOCK] Restored pre-filled signature annotation ${annotId}`);
-
-                                                        // Trigger callback to show warning (only if not in silent mode)
-                                                        if (!silentPositionRestore) {
-                                                            if (onSignaturePositionRestored) {
-                                                                onSignaturePositionRestored();
-                                                            } else if (onPrefilledFieldModified) {
-                                                                onPrefilledFieldModified();
-                                                            }
-                                                        }
-                                                    } catch (e) {
-                                                        console.error(`❌ [DELETE LOCK] Failed to restore annotation ${annotId}:`, e);
+                                                setTimeout(() => {
+                                                    // Only cleanup if the annotation is truly gone (not re-added)
+                                                    const stillExists = Core.annotationManager.getAnnotationById(annotId);
+                                                    if (!stillExists) {
+                                                        console.log(`🗑️ [DELETE LOCK] Cleaning up tracking for deleted annotation ${annotId}`);
+                                                        prefilledSignaturePositionsRef.current.delete(annotId);
+                                                        prefilledSignatureDataRef.current.delete(annotId);
+                                                        signatureAnnotationPartyRef.current.delete(annotId);
+                                                    } else {
+                                                        console.log(`✅ [DELETE LOCK] Annotation ${annotId} still exists, keeping tracking data`);
                                                     }
-                                                } else {
-                                                    // ✅ Allow deleting signatures that belong to the user's own party
-                                                    console.log(`✅ [DELETE LOCK] Allowing deletion of own party signature annotation ${annotId} (party: ${signatureParty || 'unknown'})`);
-                                                    // Remove from our tracking maps
-                                                    prefilledSignaturePositionsRef.current.delete(annotId);
-                                                    prefilledSignatureDataRef.current.delete(annotId);
-                                                    signatureAnnotationPartyRef.current.delete(annotId);
-                                                }
+                                                }, 500); // Wait 500ms to see if annotation gets re-added
                                             }
                                         });
                                     }
 
-                                    // ✅ Handle 'add' action - capture any late-loaded pre-filled signatures (from XFDF import)
-                                    if (action === 'add' && info?.imported) {
+                                    // ✅ Handle 'add' action - check position and capture signatures
+                                    if (action === 'add') {
                                         annotations.forEach(async (annot: any) => {
                                             const isSignatureWidget = annot instanceof Core.Annotations.SignatureWidgetAnnotation;
                                             const isSignatureAnnot =
@@ -2660,11 +2721,138 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                         PageNumber: annot.PageNumber
                                                     };
                                                     prefilledSignaturePositionsRef.current.set(widgetId, position);
-                                                    console.log(`📍 [LATE CAPTURE] Captured imported signature widget ${widgetId}:`, position);
+                                                    console.log(`📍 [LATE CAPTURE] Captured signature widget ${widgetId}:`, position);
                                                 }
                                             } else if (isSignatureAnnot) {
                                                 const annotId = annot.Id;
-                                                if (!prefilledSignaturePositionsRef.current.has(annotId)) {
+
+                                                // ✅ CRITICAL: Check if this is a re-added signature (after deletion)
+                                                // First, try to determine the field name for this signature
+                                                let fieldName = signatureAnnotationToFieldRef.current.get(annotId);
+
+                                                // ✅ NEW: If field name not found for this new annotation ID, find it by checking overlapping widgets
+                                                if (!fieldName) {
+                                                    const sigRect = (annot as any).getRect?.();
+                                                    const sigPage = annot.PageNumber;
+
+                                                    if (sigRect && sigPage) {
+                                                        const allAnnots = Core.annotationManager.getAnnotationsList();
+                                                        const sigWidgets = allAnnots.filter((a: any) =>
+                                                            a instanceof Core.Annotations.SignatureWidgetAnnotation &&
+                                                            a.PageNumber === sigPage
+                                                        );
+
+                                                        for (const widget of sigWidgets) {
+                                                            const wRect = (widget as any).getRect?.();
+                                                            if (!wRect) continue;
+
+                                                            // Check if the signature overlaps the widget
+                                                            const overlaps =
+                                                                sigRect.x1 < wRect.x2 && sigRect.x2 > wRect.x1 &&
+                                                                sigRect.y1 < wRect.y2 && sigRect.y2 > wRect.y1;
+
+                                                            if (overlaps) {
+                                                                const field = (widget as any).getField?.();
+                                                                fieldName = field?.name || (widget as any).fieldName;
+                                                                if (fieldName) {
+                                                                    console.log(`🔍 [ADD CHECK] Found field name for new annotation ${annotId}: ${fieldName}`);
+                                                                    signatureAnnotationToFieldRef.current.set(annotId, fieldName);
+                                                                    break;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                let originalPosition = prefilledSignaturePositionsRef.current.get(annotId);
+                                                let originalAnnotId = annotId;
+
+                                                // If not found by ID, search by field name
+                                                if (!originalPosition && fieldName) {
+                                                    // Find any tracked position for this field
+                                                    for (const [trackedId, fieldN] of signatureAnnotationToFieldRef.current.entries()) {
+                                                        if (fieldN === fieldName) {
+                                                            originalPosition = prefilledSignaturePositionsRef.current.get(trackedId);
+                                                            if (originalPosition) {
+                                                                originalAnnotId = trackedId; // Remember the original annotation ID for XFDF lookup
+                                                                console.log(`🔍 [ADD CHECK] Found original position for field ${fieldName} via tracked ID ${trackedId}`);
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                // Check if signature is in wrong position
+                                                if (originalPosition) {
+                                                    // ✅ Check if this belongs to a protected party
+                                                    let signatureParty: string | undefined;
+                                                    if (fieldName && formFieldsRef.current.length > 0) {
+                                                        const formField = formFieldsRef.current.find((f: any) => f.name === fieldName);
+                                                        signatureParty = formField?.assignedParty;
+                                                    }
+
+                                                    // ✅ ALL signatures are now position-locked, no need to check protection
+                                                    const hasWrongPosition =
+                                                        Math.abs(annot.X - originalPosition.X) > 0.01 ||
+                                                        Math.abs(annot.Y - originalPosition.Y) > 0.01 ||
+                                                        annot.PageNumber !== originalPosition.PageNumber;
+
+                                                    if (hasWrongPosition) {
+                                                        // ✅ ALWAYS restore - ALL signatures are position-locked regardless of party
+                                                        console.log(`🔄 [ADD CHECK] Signature re-added in wrong position!`);
+                                                        console.log(`   Expected: (${originalPosition.X}, ${originalPosition.Y}) Page ${originalPosition.PageNumber}`);
+                                                        console.log(`   Actual: (${annot.X}, ${annot.Y}) Page ${annot.PageNumber}`);
+                                                        console.log(`   Party: ${signatureParty || 'none'} - RESTORING (all signatures locked)`);
+
+                                                        // ✅ For cross-page moves, we need to delete and restore from XFDF
+                                                        // Simple property updates don't work properly across pages
+                                                        if (annot.PageNumber !== originalPosition.PageNumber) {
+                                                            console.log(`🔄 [ADD CHECK] Cross-page move detected, deleting and restoring from XFDF`);
+
+                                                            // Delete the incorrectly placed annotation
+                                                            Core.annotationManager.deleteAnnotation(annot, { source: 'restore_prefilled' });
+
+                                                            // Restore from XFDF using the original annotation ID
+                                                            const savedData = prefilledSignatureDataRef.current.get(originalAnnotId);
+                                                            if (savedData) {
+                                                                try {
+                                                                    await Core.annotationManager.importAnnotations(savedData.xfdf);
+                                                                    console.log(`✅ [ADD CHECK] Restored signature from XFDF (ID: ${originalAnnotId}) to correct page`);
+                                                                } catch (e) {
+                                                                    console.error(`❌ [ADD CHECK] Failed to restore from XFDF:`, e);
+                                                                }
+                                                            } else {
+                                                                console.warn(`⚠️ [ADD CHECK] No XFDF data found for annotation ${originalAnnotId} or field ${fieldName}`);
+                                                            }
+                                                        } else {
+                                                            // Same page, just update position properties
+                                                            annot.X = originalPosition.X;
+                                                            annot.Y = originalPosition.Y;
+                                                            annot.Width = originalPosition.Width;
+                                                            annot.Height = originalPosition.Height;
+
+                                                            Core.annotationManager.redrawAnnotation(annot);
+                                                            console.log(`✅ [ADD CHECK] Restored signature to correct position (same page)`);
+                                                        }
+                                                    }
+
+                                                    // Update tracking with new annotation ID
+                                                    prefilledSignaturePositionsRef.current.set(annotId, originalPosition);
+                                                    if (fieldName) {
+                                                        signatureAnnotationToFieldRef.current.set(annotId, fieldName);
+
+                                                        // ✅ Also restore party mapping for the new annotation ID
+                                                        // Find party from field assignment
+                                                        if (formFieldsRef.current.length > 0) {
+                                                            const formField = formFieldsRef.current.find((f: any) => f.name === fieldName);
+                                                            if (formField?.assignedParty) {
+                                                                signatureAnnotationPartyRef.current.set(annotId, formField.assignedParty);
+                                                                console.log(`🔍 [ADD CHECK] Restored party mapping for ${annotId}: ${formField.assignedParty}`);
+                                                            }
+                                                        }
+                                                    }
+                                                } else if (!prefilledSignaturePositionsRef.current.has(annotId)) {
+                                                    // New signature, capture its position
                                                     const position = {
                                                         X: annot.X,
                                                         Y: annot.Y,
@@ -2673,17 +2861,33 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                         PageNumber: annot.PageNumber
                                                     };
                                                     prefilledSignaturePositionsRef.current.set(annotId, position);
+                                                    console.log(`📍 [LATE CAPTURE] Captured new signature annotation ${annotId}:`, position);
 
-                                                    // Also capture XFDF for deletion restoration
+                                                    // ✅ Also capture field name and party assignment for new signatures
+                                                    if (fieldName) {
+                                                        signatureAnnotationToFieldRef.current.set(annotId, fieldName);
+
+                                                        // Capture party assignment
+                                                        if (formFieldsRef.current.length > 0) {
+                                                            const formField = formFieldsRef.current.find((f: any) => f.name === fieldName);
+                                                            if (formField?.assignedParty) {
+                                                                signatureAnnotationPartyRef.current.set(annotId, formField.assignedParty);
+                                                                console.log(`📍 [LATE CAPTURE] Captured party for ${annotId}: ${formField.assignedParty}`);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                // Always try to capture XFDF for deletion restoration
+                                                if (!prefilledSignatureDataRef.current.has(annotId)) {
                                                     try {
                                                         const xfdfString = await Core.annotationManager.exportAnnotations({ annotList: [annot] });
                                                         prefilledSignatureDataRef.current.set(annotId, {
                                                             xfdf: xfdfString,
                                                             annotType: annot instanceof Core.Annotations.FreeHandAnnotation ? 'FreeHand' : 'Stamp'
                                                         });
-                                                        console.log(`📍 [LATE CAPTURE] Captured imported signature annotation ${annotId} with XFDF`);
                                                     } catch (e) {
-                                                        console.log(`📍 [LATE CAPTURE] Captured imported signature annotation ${annotId} (no XFDF)`);
+                                                        // Silent fail for XFDF capture
                                                     }
                                                 }
                                             }
@@ -2785,20 +2989,20 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 }, 1000);
 
                                 // ✅ Add silent restoration listener for read-only mode
+                                // Including cross-page drag tracking with deferred verification
                                 Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string) => {
                                     if (action !== 'modify') return;
 
                                     annotations.forEach((annot: any) => {
-                                        const originalPosition = prefilledSignaturePositionsRef.current.get(annot.Id);
+                                        const annotId = annot.Id;
+                                        const originalPosition = prefilledSignaturePositionsRef.current.get(annotId);
 
                                         if (originalPosition) {
-                                            const hasPositionChanged =
-                                                annot.X !== originalPosition.X ||
-                                                annot.Y !== originalPosition.Y ||
-                                                annot.PageNumber !== originalPosition.PageNumber;
-
-                                            if (hasPositionChanged) {
-                                                console.log(`🔒 [READ-ONLY LOCK] Silently restoring signature position for ${annot.Id}`);
+                                            // ✅ IMPROVED: Helper function to restore annotation position (read-only mode)
+                                            const restoreAnnotationPosition = () => {
+                                                console.log(`🔒 [READ-ONLY LOCK] Silently restoring signature position for ${annotId}`);
+                                                console.log(`   Original: (${originalPosition.X}, ${originalPosition.Y}) Page ${originalPosition.PageNumber}`);
+                                                console.log(`   Current: (${annot.X}, ${annot.Y}) Page ${annot.PageNumber}`);
 
                                                 annot.X = originalPosition.X;
                                                 annot.Y = originalPosition.Y;
@@ -2806,8 +3010,52 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                 annot.Height = originalPosition.Height;
                                                 annot.PageNumber = originalPosition.PageNumber;
 
+                                                // Force redraw to update position
                                                 Core.annotationManager.redrawAnnotation(annot);
+
                                                 console.log(`✅ [READ-ONLY LOCK] Silently restored signature to original position`);
+                                            };
+
+                                            const hasPositionChanged =
+                                                annot.X !== originalPosition.X ||
+                                                annot.Y !== originalPosition.Y ||
+                                                annot.PageNumber !== originalPosition.PageNumber;
+
+                                            if (hasPositionChanged) {
+                                                // ✅ Immediate restoration
+                                                restoreAnnotationPosition();
+
+                                                // ✅ CRITICAL FIX: Deferred verification for cross-page drags (read-only mode)
+                                                setTimeout(() => {
+                                                    const currentAnnot = Core.annotationManager.getAnnotationById(annotId);
+                                                    if (currentAnnot) {
+                                                        const stillChangedPage = currentAnnot.PageNumber !== originalPosition.PageNumber;
+                                                        const stillChangedPosition =
+                                                            currentAnnot.X !== originalPosition.X ||
+                                                            currentAnnot.Y !== originalPosition.Y;
+
+                                                        if (stillChangedPage || stillChangedPosition) {
+                                                            console.log(`⏰ [READ-ONLY DEFERRED] Position still different after 50ms, restoring again`);
+                                                            restoreAnnotationPosition();
+                                                        }
+                                                    }
+                                                }, 50);
+
+                                                // ✅ Additional check after longer delay
+                                                setTimeout(() => {
+                                                    const currentAnnot = Core.annotationManager.getAnnotationById(annotId);
+                                                    if (currentAnnot) {
+                                                        const stillChangedPage = currentAnnot.PageNumber !== originalPosition.PageNumber;
+                                                        const stillChangedPosition =
+                                                            currentAnnot.X !== originalPosition.X ||
+                                                            currentAnnot.Y !== originalPosition.Y;
+
+                                                        if (stillChangedPage || stillChangedPosition) {
+                                                            console.log(`⏰ [READ-ONLY DEFERRED] Position still different after 200ms, final restoration`);
+                                                            restoreAnnotationPosition();
+                                                        }
+                                                    }
+                                                }, 200);
                                             }
                                         }
                                     });
