@@ -118,8 +118,10 @@ export default function ReviewApprovalPage() {
         const allContracts = await contractService.getAllContracts();
         // Filter contracts for review/approval (including approved and rejected for history)
         const assignedContracts = allContracts.filter(c =>
-            c.status === ContractStatus.REVIEW_APPROVAL ||
-            c.status === ContractStatus.REVIEWED ||
+            c.status === ContractStatus.IN_REVIEW ||
+            c.status === ContractStatus.IN_APPROVAL ||
+            c.status === ContractStatus.REVIEW_APPROVAL || // backward compat
+            c.status === ContractStatus.REVIEWED ||        // backward compat
             c.status === ContractStatus.APPROVED ||
             c.status === ContractStatus.REJECTED_BY_REVIEWER ||
             c.status === ContractStatus.REJECTED_BY_APPROVER

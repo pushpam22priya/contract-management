@@ -132,15 +132,33 @@ class ContractService {
             // Merge: keep existing reviewers unchanged + add new ones
             const mergedReviewers = [...existingReviewers, ...newReviewerInfos];
 
+            // Determine if an approver will be set after this submission
+            const willHaveApprover = (contract.approver && contract.approver.email)
+                || (approver && approver !== '');
+
+            // Determine correct status:
+            // - Has reviewer(s) → IN_REVIEW
+            // - No reviewers, has approver → IN_APPROVAL
+            // - Neither → DRAFT (validation should prevent this)
+            const willHaveReviewers = mergedReviewers.length > 0;
+            let newStatus: ContractStatus;
+            if (willHaveReviewers) {
+                newStatus = ContractStatus.IN_REVIEW;
+            } else if (willHaveApprover) {
+                newStatus = ContractStatus.IN_APPROVAL;
+            } else {
+                newStatus = ContractStatus.DRAFT;
+            }
+
             // Build update data
             const updateData: Record<string, any> = {
                 reviewers: mergedReviewers,
-                status: ContractStatus.REVIEW_APPROVAL,
+                status: newStatus,
                 reviewStatus: 'pending' as const,
             };
 
-            // Only set approver if one doesn't already exist
-            if (!contract.approver) {
+            // Only set approver if one doesn't already exist AND a valid email is provided
+            if (!contract.approver && approver && approver !== '') {
                 updateData.approver = {
                     email: approver,
                     status: 'pending' as const,
@@ -291,7 +309,7 @@ class ContractService {
 
             const updateData: Record<string, any> = {
                 reviewers: mergedReviewers,
-                status: ContractStatus.REVIEW_APPROVAL,
+                status: ContractStatus.IN_REVIEW,
                 reviewStatus: 'pending' as const,
                 // Keep existing approver unchanged
             };
@@ -339,11 +357,17 @@ class ContractService {
                 reviewers: updatedReviewers
             };
 
-            // If all reviewed, update contract reviewStatus and status
+            // If all reviewed, auto-transition to the correct next status
             if (allReviewed) {
                 updates.reviewStatus = 'reviewed';
-                // Also update main status to REVIEWED explicitly so Approver sees it as "READY FOR APPROVAL"
-                updates.status = ContractStatus.REVIEWED;
+                if (contract.approver && contract.approver.email) {
+                    // Case 3: Has approver — auto-transition to IN_APPROVAL
+                    updates.status = ContractStatus.IN_APPROVAL;
+                } else {
+                    // Case 1: No approver — auto-transition directly to APPROVED
+                    updates.status = ContractStatus.APPROVED;
+                    updates.approvalStatus = 'approved';
+                }
             }
 
             // Save updates

@@ -150,11 +150,13 @@ export default function DraftPage() {
         // Get contracts created by user
         const userContracts = await contractService.getContractsCreatedByUser(currentUser.email);
 
-        // Show Drafts, Reviewed (Waiting for Approval), and Rejected contracts
+        // Show Drafts, In Review, In Approval, and Rejected contracts
         const drafts = userContracts.filter(c =>
             c.status === ContractStatus.DRAFT ||
-            c.status === ContractStatus.REVIEW_APPROVAL ||
-            c.status === ContractStatus.REVIEWED ||
+            c.status === ContractStatus.IN_REVIEW ||
+            c.status === ContractStatus.IN_APPROVAL ||
+            c.status === ContractStatus.REVIEW_APPROVAL || // backward compat
+            c.status === ContractStatus.REVIEWED ||        // backward compat
             c.status === ContractStatus.REJECTED_BY_REVIEWER ||
             c.status === ContractStatus.REJECTED_BY_APPROVER
         );

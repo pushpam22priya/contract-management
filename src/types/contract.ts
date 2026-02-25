@@ -102,8 +102,10 @@ export interface SigningRequest {
 
 export enum ContractStatus {
     DRAFT = 'draft',
-    REVIEW_APPROVAL = 'review_approval',
-    REVIEWED = 'reviewed',       // Reviews done, waiting for approval
+    IN_REVIEW = 'in_review',         // Submitted for review (reviewer(s) assigned)
+    IN_APPROVAL = 'in_approval',     // All reviews done, waiting for approver action
+    REVIEW_APPROVAL = 'review_approval', // Legacy: kept for backward compatibility
+    REVIEWED = 'reviewed',           // Legacy: kept for backward compatibility
     APPROVED = 'approved',       // Gate: Approved, ready for signature
     WAITING_FOR_SIGNATURE = 'waiting_for_signature',
     SIGNED_BY_EVERYONE = 'signed_by_everyone', // All external signers completed

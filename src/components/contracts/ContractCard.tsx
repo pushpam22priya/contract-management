@@ -41,6 +41,10 @@ const ContractCard = ({
                 return 'Expiring';
             case ContractStatus.EXPIRED:
                 return 'Expired';
+            case ContractStatus.IN_REVIEW:
+                return 'In Review';
+            case ContractStatus.IN_APPROVAL:
+                return 'In Approval';
             case ContractStatus.REVIEW_APPROVAL:
                 return 'Review and Approval';
             case ContractStatus.REVIEWED:
@@ -81,6 +85,10 @@ const ContractCard = ({
             case ContractStatus.REJECTED_BY_REVIEWER:
             case ContractStatus.REJECTED_BY_APPROVER:
                 return { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' };
+            case ContractStatus.IN_REVIEW:
+                return { bg: '#ede9fe', color: '#5b21b6', border: '#c4b5fd' };
+            case ContractStatus.IN_APPROVAL:
+                return { bg: '#fef9c3', color: '#92400e', border: '#fde68a' };
             case ContractStatus.REVIEW_APPROVAL:
             case ContractStatus.REVIEWED:
                 return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' };
