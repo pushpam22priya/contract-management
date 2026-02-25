@@ -42,6 +42,7 @@ interface PDFViewerContainerProps {
 
 // Import types for multi-party support
 import { PartyConfiguration } from '@/types/template';
+import PDFNavigationButton from './pdfViewer/PDFNavigationButton';
 
 // Extended FormFieldDefinition with party assignment
 export interface FormFieldDefinitionWithParty {
@@ -92,11 +93,6 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
         const hasUnsavedChanges = useRef(false);
 
-        // ✅ Annotation Navigation State
-        const [annotations, setAnnotations] = useState<any[]>([]);
-        const [currentAnnotationIndex, setCurrentAnnotationIndex] = useState(0);
-        const [showNavButton, setShowNavButton] = useState(false);
-        const [navStarted, setNavStarted] = useState(false);
         // ✅ CRITICAL FIX: Store fieldMetadataStore as a component-level ref
         // This ensures the same Map instance persists throughout the component lifecycle
         const fieldMetadataStoreRef = useRef<Map<string, any>>(new Map());
@@ -144,7 +140,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         const signatureAnnotationToFieldRef = useRef<Map<string, string>>(new Map());
 
         // ✅ Document should be read-only if explicitly requested (e.g., Reviewers and Approvers)
-        const effectiveReadOnly = isReadOnly ?? readOnly;
+        const effectiveReadOnly = !!(isReadOnly ?? readOnly);
 
         // Keep onSignatureApplied ref updated for use in event handlers
         onSignatureAppliedRef.current = onSignatureApplied;
@@ -182,92 +178,6 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
             }
         };
 
-        // ✅ Helper function to get form field annotations (accessible throughout component)
-        const getFormFieldAnnotations = (Core: any, allowedParties?: string[], role?: string) => {
-            if (!Core?.annotationManager) return [];
-
-            const annotationManager = Core.annotationManager;
-            const allAnnotations = annotationManager.getAnnotationsList();
-
-            // Filter for widget annotations (form fields)
-            let formAnnotations = allAnnotations.filter((annot: any) => annot instanceof Core.Annotations.WidgetAnnotation);
-
-            // ✅ PARTY FILTERING FOR EXTERNAL CLIENTS
-            // Only apply filtering if role is 'client' and we have specific parties allowed
-            if (role === 'client' && allowedParties && allowedParties.length > 0) {
-                console.log(`🔍 [NAV] Filtering annotations for client parties: [${allowedParties.join(', ')}]`);
-                formAnnotations = formAnnotations.filter((annot: any) => {
-                    const assignedParty = annot.getCustomData('assignedParty');
-                    // Include if field is assigned to one of the user's parties
-                    return assignedParty && allowedParties.includes(assignedParty);
-                });
-                console.log(`🔍 [NAV] Filtered down to ${formAnnotations.length} fields for parties [${allowedParties.join(', ')}]`);
-            }
-
-            // Sort by page then position
-            formAnnotations.sort((a: any, b: any) => {
-                // Sort by page number first
-                if (a.PageNumber !== b.PageNumber) {
-                    return a.PageNumber - b.PageNumber;
-                }
-                // Then by Y position (top to bottom)
-                return a.Y - b.Y;
-            });
-
-            return formAnnotations;
-        };
-
-        const flashHighlight = (Core: any, targetAnnot: any) => {
-            if (!targetAnnot || !Core) return;
-            try {
-                const annotationManager = Core.annotationManager;
-
-                // 1. Programmatically focus the field if possible
-                // This is crucial for text fields to show the interactive cursor and focus outline
-                try {
-                    const field = targetAnnot.getField?.();
-                    if (field && typeof field.setFocus === 'function') {
-                        field.setFocus();
-                    }
-                } catch (e) { /* ignore focus errors */ }
-
-                // 2. Create an EXTERNAL highlight border
-                // We make it slightly larger than the field so it's not covered by HTML overlays
-                const rect = targetAnnot.getRect();
-                const offset = 4; // 4px offset to ensure it's clearly outside
-
-                const highlight = new Core.Annotations.RectangleAnnotation();
-                highlight.PageNumber = targetAnnot.PageNumber;
-                highlight.X = rect.x1 - offset;
-                highlight.Y = rect.y1 - offset;
-                highlight.Width = (rect.x2 - rect.x1) + (offset * 2);
-                highlight.Height = (rect.y2 - rect.y1) + (offset * 2);
-
-                // Style: Hollow box with prominent blue border
-                highlight.FillColor = new Core.Annotations.Color(255, 255, 255, 0); // Transparent fill
-                highlight.StrokeColor = new Core.Annotations.Color(15, 76, 71, 1); // Solid blue border
-                highlight.StrokeThickness = 2;
-                highlight.Opacity = 1;
-
-                // Meta properties
-                highlight.Listable = false; // Don't show in comments panel
-                highlight.setCustomData('isTempHighlight', 'true');
-                highlight.NoZoom = false;
-
-                // Add to document
-                annotationManager.addAnnotation(highlight);
-                annotationManager.redrawAnnotation(highlight);
-
-                // Automatically remove after 2.5 seconds
-                setTimeout(() => {
-                    try {
-                        annotationManager.deleteAnnotation(highlight, { force: true });
-                    } catch (e) { /* ignore */ }
-                }, 600);
-            } catch (err) {
-                console.warn('⚠️ [NAV] Highlight flash failed:', err);
-            }
-        };
 
         // ✅ Helper: check if a signature widget is truly empty (no overlapping signature annotation)
         const isSignatureWidgetEmpty = (widget: any, allAnnotations: any[], Core: any): boolean => {
@@ -3438,27 +3348,6 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             safeSetToolbarGroup(UI, targetGroup);
                             console.log(`✅ Toolbar group set to ${targetGroup}`);
 
-                            // ✅ Initialize annotation navigation if enabled
-                            console.log('🔍 [NAV] Check:', {
-                                showAnnotationNavigation,
-                                effectiveReadOnly,
-                                shouldInit: showAnnotationNavigation && !effectiveReadOnly
-                            });
-
-                            if (showAnnotationNavigation && !effectiveReadOnly) {
-                                console.log('🔍 [NAV] Initializing annotation navigation...');
-                                const formAnnotations = getFormFieldAnnotations(Core, editableParties, currentUserRole);
-                                console.log('🔍 [NAV] Form annotations:', formAnnotations);
-                                setAnnotations(formAnnotations);
-                                setCurrentAnnotationIndex(0);
-
-                                if (formAnnotations.length > 0) {
-                                    setShowNavButton(true);
-                                    console.log(`🔍 [NAV] Found ${formAnnotations.length} annotations for navigation`);
-                                } else {
-                                    console.log('🔍 [NAV] No annotations found');
-                                }
-                            }
 
                             // ✅ Restore party assignments from formFields prop
                             // Only restore for fields that actually exist in the current PDF
@@ -3633,7 +3522,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
         // Handle readonly mode changes
         useEffect(() => {
-            if (!viewerInstance.current || effectiveReadOnly === undefined) return;
+            if (!viewerInstance.current) return;
 
             try {
                 const { annotationManager } = viewerInstance.current.Core;
@@ -3794,172 +3683,14 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                 />
 
                 {/* ✅ Floating Arrow-Shaped Navigation Button */}
-                {showNavButton && showAnnotationNavigation && annotations.length > 0 && (
-                    <Box
-                        sx={{
-                            position: 'absolute',
-                            left: 0,
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            zIndex: 1000,
-                            display: 'flex',
-                            alignItems: 'center',
-                        }}
-                    >
-                        {/* Arrow-shaped button */}
-                        <Box
-                            onClick={async () => {
-                                if (!viewerInstance.current) return;
-
-                                const { Core } = viewerInstance.current;
-                                const { documentViewer, annotationManager } = Core;
-                                const formAnnotations = getFormFieldAnnotations(Core, editableParties, currentUserRole);
-
-                                if (formAnnotations.length === 0) return;
-
-                                // If not started yet, go to first annotation
-                                if (!navStarted) {
-                                    setNavStarted(true);
-                                    const firstAnnotation = formAnnotations[0];
-                                    console.log(`🔍 [NAV] Starting navigation - jumping to first annotation`);
-
-                                    try {
-                                        const scrollContainer = documentViewer.getScrollViewElement();
-                                        if (scrollContainer) scrollContainer.style.scrollBehavior = 'smooth';
-                                        annotationManager.deselectAllAnnotations();
-
-                                        const currentPage = documentViewer.getCurrentPage();
-                                        if (currentPage !== firstAnnotation.PageNumber) {
-                                            documentViewer.setCurrentPage(firstAnnotation.PageNumber);
-                                            await new Promise(resolve => setTimeout(resolve, 250));
-                                        }
-
-                                        annotationManager.selectAnnotation(firstAnnotation);
-                                        await new Promise(resolve => setTimeout(resolve, 50));
-                                        annotationManager.jumpToAnnotation(firstAnnotation);
-
-                                        // ✅ FLASH HIGHLIGHT
-                                        flashHighlight(Core, firstAnnotation);
-
-                                        setTimeout(() => {
-                                            if (scrollContainer) scrollContainer.style.scrollBehavior = 'auto';
-                                        }, 600);
-                                    } catch (error) {
-                                        console.error('🔍 [NAV] Error during start navigation:', error);
-                                        try {
-                                            annotationManager.selectAnnotation(firstAnnotation);
-                                            annotationManager.jumpToAnnotation(firstAnnotation);
-                                        } catch (e) { console.error('🔍 [NAV] Fallback failed:', e); }
-                                    }
-
-                                    setCurrentAnnotationIndex(0);
-                                    return;
-                                }
-
-                                // If at the last annotation, scroll to top and reset
-                                if (currentAnnotationIndex === formAnnotations.length - 1) {
-                                    console.log('🔄 [NAV] Move to top - resetting navigation');
-                                    try {
-                                        annotationManager.deselectAllAnnotations();
-                                        const scrollContainer = documentViewer.getScrollViewElement();
-                                        if (scrollContainer) {
-                                            scrollContainer.style.scrollBehavior = 'smooth';
-                                            scrollContainer.scrollTop = 0;
-                                            setTimeout(() => {
-                                                scrollContainer.style.scrollBehavior = 'auto';
-                                            }, 600);
-                                        }
-                                        documentViewer.setCurrentPage(1);
-                                    } catch (error) {
-                                        console.error('🔍 [NAV] Error scrolling to top:', error);
-                                    }
-                                    setCurrentAnnotationIndex(0);
-                                    setNavStarted(false);
-                                    return;
-                                }
-
-                                // Navigate to next annotation
-                                const nextIndex = currentAnnotationIndex + 1;
-                                const nextAnnotation = formAnnotations[nextIndex];
-
-                                console.log(`🔍 [NAV] Jumping to annotation ${nextIndex + 1}/${formAnnotations.length}`);
-
-                                try {
-                                    const currentPage = documentViewer.getCurrentPage();
-                                    const scrollContainer = documentViewer.getScrollViewElement();
-                                    if (scrollContainer) scrollContainer.style.scrollBehavior = 'smooth';
-
-                                    annotationManager.deselectAllAnnotations();
-
-                                    if (currentPage !== nextAnnotation.PageNumber) {
-                                        documentViewer.setCurrentPage(nextAnnotation.PageNumber);
-                                        await new Promise(resolve => setTimeout(resolve, 250));
-                                    }
-
-                                    annotationManager.selectAnnotation(nextAnnotation);
-                                    await new Promise(resolve => setTimeout(resolve, 50));
-                                    annotationManager.jumpToAnnotation(nextAnnotation);
-
-                                    // ✅ FLASH HIGHLIGHT
-                                    flashHighlight(Core, nextAnnotation);
-
-                                    setTimeout(() => {
-                                        if (scrollContainer) scrollContainer.style.scrollBehavior = 'auto';
-                                    }, 600);
-                                } catch (error) {
-                                    console.error('🔍 [NAV] Error during navigation:', error);
-                                    try {
-                                        annotationManager.selectAnnotation(nextAnnotation);
-                                        annotationManager.jumpToAnnotation(nextAnnotation);
-                                    } catch (e) { console.error('🔍 [NAV] Fallback failed:', e); }
-                                }
-
-                                setCurrentAnnotationIndex(nextIndex);
-                            }}
-                            sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                backgroundColor: '#0F4C47',
-                                color: '#fff',
-                                fontWeight: 700,
-                                fontSize: '13px',
-                                letterSpacing: '0.5px',
-                                padding: '10px 28px 10px 16px',
-                                cursor: 'pointer',
-                                clipPath: 'polygon(0% 0%, calc(100% - 18px) 0%, 100% 50%, calc(100% - 18px) 100%, 0% 100%)',
-                                userSelect: 'none',
-                                transition: 'background-color 0.2s ease, transform 0.15s ease',
-                                whiteSpace: 'nowrap',
-                                boxShadow: '2px 2px 8px rgba(0,0,0,0.3)',
-                                '&:hover': {
-                                    backgroundColor: '#0F4C47',
-                                    transform: 'scale(1.03)',
-                                },
-                                '&:active': {
-                                    backgroundColor: '#0F4C47',
-                                    transform: 'scale(0.98)',
-                                },
-                            }}
-                        >
-                            {!navStarted
-                                ? 'CLICK TO START'
-                                : currentAnnotationIndex === annotations.length - 1
-                                    ? 'MOVE TO TOP'
-                                    : 'NEXT'
-                            }
-                        </Box>
-
-                        {/* Dotted line extending from arrow */}
-                        <Box
-                            sx={{
-                                width: '60px',
-                                borderTop: '2px dotted #0F4C47',
-                                marginLeft: '-2px',
-                            }}
-                        />
-                    </Box>
-                )}
+                <PDFNavigationButton
+                    viewerInstance={viewerInstance}
+                    showAnnotationNavigation={showAnnotationNavigation}
+                    effectiveReadOnly={effectiveReadOnly}
+                    loading={loading}
+                    editableParties={editableParties}
+                    currentUserRole={currentUserRole}
+                />
             </Box>
         );
     }
