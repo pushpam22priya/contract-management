@@ -471,6 +471,27 @@ export default function PublicSigningPage() {
     }, [signatureRequest]);
 
     /**
+     * Calculate protected party IDs (parties whose signatures the client cannot modify)
+     * These are all parties EXCEPT the client's assigned party
+     */
+    const protectedPartyIds = useMemo(() => {
+        if (!signatureRequest?.parties || !signatureRequest?.assignedParty) {
+            // Legacy mode - protect nothing (undefined means no restrictions)
+            return undefined;
+        }
+
+        const allPartyIds = (signatureRequest.parties as PartyConfiguration[]).map(p => p.id);
+        const userPartyIds = Array.isArray(signatureRequest.assignedParty)
+            ? signatureRequest.assignedParty
+            : [signatureRequest.assignedParty];
+
+        // Protected = all parties EXCEPT the user's assigned parties
+        const protectedIds = allPartyIds.filter(id => !userPartyIds.includes(id));
+        console.log(`🛡️ [PublicSigningPage] Protected party IDs (cannot modify signatures): ${protectedIds.join(', ')}`);
+        return protectedIds;
+    }, [signatureRequest]);
+
+    /**
      * Get the assigned party configuration(s) for display
      */
     const assignedPartyConfigs = useMemo(() => {
@@ -733,6 +754,8 @@ export default function PublicSigningPage() {
                         onSignaturePositionRestored={() => setShowWrongPartyWarning(true)}
                         // ✅ MULTI-PARTY: Restrict editing to assigned party's fields only
                         editableParties={editableParties}
+                        // ✅ Protect signatures belonging to other parties (client can only modify their own party's signatures)
+                        protectedPartyIds={protectedPartyIds}
                     />
                 )}
 

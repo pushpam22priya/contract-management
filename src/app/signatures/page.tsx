@@ -296,6 +296,8 @@ export default function SignaturesPage() {
                         formFields={selectedContract.formFields}
                         // ✅ CRITICAL: External signers can only edit empty fields, filled fields are read-only
                         editableFieldMode="empty-only"
+                        // ✅ Pass parties for party validation (must complete all fields of a party)
+                        parties={selectedContract.parties}
                     />
                 )}
 

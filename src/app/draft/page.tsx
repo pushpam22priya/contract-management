@@ -306,20 +306,9 @@ export default function DraftPage() {
                     console.log('✅ [DraftPage] Field metadata updated successfully');
                 }
 
-                // ✅ Only show notification and close dialog on manual save (not auto-save)
-                if (!isAutoSave) {
-                    showNotification('Changes saved successfully!', 'success');
-
-                    // Close the viewer first to prevent stale data display
-                    setViewerOpen(false);
-                    setSelectedContract(null);
-                    setViewerData(null);
-
-                    // Then reload to get updated contract
-                    await loadDrafts();
-                } else {
-                    console.log('💾 [DraftPage] Auto-save completed silently (dialog stays open)');
-                }
+                // ✅ Show notification on save (don't close - DocumentViewerDialog handles closing)
+                showNotification('Changes saved successfully!', 'success');
+                console.log('💾 [DraftPage] Save completed - dialog stays open for continued editing');
             } else {
                 showNotification('Failed to save changes: ' + result.message, 'error');
                 throw new Error(result.message);
@@ -518,6 +507,8 @@ export default function DraftPage() {
                         setViewerOpen(false);
                         setSelectedContract(null);
                         setViewerData(null);
+                        // ✅ Reload drafts when dialog closes to reflect any saved changes
+                        loadDrafts();
                     }}
                     fileUrl={viewerData.fileUrl}
                     fileName={`${selectedContract.title}.pdf`}
@@ -536,6 +527,10 @@ export default function DraftPage() {
                     editableFieldMode="all"
                     // ✅ Enable annotation navigation for draft editing
                     showAnnotationNavigation={true}
+                    // ✅ Pass parties for party validation (must complete all fields of a party)
+                    parties={selectedContract.parties}
+                    // ✅ Pass external signers to protect client party fields from contractor editing
+                    externalSigners={selectedContract.externalSigners}
                 />
             )}
 

@@ -8,6 +8,7 @@ import { Close } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
 import { useRef, useState, useEffect, useMemo } from 'react';
 import BaseDialog from '@/components/common/BaseDialog';
+import ConfirmationDialog from '@/components/common/ConfirmationDialog';
 import { validatePartyFields } from '@/utils/partyValidation';
 import { PartyConfiguration } from '@/types/template';
 
@@ -76,6 +77,7 @@ interface DocumentViewerDialogProps {
     editableFieldMode?: 'all' | 'empty-only' | 'none';
     showAnnotationNavigation?: boolean; // ✅ Show floating navigation button for annotations
     parties?: any[]; // ✅ Party configurations for validation
+    externalSigners?: any[]; // ✅ External signers to determine client parties (contractor protection)
 }
 
 export default function DocumentViewerDialog({
@@ -101,12 +103,51 @@ export default function DocumentViewerDialog({
     editableFieldMode = 'all',
     showAnnotationNavigation = false,
     parties,
+    externalSigners,
 }: DocumentViewerDialogProps) {
 
 
     const pdfViewerRef = useRef<any>(null);
     const [saving, setSaving] = useState(false);
     const [signatureCommitted, setSignatureCommitted] = useState(false);
+
+    // ✅ Wrong party warning for contractor - shows when contractor tries to edit client party field
+    const [showWrongPartyWarning, setShowWrongPartyWarning] = useState(false);
+
+    // ✅ Unsaved changes confirmation dialog state
+    const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+    // Track values at last save to detect unsaved changes
+    const lastSavedValuesRef = useRef<Record<string, string>>({});
+
+    // ✅ Calculate client party IDs (parties that have external signers assigned)
+    const clientPartyIds = useMemo(() => {
+        console.log(`📋 [DocumentViewerDialog] Computing clientPartyIds from externalSigners:`, externalSigners);
+        if (!externalSigners || externalSigners.length === 0) {
+            console.log(`📋 [DocumentViewerDialog] No externalSigners - clientPartyIds = []`);
+            return [];
+        }
+        // Handle both single partyId (string) and multiple partyIds (array)
+        const partyIds: string[] = [];
+        externalSigners.forEach((signer: any) => {
+            if (signer.partyId) {
+                // partyId could be a string or an array of strings
+                if (Array.isArray(signer.partyId)) {
+                    partyIds.push(...signer.partyId);
+                } else {
+                    partyIds.push(signer.partyId);
+                }
+            }
+        });
+        const uniqueIds = [...new Set(partyIds)];
+        console.log(`📋 [DocumentViewerDialog] Computed clientPartyIds = [${uniqueIds.join(', ')}]`);
+        return uniqueIds; // Remove duplicates
+    }, [externalSigners]);
+
+    // ✅ Store initial field values for restoration (for contractor protection)
+    const initialFieldValuesRef = useRef<Record<string, string>>({});
+
+    // ✅ Track if user has interacted with the document (to avoid warning on initial load)
+    const userHasInteractedRef = useRef(false);
 
 
     // Track field changes during client signing (same pattern as CreateContractDialog)
@@ -129,10 +170,14 @@ export default function DocumentViewerDialog({
     useEffect(() => {
         if (open) {
             const initial: Record<string, string> = {};
+            const partyAssignments: Record<string, string> = {};
             if (formFields) {
                 formFields.forEach((field: any) => {
                     if (field.value && field.value.toString().trim() !== '') {
                         initial[field.name] = field.value.toString();
+                    }
+                    if (field.assignedParty) {
+                        partyAssignments[field.name] = field.assignedParty;
                     }
                 });
             }
@@ -140,9 +185,25 @@ export default function DocumentViewerDialog({
             setDismissedPartyWarning(false);
             setPopupPosition(null);
             setSignatureCommitted(false);
-            console.log(`🔄 [DocumentViewerDialog] Dialog opened — reset state with ${Object.keys(initial).length} pre-filled values`);
+            setShowWrongPartyWarning(false);
+            setShowUnsavedDialog(false);
+            // ✅ Capture initial values for contractor protection (to restore if they edit client fields)
+            initialFieldValuesRef.current = { ...initial };
+            // ✅ Track last saved values to detect unsaved changes
+            lastSavedValuesRef.current = { ...initial };
+            // ✅ Reset user interaction flag - will be set to true after initial load completes
+            userHasInteractedRef.current = false;
+            // Set interaction flag after a delay to skip initial PDF load events
+            setTimeout(() => {
+                userHasInteractedRef.current = true;
+                console.log(`✅ [DocumentViewerDialog] User interaction tracking enabled`);
+            }, 2000); // 2 second delay to let PDF finish loading
+            console.log(`🔄 [DocumentViewerDialog] Dialog opened — currentUserRole: ${currentUserRole}`);
+            console.log(`🔄 [DocumentViewerDialog] Dialog opened — ${Object.keys(initial).length} pre-filled values`);
+            console.log(`🔄 [DocumentViewerDialog] Dialog opened — Party assignments:`, partyAssignments);
+            console.log(`🔄 [DocumentViewerDialog] Dialog opened — clientPartyIds: [${clientPartyIds.join(', ')}]`);
         }
-    }, [open]);
+    }, [open, currentUserRole, clientPartyIds]);
 
     // Track if user dismissed the party validation warning popup
     const [dismissedPartyWarning, setDismissedPartyWarning] = useState(false);
@@ -154,12 +215,65 @@ export default function DocumentViewerDialog({
 
     // Handle form field changes
     const handleFieldChange = (fieldName: string, value: any) => {
-        console.log(`📝 [DocumentViewerDialog] Field changed: ${fieldName} = ${value}`);
-
         // ✅ SIGNATURE COMMIT SIGNAL — DO NOT STORE AS FIELD
         if (fieldName === '__signature_committed__') {
             setSignatureCommitted(true);
             return;
+        }
+
+        // Get the initial value and current value
+        const initialValue = initialFieldValuesRef.current[fieldName] || '';
+        const newValue = value?.toString() || '';
+
+        // ✅ Skip protection for signature imports (value 'signed' is only used during import/tracking)
+        // Also skip if value matches initial (restore/reload)
+        if (newValue === 'signed' || newValue === initialValue) {
+            // Still update state for tracking
+            setFilledFieldValues(prev => ({
+                ...prev,
+                [fieldName]: newValue
+            }));
+            return;
+        }
+
+        // ✅ CONTRACTOR PROTECTION: Prevent contractor from editing CLIENT party fields only
+        // Contractor CAN edit their own party fields (fields NOT assigned to external signers)
+        const isContractor = currentUserRole === 'contractor';
+        const hasClientParties = clientPartyIds.length > 0;
+        const hasFormFields = !!formFields;
+
+        if (isContractor && hasClientParties && hasFormFields) {
+            const field = formFields.find((f: any) => f.name === fieldName);
+            const fieldParty = field?.assignedParty;
+
+            // Only block if field is assigned to a CLIENT party (party with external signer)
+            // Contractor CAN edit fields assigned to contractor parties or unassigned fields
+            const isClientPartyField = fieldParty && clientPartyIds.includes(fieldParty);
+
+            if (isClientPartyField) {
+                console.log(`🚫 [DocumentViewerDialog] BLOCKING! Contractor tried to edit client party field: ${fieldName} (party: ${fieldParty})`);
+                setShowWrongPartyWarning(true);
+
+                // Get the original value and restore it
+                const originalValue = initialFieldValuesRef.current[fieldName] || '';
+                setFilledFieldValues(prev => ({
+                    ...prev,
+                    [fieldName]: originalValue
+                }));
+
+                // Restore the field in the PDF viewer
+                if (originalValue) {
+                    if (pdfViewerRef.current?.restoreFieldValue) {
+                        pdfViewerRef.current.restoreFieldValue(fieldName, originalValue);
+                    }
+                } else {
+                    if (pdfViewerRef.current?.clearField) {
+                        pdfViewerRef.current.clearField(fieldName);
+                    }
+                }
+
+                return; // Don't save the change
+            }
         }
 
         // ✅ NORMAL FORM FIELD
@@ -246,6 +360,55 @@ export default function DocumentViewerDialog({
         };
     }, [isDragging]);
 
+    // ✅ Check if there are unsaved changes (comparing current values to last saved values)
+    const hasUnsavedChanges = (): boolean => {
+        // Only track unsaved changes if onSave is provided (edit mode)
+        if (!onSave) return false;
+
+        const currentKeys = Object.keys(filledFieldValues);
+        const savedKeys = Object.keys(lastSavedValuesRef.current);
+
+        // Check if any new fields were filled
+        if (currentKeys.length !== savedKeys.length) return true;
+
+        // Check if any values changed
+        for (const key of currentKeys) {
+            if (filledFieldValues[key] !== lastSavedValuesRef.current[key]) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    // ✅ Handle close attempt - always show confirmation dialog when onSave is available (edit mode)
+    const handleCloseAttempt = () => {
+        if (onSave) {
+            // Edit mode: always show confirmation dialog
+            setShowUnsavedDialog(true);
+        } else {
+            // Read-only mode: close directly
+            onClose();
+        }
+    };
+
+    // ✅ Handle confirmation dialog: Yes - save and close
+    const handleUnsavedYes = async () => {
+        setShowUnsavedDialog(false);
+        await handleSaveClick();
+        onClose();
+    };
+
+    // ✅ Handle confirmation dialog: No - close without saving
+    const handleUnsavedNo = () => {
+        setShowUnsavedDialog(false);
+        onClose();
+    };
+
+    // ✅ Handle confirmation dialog: Cancel - stay in dialog
+    const handleUnsavedCancel = () => {
+        setShowUnsavedDialog(false);
+    };
 
     // Log form fields when component mounts/updates
     if (formFields && formFields.length > 0) {
@@ -314,8 +477,12 @@ export default function DocumentViewerDialog({
                     console.warn('⚠️ Could not clear signature store:', e);
                 }
 
-                // ✅ Close dialog after successful save
-                onClose();
+                // ✅ Update last saved values to track unsaved changes correctly
+                lastSavedValuesRef.current = { ...filledFieldValues };
+                console.log('📝 [DocumentViewerDialog] Updated lastSavedValuesRef after save');
+
+                // ✅ NOTE: Don't close dialog after saving - user can continue editing
+                // Dialog closes when user clicks the close button (with unsaved changes confirmation)
             }
 
         } catch (error) {
@@ -349,9 +516,10 @@ export default function DocumentViewerDialog({
     );
 
     return (
+        <>
         <BaseDialog
             open={open}
-            onClose={onClose}
+            onClose={handleCloseAttempt}
             title={title || fileName || 'Document Viewer'}
             maxWidth="lg"
             fullWidth
@@ -375,7 +543,13 @@ export default function DocumentViewerDialog({
                         canAddFormFields={canAddFormFields}
                         editableFieldMode={editableFieldMode}
                         showAnnotationNavigation={showAnnotationNavigation}
-                        silentPositionRestore={readOnly || editableFieldMode === 'empty-only'}
+                        // ✅ For contractor: Show warning when signature position is restored (silent restore + warning)
+                        silentPositionRestore={readOnly}
+                        // ✅ CRITICAL FIX: Always enable position tracking for contractors (removed clientPartyIds.length > 0 check)
+                        // This ensures ALL signatures (contractor's own + client's) are tracked back to their positions
+                        onSignaturePositionRestored={currentUserRole === 'contractor' ? () => setShowWrongPartyWarning(true) : undefined}
+                        // ✅ Pass client party IDs to protect only client signatures (contractor can edit their own)
+                        protectedPartyIds={currentUserRole === 'contractor' ? clientPartyIds : undefined}
                     />
 
                     {/* ✅ Party Validation Warning Popup (same as CreateContractDialog) */}
@@ -440,8 +614,66 @@ export default function DocumentViewerDialog({
                             </Alert>
                         </Box>
                     )}
+
+                    {/* ✅ Wrong Party Warning Dialog - for contractor trying to edit client party fields */}
+                    {showWrongPartyWarning && currentUserRole === 'contractor' && (
+                        <Box
+                            sx={{
+                                position: 'fixed',
+                                top: '50%',
+                                left: '50%',
+                                transform: 'translate(-50%, -50%)',
+                                zIndex: 1200,
+                                maxWidth: 420,
+                                minWidth: 340,
+                            }}
+                        >
+                            <Alert
+                                severity="warning"
+                                sx={{
+                                    py: 2,
+                                    px: 2.5,
+                                    boxShadow: 8,
+                                    borderRadius: 2,
+                                    border: '2px solid',
+                                    borderColor: 'warning.main',
+                                }}
+                            >
+                                <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+                                    Client Party Field
+                                </Typography>
+                                <Typography variant="body1" sx={{ mb: 2 }}>
+                                    This field is assigned to a client party and cannot be edited by the contractor.
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                                    Your changes have been automatically reverted. Only clients assigned to this party can fill these fields.
+                                </Typography>
+                                <Button
+                                    fullWidth
+                                    variant="contained"
+                                    color="warning"
+                                    onClick={() => setShowWrongPartyWarning(false)}
+                                    sx={{ textTransform: 'none', fontWeight: 600 }}
+                                >
+                                    I Understand
+                                </Button>
+                            </Alert>
+                        </Box>
+                    )}
                 </Box>
             </Box>
         </BaseDialog>
+
+        {/* ✅ Unsaved Changes Confirmation Dialog */}
+        <ConfirmationDialog
+            open={showUnsavedDialog}
+            title="Unsaved Changes"
+            message="Do you want to save changes?"
+            onYes={handleUnsavedYes}
+            onNo={handleUnsavedNo}
+            onClose={handleUnsavedCancel}
+            loading={saving}
+        />
+        </>
     );
 }

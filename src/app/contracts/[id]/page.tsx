@@ -174,8 +174,22 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         }
                     }
 
-                    // 5. Signature Request Sent
-                    if (found.signingRequest || found.externalSigningSentAt) {
+                    // 5. Contractor filled party fields (multi-party)
+                    if (found.partyCompletions && found.partyCompletions.length > 0) {
+                        found.partyCompletions.forEach((completion: any, idx: number) => {
+                            if (completion.isContractor && completion.status === 'completed' && completion.completedAt) {
+                                activities.push({
+                                    id: `contractor-filled-${idx}`,
+                                    title: `Contractor filled ${completion.partyLabel || completion.partyId} fields`,
+                                    user: completion.completedByName || completion.completedBy || found.createdBy || 'Contractor',
+                                    date: formatDate(completion.completedAt)
+                                });
+                            }
+                        });
+                    }
+
+                    // 6. Signature Request Sent (legacy single-signer flow)
+                    if (found.signingRequest && !found.externalSigners?.length) {
                         activities.push({
                             id: 'signature-requested',
                             title: 'Signature Request Sent',
@@ -184,7 +198,61 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         });
                     }
 
-                    // 6. Signed
+                    // 7. Multi-party: Signature requests sent to external signers
+                    if (found.externalSigners && found.externalSigners.length > 0) {
+                        found.externalSigners.forEach((signer: any, idx: number) => {
+                            // Get party label(s) for display
+                            const partyLabels = Array.isArray(signer.partyLabel)
+                                ? signer.partyLabel.join(', ')
+                                : signer.partyLabel || 'Party';
+
+                            // Signature request sent to this signer
+                            if (signer.sentAt) {
+                                activities.push({
+                                    id: `signature-sent-${idx}`,
+                                    title: `Signature request sent for ${partyLabels}`,
+                                    user: signer.name || signer.email,
+                                    date: formatDate(signer.sentAt)
+                                });
+                            }
+
+                            // Signer viewed the contract
+                            if (signer.viewedAt) {
+                                activities.push({
+                                    id: `signature-viewed-${idx}`,
+                                    title: `Viewed contract`,
+                                    user: signer.name || signer.email,
+                                    date: formatDate(signer.viewedAt)
+                                });
+                            }
+
+                            // Signer completed their party fields
+                            if (signer.status === 'completed' && signer.completedAt) {
+                                activities.push({
+                                    id: `signature-completed-${idx}`,
+                                    title: `Completed ${partyLabels} fields`,
+                                    user: signer.name || signer.email,
+                                    date: formatDate(signer.completedAt)
+                                });
+                            }
+                        });
+                    }
+
+                    // 8. Client party completions (from partyCompletions, non-contractor)
+                    if (found.partyCompletions && found.partyCompletions.length > 0) {
+                        found.partyCompletions.forEach((completion: any, idx: number) => {
+                            if (!completion.isContractor && completion.status === 'completed' && completion.completedAt) {
+                                activities.push({
+                                    id: `client-completed-${idx}`,
+                                    title: `Completed ${completion.partyLabel || completion.partyId} fields`,
+                                    user: completion.completedByName || completion.completedBy || 'Client',
+                                    date: formatDate(completion.completedAt)
+                                });
+                            }
+                        });
+                    }
+
+                    // 9. Signed (legacy single-signer flow)
                     if (found.signer?.status === 'signed' && found.signer?.signedAt) {
                         activities.push({
                             id: 'signed',
@@ -192,7 +260,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                             user: found.signer.email || found.signer.name || 'Client',
                             date: formatDate(found.signer.signedAt)
                         });
-                    } else if (found.signingRequest?.status === 'signed' && found.signingRequest?.signedAt) {
+                    } else if (found.signingRequest?.status === 'signed' && found.signingRequest?.signedAt && !found.externalSigners?.length) {
                         activities.push({
                             id: 'signed',
                             title: 'Contract Signed',
@@ -201,8 +269,25 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         });
                     }
 
-                    // Sort activities by date (newest first) - optional
-                    // activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                    // 10. Contract Finalized (multi-party flow)
+                    if (found.finalizedAt) {
+                        activities.push({
+                            id: 'finalized',
+                            title: 'Contract Finalized',
+                            user: found.finalizedBy || found.createdBy || 'System',
+                            date: formatDate(found.finalizedAt)
+                        });
+                    }
+
+                    // Sort activities by date (oldest first for chronological order)
+                    activities.sort((a, b) => {
+                        const dateA = new Date(a.date).getTime();
+                        const dateB = new Date(b.date).getTime();
+                        // Handle invalid dates
+                        if (isNaN(dateA)) return 1;
+                        if (isNaN(dateB)) return -1;
+                        return dateA - dateB;
+                    });
 
                     setDetails({
                         documents: [{
@@ -803,6 +888,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 editableFieldMode="empty-only"
                 showAnnotationNavigation={true}
                 parties={contract.parties}
+                // ✅ Pass external signers info so contractor can't edit client party fields
+                externalSigners={contract.externalSigners}
             />
         </AppLayout>
     );
