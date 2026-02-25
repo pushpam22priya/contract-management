@@ -463,6 +463,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                         if (!alreadyExists) {
                                             console.log(`🖊️ [SIGNATURE] Adding linked annotation to annotation manager...`);
+                                            // Prevent signature from being dragged
+                                            linkedAnnotation.NoMove = true;
                                             annotationManager.addAnnotation(linkedAnnotation, { imported: true, isUndoRedo: false });
                                             annotationManager.drawAnnotationsFromList([linkedAnnotation]);
                                             linkedAnnotationsAdded++;
@@ -586,6 +588,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                 if (!alreadyExists && annotation && isValid) {
                                     console.log(`🖊️ [RESTORE] Restoring: ${capturedData.type} (ID: ${annotId})`);
+
+                                    // Prevent signature from being dragged
+                                    annotation.NoMove = true;
 
                                     // Re-add the annotation to the document
                                     annotationManager.addAnnotation(annotation, { imported: true, isUndoRedo: false });
@@ -1182,6 +1187,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             stamp.Height = widget.Height;
                             stamp.Subject = 'Signature';
                             stamp.Author = annotationManager.getCurrentUser();
+                            stamp.NoMove = true; // Prevent dragging signature
 
                             // Set image data (async for proper loading)
                             if (typeof stamp.setImageData === 'function') {
@@ -1967,6 +1973,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     const annotId = annot.Id || annot.getCustomData?.('id') || `sig_${Date.now()}`;
 
                                     if (action === 'add') {
+                                        // Prevent signature from being dragged (but allow deletion)
+                                        annot.NoMove = true;
 
                                         // Store the annotation for later restoration
                                         capturedSignatureAnnotationsRef.current.set(annotId, {
@@ -2284,6 +2292,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         annot.ReadOnly = true;
                                         annot.Locked = true;
                                         annot.LockedContents = true;
+                                        annot.NoMove = true; // Prevent dragging signatures
                                         readOnlyCount++;
                                         return;
                                     }
@@ -2307,6 +2316,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         annot.ReadOnly = false;
                                         annot.Locked = false;
                                         annot.LockedContents = false;
+                                        // Note: NoMove remains true - signatures should never be draggable
                                         (annot as any).Opacity = 1;
 
                                         // Visual indicator: highlight editable fields
@@ -2338,6 +2348,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         annot.ReadOnly = true;
                                         annot.Locked = true;
                                         annot.LockedContents = true;
+                                        annot.NoMove = true; // Prevent dragging signatures
                                         (annot as any).Opacity = 0.6;
                                         readOnlyCount++;
                                         console.log(`🏷️ [MULTI-PARTY] Field "${fieldName}" (${assignedParty}): READ-ONLY`);
@@ -2975,6 +2986,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     annot.ReadOnly = true;
                                     annot.Locked = true;
                                     annot.LockedContents = true;
+                                    annot.NoMove = true; // Prevent dragging signatures
                                 });
 
                                 // ✅ Force redraw so WebViewer removes interactive HTML inputs
@@ -3638,6 +3650,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         annot.ReadOnly = true;
                         annot.Locked = true;
                         annot.LockedContents = true;
+                        annot.NoMove = true; // Prevent dragging signatures
                     });
 
                     // ✅ Force redraw so WebViewer removes interactive HTML inputs
@@ -3697,6 +3710,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             annot.ReadOnly = false;
                             annot.Locked = false;
                             annot.LockedContents = false;
+                            // Note: NoMove remains true - signatures should never be draggable
                         }
                     });
 
