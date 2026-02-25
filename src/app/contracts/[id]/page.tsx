@@ -883,9 +883,10 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 initialXfdf={contract.xfdfData}
                 formFields={contract.formFields}
                 currentUserRole="contractor"
-                onSave={handleSaveChanges}
-                readOnly={false}
-                editableFieldMode="empty-only"
+                // ✅ Only allow saving if contract is NOT finalized
+                onSave={isFinalized ? undefined : handleSaveChanges}
+                readOnly={isFinalized}
+                editableFieldMode={isFinalized ? 'none' : 'empty-only'}
                 showAnnotationNavigation={true}
                 parties={contract.parties}
                 // ✅ Pass external signers info so contractor can't edit client party fields
