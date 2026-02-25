@@ -43,6 +43,8 @@ interface PDFViewerContainerProps {
 // Import types for multi-party support
 import { PartyConfiguration } from '@/types/template';
 import PDFNavigationButton from './pdfViewer/PDFNavigationButton';
+import { usePDFAnnotationStore } from './pdfViewer/hooks/usePDFAnnotationStore';
+import { usePDFPropSync } from './pdfViewer/hooks/usePDFPropSync';
 
 // Extended FormFieldDefinition with party assignment
 export interface FormFieldDefinitionWithParty {
@@ -88,69 +90,36 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         const [error, setError] = useState<string>('');
         const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
         const initialLoadDone = useRef(false);
-        // Guard against React 18 StrictMode double-mount creating two WebViewer instances
-        const isInitializingRef = useRef(false);
-        const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-        const hasUnsavedChanges = useRef(false);
-
-        // ✅ CRITICAL FIX: Store fieldMetadataStore as a component-level ref
-        // This ensures the same Map instance persists throughout the component lifecycle
-        const fieldMetadataStoreRef = useRef<Map<string, any>>(new Map());
-
-        // ✅ CRITICAL FIX: Store signature annotations separately
-        // WebViewer 11's appearance mode deletes FreeHand signatures after applying to widget
-        // We capture them here and re-add before export
-        const capturedSignatureAnnotationsRef = useRef<Map<string, any>>(new Map());
-
-        // ✅ CRITICAL FIX: Store text field values when they change
-        // field.getValue() may return empty at export time if the blur event hasn't been processed
-        // We capture values in fieldChanged listener and re-apply before export
-        const capturedFieldValuesRef = useRef<Map<string, string>>(new Map());
-
-        // ✅ Store original positions of pre-filled signature annotations
-        // Used to restore position if external user tries to drag them
-        const prefilledSignaturePositionsRef = useRef<Map<string, { X: number; Y: number; Width: number; Height: number; PageNumber: number }>>(new Map());
-
-        // ✅ Store pre-filled signature annotation objects for restoration if deleted
-        // Maps annotationId -> { xfdf: string, annotType: string } so we can restore if user tries to delete
-        const prefilledSignatureDataRef = useRef<Map<string, { xfdf: string; annotType: string }>>(new Map());
-
-        // ✅ Store which party each signature annotation belongs to (for party-aware protection)
-        // Maps annotationId -> partyId (e.g., 'party_1', 'party_2')
-        const signatureAnnotationPartyRef = useRef<Map<string, string>>(new Map());
-
-        // ✅ Refs for protectedPartyIds and formFields to avoid stale closures
-        const protectedPartyIdsRef = useRef<string[]>([]);
-        const formFieldsRef = useRef<any[]>([]);
-
-        // ✅ Refs for "Sign All" feature
-        const onSignatureAppliedRef = useRef<((data: { emptySignatureFieldCount: number }) => void) | undefined>(undefined);
-        const isApplyingSignAllRef = useRef(false);
-
-        // ✅ Ref for onFieldChange to avoid stale closure in event handlers
-        const onFieldChangeRef = useRef<((fieldName: string, value: any) => void) | undefined>(undefined);
-
-        // ✅ Multi-party field assignment storage
-        // Maps fieldName -> { partyId, partyLabel, partyColor }
-        const fieldPartyAssignmentsRef = useRef<Map<string, { partyId: string; partyLabel: string; partyColor: string }>>(new Map());
-
-        // ✅ Track signature annotation ID -> field name mapping for deletion tracking
-        // When a signature is added, we store annotationId -> fieldName
-        // When deleted, we look up which field to clear
-        const signatureAnnotationToFieldRef = useRef<Map<string, string>>(new Map());
+        // ✅ Ref-based Storage & Logic (Extracted to Hooks)
+        const {
+            isInitializingRef,
+            autoSaveTimeoutRef,
+            hasUnsavedChanges,
+            isApplyingSignAllRef,
+            fieldMetadataStoreRef,
+            capturedSignatureAnnotationsRef,
+            capturedFieldValuesRef,
+            signatureAnnotationPartyRef,
+            fieldPartyAssignmentsRef,
+            signatureAnnotationToFieldRef,
+            prefilledSignaturePositionsRef,
+            prefilledSignatureDataRef
+        } = usePDFAnnotationStore();
 
         // ✅ Document should be read-only if explicitly requested (e.g., Reviewers and Approvers)
         const effectiveReadOnly = !!(isReadOnly ?? readOnly);
 
-        // Keep onSignatureApplied ref updated for use in event handlers
-        onSignatureAppliedRef.current = onSignatureApplied;
-
-        // Keep onFieldChange ref updated for use in event handlers (avoids stale closure)
-        onFieldChangeRef.current = onFieldChange;
-
-        // Keep protectedPartyIds and formFields refs updated for use in event handlers
-        protectedPartyIdsRef.current = protectedPartyIds || [];
-        formFieldsRef.current = formFields || [];
+        const {
+            protectedPartyIdsRef,
+            formFieldsRef,
+            onSignatureAppliedRef,
+            onFieldChangeRef
+        } = usePDFPropSync({
+            protectedPartyIds,
+            formFields,
+            onSignatureApplied,
+            onFieldChange
+        });
 
         // ✅ Helper: Switch toolbar group using the correct API for the UI version
         // WebViewer 11+ uses Modular UI by default, where setToolbarGroup is a Legacy API
@@ -3424,14 +3393,6 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     if (documentUrl) {
                         console.log('📥 Loading initial document:', documentUrl);
 
-                        // // Set up timeout (15 seconds) to prevent infinite loading
-                        // loadTimeoutRef.current = setTimeout(() => {
-                        //     console.error('⏱️ Document load timeout after 15 seconds');
-                        //     setLoading(false);
-                        //     setError('Document load timeout - please try again');
-                        //     if (onError) onError('Document load timeout');
-                        // }, 15000);
-
                         UI.loadDocument(documentUrl);
                         initialLoadDone.current = true;
                     } else {
@@ -3491,15 +3452,6 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                         setLoading(true);
                         console.log('📥 Reloading document (URL changed):', documentUrl);
-
-                        // Set up timeout (15 seconds) to prevent infinite loading
-                        // loadTimeoutRef.current = setTimeout(() => {
-                        //     console.error('⏱️ Document load timeout after 15 seconds');
-                        //     setLoading(false);
-                        //     setError('Document load timeout - please try again');
-                        //     if (onError) onError('Document load timeout');
-                        // }, 15000);
-
                         const { UI } = viewerInstance.current;
                         UI.loadDocument(documentUrl);
                     } catch (err) {
