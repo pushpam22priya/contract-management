@@ -9,10 +9,13 @@ import {
     Tab,
     Button,
     Avatar,
+    IconButton,
+    Tooltip,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 
 export interface Document {
@@ -34,12 +37,14 @@ interface ContractDetailsPanelProps {
     documents: Document[];
     activities: Activity[];
     onViewDocument?: (doc: Document) => void;
+    onDownloadDocument?: (doc: Document) => void;
 }
 
 const ContractDetailsPanel = ({
     documents,
     activities,
     onViewDocument,
+    onDownloadDocument,
 }: ContractDetailsPanelProps) => {
     const [activeTab, setActiveTab] = useState(0);
 
@@ -171,22 +176,59 @@ const ContractDetailsPanel = ({
                                         </Typography>
                                     </Box>
                                 </Box>
-                                {/* <Button
-                                    variant="text"
-                                    startIcon={<FileDownloadOutlinedIcon />}
-                                    onClick={() => handleDownload(doc.id)}
-                                    sx={{
-                                        textTransform: 'none',
-                                        fontWeight: 600,
-                                        color: 'text.primary',
-                                        flexShrink: 0,
-                                        '&:hover': {
-                                            bgcolor: 'action.hover',
-                                        },
-                                    }}
-                                >
-                                    <Box sx={{ display: { xs: 'none', sm: 'block' } }}>Download</Box>
-                                </Button> */}
+
+                                {/* Action Buttons */}
+                                <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                    <Tooltip title="View Document" arrow>
+                                        <IconButton
+                                            size="small"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onViewDocument?.(doc);
+                                            }}
+                                            sx={{
+                                                 color: 'text.secondary',
+                                                border: '1px solid',
+                                                borderColor: 'divider',
+                                                padding: '6px',
+                                                transition: 'all 0.2s',
+                                                '&:hover': {
+                                                    bgcolor: 'action.hover',
+                                                    color: 'primary.main',
+                                                    borderColor: 'primary.main',
+                                                    transform: 'translateY(-1px)',
+                                                },
+                                            }}
+                                        >
+                                            <VisibilityOutlinedIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+
+                                    <Tooltip title="Download Document" arrow>
+                                        <IconButton
+                                            size="small"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDownloadDocument?.(doc);
+                                            }}
+                                            sx={{
+                                                color: 'text.secondary',
+                                                border: '1px solid',
+                                                borderColor: 'divider',
+                                                padding: '6px',
+                                                transition: 'all 0.2s',
+                                                '&:hover': {
+                                                    bgcolor: 'action.hover',
+                                                    color: 'primary.main',
+                                                    borderColor: 'primary.main',
+                                                    transform: 'translateY(-1px)',
+                                                },
+                                            }}
+                                        >
+                                            <FileDownloadOutlinedIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                </Box>
                             </Box>
                         ))}
                     </Box>

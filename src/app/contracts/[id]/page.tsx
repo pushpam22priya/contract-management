@@ -316,7 +316,49 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     // Handlers
     const handleBack = () => router.back();
     const handleEdit = () => console.log('Edit contract:', contract?.id);
-    const handleDownload = () => console.log('Download contract:', contract?.id);
+    const handleDownload = () => {
+        if (contract) {
+            handleDownloadDocument({
+                id: 'main-contract',
+                name: `${contract.title}.pdf`,
+                size: 'PDF',
+                uploadDate: new Date(contract.createdAt).toLocaleDateString(),
+                url: contract.fileUrl
+            });
+        }
+    };
+
+    /**
+     * Helper to download a document (PDF)
+     */
+    const handleDownloadDocument = (doc: Document) => {
+        console.log('📥 [ContractViewPage] Downloading document:', doc.id);
+
+        let downloadUrl = doc.url;
+
+        // Use signedPdfBase64 if available for the main contract
+        if (doc.id === 'main-contract' && contract?.signedPdfBase64) {
+            console.log('📄 [ContractViewPage] Using signedPdfBase64 for download');
+            downloadUrl = `data:application/pdf;base64,${contract.signedPdfBase64}`;
+        }
+
+        if (!downloadUrl) {
+            console.error('❌ [ContractViewPage] No URL or data found for download');
+            return;
+        }
+
+        try {
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = doc.name || 'document.pdf';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            console.log('✅ [ContractViewPage] Download triggered');
+        } catch (error) {
+            console.error('❌ [ContractViewPage] Download failed:', error);
+        }
+    };
     const handleDelete = () => console.log('Delete contract:', contract?.id);
 
     /**
@@ -571,31 +613,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 alignSelf: { xs: 'flex-end', md: 'center' },
                             }}
                         >
-                            {/* <Tooltip title="Edit" arrow>
-                                <IconButton
-                                    onClick={handleEdit}
-                                    sx={{
-                                        bgcolor: 'transparent',
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        color: 'text.secondary',
-                                        width: 36,
-                                        height: 36,
-                                        transition: 'all 0.2s',
-                                        '&:hover': {
-                                            bgcolor: 'primary.main',
-                                            borderColor: 'primary.main',
-                                            color: 'white',
-                                            transform: 'translateY(-2px)',
-                                            boxShadow: '0 4px 8px rgba(15, 118, 110, 0.2)',
-                                        },
-                                    }}
-                                >
-                                    <EditOutlinedIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip> */}
-                            {/* 
-                            <Tooltip title="Download" arrow>
+                            {/* <Tooltip title="Download Contract" arrow>
                                 <IconButton
                                     onClick={handleDownload}
                                     sx={{
@@ -616,30 +634,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                     }}
                                 >
                                     <FileDownloadOutlinedIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip> */}
-
-                            {/* <Tooltip title="Delete" arrow>
-                                <IconButton
-                                    onClick={handleDelete}
-                                    sx={{
-                                        bgcolor: 'transparent',
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        color: 'text.secondary',
-                                        width: 36,
-                                        height: 36,
-                                        transition: 'all 0.2s',
-                                        '&:hover': {
-                                            bgcolor: 'error.main',
-                                            borderColor: 'error.main',
-                                            color: 'white',
-                                            transform: 'translateY(-2px)',
-                                            boxShadow: '0 4px 8px rgba(211, 47, 47, 0.2)',
-                                        },
-                                    }}
-                                >
-                                    <DeleteOutlineIcon fontSize="small" />
                                 </IconButton>
                             </Tooltip> */}
                         </Box>
@@ -827,6 +821,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 documents={displayDetails.documents}
                                 activities={displayDetails.activities}
                                 onViewDocument={handleViewDocument}
+                                onDownloadDocument={handleDownloadDocument}
                             />
                         </Box>
                     </Box>
@@ -883,9 +878,10 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 initialXfdf={contract.xfdfData}
                 formFields={contract.formFields}
                 currentUserRole="contractor"
-                onSave={handleSaveChanges}
-                readOnly={false}
-                editableFieldMode="empty-only"
+                // ✅ Only allow saving if contract is NOT finalized
+                onSave={isFinalized ? undefined : handleSaveChanges}
+                readOnly={isFinalized}
+                editableFieldMode={isFinalized ? 'none' : 'empty-only'}
                 showAnnotationNavigation={true}
                 parties={contract.parties}
                 // ✅ Pass external signers info so contractor can't edit client party fields
