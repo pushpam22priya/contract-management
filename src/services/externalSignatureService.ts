@@ -15,7 +15,7 @@
  * 4. When all parties complete, contractor finalizes and emails are sent
  */
 
-import { Contract, ExternalSigner } from '@/types/contract';
+import { Contract, ExternalSigner, InternalSigner, SignerAssignment } from '@/types/contract';
 import { SignatureRequest, SignatureCompletionData } from '@/types/signature';
 import { sendSignatureRequestEmail, sendSignedCopyEmail } from './emailService';
 import { externalSignatureConfig } from '../../config/externalSignature';
@@ -317,16 +317,19 @@ export const submitForMultiPartySignature = async (
                 emailSent,
             });
 
-            // Add to new externalSigners array
-            newExternalSigners.push({
-                email: recipient.email,
-                name: recipient.name,
-                partyId: recipient.partyId,
-                partyLabel: recipient.partyLabel,
-                token,
-                status: 'pending',
-                sentAt: now,
-            });
+            // Add to new externalSigners array (one entry per party for multi-party recipients)
+            for (let i = 0; i < recipient.partyId.length; i++) {
+                newExternalSigners.push({
+                    email: recipient.email,
+                    name: recipient.name,
+                    partyId: recipient.partyId[i],
+                    partyLabel: recipient.partyLabel[i],
+                    order: 1, // Default order for legacy flow
+                    token,
+                    status: 'pending',
+                    sentAt: now,
+                });
+            }
         }
 
         // Update contract with multi-party tracking data
@@ -518,5 +521,187 @@ export const checkSignatureStatus = async (token: string): Promise<any> => {
         status: result.data.status,
         signedAt: result.data.signedAt
     };
+};
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * MIXED SIGNATURE: Submit contract for signature to both internal and external
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Creates signature assignments for both internal users and external clients.
+ * Each party is assigned to exactly ONE signer with a specific order.
+ * - Internal users: See the contract in their Signatures page
+ * - External clients: Receive email with signing link (only when unlocked)
+ *
+ * The contractor manually unlocks each order after the previous one completes.
+ */
+export const submitForMixedSignature = async (
+    contract: Contract,
+    assignments: SignerAssignment[],
+    senderName: string
+): Promise<{ success: boolean; error?: string }> => {
+    console.log('🚀 [MixedSignature] Starting mixed signature submission...');
+    console.log(`   Contract: ${contract.id} - ${contract.title}`);
+    console.log(`   Assignments: ${assignments.length}`);
+
+    try {
+        const now = new Date().toISOString();
+        const expiresAt = calculateExpiryDate();
+        const contractVersion = contract.version || 0;
+
+        // Separate internal and external assignments
+        const internalAssignments = assignments.filter(a => a.type === 'internal');
+        const externalAssignments = assignments.filter(a => a.type === 'external');
+
+        console.log(`   Internal: ${internalAssignments.length}, External: ${externalAssignments.length}`);
+
+        // Find minimum order (first signers to act)
+        const minOrder = Math.min(...assignments.map(a => a.order));
+        console.log(`   Starting order: ${minOrder}`);
+
+        // Build internal signers array
+        const newInternalSigners: InternalSigner[] = internalAssignments.map(a => ({
+            userId: a.userId,
+            email: a.email || '',
+            name: a.name,
+            partyId: a.partyId,
+            partyLabel: a.partyLabel,
+            order: a.order,
+            status: a.order === minOrder ? 'unlocked' : 'pending',
+            assignedAt: now,
+            unlockedAt: a.order === minOrder ? now : undefined,
+        }));
+
+        // Build external signers array and create signature requests
+        const newExternalSigners: ExternalSigner[] = [];
+
+        for (const assignment of externalAssignments) {
+            const token = generateToken();
+            const signingUrl = generateSigningUrl(token);
+
+            // Create signature request in DB
+            const requestPayload = {
+                token,
+                contractId: contract.id,
+                contractTitle: contract.title,
+                signerEmail: assignment.email,
+                signerName: assignment.name || '',
+                createdBy: contract.createdBy,
+                createdByName: senderName,
+                createdAt: now,
+                expiresAt,
+                templateId: contract.templateId,
+                formFields: contract.formFields,
+                hasFormFields: contract.hasFormFields,
+                xfdfData: contract.xfdfData,
+                fieldValues: contract.fieldValues,
+                // Single party assignment
+                assignedParty: [assignment.partyId],
+                assignedPartyLabel: [assignment.partyLabel],
+                order: assignment.order,
+                contractVersion,
+            };
+
+            const res = await fetch(`${API_BASE}/sign-requests`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestPayload)
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(`Failed to create request for ${assignment.email}: ${err.error}`);
+            }
+
+            console.log(`✅ [MixedSignature] Signature request created for ${assignment.email}`);
+
+            // Only send email if it's their turn (order === minOrder)
+            if (assignment.order === minOrder) {
+                try {
+                    console.log(`📧 [MixedSignature] Sending email to ${assignment.email} (order ${assignment.order})...`);
+                    await sendSignatureRequestEmail({
+                        to_email: assignment.email || '',
+                        contract_title: contract.title,
+                        sender_name: senderName,
+                        sent_date: formatDateForEmail(now),
+                        expiry_date: formatDateForEmail(expiresAt),
+                        signing_url: signingUrl,
+                    });
+                    console.log(`✅ [MixedSignature] Email sent to ${assignment.email}`);
+                } catch (emailError: any) {
+                    console.error(`❌ [MixedSignature] Email error for ${assignment.email}:`, emailError);
+                }
+            } else {
+                console.log(`⏳ [MixedSignature] Email deferred for ${assignment.email} (order ${assignment.order}, waiting for order ${minOrder})`);
+            }
+
+            newExternalSigners.push({
+                email: assignment.email || '',
+                name: assignment.name,
+                partyId: assignment.partyId,
+                partyLabel: assignment.partyLabel,
+                order: assignment.order,
+                token,
+                status: assignment.order === minOrder ? 'unlocked' : 'pending',
+                sentAt: now,
+                unlockedAt: assignment.order === minOrder ? now : undefined,
+            });
+        }
+
+        // Build party completions
+        const newPartyCompletions = assignments.map(a => ({
+            partyId: a.partyId,
+            partyLabel: a.partyLabel,
+            order: a.order,
+            assigneeType: a.type,
+            assigneeEmail: a.email,
+            status: a.order === minOrder ? 'unlocked' : 'pending',
+            isContractor: false,
+        }));
+
+        // Merge with existing completions (keep non-conflicting)
+        const existingCompletions = contract.partyCompletions || [];
+        const partyCompletions = [
+            ...existingCompletions.filter(pc => !newPartyCompletions.find(np => np.partyId === pc.partyId)),
+            ...newPartyCompletions,
+        ];
+
+        // Update contract with all tracking data
+        const contractUpdate = {
+            status: 'waiting_for_signature',
+            signatureFlowStatus: 'pending_signatures',
+            currentSigningOrder: minOrder,
+            internalSigners: [
+                ...(contract.internalSigners || []),
+                ...newInternalSigners,
+            ],
+            externalSigners: [
+                ...(contract.externalSigners || []),
+                ...newExternalSigners,
+            ],
+            partyCompletions,
+            updatedAt: now,
+        };
+
+        const updateRes = await fetch(`${API_BASE}/contracts/${contract.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(contractUpdate)
+        });
+
+        if (!updateRes.ok) {
+            console.error(`⚠️ [MixedSignature] Failed to update contract tracking data`);
+        } else {
+            console.log(`✅ [MixedSignature] Contract tracking data updated`);
+        }
+
+        console.log(`🎉 [MixedSignature] Complete! Created ${newInternalSigners.length} internal + ${newExternalSigners.length} external assignments`);
+
+        return { success: true };
+
+    } catch (error: any) {
+        console.error('❌ [MixedSignature] Error:', error);
+        return { success: false, error: error.message };
+    }
 };
 

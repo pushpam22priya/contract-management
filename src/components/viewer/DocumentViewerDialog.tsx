@@ -78,6 +78,10 @@ interface DocumentViewerDialogProps {
     showAnnotationNavigation?: boolean; // ✅ Show floating navigation button for annotations
     parties?: any[]; // ✅ Party configurations for validation
     externalSigners?: any[]; // ✅ External signers to determine client parties (contractor protection)
+    // ✅ NEW: Assigned party for internal signer - displays chip and validates completion
+    assignedPartyId?: string;
+    assignedPartyLabel?: string;
+    assignedPartyColor?: string;
 }
 
 export default function DocumentViewerDialog({
@@ -104,6 +108,9 @@ export default function DocumentViewerDialog({
     showAnnotationNavigation = false,
     parties,
     externalSigners,
+    assignedPartyId,
+    assignedPartyLabel,
+    assignedPartyColor,
 }: DocumentViewerDialogProps) {
 
 
@@ -314,6 +321,40 @@ export default function DocumentViewerDialog({
 
     const hasPartialParty = !!partyValidationWarning;
 
+    // ✅ Check if internal signer has filled ALL their assigned party fields
+    const { hasFilledAllAssignedFields, unfilledFieldCount } = useMemo(() => {
+        // If no assigned party (not an internal signer flow), allow submit
+        if (!assignedPartyId || !formFields) {
+            return { hasFilledAllAssignedFields: true, unfilledFieldCount: 0 };
+        }
+
+        // Get all fields assigned to this internal signer's party
+        const partyFields = formFields.filter((f: any) => f.assignedParty === assignedPartyId);
+
+        // Filter to only editable fields (fields that are empty or were not pre-filled)
+        const editableFields = partyFields.filter((f: any) => {
+            const prefilledVal = initialFieldValuesRef.current[f.name];
+            // Field is editable if it wasn't pre-filled
+            return !prefilledVal || prefilledVal.toString().trim() === '';
+        });
+
+        // Count how many of these fields are filled
+        const filledCount = editableFields.filter((f: any) => {
+            const val = filledFieldValues[f.name];
+            return val && val.toString().trim() !== '';
+        }).length;
+
+        const unfilled = editableFields.length - filledCount;
+        const allFilled = unfilled === 0;
+
+        console.log(`📋 [INTERNAL SIGNER CHECK] Party: ${assignedPartyId}, Fields: ${editableFields.length}, Filled: ${filledCount}, Unfilled: ${unfilled}`);
+
+        return {
+            hasFilledAllAssignedFields: allFilled,
+            unfilledFieldCount: unfilled
+        };
+    }, [assignedPartyId, formFields, filledFieldValues]);
+
     // Reset dismissed state when warning content changes (user fills more fields)
     useEffect(() => {
         if (partyValidationWarning) {
@@ -492,19 +533,36 @@ export default function DocumentViewerDialog({
         }
     };
 
+    // ✅ Determine if save button should be disabled
+    // For internal signers (assignedPartyId is set): require all assigned party fields to be filled
+    // For legacy client signing mode: require signature committed
+    const getSaveDisabledReason = (): string => {
+        if (hasPartialParty) return 'Complete all fields for the party you started';
+        if (assignedPartyId && !hasFilledAllAssignedFields) {
+            return `Please fill all your assigned fields (${unfilledFieldCount} remaining)`;
+        }
+        if (clientSigningMode && !assignedPartyId && !signatureCommitted) {
+            return 'Please add your signature before saving';
+        }
+        return '';
+    };
+
+    const saveDisabled = saving || hasPartialParty ||
+        (assignedPartyId ? !hasFilledAllAssignedFields : (clientSigningMode && !signatureCommitted));
+
     // Action buttons for dialog footer
     // ✅ Show save button if onSave callback is provided
-    // ✅ Disable save when party fields are partially filled
+    // ✅ Disable save when party fields are partially filled or not all assigned fields are complete
     const dialogActions = (
         <>
             {onSave && (
-                <Tooltip title={hasPartialParty ? 'Complete all fields for the party you started' : ''} arrow>
+                <Tooltip title={getSaveDisabledReason()} arrow>
                     <span>
                         <Button
                             variant="contained"
                             startIcon={<SaveIcon />}
                             onClick={handleSaveClick}
-                            disabled={saving || hasPartialParty || (clientSigningMode && !signatureCommitted)}
+                            disabled={saveDisabled}
                             sx={{ py: 0.6 }}
                         >
                             {saving ? 'Saving...' : 'Save Changes'}
@@ -528,6 +586,45 @@ export default function DocumentViewerDialog({
             actions={dialogActions}
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                {/* ✅ Party Assignment Header - shows which party the internal signer is filling */}
+                {assignedPartyId && assignedPartyLabel && (
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            px: 2,
+                            py: 0.75,
+                            bgcolor: 'primary.50',
+                            borderBottom: '1px solid',
+                            borderColor: 'primary.100',
+                        }}
+                    >
+                        <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                            Your assigned fields:
+                        </Typography>
+                        <Chip
+                            label={assignedPartyLabel}
+                            size="small"
+                            sx={{
+                                bgcolor: assignedPartyColor || '#1976d2',
+                                color: '#fff',
+                                fontWeight: 600,
+                                fontSize: '0.75rem',
+                            }}
+                        />
+                        {!hasFilledAllAssignedFields && unfilledFieldCount > 0 && (
+                            <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 500 }}>
+                                ({unfilledFieldCount} field{unfilledFieldCount > 1 ? 's' : ''} remaining)
+                            </Typography>
+                        )}
+                        {hasFilledAllAssignedFields && (
+                            <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 500 }}>
+                                (All fields complete)
+                            </Typography>
+                        )}
+                    </Box>
+                )}
                 <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
                     <PDFViewerContainer
                         ref={pdfViewerRef}

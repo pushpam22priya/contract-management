@@ -2,7 +2,7 @@
 
 import { Box, Typography, AlertColor, Paper } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
 import { Contract, ContractStatus } from '@/types/contract';
@@ -39,6 +39,27 @@ export default function SignaturesPage() {
     const [viewerOpen, setViewerOpen] = useState(false);
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
 
+    // ✅ Get the current user's internal signer assignment for the selected contract
+    const currentUserInternalSigner = useMemo(() => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser || !selectedContract?.internalSigners) return null;
+
+        const signer = selectedContract.internalSigners.find(
+            s => s.email === currentUser.email && s.status === 'unlocked'
+        );
+        return signer || null;
+    }, [selectedContract]);
+
+    // ✅ Get the party configuration for the internal signer's assigned party
+    const assignedPartyConfig = useMemo(() => {
+        if (!currentUserInternalSigner || !selectedContract?.parties) return null;
+
+        const party = selectedContract.parties.find(
+            p => p.id === currentUserInternalSigner.partyId
+        );
+        return party || null;
+    }, [currentUserInternalSigner, selectedContract]);
+
     // Signature Pad state
     const [signaturePadOpen, setSignaturePadOpen] = useState(false);
     const [contractToSign, setContractToSign] = useState<Contract | null>(null);
@@ -67,6 +88,9 @@ export default function SignaturesPage() {
 
     /**
      * Load contracts assigned to current user for signature
+     * Includes:
+     * - Legacy single-signer contracts (c.signer?.email)
+     * - Multi-party contracts where user is an internal signer with status 'unlocked'
      */
     const loadContracts = async () => {
         setLoading(true);
@@ -79,11 +103,31 @@ export default function SignaturesPage() {
         }
 
         const allContracts = await contractService.getAllContracts();
+
         // Filter contracts waiting for signature by current user
-        const assignedContracts = allContracts.filter(c =>
-            c.status === ContractStatus.WAITING_FOR_SIGNATURE &&
-            c.signer?.email === currentUser.email
-        );
+        const assignedContracts = allContracts.filter(c => {
+            // Must be waiting for signature
+            if (c.status !== ContractStatus.WAITING_FOR_SIGNATURE) {
+                return false;
+            }
+
+            // Check 1: Legacy single-signer flow (c.signer?.email)
+            if (c.signer?.email === currentUser.email) {
+                return true;
+            }
+
+            // Check 2: Multi-party internal signer with status 'unlocked'
+            const internalSigners = c.internalSigners || [];
+            const isInternalSigner = internalSigners.some(
+                s => s.email === currentUser.email && s.status === 'unlocked'
+            );
+            if (isInternalSigner) {
+                return true;
+            }
+
+            return false;
+        });
+
         setContracts(assignedContracts);
         setLoading(false);
     };
@@ -180,41 +224,80 @@ export default function SignaturesPage() {
             }
             console.log(`   - Base64 length: ${pdfBase64.length} chars`);
 
-            // First, save the signed PDF with XFDF data
-            const updateResult = await contractService.updateContractSignedPdf(
-                selectedContract.id,
-                pdfBase64,
-                xfdfString // ✅ Include XFDF to preserve annotations
+            // ✅ Check if this is an internal signer (multi-party flow)
+            const internalSigner = selectedContract.internalSigners?.find(
+                s => s.email === currentUser.email && s.status === 'unlocked'
             );
 
-            if (!updateResult.success) {
-                showNotification(updateResult.message || 'Failed to save signature', 'error');
-                return;
-            }
+            if (internalSigner) {
+                // ✅ INTERNAL SIGNER FLOW: Use dedicated internal-sign endpoint
+                console.log('📝 [SignaturesPage] Using internal-sign endpoint for multi-party flow');
+                const response = await fetch(`/api/contracts/${selectedContract.id}/internal-sign`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        signerEmail: currentUser.email,
+                        pdfBase64,
+                        xfdfData: xfdfString,
+                        fieldValues,
+                        formFields,
+                    }),
+                });
 
-            // Then, mark the contract as signed
-            const signResult = await contractService.signContract(
-                selectedContract.id,
-                currentUser.email,
-                '' // No separate signature image needed since it's in the PDF
-            );
+                const result = await response.json();
 
-            if (signResult.success) {
-                showNotification('Contract signed successfully!', 'success');
+                if (result.success) {
+                    showNotification(`Fields for ${internalSigner.partyLabel} completed successfully!`, 'success');
 
-                // ✅ Close the viewer first to prevent stale data display
-                setViewerOpen(false);
-                setSelectedContract(null);
+                    // ✅ Close the viewer first to prevent stale data display
+                    setViewerOpen(false);
+                    setSelectedContract(null);
 
-                // Then reload to remove from signatures list
-                await loadContracts();
+                    // Then reload to remove from signatures list
+                    await loadContracts();
+                } else {
+                    showNotification(result.error || 'Failed to save signature', 'error');
+                }
             } else {
-                showNotification(signResult.message || 'Signature saved but failed to update status', 'warning');
+                // ✅ LEGACY SINGLE-SIGNER FLOW
+                console.log('📝 [SignaturesPage] Using legacy single-signer flow');
 
-                // ✅ Close viewer and reload
-                setViewerOpen(false);
-                setSelectedContract(null);
-                await loadContracts();
+                // First, save the signed PDF with XFDF data
+                const updateResult = await contractService.updateContractSignedPdf(
+                    selectedContract.id,
+                    pdfBase64,
+                    xfdfString // ✅ Include XFDF to preserve annotations
+                );
+
+                if (!updateResult.success) {
+                    showNotification(updateResult.message || 'Failed to save signature', 'error');
+                    return;
+                }
+
+                // Then, mark the contract as signed
+                const signResult = await contractService.signContract(
+                    selectedContract.id,
+                    currentUser.email,
+                    '' // No separate signature image needed since it's in the PDF
+                );
+
+                if (signResult.success) {
+                    showNotification('Contract signed successfully!', 'success');
+
+                    // ✅ Close the viewer first to prevent stale data display
+                    setViewerOpen(false);
+                    setSelectedContract(null);
+
+                    // Then reload to remove from signatures list
+                    await loadContracts();
+                } else {
+                    showNotification(signResult.message || 'Signature saved but failed to update status', 'warning');
+
+                    // ✅ Close viewer and reload
+                    setViewerOpen(false);
+                    setSelectedContract(null);
+                    await loadContracts();
+                }
             }
         } catch (error) {
             console.error('Error saving signature:', error);
@@ -378,6 +461,10 @@ export default function SignaturesPage() {
                         editableFieldMode="empty-only"
                         // ✅ Pass parties for party validation (must complete all fields of a party)
                         parties={selectedContract.parties}
+                        // ✅ Pass assigned party info for internal signers
+                        assignedPartyId={currentUserInternalSigner?.partyId}
+                        assignedPartyLabel={currentUserInternalSigner?.partyLabel || assignedPartyConfig?.label}
+                        assignedPartyColor={assignedPartyConfig?.color}
                     />
                 )}
 

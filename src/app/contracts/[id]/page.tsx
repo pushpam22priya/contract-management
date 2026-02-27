@@ -23,6 +23,9 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import SendIcon from '@mui/icons-material/Send';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
+import PersonIcon from '@mui/icons-material/Person';
+import EmailIcon from '@mui/icons-material/Email';
 import AppLayout from '@/components/layout/AppLayout';
 import ContractInformation from '@/components/contracts/ContractInformation';
 import ContractDetailsPanel from '@/components/contracts/ContractDetailsPanel';
@@ -30,6 +33,8 @@ import { contractService } from '@/services/contractService';
 import { apiService } from '@/services/apiService';
 import { templateService } from '@/services/templateService';
 import { sendFinalizedContractEmails } from '@/services/externalSignatureService';
+import { sendSignatureRequestEmail } from '@/services/emailService';
+import { externalSignatureConfig } from '../../../../config/externalSignature';
 import { authService } from '@/services/authService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { Document } from '@/components/contracts/ContractDetailsPanel';
@@ -53,6 +58,11 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const [finalizing, setFinalizing] = useState(false);
     const [finalizeError, setFinalizeError] = useState<string | null>(null);
     const [finalizeSuccess, setFinalizeSuccess] = useState(false);
+
+    // Unlock order state
+    const [unlocking, setUnlocking] = useState(false);
+    const [unlockError, setUnlockError] = useState<string | null>(null);
+    const [unlockSuccess, setUnlockSuccess] = useState<string | null>(null);
 
     // --- ROBUST DATA FETCHING LOGIC ---
     useEffect(() => {
@@ -198,28 +208,73 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         });
                     }
 
-                    // 7. Multi-party: Signature requests sent to external signers
+                    // 7. Multi-party: Internal signers assignments and completions
+                    if (found.internalSigners && found.internalSigners.length > 0) {
+                        found.internalSigners.forEach((signer: any, idx: number) => {
+                            const partyLabel = signer.partyLabel || 'Party';
+
+                            // Internal signer assigned
+                            if (signer.assignedAt) {
+                                activities.push({
+                                    id: `internal-assigned-${idx}`,
+                                    title: `Internal signer assigned for ${partyLabel} (Order ${signer.order})`,
+                                    user: signer.name || signer.email,
+                                    date: formatDate(signer.assignedAt)
+                                });
+                            }
+
+                            // Internal signer unlocked
+                            if (signer.unlockedAt && signer.unlockedAt !== signer.assignedAt) {
+                                activities.push({
+                                    id: `internal-unlocked-${idx}`,
+                                    title: `Order ${signer.order} unlocked for ${partyLabel}`,
+                                    user: signer.name || signer.email,
+                                    date: formatDate(signer.unlockedAt)
+                                });
+                            }
+
+                            // Internal signer completed
+                            if (signer.status === 'completed' && signer.completedAt) {
+                                activities.push({
+                                    id: `internal-completed-${idx}`,
+                                    title: `Completed ${partyLabel} fields`,
+                                    user: signer.name || signer.email,
+                                    date: formatDate(signer.completedAt)
+                                });
+                            }
+                        });
+                    }
+
+                    // 8. Multi-party: External signers requests sent
                     if (found.externalSigners && found.externalSigners.length > 0) {
                         found.externalSigners.forEach((signer: any, idx: number) => {
-                            // Get party label(s) for display
-                            const partyLabels = Array.isArray(signer.partyLabel)
-                                ? signer.partyLabel.join(', ')
-                                : signer.partyLabel || 'Party';
+                            // Get party label for display
+                            const partyLabel = signer.partyLabel || 'Party';
 
-                            // Signature request sent to this signer
+                            // External signer assigned
                             if (signer.sentAt) {
                                 activities.push({
-                                    id: `signature-sent-${idx}`,
-                                    title: `Signature request sent for ${partyLabels}`,
+                                    id: `external-assigned-${idx}`,
+                                    title: `External signer assigned for ${partyLabel} (Order ${signer.order})`,
                                     user: signer.name || signer.email,
                                     date: formatDate(signer.sentAt)
+                                });
+                            }
+
+                            // External signer unlocked (email sent)
+                            if (signer.unlockedAt && signer.unlockedAt !== signer.sentAt) {
+                                activities.push({
+                                    id: `external-unlocked-${idx}`,
+                                    title: `Order ${signer.order} unlocked - email sent for ${partyLabel}`,
+                                    user: signer.name || signer.email,
+                                    date: formatDate(signer.unlockedAt)
                                 });
                             }
 
                             // Signer viewed the contract
                             if (signer.viewedAt) {
                                 activities.push({
-                                    id: `signature-viewed-${idx}`,
+                                    id: `external-viewed-${idx}`,
                                     title: `Viewed contract`,
                                     user: signer.name || signer.email,
                                     date: formatDate(signer.viewedAt)
@@ -229,8 +284,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                             // Signer completed their party fields
                             if (signer.status === 'completed' && signer.completedAt) {
                                 activities.push({
-                                    id: `signature-completed-${idx}`,
-                                    title: `Completed ${partyLabels} fields`,
+                                    id: `external-completed-${idx}`,
+                                    title: `Completed ${partyLabel} fields`,
                                     user: signer.name || signer.email,
                                     date: formatDate(signer.completedAt)
                                 });
@@ -421,15 +476,119 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     };
 
     /**
-     * Check if this is a multi-party contract
+     * Handle unlocking the next signing order
      */
-    const isMultiPartyContract = contract?.externalSigners && contract.externalSigners.length > 0;
+    const handleUnlockNextOrder = async () => {
+        if (!contract) return;
+
+        console.log('🔓 [ContractViewPage] Unlocking next order for contract:', contract.id);
+        setUnlocking(true);
+        setUnlockError(null);
+        setUnlockSuccess(null);
+
+        try {
+            const currentUser = authService.getCurrentUser();
+
+            // Call unlock API
+            const response = await fetch(`/api/contracts/${contract.id}/unlock-order`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    unlockedBy: currentUser?.email || 'system',
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to unlock next order');
+            }
+
+            console.log('✅ [ContractViewPage] Order unlocked:', result);
+
+            // Send emails to external signers at the unlocked order
+            if (result.unlockedExternalSigners && result.unlockedExternalSigners.length > 0) {
+                console.log(`📧 [ContractViewPage] Sending emails to ${result.unlockedExternalSigners.length} external signer(s)`);
+
+                const baseUrl = externalSignatureConfig.app.getDynamicBaseUrl();
+                const now = new Date();
+                const expiryDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+                for (const signer of result.unlockedExternalSigners) {
+                    const signingUrl = `${baseUrl}/sign/${signer.token}`;
+                    try {
+                        await sendSignatureRequestEmail({
+                            to_email: signer.email,
+                            contract_title: result.contractTitle || contract.title,
+                            sender_name: currentUser?.email || 'Contract System',
+                            sent_date: now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+                            expiry_date: expiryDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+                            signing_url: signingUrl,
+                        });
+                        console.log(`✅ [ContractViewPage] Email sent to ${signer.email}`);
+                    } catch (emailError) {
+                        console.error(`❌ [ContractViewPage] Failed to send email to ${signer.email}:`, emailError);
+                    }
+                }
+            }
+
+            if (result.allComplete) {
+                setUnlockSuccess('All signing orders completed! You can now finalize the contract.');
+            } else {
+                const internalCount = result.unlockedInternalSigners?.length || 0;
+                const externalCount = result.unlockedExternalSigners?.length || 0;
+                setUnlockSuccess(
+                    `Order ${result.unlockedOrder} unlocked! ${internalCount} internal and ${externalCount} external signer(s) notified.`
+                );
+            }
+
+            // Refresh contract data
+            const updatedContract = await contractService.getContractById(contract.id);
+            if (updatedContract) {
+                setContract(updatedContract);
+            }
+
+        } catch (error: any) {
+            console.error('❌ [ContractViewPage] Unlock error:', error);
+            setUnlockError(error.message || 'Failed to unlock next order');
+        } finally {
+            setUnlocking(false);
+        }
+    };
 
     /**
-     * Check if all external signers have completed
+     * Check if this is a multi-party contract
+     */
+    const isMultiPartyContract = (contract?.externalSigners && contract.externalSigners.length > 0) ||
+        (contract?.internalSigners && contract.internalSigners.length > 0);
+
+    /**
+     * Check if all signers (internal + external) have completed
      */
     const allSignersCompleted = isMultiPartyContract &&
-        contract.externalSigners.every((signer: any) => signer.status === 'completed');
+        (contract.externalSigners || []).every((signer: any) => signer.status === 'completed') &&
+        (contract.internalSigners || []).every((signer: any) => signer.status === 'completed');
+
+    /**
+     * Check if current order is complete (can unlock next)
+     */
+    const currentOrder = contract?.currentSigningOrder;
+    const internalAtCurrentOrder = (contract?.internalSigners || []).filter((s: any) => s.order === currentOrder);
+    const externalAtCurrentOrder = (contract?.externalSigners || []).filter((s: any) => s.order === currentOrder);
+    const currentOrderComplete = currentOrder &&
+        internalAtCurrentOrder.every((s: any) => s.status === 'completed') &&
+        externalAtCurrentOrder.every((s: any) => s.status === 'completed');
+
+    /**
+     * Check if there's a next order to unlock
+     */
+    const allOrders = [
+        ...(contract?.internalSigners || []).map((s: any) => s.order),
+        ...(contract?.externalSigners || []).map((s: any) => s.order),
+    ];
+    const uniqueOrders = [...new Set(allOrders)].sort((a: number, b: number) => a - b);
+    const nextOrder = currentOrder ? uniqueOrders.find((o: number) => o > currentOrder) : undefined;
+    const canUnlockNextOrder = currentOrderComplete && nextOrder !== undefined;
 
     /**
      * Check if contract can be finalized
@@ -658,6 +817,13 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 <Typography variant="subtitle1" fontWeight={600}>
                                     {isFinalized ? '✅ Contract Finalized' : '📝 Multi-Party Signature Status'}
                                 </Typography>
+                                {currentOrder && !isFinalized && (
+                                    <Chip
+                                        label={`Current Order: ${currentOrder}`}
+                                        size="small"
+                                        sx={{ bgcolor: 'primary.main', color: '#fff', fontWeight: 600 }}
+                                    />
+                                )}
                                 {isFinalized && contract.finalizedAt && (
                                     <Typography variant="body2" color="text.secondary">
                                         Finalized on {new Date(contract.finalizedAt).toLocaleDateString()}
@@ -665,68 +831,170 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 )}
                             </Box>
 
-                            {/* Party completion status list */}
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
-                                {contract.externalSigners?.map((signer: any, index: number) => (
+                            {/* Signers grouped by order */}
+                            {uniqueOrders.map((order: number) => {
+                                const internalAtOrder = (contract.internalSigners || []).filter((s: any) => s.order === order);
+                                const externalAtOrder = (contract.externalSigners || []).filter((s: any) => s.order === order);
+                                const allAtOrder = [...internalAtOrder, ...externalAtOrder];
+                                const allComplete = allAtOrder.every((s: any) => s.status === 'completed');
+                                const isCurrentOrder = order === currentOrder;
+                                const isPastOrder = currentOrder ? order < currentOrder : false;
+                                const isFutureOrder = currentOrder ? order > currentOrder : true;
+
+                                return (
                                     <Box
-                                        key={signer.token || index}
+                                        key={order}
                                         sx={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 1,
+                                            mb: 2,
                                             p: 1.5,
-                                            borderRadius: 1.5,
-                                            bgcolor: signer.status === 'completed' ? 'success.50' : 'grey.100',
+                                            borderRadius: 2,
                                             border: '1px solid',
-                                            borderColor: signer.status === 'completed' ? 'success.light' : 'grey.300',
-                                            minWidth: 200,
+                                            borderColor: allComplete ? 'success.light' : isCurrentOrder ? 'primary.light' : 'grey.300',
+                                            bgcolor: allComplete ? 'success.50' : isCurrentOrder ? 'primary.50' : isFutureOrder ? 'grey.50' : 'background.paper',
                                         }}
                                     >
-                                        {signer.status === 'completed' ? (
-                                            <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />
-                                        ) : (
-                                            <HourglassEmptyIcon sx={{ color: 'warning.main', fontSize: 20 }} />
-                                        )}
-                                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Chip
-                                                    label={signer.partyLabel}
-                                                    size="small"
-                                                    sx={{
-                                                        bgcolor: contract.parties?.find((p: any) => p.id === signer.partyId)?.color || '#666',
-                                                        color: '#fff',
-                                                        fontWeight: 600,
-                                                        fontSize: '0.7rem',
-                                                        height: 20,
-                                                    }}
-                                                />
-                                                <Typography
-                                                    variant="body2"
-                                                    sx={{
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
-                                                        whiteSpace: 'nowrap',
-                                                    }}
-                                                >
-                                                    {signer.email}
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                            <Chip
+                                                label={`Order ${order}`}
+                                                size="small"
+                                                sx={{
+                                                    bgcolor: allComplete ? 'success.main' : isCurrentOrder ? 'primary.main' : 'grey.500',
+                                                    color: '#fff',
+                                                    fontWeight: 700,
+                                                    fontSize: '0.75rem',
+                                                }}
+                                            />
+                                            {allComplete && (
+                                                <CheckCircleIcon sx={{ color: 'success.main', fontSize: 18 }} />
+                                            )}
+                                            {isCurrentOrder && !allComplete && (
+                                                <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                                                    In Progress
                                                 </Typography>
-                                            </Box>
-                                            <Typography variant="caption" color="text.secondary">
-                                                {signer.status === 'completed'
-                                                    ? `Completed ${signer.completedAt ? new Date(signer.completedAt).toLocaleDateString() : ''}`
-                                                    : 'Pending'
-                                                }
-                                            </Typography>
+                                            )}
+                                            {isFutureOrder && (
+                                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                                    Waiting
+                                                </Typography>
+                                            )}
+                                        </Box>
+
+                                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                                            {allAtOrder.map((signer: any, index: number) => {
+                                                const isInternal = internalAtOrder.includes(signer);
+                                                return (
+                                                    <Box
+                                                        key={signer.token || signer.email || index}
+                                                        sx={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: 1,
+                                                            p: 1,
+                                                            borderRadius: 1,
+                                                            bgcolor: signer.status === 'completed' ? 'success.100' : 'background.paper',
+                                                            border: '1px solid',
+                                                            borderColor: signer.status === 'completed' ? 'success.light' : 'grey.200',
+                                                            minWidth: 180,
+                                                        }}
+                                                    >
+                                                        {signer.status === 'completed' ? (
+                                                            <CheckCircleIcon sx={{ color: 'success.main', fontSize: 18 }} />
+                                                        ) : signer.status === 'unlocked' ? (
+                                                            <HourglassEmptyIcon sx={{ color: 'warning.main', fontSize: 18 }} />
+                                                        ) : (
+                                                            <HourglassEmptyIcon sx={{ color: 'grey.400', fontSize: 18 }} />
+                                                        )}
+                                                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                                                                <Chip
+                                                                    label={signer.partyLabel}
+                                                                    size="small"
+                                                                    sx={{
+                                                                        bgcolor: contract.parties?.find((p: any) => p.id === signer.partyId)?.color || '#666',
+                                                                        color: '#fff',
+                                                                        fontWeight: 600,
+                                                                        fontSize: '0.65rem',
+                                                                        height: 18,
+                                                                    }}
+                                                                />
+                                                                <Chip
+                                                                    icon={isInternal ? <PersonIcon sx={{ fontSize: 12 }} /> : <EmailIcon sx={{ fontSize: 12 }} />}
+                                                                    label={isInternal ? 'Internal' : 'External'}
+                                                                    size="small"
+                                                                    sx={{
+                                                                        bgcolor: isInternal ? '#e3f2fd' : '#fff3e0',
+                                                                        color: isInternal ? '#1565c0' : '#e65100',
+                                                                        fontWeight: 500,
+                                                                        fontSize: '0.6rem',
+                                                                        height: 18,
+                                                                        '& .MuiChip-icon': { fontSize: 12 },
+                                                                    }}
+                                                                />
+                                                            </Box>
+                                                            <Typography
+                                                                variant="caption"
+                                                                sx={{
+                                                                    display: 'block',
+                                                                    overflow: 'hidden',
+                                                                    textOverflow: 'ellipsis',
+                                                                    whiteSpace: 'nowrap',
+                                                                    fontWeight: 500,
+                                                                }}
+                                                            >
+                                                                {signer.email}
+                                                            </Typography>
+                                                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                                                                {signer.status === 'completed'
+                                                                    ? `Completed ${signer.completedAt ? new Date(signer.completedAt).toLocaleDateString() : ''}`
+                                                                    : signer.status === 'unlocked'
+                                                                        ? 'Awaiting signature'
+                                                                        : 'Pending unlock'
+                                                                }
+                                                            </Typography>
+                                                        </Box>
+                                                    </Box>
+                                                );
+                                            })}
                                         </Box>
                                     </Box>
-                                ))}
-                            </Box>
+                                );
+                            })}
 
                             <Divider sx={{ my: 2 }} />
 
-                            {/* Finalize section */}
+                            {/* Unlock / Finalize section */}
                             {!isFinalized && (
                                 <Box>
+                                    {/* Unlock next order button */}
+                                    {canUnlockNextOrder && (
+                                        <Box sx={{ mb: 2 }}>
+                                            <Alert severity="info" sx={{ mb: 2 }}>
+                                                <strong>Order {currentOrder} complete!</strong> You can now unlock Order {nextOrder} for the next signers.
+                                            </Alert>
+                                            {unlockError && (
+                                                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setUnlockError(null)}>
+                                                    {unlockError}
+                                                </Alert>
+                                            )}
+                                            {unlockSuccess && (
+                                                <Alert severity="success" sx={{ mb: 2 }} onClose={() => setUnlockSuccess(null)}>
+                                                    {unlockSuccess}
+                                                </Alert>
+                                            )}
+                                            <Button
+                                                variant="contained"
+                                                color="primary"
+                                                onClick={handleUnlockNextOrder}
+                                                disabled={unlocking}
+                                                startIcon={unlocking ? <CircularProgress size={20} color="inherit" /> : <LockOpenIcon />}
+                                                sx={{ fontWeight: 600 }}
+                                            >
+                                                {unlocking ? 'Unlocking...' : `Unlock Order ${nextOrder}`}
+                                            </Button>
+                                        </Box>
+                                    )}
+
+                                    {/* Finalize button */}
                                     {canFinalize ? (
                                         <Box>
                                             <Alert severity="success" sx={{ mb: 2 }}>
@@ -754,9 +1022,12 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                                 {finalizing ? 'Finalizing...' : 'Finalize Contract'}
                                             </Button>
                                         </Box>
-                                    ) : (
+                                    ) : !canUnlockNextOrder && (
                                         <Alert severity="info">
-                                            Waiting for all parties to complete their fields before finalization.
+                                            {currentOrder
+                                                ? `Waiting for signers at Order ${currentOrder} to complete their fields.`
+                                                : 'Waiting for all parties to complete their fields before finalization.'
+                                            }
                                         </Alert>
                                     )}
                                 </Box>

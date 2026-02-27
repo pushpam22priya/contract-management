@@ -52,13 +52,46 @@ export interface SigningSequenceEntry {
 export interface ExternalSigner {
     email: string;             // Signer's email
     name?: string;             // Signer's name (optional)
-    partyId: string | string[];  // Which party/parties they are assigned to fill
-    partyLabel: string | string[];  // Party label(s) for display
+    partyId: string;           // Which party they are assigned to fill (single party)
+    partyLabel: string;        // Party label for display
+    order: number;             // Signing order (1, 2, 3, etc.)
     token: string;             // Unique signing token
-    status: 'pending' | 'viewed' | 'completed';
+    status: 'pending' | 'unlocked' | 'viewed' | 'completed';
     sentAt: string;            // When the signing request was sent
+    unlockedAt?: string;       // When their turn was unlocked
     viewedAt?: string;         // When they first opened the link
     completedAt?: string;      // When they submitted their changes
+}
+
+/**
+ * Internal signer for multi-party signature flow
+ * Internal users sign through the Signatures page, not via email link
+ */
+export interface InternalSigner {
+    userId?: string;           // User ID in the system (optional)
+    email: string;             // Internal user's email
+    name?: string;             // User's name
+    partyId: string;           // Which party they are assigned to fill (single party)
+    partyLabel: string;        // Party label for display
+    order: number;             // Signing order (1, 2, 3, etc.)
+    status: 'pending' | 'unlocked' | 'completed';
+    assignedAt: string;        // When assigned
+    unlockedAt?: string;       // When their turn was unlocked
+    completedAt?: string;      // When they completed
+}
+
+/**
+ * Signer assignment for the assignment dialog
+ */
+export interface SignerAssignment {
+    id: string;                // Unique ID for UI tracking
+    partyId: string;           // Which party
+    partyLabel: string;        // Party label
+    type: 'internal' | 'external';  // Type of signer
+    email?: string;            // Email (required for external, optional for internal)
+    name?: string;             // Name
+    userId?: string;           // User ID (for internal users)
+    order: number;             // Signing order
 }
 
 /**
@@ -189,6 +222,12 @@ export interface Contract {
     // External signers (one per party that's assigned to an external client)
     externalSigners?: ExternalSigner[];
 
+    // Internal signers (one per party that's assigned to an internal user)
+    internalSigners?: InternalSigner[];
+
+    // Current signing order being processed (for sequential signing flow)
+    currentSigningOrder?: number;
+
     // Which party/parties the contractor fills (if any)
     contractorParty?: string | string[];
 
@@ -199,7 +238,10 @@ export interface Contract {
     partyCompletions?: {
         partyId: string;
         partyLabel: string;
-        status: 'pending' | 'completed';
+        order?: number;              // Signing order
+        assigneeType?: 'internal' | 'external' | 'contractor';  // Type of assignee
+        assigneeEmail?: string;      // Email of assignee
+        status: 'pending' | 'unlocked' | 'completed';
         completedBy?: string;        // Email of who completed
         completedByName?: string;    // Name of who completed
         completedAt?: string;        // When completed

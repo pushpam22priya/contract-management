@@ -11,13 +11,13 @@ import dayjs, { Dayjs } from 'dayjs';
 import ContractCard from '@/components/contracts/ContractCard';
 import CreateContractDialog from '@/components/contracts/CreateContractDialog';
 import { contractService } from '@/services/contractService';
-import { Contract, ContractStatus } from '@/types/contract';
+import { Contract, ContractStatus, SignerAssignment } from '@/types/contract';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { authService } from '@/services/authService';
 import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
 import MultiPartySignatureDialog from '@/components/contracts/MultiPartySignatureDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
-import { submitForMultiPartySignature, SignatureRecipient } from '@/services/externalSignatureService';
+import { submitForMixedSignature } from '@/services/externalSignatureService';
 import { AlertColor } from '@mui/material';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
@@ -280,14 +280,14 @@ export default function ContractsPage() {
     };
 
     /**
-     * Handle multi-party signature submission
+     * Handle mixed signature submission (internal + external signers with order)
      */
-    const handleMultiPartySignatureSubmit = async (
-        recipients: SignatureRecipient[]
-    ) => {
-        console.log('📝 [ContractsPage] Handling multi-party signature submit...');
+    const handleMixedSignatureSubmit = async (
+        assignments: SignerAssignment[]
+    ): Promise<{ success: boolean; error?: string }> => {
+        console.log('📝 [ContractsPage] Handling mixed signature submit...');
         console.log('   Contract:', contractForSignature?.id);
-        console.log('   Recipients:', recipients.length);
+        console.log('   Assignments:', assignments.length);
 
         if (!contractForSignature) {
             console.error('❌ [ContractsPage] No contract selected for signature');
@@ -298,21 +298,27 @@ export default function ContractsPage() {
         const currentUser = authService.getCurrentUser();
         const senderName = currentUser?.email || 'Contract System';
 
+        const internalCount = assignments.filter(a => a.type === 'internal').length;
+        const externalCount = assignments.filter(a => a.type === 'external').length;
         console.log('   Sender:', senderName);
+        console.log(`   Internal: ${internalCount}, External: ${externalCount}`);
 
         try {
-            const result = await submitForMultiPartySignature(
+            const result = await submitForMixedSignature(
                 contractForSignature,
-                recipients,
+                assignments,
                 senderName
             );
 
             if (result.success) {
-                console.log('✅ [ContractsPage] Multi-party signature requests sent successfully');
-                const emailCount = result.signers?.filter(s => s.emailSent).length || 0;
-                showNotification(`Signature requests sent to ${emailCount} recipient(s)`, 'success');
+                console.log('✅ [ContractsPage] Mixed signature assignments created successfully');
+                showNotification(
+                    `Assignments created: ${internalCount} internal, ${externalCount} external signers`,
+                    'success'
+                );
                 loadContracts();  // Reload to show updated status
-                // Refresh the contract data so dialog shows updated externalSigners
+
+                // Refresh the contract data so dialog shows updated signers
                 try {
                     const refreshRes = await fetch(`/api/contracts/${contractForSignature.id}`);
                     if (refreshRes.ok) {
@@ -322,14 +328,15 @@ export default function ContractsPage() {
                 } catch (e) {
                     console.warn('Could not refresh contract data:', e);
                 }
-            } else {
-                console.error('❌ [ContractsPage] Failed to send multi-party signature requests:', result.error);
-                showNotification(result.error || 'Failed to send signature requests', 'error');
-            }
 
-            return result;
+                return { success: true };
+            } else {
+                console.error('❌ [ContractsPage] Failed to create mixed signature assignments:', result.error);
+                showNotification(result.error || 'Failed to create assignments', 'error');
+                return { success: false, error: result.error };
+            }
         } catch (error: any) {
-            console.error('❌ [ContractsPage] Error in multi-party signature submit:', error);
+            console.error('❌ [ContractsPage] Error in mixed signature submit:', error);
             showNotification(error.message || 'An unexpected error occurred', 'error');
             return { success: false, error: error.message };
         }
@@ -536,15 +543,16 @@ export default function ContractsPage() {
                     contractTitle={contractForSignature?.title}
                 />
 
-                {/* Multi-Party Signature Dialog */}
+                {/* Multi-Party Signature Dialog (supports internal + external with order) */}
                 <MultiPartySignatureDialog
                     open={multiPartyDialogOpen}
                     onClose={() => setMultiPartyDialogOpen(false)}
-                    onSubmit={handleMultiPartySignatureSubmit}
+                    onSubmit={handleMixedSignatureSubmit}
                     contractTitle={contractForSignature?.title}
                     parties={contractForSignature?.parties || []}
                     formFields={contractForSignature?.formFields}
-                    existingSigners={contractForSignature?.externalSigners}
+                    existingExternalSigners={contractForSignature?.externalSigners}
+                    existingInternalSigners={contractForSignature?.internalSigners}
                     fieldValues={contractForSignature?.fieldValues}
                 />
 

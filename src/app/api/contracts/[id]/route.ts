@@ -71,7 +71,8 @@ export async function PATCH(
             'reviewers', 'approver', 'signer', 'reviewStatus', 'approvalStatus',
             'modificationComments', 'modificationRequests',
             // Multi-party signature flow fields
-            'signatureFlowStatus', 'version', 'externalSigners', 'contractorParty', 'partyCompletions'
+            'signatureFlowStatus', 'version', 'externalSigners', 'internalSigners',
+            'currentSigningOrder', 'contractorParty', 'partyCompletions'
         ];
 
         // Track fields to unset (when value is null)
