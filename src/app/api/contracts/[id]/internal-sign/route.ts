@@ -135,6 +135,25 @@ export async function POST(
         console.log(`   External at order ${currentOrder}: ${externalAtCurrentOrder.length}, all complete: ${allExternalComplete}`);
         console.log(`   Current order complete: ${currentOrderComplete}`);
 
+        // 9. Check if ALL signers across ALL orders are complete → update status
+        const allInternalEverComplete = updatedInternalSigners.every((s: any) => s.status === 'completed');
+        const allExternalEverComplete = externalSigners.length === 0 || externalSigners.every((s: any) => s.status === 'completed');
+        const allSignersComplete = allInternalEverComplete && allExternalEverComplete;
+
+        if (allSignersComplete && contract.signatureFlowStatus === 'pending_signatures') {
+            console.log(`🎉 [InternalSign] All signers (external + internal) have completed!`);
+            await db.collection('contracts').updateOne(
+                { _id: new ObjectId(id) },
+                {
+                    $set: {
+                        signatureFlowStatus: 'all_completed',
+                        status: 'signed_by_everyone',
+                        updatedAt: now,
+                    }
+                }
+            );
+        }
+
         return NextResponse.json({
             success: true,
             message: 'Signature saved successfully',

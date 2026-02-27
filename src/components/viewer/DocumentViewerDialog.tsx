@@ -243,11 +243,48 @@ export default function DocumentViewerDialog({
             return;
         }
 
+        // ✅ INTERNAL SIGNER PROTECTION: Prevent internal signer from editing OTHER party's fields
+        // This is similar to external signer protection in the public signing page
+        const isInternalSigner = !!assignedPartyId && currentUserRole === 'client';
+        const hasFormFields = !!formFields;
+
+        if (isInternalSigner && hasFormFields && userHasInteractedRef.current) {
+            const field = formFields.find((f: any) => f.name === fieldName);
+            const fieldParty = field?.assignedParty;
+
+            // If this field belongs to a different party, restore to original value and show warning
+            if (fieldParty && fieldParty !== assignedPartyId) {
+                console.log(`🚫 [DocumentViewerDialog] BLOCKING! Internal signer tried to edit other party field: ${fieldName} (field party: ${fieldParty}, assigned party: ${assignedPartyId})`);
+                setShowWrongPartyWarning(true);
+
+                // Get the original value (may be empty or pre-filled)
+                const originalValue = initialFieldValuesRef.current[fieldName] || '';
+
+                // Restore the field value in state to original
+                setFilledFieldValues(prev => ({
+                    ...prev,
+                    [fieldName]: originalValue
+                }));
+
+                // Restore the field in the PDF viewer to original value
+                if (originalValue) {
+                    if (pdfViewerRef.current?.restoreFieldValue) {
+                        pdfViewerRef.current.restoreFieldValue(fieldName, originalValue);
+                    }
+                } else {
+                    if (pdfViewerRef.current?.clearField) {
+                        pdfViewerRef.current.clearField(fieldName);
+                    }
+                }
+
+                return; // Exit early, don't save the wrong party's value
+            }
+        }
+
         // ✅ CONTRACTOR PROTECTION: Prevent contractor from editing CLIENT party fields only
         // Contractor CAN edit their own party fields (fields NOT assigned to external signers)
         const isContractor = currentUserRole === 'contractor';
         const hasClientParties = clientPartyIds.length > 0;
-        const hasFormFields = !!formFields;
 
         if (isContractor && hasClientParties && hasFormFields) {
             const field = formFields.find((f: any) => f.name === fieldName);
@@ -642,11 +679,19 @@ export default function DocumentViewerDialog({
                         showAnnotationNavigation={showAnnotationNavigation}
                         // ✅ For contractor: Show warning when signature position is restored (silent restore + warning)
                         silentPositionRestore={readOnly}
-                        // ✅ CRITICAL FIX: Always enable position tracking for contractors (removed clientPartyIds.length > 0 check)
-                        // This ensures ALL signatures (contractor's own + client's) are tracked back to their positions
-                        onSignaturePositionRestored={currentUserRole === 'contractor' ? () => setShowWrongPartyWarning(true) : undefined}
-                        // ✅ Pass client party IDs to protect only client signatures (contractor can edit their own)
-                        protectedPartyIds={currentUserRole === 'contractor' ? clientPartyIds : undefined}
+                        // ✅ Show warning when signature position is restored (for both contractor and internal signer)
+                        onSignaturePositionRestored={(currentUserRole === 'contractor' || assignedPartyId) ? () => setShowWrongPartyWarning(true) : undefined}
+                        // ✅ For contractor: Protect client signatures
+                        // ✅ For internal signer: Protect other party signatures (all parties except assigned)
+                        protectedPartyIds={
+                            currentUserRole === 'contractor'
+                                ? clientPartyIds
+                                : assignedPartyId && parties
+                                    ? parties.filter((p: any) => p.id !== assignedPartyId).map((p: any) => p.id)
+                                    : undefined
+                        }
+                        // ✅ For internal signer: Restrict editing to only assigned party's fields
+                        editableParties={assignedPartyId ? [assignedPartyId] : undefined}
                     />
 
                     {/* ✅ Party Validation Warning Popup (same as CreateContractDialog) */}
@@ -712,8 +757,8 @@ export default function DocumentViewerDialog({
                         </Box>
                     )}
 
-                    {/* ✅ Wrong Party Warning Dialog - for contractor trying to edit client party fields */}
-                    {showWrongPartyWarning && currentUserRole === 'contractor' && (
+                    {/* ✅ Wrong Party Warning Dialog - for contractor or internal signer trying to edit other party fields */}
+                    {showWrongPartyWarning && (
                         <Box
                             sx={{
                                 position: 'fixed',
@@ -737,13 +782,18 @@ export default function DocumentViewerDialog({
                                 }}
                             >
                                 <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
-                                    Client Party Field
+                                    {currentUserRole === 'contractor' ? 'Client Party Field' : 'Wrong Party Field'}
                                 </Typography>
                                 <Typography variant="body1" sx={{ mb: 2 }}>
-                                    This field is assigned to a client party and cannot be edited by the contractor.
+                                    {currentUserRole === 'contractor'
+                                        ? 'This field is assigned to a client party and cannot be edited by the contractor.'
+                                        : assignedPartyLabel
+                                            ? `You are assigned to fill fields as "${assignedPartyLabel}". This field belongs to another party.`
+                                            : 'This field belongs to another party and cannot be edited by you.'
+                                    }
                                 </Typography>
                                 <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                                    Your changes have been automatically reverted. Only clients assigned to this party can fill these fields.
+                                    Your changes have been automatically reverted. Please only fill the fields that belong to your assigned party.
                                 </Typography>
                                 <Button
                                     fullWidth

@@ -77,7 +77,7 @@ export async function PUT(
         // 3. Fetch existing contract for version checking and merging
         const existingContract = await db.collection('contracts').findOne(
             { _id: new ObjectId(signRequest.contractId) },
-            { projection: { fieldValues: 1, formFields: 1, version: 1, partyCompletions: 1, externalSigners: 1, signatureFlowStatus: 1, parties: 1 } }
+            { projection: { fieldValues: 1, formFields: 1, version: 1, partyCompletions: 1, externalSigners: 1, internalSigners: 1, signatureFlowStatus: 1, parties: 1 } }
         );
 
         if (!existingContract) {
@@ -261,12 +261,14 @@ export async function PUT(
 
             contractUpdate.partyCompletions = updatedCompletions;
 
-            // Check if all parties are now complete
-            const allSigners = updatedSigners;
-            const allCompleted = allSigners.length > 0 && allSigners.every((s: any) => s.status === 'completed');
+            // Check if ALL parties (external + internal) are now complete
+            const allExternalComplete = updatedSigners.length > 0 && updatedSigners.every((s: any) => s.status === 'completed');
+            const internalSigners = existingContract.internalSigners || [];
+            const allInternalComplete = internalSigners.length === 0 || internalSigners.every((s: any) => s.status === 'completed');
+            const allCompleted = allExternalComplete && allInternalComplete;
 
             if (allCompleted && existingContract.signatureFlowStatus === 'pending_signatures') {
-                console.log(`🎉 [SignComplete] All external signers have completed!`);
+                console.log(`🎉 [SignComplete] All signers (external + internal) have completed!`);
                 contractUpdate.signatureFlowStatus = 'all_completed';
                 contractUpdate.status = 'signed_by_everyone';
             }
