@@ -107,8 +107,28 @@ export async function POST(
                 ...fieldValues,
             };
         }
-        if (formFields) {
-            updateData.formFields = formFields;
+        if (formFields && formFields.length > 0) {
+            // ✅ MERGE formFields instead of overwriting to preserve custom metadata
+            // (e.g., assignedParty, partyLabel, lockedBy) that PDFTron exports don't include
+            const existingFormFields = contract.formFields || [];
+            const existingFieldsMap = new Map<string, any>();
+
+            for (const field of existingFormFields) {
+                if (field.name) {
+                    existingFieldsMap.set(field.name, field);
+                }
+            }
+
+            for (const signerField of formFields) {
+                if (signerField.name) {
+                    existingFieldsMap.set(signerField.name, {
+                        ...(existingFieldsMap.get(signerField.name) || {}),
+                        ...signerField
+                    });
+                }
+            }
+
+            updateData.formFields = Array.from(existingFieldsMap.values());
         }
 
         // 7. Update the contract
