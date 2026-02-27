@@ -30,7 +30,7 @@ const menuItems = [
     { text: 'Contracts', icon: <ArticleOutlinedIcon />, path: '/contracts' },
     { text: 'Draft', icon: <DraftsIcon />, path: '/draft' },
     { text: 'Review & Approval', icon: <RateReviewIcon />, path: '/review-approval' },
-    // { text: 'Contract for Signature', icon: <DrawIcon />, path: '/signatures' },
+    { text: 'Contract for Signature', icon: <DrawIcon />, path: '/signatures' },
 ];
 
 interface SidebarProps {

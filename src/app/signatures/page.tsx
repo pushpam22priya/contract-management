@@ -1,10 +1,10 @@
 'use client';
 
-import { Box, Typography, Alert, AlertColor, Button, Paper } from '@mui/material';
+import { Box, Typography, AlertColor, Paper } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
-import { templateService } from '@/services/templateService';
 import { Contract, ContractStatus } from '@/types/contract';
 import { authService } from '@/services/authService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
@@ -13,6 +13,9 @@ import ContractCard from '@/components/contracts/ContractCard';
 import DrawIcon from '@mui/icons-material/Draw';
 import SignaturePadDialog from '@/components/contracts/SignaturePadDialog';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
+import ReusableFilter from '@/components/common/ReusableFilter';
+import { categoryService } from '@/services/categoryService';
+import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 
 /**
  * Signatures Page
@@ -21,6 +24,16 @@ import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
 export default function SignaturesPage() {
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Filter state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState({ label: 'All Categories', value: 'all' });
+    const [startDate, setStartDate] = useState<Dayjs | null>(null);
+    const [endDate, setEndDate] = useState<Dayjs | null>(null);
+    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+    const [categoryOptions, setCategoryOptions] = useState<{ label: string; value: string }[]>([
+        { label: 'All Categories', value: 'all' }
+    ]);
 
     // Viewer state
     const [viewerOpen, setViewerOpen] = useState(false);
@@ -37,10 +50,20 @@ export default function SignaturesPage() {
         severity: 'success' as AlertColor,
     });
 
-    // Load contracts on mount
+    // Load contracts and categories on mount
     useEffect(() => {
         loadContracts();
+        loadCategories();
     }, []);
+
+    const loadCategories = () => {
+        const categories = categoryService.getAllCategories();
+        const options = [
+            { label: 'All Categories', value: 'all' },
+            ...categories.map(cat => ({ label: cat.name, value: cat.name }))
+        ];
+        setCategoryOptions(options);
+    };
 
     /**
      * Load contracts assigned to current user for signature
@@ -64,6 +87,33 @@ export default function SignaturesPage() {
         setContracts(assignedContracts);
         setLoading(false);
     };
+
+    // Total contracts count
+    const totalContracts = contracts.length;
+
+    // Filter Logic
+    const filteredContracts = contracts.filter(contract => {
+        // Search Filter
+        const matchesSearch = searchQuery === '' ||
+            contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            contract.client?.toLowerCase().includes(searchQuery.toLowerCase());
+
+        // Category Filter
+        const matchesCategory = categoryFilter.value === 'all' ||
+            contract.category === categoryFilter.value;
+
+        // Date Filter
+        let matchesDate = true;
+        if (startDate || endDate) {
+            const contractDate = dayjs(contract.createdAt);
+            if (startDate && contractDate.isBefore(startDate, 'day')) matchesDate = false;
+            if (endDate && contractDate.isAfter(endDate, 'day')) matchesDate = false;
+        }
+
+        return matchesSearch && matchesCategory && matchesDate;
+    });
+
+    const filteredCount = filteredContracts.length;
 
     /**
      * Show snackbar notification
@@ -193,7 +243,7 @@ export default function SignaturesPage() {
         <AppLayout>
             <Box>
                 {/* Header Section */}
-                <Box sx={{ mb: 3 }}>
+                <Box sx={{ mb: 1 }}>
                     <Typography
                         fontWeight={600}
                         sx={{
@@ -208,8 +258,34 @@ export default function SignaturesPage() {
                     </Typography>
                 </Box>
 
+                {/* Filter Section */}
+                <ReusableFilter
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    searchPlaceholder="Search contracts or clients..."
+                    filters={[
+                        {
+                            label: 'Category',
+                            value: categoryFilter,
+                            onChange: (newValue) => setCategoryFilter(newValue || categoryOptions[0]),
+                            options: categoryOptions,
+                        }
+                    ]}
+                    enableDateFilter={true}
+                    startDate={startDate}
+                    onStartDateChange={setStartDate}
+                    endDate={endDate}
+                    onEndDateChange={setEndDate}
+                    showAdvancedFilters={showAdvancedFilters}
+                    onAdvancedFiltersToggle={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                    dateFilterTitle="Filter by Contract Date Range"
+                    filteredCount={filteredCount}
+                    totalCount={totalContracts}
+                    countLabel="contracts"
+                />
+
                 {/* Contracts Grid */}
-                {contracts.length === 0 && !loading ? (
+                {filteredContracts.length === 0 && !loading ? (
                     <Paper
                         sx={{
                             p: 4,
@@ -235,18 +311,22 @@ export default function SignaturesPage() {
                             gridTemplateColumns: {
                                 xs: '1fr',
                                 sm: 'repeat(2, 1fr)',
-                                lg: 'repeat(3, 1fr)',
+                                lg: 'repeat(4, 1fr)',
                             },
-                            gap: 2,
+                            gap: 0.75,
                         }}
                     >
-                        {contracts.map((contract) => (
-                            <ContractCard
-                                key={contract.id}
-                                contract={contract}
-                                onView={handleView}
-                            />
-                        ))}
+                        {loading ? (
+                            <ShimmerCardGrid count={8} variant="contract" />
+                        ) : (
+                            filteredContracts.map((contract) => (
+                                <ContractCard
+                                    key={contract.id}
+                                    contract={contract}
+                                    onView={handleView}
+                                />
+                            ))
+                        )}
                     </Box>
                 )}
 
