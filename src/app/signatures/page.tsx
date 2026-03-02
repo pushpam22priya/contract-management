@@ -244,6 +244,13 @@ export default function SignaturesPage() {
                     }),
                 });
 
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`❌ [SignaturesPage] internal-sign failed with status ${response.status}:`, errorText);
+                    showNotification(`Failed to save signature: Server returned ${response.status}`, 'error');
+                    return;
+                }
+
                 const result = await response.json();
 
                 if (result.success) {
@@ -461,6 +468,8 @@ export default function SignaturesPage() {
                         editableFieldMode="empty-only"
                         // ✅ Pass parties for party validation (must complete all fields of a party)
                         parties={selectedContract.parties}
+                        // ✅ Show navigation button so internal signer can jump between their assigned fields
+                        showAnnotationNavigation={true}
                         // ✅ Pass assigned party info for internal signers
                         assignedPartyId={currentUserInternalSigner?.partyId}
                         assignedPartyLabel={currentUserInternalSigner?.partyLabel || assignedPartyConfig?.label}

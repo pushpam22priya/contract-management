@@ -78,6 +78,7 @@ interface DocumentViewerDialogProps {
     showAnnotationNavigation?: boolean; // ✅ Show floating navigation button for annotations
     parties?: any[]; // ✅ Party configurations for validation
     externalSigners?: any[]; // ✅ External signers to determine client parties (contractor protection)
+    internalSigners?: any[]; // ✅ Internal signers to determine internal client parties (contractor protection)
     // ✅ NEW: Assigned party for internal signer - displays chip and validates completion
     assignedPartyId?: string;
     assignedPartyLabel?: string;
@@ -108,6 +109,7 @@ export default function DocumentViewerDialog({
     showAnnotationNavigation = false,
     parties,
     externalSigners,
+    internalSigners,
     assignedPartyId,
     assignedPartyLabel,
     assignedPartyColor,
@@ -149,6 +151,33 @@ export default function DocumentViewerDialog({
         console.log(`📋 [DocumentViewerDialog] Computed clientPartyIds = [${uniqueIds.join(', ')}]`);
         return uniqueIds; // Remove duplicates
     }, [externalSigners]);
+
+    // ✅ Calculate internal client party IDs (parties that have internal signers assigned)
+    const internalClientPartyIds = useMemo(() => {
+        if (!internalSigners || internalSigners.length === 0) return [];
+        const partyIds: string[] = [];
+        internalSigners.forEach((signer: any) => {
+            if (signer.partyId) {
+                if (Array.isArray(signer.partyId)) {
+                    partyIds.push(...signer.partyId);
+                } else {
+                    partyIds.push(signer.partyId);
+                }
+            }
+        });
+        const uniqueIds = [...new Set(partyIds)];
+        console.log(`📋 [DocumentViewerDialog] Computed internalClientPartyIds = [${uniqueIds.join(', ')}]`);
+        return uniqueIds;
+    }, [internalSigners]);
+
+    // ✅ All protected party IDs for contractor (both external + internal client parties)
+    const allClientPartyIds = useMemo(() => {
+        const combined = [...new Set([...clientPartyIds, ...internalClientPartyIds])];
+        if (combined.length > 0) {
+            console.log(`📋 [DocumentViewerDialog] allClientPartyIds (for contractor protection) = [${combined.join(', ')}]`);
+        }
+        return combined;
+    }, [clientPartyIds, internalClientPartyIds]);
 
     // ✅ Store initial field values for restoration (for contractor protection)
     const initialFieldValuesRef = useRef<Record<string, string>>({});
@@ -281,18 +310,19 @@ export default function DocumentViewerDialog({
             }
         }
 
-        // ✅ CONTRACTOR PROTECTION: Prevent contractor from editing CLIENT party fields only
-        // Contractor CAN edit their own party fields (fields NOT assigned to external signers)
+        // ✅ CONTRACTOR PROTECTION: Prevent contractor from editing ANY client party fields
+        // (both external client parties AND internal client parties)
+        // Contractor CAN only edit their own party fields (fields NOT assigned to any signer)
         const isContractor = currentUserRole === 'contractor';
-        const hasClientParties = clientPartyIds.length > 0;
+        const hasClientParties = allClientPartyIds.length > 0;
 
         if (isContractor && hasClientParties && hasFormFields) {
             const field = formFields.find((f: any) => f.name === fieldName);
             const fieldParty = field?.assignedParty;
 
-            // Only block if field is assigned to a CLIENT party (party with external signer)
-            // Contractor CAN edit fields assigned to contractor parties or unassigned fields
-            const isClientPartyField = fieldParty && clientPartyIds.includes(fieldParty);
+            // Block if field is assigned to ANY client party (external or internal signer)
+            // Contractor CAN only edit fields assigned to contractor parties or unassigned fields
+            const isClientPartyField = fieldParty && allClientPartyIds.includes(fieldParty);
 
             if (isClientPartyField) {
                 console.log(`🚫 [DocumentViewerDialog] BLOCKING! Contractor tried to edit client party field: ${fieldName} (party: ${fieldParty})`);
@@ -681,11 +711,11 @@ export default function DocumentViewerDialog({
                         silentPositionRestore={readOnly}
                         // ✅ Show warning when signature position is restored (for both contractor and internal signer)
                         onSignaturePositionRestored={(currentUserRole === 'contractor' || assignedPartyId) ? () => setShowWrongPartyWarning(true) : undefined}
-                        // ✅ For contractor: Protect client signatures
+                        // ✅ For contractor: Protect ALL client signatures (external + internal)
                         // ✅ For internal signer: Protect other party signatures (all parties except assigned)
                         protectedPartyIds={
                             currentUserRole === 'contractor'
-                                ? clientPartyIds
+                                ? allClientPartyIds
                                 : assignedPartyId && parties
                                     ? parties.filter((p: any) => p.id !== assignedPartyId).map((p: any) => p.id)
                                     : undefined

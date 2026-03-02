@@ -1157,6 +1157,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 parties={contract.parties}
                 // ✅ Pass external signers info so contractor can't edit client party fields
                 externalSigners={contract.externalSigners}
+                // ✅ Pass internal signers info so contractor can't edit internal client party fields
+                internalSigners={contract.internalSigners}
             />
         </AppLayout>
     );

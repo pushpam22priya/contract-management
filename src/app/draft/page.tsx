@@ -531,6 +531,8 @@ export default function DraftPage() {
                     parties={selectedContract.parties}
                     // ✅ Pass external signers to protect client party fields from contractor editing
                     externalSigners={selectedContract.externalSigners}
+                    // ✅ Pass internal signers to protect internal client party fields from contractor editing
+                    internalSigners={selectedContract.internalSigners}
                 />
             )}
 

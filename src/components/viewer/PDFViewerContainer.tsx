@@ -90,6 +90,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         const [error, setError] = useState<string>('');
         const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
         const initialLoadDone = useRef(false);
+        const isLoadingInitialDocument = useRef(true); // ✅ Track if we're loading the initial document
         // ✅ Ref-based Storage & Logic (Extracted to Hooks)
         const {
             isInitializingRef,
@@ -1889,6 +1890,61 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                             const field = (widget as any).getField?.();
                                                             const fieldName = field?.name || (widget as any).fieldName;
                                                             if (fieldName && capturedFieldValuesRef.current.get(fieldName) !== 'signed') {
+                                                                // ✅ SKIP validation during initial document loading (pre-filled signatures)
+                                                                // Only validate user-initiated signature additions
+                                                                // Check: 1) Not during initial load, AND 2) Not from import source
+                                                                if (!isLoadingInitialDocument.current && !info?.imported) {
+                                                                    // ✅ CHECK: Validate if this signature belongs to another party
+                                                                    let signatureParty: string | undefined;
+                                                                    if (formFieldsRef.current.length > 0) {
+                                                                        const formField = formFieldsRef.current.find((f: any) => f.name === fieldName);
+                                                                        signatureParty = formField?.assignedParty;
+                                                                    }
+
+                                                                    // Check if this is a protected party or not in editable parties
+                                                                    let isUnauthorizedParty = false;
+
+                                                                    // For internal signers: Check if user is trying to sign a field not assigned to them
+                                                                    if (editableParties && editableParties.length > 0 && signatureParty) {
+                                                                        if (!editableParties.includes(signatureParty)) {
+                                                                            isUnauthorizedParty = true;
+                                                                            console.log(`🚫 [SIGNATURE ADD] Internal signer attempted to sign other party field: ${fieldName} (party: ${signatureParty}, allowed: ${editableParties.join(', ')})`);
+                                                                        }
+                                                                    }
+
+                                                                    // For contractors: Check if trying to sign client party fields
+                                                                    if (!isUnauthorizedParty && protectedPartyIdsRef.current.length > 0 && signatureParty) {
+                                                                        if (protectedPartyIdsRef.current.includes(signatureParty)) {
+                                                                            isUnauthorizedParty = true;
+                                                                            console.log(`🚫 [SIGNATURE ADD] Contractor attempted to sign client party field: ${fieldName} (party: ${signatureParty})`);
+                                                                        }
+                                                                    }
+
+                                                                    // If unauthorized, delete the signature and show warning
+                                                                    if (isUnauthorizedParty) {
+                                                                        console.log(`🗑️ [SIGNATURE ADD] Removing unauthorized signature from ${fieldName}`);
+
+                                                                        // Delete the signature annotation
+                                                                        setTimeout(() => {
+                                                                            try {
+                                                                                Core.annotationManager.deleteAnnotation(annot, { source: 'unauthorized_party' });
+                                                                                console.log(`✅ [SIGNATURE ADD] Deleted unauthorized signature annotation`);
+                                                                            } catch (e) {
+                                                                                console.error(`❌ [SIGNATURE ADD] Failed to delete signature:`, e);
+                                                                            }
+                                                                        }, 50);
+
+                                                                        // Show warning dialog
+                                                                        if (onSignaturePositionRestored) {
+                                                                            setTimeout(() => {
+                                                                                onSignaturePositionRestored();
+                                                                            }, 100);
+                                                                        }
+
+                                                                        break; // Exit the loop, don't process this signature
+                                                                    }
+                                                                }
+
                                                                 capturedFieldValuesRef.current.set(fieldName, 'signed');
                                                                 // ✅ Store mapping: annotation ID → field name (for delete tracking)
                                                                 const annotId = annot.Id || (annot as any).getId?.();
@@ -1929,6 +1985,38 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         // ✅ Quick escape if this delete was triggered by our cleanup script
                                         if (info?.source === 'cleanup_script') {
                                             console.log(`🧹 [SIGNATURE DELETE] Ignoring annotation deletion (cleanup script)`);
+                                            return;
+                                        }
+
+                                        // ✅ Quick escape if this delete was triggered by unauthorized party validation
+                                        if (info?.source === 'unauthorized_party') {
+                                            console.log(`🧹 [SIGNATURE DELETE] Ignoring annotation deletion (unauthorized party validation)`);
+                                            return;
+                                        }
+
+                                        // ✅ CRITICAL FIX: During initial document load, protect ALL pre-filled signatures
+                                        // This prevents WebViewer's internal widget rebuild from deleting signatures
+                                        if (isLoadingInitialDocument.current) {
+                                            console.log(`🛡️ [SIGNATURE DELETE] Restoring signature deleted during initial load`);
+
+                                            // Get the annotation ID and restore from XFDF
+                                            const deletedAnnotId = annot.Id || (annot as any).getId?.();
+                                            const savedData = prefilledSignatureDataRef.current.get(deletedAnnotId);
+
+                                            if (savedData) {
+                                                // Use async IIFE to restore the annotation
+                                                (async () => {
+                                                    try {
+                                                        await Core.annotationManager.importAnnotations(savedData.xfdf);
+                                                        console.log(`✅ [SIGNATURE DELETE] Restored signature from XFDF during initial load`);
+                                                    } catch (e) {
+                                                        console.error(`❌ [SIGNATURE DELETE] Failed to restore signature during initial load:`, e);
+                                                    }
+                                                })();
+                                            } else {
+                                                console.log(`⚠️ [SIGNATURE DELETE] No XFDF data found for annotation ${deletedAnnotId} during initial load`);
+                                            }
+
                                             return;
                                         }
 
@@ -2089,9 +2177,18 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                             console.log(`📄 [DOCUMENT] PDF loaded with ${existingAnnotations.length} existing annotations`);
 
+                            // ✅ MULTI-PARTY FIX: Detect multi-party flow for special handling
+                            const isMultiPartyFlow = (editableParties && editableParties.length > 0) || protectedPartyIds !== undefined;
+
                             if (initialXfdf) {
-                                if (hasExistingAnnotations) {
-                                    // PDF already has annotations - skip XFDF import to preserve appearances
+                                // ✅ MULTI-PARTY FIX: Always import XFDF when editableParties or protectedPartyIds is set
+                                // This is crucial for multi-party flows where:
+                                // - Internal signers save signatures to XFDF (flatten: false)
+                                // - Contractors need to see those signatures even if PDF has form widgets
+                                // - External signers need XFDF imported to see other parties' signatures
+
+                                if (hasExistingAnnotations && !isMultiPartyFlow) {
+                                    // PDF already has annotations AND not multi-party - skip XFDF import to preserve appearances
                                     console.log('⚠️ [IMPORT] PDF has existing annotations - SKIPPING XFDF import to preserve appearances');
                                     console.log(`✅ [IMPORT] Using ${existingAnnotations.length} embedded annotations from PDF`);
 
@@ -2101,13 +2198,45 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     annotTypes.forEach((t: string) => { typeCount[t] = (typeCount[t] || 0) + 1; });
                                     console.log('📊 [IMPORT] Existing annotation types:', typeCount);
                                 } else {
-                                    // No existing annotations - import XFDF (template case)
-                                    console.log('📥 [IMPORT] No existing annotations - importing XFDF...');
+                                    // Import XFDF if: 1) No existing annotations OR 2) Multi-party flow
+                                    if (isMultiPartyFlow) {
+                                        console.log('📥 [IMPORT] Multi-party flow detected - importing XFDF to load all parties\' signatures...');
+                                    } else {
+                                        console.log('📥 [IMPORT] No existing annotations - importing XFDF...');
+                                    }
                                     console.log(`📥 [IMPORT] XFDF length: ${initialXfdf.length} chars`);
                                     console.log(`📥 [IMPORT] XFDF preview: ${initialXfdf.substring(0, 500)}...`);
                                     await Core.annotationManager.importAnnotations(initialXfdf);
                                     const importedCount = Core.annotationManager.getAnnotationsList().length;
                                     console.log(`✅ [IMPORT] XFDF imported successfully - ${importedCount} annotations loaded`);
+
+                                    // ✅ MULTI-PARTY: Capture signature annotations BEFORE cleanup
+                                    // This is critical for contractor view - we need to preserve signature annotations
+                                    // even after widget rebuild which happens automatically by PDFTron
+                                    if (isMultiPartyFlow) {
+                                        const allAnnots = Core.annotationManager.getAnnotationsList();
+                                        const signatureAnnots = allAnnots.filter((a: any) =>
+                                            a instanceof Core.Annotations.FreeHandAnnotation ||
+                                            a instanceof Core.Annotations.StampAnnotation
+                                        );
+
+                                        console.log(`📸 [MULTI-PARTY] Capturing ${signatureAnnots.length} signature annotations before cleanup...`);
+
+                                        for (const annot of signatureAnnots) {
+                                            try {
+                                                const annotId = annot.Id;
+                                                const xfdfString = await Core.annotationManager.exportAnnotations({ annotList: [annot] });
+                                                capturedSignatureAnnotationsRef.current.set(annotId, {
+                                                    annotation: annot,
+                                                    xfdf: xfdfString,
+                                                    capturedAt: Date.now()
+                                                });
+                                                console.log(`📸 [CAPTURE] Saved signature annotation ${annotId}`);
+                                            } catch (e) {
+                                                console.warn('⚠️ [CAPTURE] Failed to capture annotation:', e);
+                                            }
+                                        }
+                                    }
 
                                     // ✅ FIX: Cleanup duplicate signatures loaded from XFDF
                                     // When a document is saved with `flatten: false`, both the Widget appearance
@@ -2148,6 +2277,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         console.log(`🧹 [CLEANUP] Removed ${deletedCount} duplicate FreeHand/Stamp annotations overlapping signature widgets`);
                                     }
                                 }
+
                             }
 
                             // ══════════════════════════════════════════════════════════════════
@@ -2436,6 +2566,66 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     console.log('📍 [POSITION LOCK] Delayed capture check (3000ms)...');
                                     captureSignaturePositions();
                                 }, 3000);
+
+                                // ✅ MULTI-PARTY: Restore signature annotations after widget rebuild
+                                // Widget rebuild happens automatically after document load and wipes out signature annotations
+                                // We restore them from capturedSignatureAnnotationsRef which was populated during XFDF import
+                                if (isMultiPartyFlow && capturedSignatureAnnotationsRef.current.size > 0) {
+                                    setTimeout(() => {
+                                        console.log(`🔄 [WIDGET REBUILD] Checking if signature annotations need restoration...`);
+                                        const currentAnnotations = Core.annotationManager.getAnnotationsList();
+                                        const currentSignatureAnnotIds = new Set(
+                                            currentAnnotations
+                                                .filter((a: any) =>
+                                                    a instanceof Core.Annotations.FreeHandAnnotation ||
+                                                    a instanceof Core.Annotations.StampAnnotation
+                                                )
+                                                .map((a: any) => a.Id)
+                                        );
+
+                                        let restoredCount = 0;
+                                        const annotationsToRestore: any[] = [];
+
+                                        capturedSignatureAnnotationsRef.current.forEach((capturedData, annotId) => {
+                                            // If this signature annotation is missing, restore it
+                                            if (!currentSignatureAnnotIds.has(annotId)) {
+                                                console.log(`🔄 [WIDGET REBUILD] Restoring missing signature annotation ${annotId}`);
+                                                annotationsToRestore.push(capturedData.annotation);
+                                                restoredCount++;
+                                            }
+                                        });
+
+                                        if (annotationsToRestore.length > 0) {
+                                            // ✅ CRITICAL: Use the SAME restoration approach as the export process
+                                            // Add annotations one by one with {imported: true} flag
+                                            annotationsToRestore.forEach((annotation: any) => {
+                                                // Prevent signature from being dragged
+                                                annotation.NoMove = true;
+
+                                                // Re-add the annotation using the same method as export restore
+                                                Core.annotationManager.addAnnotation(annotation, { imported: true, isUndoRedo: false });
+                                            });
+
+                                            // Redraw restored annotations
+                                            Core.annotationManager.drawAnnotationsFromList(annotationsToRestore);
+
+                                            // Refresh viewer to show updated widget appearances
+                                            setTimeout(() => {
+                                                try {
+                                                    Core.documentViewer.refreshAll();
+                                                    Core.documentViewer.updateView();
+                                                    console.log(`🎨 [WIDGET REBUILD] Triggered viewer refresh to update widget appearances`);
+                                                } catch (e) {
+                                                    console.warn(`⚠️ [WIDGET REBUILD] Could not trigger viewer refresh:`, e);
+                                                }
+                                            }, 100);
+
+                                            console.log(`✅ [WIDGET REBUILD] Restored ${restoredCount} signature annotations after widget rebuild`);
+                                        } else {
+                                            console.log(`✅ [WIDGET REBUILD] All signature annotations present, no restoration needed`);
+                                        }
+                                    }, 1200); // Run after widget rebuild completes (around 1000ms as per comment in code)
+                                }
 
                                 // ✅ Add listener to detect and prevent signature position changes
                                 // Including cross-page drag tracking with deferred verification
@@ -3357,6 +3547,15 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                             console.log('✅ Setting loading to false');
                             setLoading(false);
+
+                            // ✅ CRITICAL: Delay setting isLoadingInitialDocument to false
+                            // This allows the widget rebuild process to complete first
+                            // Widget rebuild happens async after document load, and we need to protect signatures during that process
+                            setTimeout(() => {
+                                isLoadingInitialDocument.current = false;
+                                console.log('✅ Initial document loading marked as complete (after widget rebuild)');
+                            }, 1000); // Wait for widget rebuild to complete
+
                             if (onDocumentLoaded) {
                                 console.log('📞 Calling onDocumentLoaded callback');
                                 onDocumentLoaded();
@@ -3364,6 +3563,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         } catch (err) {
                             console.error('❌ Error in documentLoaded handler:', err);
                             setLoading(false);
+                            isLoadingInitialDocument.current = false; // ✅ Mark as complete even on error
                             setError('Failed to load document');
                             if (onError) onError('Failed to load document');
                         }
