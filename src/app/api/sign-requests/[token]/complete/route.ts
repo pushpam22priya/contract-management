@@ -173,6 +173,17 @@ export async function PUT(
             version: contractVersion + 1,
         };
 
+        // ✅ SYNC FIX: Also update 'signedPdfBase64' field so contractor UI (which uses Base64) stays in sync
+        try {
+            const pdfBase64 = buffer.toString('base64');
+            if (pdfBase64) {
+                contractUpdate.signedPdfBase64 = pdfBase64;
+                console.log(`🔄 [SignComplete] Synchronized binary pdf to signedPdfBase64 field (${pdfBase64.length} chars)`);
+            }
+        } catch (syncError) {
+            console.warn('⚠️ [SignComplete] Failed to convert binary buffer to base64 for sync:', syncError);
+        }
+
         // Merge field values
         if (fieldValues) {
             contractUpdate.fieldValues = {

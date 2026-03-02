@@ -84,12 +84,25 @@ export async function POST(
             return pc;
         });
 
-        // 5. Build update object
+        // Build contract update object
+        const contractVersion = contract.version || 0;
         const updateData: any = {
             internalSigners: updatedInternalSigners,
             partyCompletions: updatedPartyCompletions,
             updatedAt: now,
+            version: contractVersion + 1,
         };
+
+        // ✅ SYNC FIX: Also update the 'pdf' binary field so download APIs (which use binary) stay in sync
+        try {
+            const buffer = Buffer.from(pdfBase64, 'base64');
+            if (buffer.length > 0) {
+                updateData.pdf = buffer;
+                console.log(`🔄 [InternalSign] Synchronized pdfBase64 to binary pdf field (${buffer.length} bytes)`);
+            }
+        } catch (syncError) {
+            console.warn('⚠️ [InternalSign] Failed to convert pdfBase64 to buffer for binary sync:', syncError);
+        }
 
         // 6. Save PDF and XFDF if provided
         if (pdfBase64) {
@@ -132,10 +145,31 @@ export async function POST(
         }
 
         // 7. Update the contract
+        const newVersion = contractVersion + 1;
         await db.collection('contracts').updateOne(
             { _id: new ObjectId(id) },
             { $set: updateData }
         );
+
+        // ✅ SYNC FIX: Update other pending signature requests with the new version
+        // This prevents external signers from getting a 409 Conflict error
+        // when they submit after an internal party has already signed.
+        try {
+            const updateResult = await db.collection('signature_requests').updateMany(
+                {
+                    contractId: id,
+                    status: 'pending'
+                },
+                {
+                    $set: { contractVersion: newVersion }
+                }
+            );
+            if (updateResult.modifiedCount > 0) {
+                console.log(`🔄 [InternalSign] Updated ${updateResult.modifiedCount} pending external signature requests to version ${newVersion}`);
+            }
+        } catch (syncError) {
+            console.warn('⚠️ [InternalSign] Failed to sync version to signature requests:', syncError);
+        }
 
         console.log(`✅ [InternalSign] Internal signer ${signerEmail} completed for party ${signer.partyId}`);
 

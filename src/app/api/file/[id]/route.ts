@@ -35,11 +35,10 @@ export async function GET(
         let collectionName = 'templates';
         if (type === 'contract') collectionName = 'contracts';
 
-        // Retrieve specifically the binary field
-        // We look for 'pdf' field. For DOCX support in templates, we might need logic, but requirements focus on PDF.
+        // Retrieve specifically the binary fields
         const doc = await db.collection(collectionName).findOne(
             { _id: new ObjectId(id) },
-            { projection: { pdf: 1, docx: 1, fileType: 1 } }
+            { projection: { pdf: 1, docx: 1, fileType: 1, signedPdfBase64: 1 } }
         );
 
         if (!doc) {
@@ -47,8 +46,6 @@ export async function GET(
         }
 
         // Determine which buffer to serve
-        // If query param specifically asks for 'docx', serve that?
-        // Default to PDF.
         const format = searchParams.get('format');
         let buffer: Buffer | null = null;
         let contentType = 'application/pdf';
@@ -60,6 +57,16 @@ export async function GET(
         } else {
             // @ts-ignore
             buffer = doc.pdf ? (doc.pdf.buffer || doc.pdf) : null;
+
+            // ✅ FALLBACK: If binary 'pdf' is missing, try 'signedPdfBase64'
+            if (!buffer && doc.signedPdfBase64) {
+                try {
+                    buffer = Buffer.from(doc.signedPdfBase64, 'base64');
+                    console.log(`🔄 [FileGET] Fallback: Serving from signedPdfBase64 (${buffer.length} bytes)`);
+                } catch (e) {
+                    console.warn('⚠️ [FileGET] Failed to decode signedPdfBase64 fallback:', e);
+                }
+            }
         }
 
         if (!buffer) {
@@ -121,18 +128,56 @@ export async function PUT(
 
         const updateField = (format === 'docx') ? 'docx' : 'pdf';
 
+        // For PDF uploads, also update signedPdfBase64 to keep fields in sync
+        const updateDoc: Record<string, any> = {
+            [updateField]: buffer,
+            updatedAt: new Date().toISOString()
+        };
+
+        if (updateField === 'pdf') {
+            updateDoc.signedPdfBase64 = buffer.toString('base64');
+            console.log(`🔄 [FilePUT] Synchronized uploaded pdf to signedPdfBase64 (${updateDoc.signedPdfBase64.length} chars)`);
+
+            // ✅ VERSIONING: Increment version for contracts when content changes
+            if (type === 'contract') {
+                const contract = await db.collection(collectionName).findOne(
+                    { _id: new ObjectId(id) },
+                    { projection: { version: 1 } }
+                );
+                const currentVersion = contract?.version || 0;
+                updateDoc.version = currentVersion + 1;
+            }
+        }
+
         const result = await db.collection(collectionName).updateOne(
             { _id: new ObjectId(id) },
             {
-                $set: {
-                    [updateField]: buffer,
-                    updatedAt: new Date().toISOString()
-                }
+                $set: updateDoc
             }
         );
 
         if (result.matchedCount === 0) {
             return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+        }
+
+        // ✅ SYNC FIX: If version was incremented, propagate to pending signature requests
+        if (type === 'contract' && updateDoc.version !== undefined) {
+            try {
+                const syncResult = await db.collection('signature_requests').updateMany(
+                    {
+                        contractId: id,
+                        status: 'pending'
+                    },
+                    {
+                        $set: { contractVersion: updateDoc.version }
+                    }
+                );
+                if (syncResult.modifiedCount > 0) {
+                    console.log(`🔄 [FilePUT] Propagated version ${updateDoc.version} to ${syncResult.modifiedCount} pending requests`);
+                }
+            } catch (syncError) {
+                console.warn('⚠️ [FilePUT] Failed to sync version to signature requests:', syncError);
+            }
         }
 
         return NextResponse.json({ success: true, size: buffer.length });

@@ -28,8 +28,10 @@ export async function PATCH(
         };
 
         // Allow updating XFDF data
+        let contentChanged = false;
         if (body.xfdfData !== undefined) {
             updateFields.xfdfData = body.xfdfData;
+            contentChanged = true;
         }
 
         // ✅ FIX: Fetch existing contract to merge formFields and fieldValues
@@ -62,6 +64,7 @@ export async function PATCH(
 
             // Convert map back to array
             updateFields.formFields = Array.from(existingFieldsMap.values());
+            contentChanged = true;
         }
 
         // Allow updating any other contract fields
@@ -95,6 +98,13 @@ export async function PATCH(
                 ...(existingContract?.fieldValues || {}),
                 ...body.fieldValues
             };
+            contentChanged = true;
+        }
+
+        // ✅ VERSIONING: Automatically increment version if content changed
+        if (contentChanged) {
+            const currentVersion = existingContract?.version || 0;
+            updateFields.version = currentVersion + 1;
         }
 
         // Build the update operation
@@ -112,8 +122,29 @@ export async function PATCH(
             return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
         }
 
+        // ✅ SYNC FIX: If version was incremented, propagate to pending signature requests
+        if (updateFields.version !== undefined) {
+            try {
+                const syncResult = await db.collection('signature_requests').updateMany(
+                    {
+                        contractId: id,
+                        status: 'pending'
+                    },
+                    {
+                        $set: { contractVersion: updateFields.version }
+                    }
+                );
+                if (syncResult.modifiedCount > 0) {
+                    console.log(`🔄 [ContractPATCH] Propagated new version ${updateFields.version} to ${syncResult.modifiedCount} pending requests`);
+                }
+            } catch (syncError) {
+                console.warn('⚠️ [ContractPATCH] Failed to sync version to signature requests:', syncError);
+            }
+        }
+
         return NextResponse.json({
             success: true,
+            version: updateFields.version,
             message: 'Contract updated successfully'
         });
 
