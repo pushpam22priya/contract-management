@@ -25,6 +25,7 @@ import SendIcon from '@mui/icons-material/Send';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
 import PersonIcon from '@mui/icons-material/Person';
 import EmailIcon from '@mui/icons-material/Email';
+import SignatureProgressTimeline from '@/components/contracts/SignatureProgressTimeline';
 import AppLayout from '@/components/layout/AppLayout';
 import ContractInformation from '@/components/contracts/ContractInformation';
 import ContractDetailsPanel from '@/components/contracts/ContractDetailsPanel';
@@ -693,17 +694,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                         }}
                                     />
                                 </Box>
-
-                                {/* Subtitle */}
-                                <Typography
-                                    variant="body2"
-                                    sx={{
-                                        color: 'text.secondary',
-                                        fontSize: '0.9rem',
-                                    }}
-                                >
-                                    {contract.description || 'No description provided'}
-                                </Typography>
                             </Box>
                         </Box>
 
@@ -745,213 +735,17 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                     {/* MULTI-PARTY SIGNATURE STATUS */}
                     {/* ═══════════════════════════════════════════════════════════════════════════ */}
                     {isMultiPartyContract && (
-                        <Paper
-                            elevation={0}
-                            sx={{
-                                mt: 2,
-                                p: 2,
-                                border: '1px solid',
-                                borderColor: isFinalized ? 'success.light' : 'divider',
-                                borderRadius: 2,
-                                bgcolor: isFinalized ? 'success.50' : 'background.paper',
-                            }}
-                        >
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                                <Typography variant="subtitle1" fontWeight={600}>
-                                    {isFinalized ? '✅ Contract Finalized' : '📝 Multi-Party Signature Status'}
-                                </Typography>
-                                {currentOrder && !isFinalized && (
-                                    <Chip
-                                        label={`Current Order: ${currentOrder}`}
-                                        size="small"
-                                        sx={{ bgcolor: 'primary.main', color: '#fff', fontWeight: 600 }}
-                                    />
-                                )}
-                                {isFinalized && contract.finalizedAt && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        Finalized on {new Date(contract.finalizedAt).toLocaleDateString()}
-                                    </Typography>
-                                )}
-                            </Box>
-
-                            {/* Signers grouped by order */}
-                            {uniqueOrders.map((order: number) => {
-                                const internalAtOrder = (contract.internalSigners || []).filter((s: any) => s.order === order);
-                                const externalAtOrder = (contract.externalSigners || []).filter((s: any) => s.order === order);
-                                const allAtOrder = [...internalAtOrder, ...externalAtOrder];
-                                const allComplete = allAtOrder.every((s: any) => s.status === 'completed');
-                                const isCurrentOrder = order === currentOrder;
-                                const isPastOrder = currentOrder ? order < currentOrder : false;
-                                const isFutureOrder = currentOrder ? order > currentOrder : true;
-
-                                return (
-                                    <Box
-                                        key={order}
-                                        sx={{
-                                            mb: 2,
-                                            p: 1.5,
-                                            borderRadius: 2,
-                                            border: '1px solid',
-                                            borderColor: allComplete ? 'success.light' : isCurrentOrder ? 'primary.light' : 'grey.300',
-                                            bgcolor: allComplete ? 'success.50' : isCurrentOrder ? 'primary.50' : isFutureOrder ? 'grey.50' : 'background.paper',
-                                        }}
-                                    >
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                            <Chip
-                                                label={`Order ${order}`}
-                                                size="small"
-                                                sx={{
-                                                    bgcolor: allComplete ? 'success.main' : isCurrentOrder ? 'primary.main' : 'grey.500',
-                                                    color: '#fff',
-                                                    fontWeight: 700,
-                                                    fontSize: '0.75rem',
-                                                }}
-                                            />
-                                            {allComplete && (
-                                                <CheckCircleIcon sx={{ color: 'success.main', fontSize: 18 }} />
-                                            )}
-                                            {isCurrentOrder && !allComplete && (
-                                                <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
-                                                    In Progress
-                                                </Typography>
-                                            )}
-                                            {isFutureOrder && (
-                                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                                    Waiting
-                                                </Typography>
-                                            )}
-                                        </Box>
-
-                                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-                                            {allAtOrder.map((signer: any, index: number) => {
-                                                const isInternal = internalAtOrder.includes(signer);
-                                                return (
-                                                    <Box
-                                                        key={signer.token || signer.email || index}
-                                                        sx={{
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: 1,
-                                                            p: 1,
-                                                            borderRadius: 1,
-                                                            bgcolor: signer.status === 'completed' ? 'success.100' : 'background.paper',
-                                                            border: '1px solid',
-                                                            borderColor: signer.status === 'completed' ? 'success.light' : 'grey.200',
-                                                            minWidth: 180,
-                                                        }}
-                                                    >
-                                                        {signer.status === 'completed' ? (
-                                                            <CheckCircleIcon sx={{ color: 'success.main', fontSize: 18 }} />
-                                                        ) : signer.status === 'unlocked' ? (
-                                                            <HourglassEmptyIcon sx={{ color: 'warning.main', fontSize: 18 }} />
-                                                        ) : (
-                                                            <HourglassEmptyIcon sx={{ color: 'grey.400', fontSize: 18 }} />
-                                                        )}
-                                                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                                                                <Chip
-                                                                    label={signer.partyLabel}
-                                                                    size="small"
-                                                                    sx={{
-                                                                        bgcolor: contract.parties?.find((p: any) => p.id === signer.partyId)?.color || '#666',
-                                                                        color: '#fff',
-                                                                        fontWeight: 600,
-                                                                        fontSize: '0.65rem',
-                                                                        height: 18,
-                                                                    }}
-                                                                />
-                                                                <Chip
-                                                                    icon={isInternal ? <PersonIcon sx={{ fontSize: 12 }} /> : <EmailIcon sx={{ fontSize: 12 }} />}
-                                                                    label={isInternal ? 'Internal' : 'External'}
-                                                                    size="small"
-                                                                    sx={{
-                                                                        bgcolor: isInternal ? '#e3f2fd' : '#fff3e0',
-                                                                        color: isInternal ? '#1565c0' : '#e65100',
-                                                                        fontWeight: 500,
-                                                                        fontSize: '0.6rem',
-                                                                        height: 18,
-                                                                        '& .MuiChip-icon': { fontSize: 12 },
-                                                                    }}
-                                                                />
-                                                            </Box>
-                                                            <Typography
-                                                                variant="caption"
-                                                                sx={{
-                                                                    display: 'block',
-                                                                    overflow: 'hidden',
-                                                                    textOverflow: 'ellipsis',
-                                                                    whiteSpace: 'nowrap',
-                                                                    fontWeight: 500,
-                                                                }}
-                                                            >
-                                                                {signer.email}
-                                                            </Typography>
-                                                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                                                                {signer.status === 'completed'
-                                                                    ? `Completed ${signer.completedAt ? new Date(signer.completedAt).toLocaleDateString() : ''}`
-                                                                    : signer.status === 'unlocked'
-                                                                        ? 'Awaiting signature'
-                                                                        : 'Pending unlock'
-                                                                }
-                                                            </Typography>
-                                                        </Box>
-                                                    </Box>
-                                                );
-                                            })}
-                                        </Box>
-                                    </Box>
-                                );
-                            })}
-
-                            <Divider sx={{ my: 2 }} />
-
-                            {/* Finalize / waiting section */}
-                            {!isFinalized && (
-                                <Box>
-                                    {canFinalize ? (
-                                        <Box>
-                                            <Alert severity="success" sx={{ mb: 2 }}>
-                                                <strong>All parties have completed!</strong> You can now finalize this contract.
-                                                Finalizing will mark the contract as active and send a copy to all signers.
-                                            </Alert>
-                                            {finalizeError && (
-                                                <Alert severity="error" sx={{ mb: 2 }}>
-                                                    {finalizeError}
-                                                </Alert>
-                                            )}
-                                            {finalizeSuccess && (
-                                                <Alert severity="success" sx={{ mb: 2 }}>
-                                                    Contract finalized successfully! Emails have been sent to all signers.
-                                                </Alert>
-                                            )}
-                                            <Button
-                                                variant="contained"
-                                                color="primary"
-                                                onClick={handleFinalize}
-                                                disabled={finalizing || finalizeSuccess}
-                                                startIcon={finalizing ? <CircularProgress size={20} color="inherit" /> : <DoneAllIcon />}
-                                                sx={{ fontWeight: 600 }}
-                                            >
-                                                {finalizing ? 'Finalizing...' : 'Finalize Contract'}
-                                            </Button>
-                                        </Box>
-                                    ) : (
-                                        <Alert severity="info">
-                                            {currentOrder
-                                                ? `Waiting for signers at Order ${currentOrder} to complete their fields.`
-                                                : 'Waiting for all parties to complete their fields before finalization.'
-                                            }
-                                        </Alert>
-                                    )}
-                                </Box>
-                            )}
-
-                            {isFinalized && (
-                                <Alert severity="success" icon={<DoneAllIcon />}>
-                                    This contract has been finalized. All signers have received a copy.
-                                </Alert>
-                            )}
-                        </Paper>
+                        <SignatureProgressTimeline
+                            contract={contract}
+                            isFinalized={isFinalized}
+                            canFinalize={canFinalize}
+                            currentOrder={currentOrder}
+                            uniqueOrders={uniqueOrders}
+                            finalizing={finalizing}
+                            finalizeError={finalizeError}
+                            finalizeSuccess={finalizeSuccess}
+                            onFinalize={handleFinalize}
+                        />
                     )}
 
                     {/* Content Grid: Contract Info + Details Panel */}
