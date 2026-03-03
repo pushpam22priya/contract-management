@@ -3,45 +3,70 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { contractService } from '@/services/contractService';
 import { externalSignatureConfig } from '../../config/externalSignature';
-// import { externalSignatureConfig } from '@/config/externalSignature';
 
 /**
- * Custom hook to poll for external signature updates.
- * 
- * Use this on the contracts page to automatically detect when
- * a client has signed a contract.
+ * Custom hook to poll contracts for ANY workflow state change.
+ *
+ * Tracks each contract's `updatedAt` timestamp. When a change is
+ * detected (auto-advance, signer completion, order unlock, etc.)
+ * the `onContractChanged` callback fires so the page can reload.
  */
 export const useSignaturePolling = (
     contractIds: string[],
-    onSignatureComplete: (contractId: string) => void,
+    onContractChanged: (contractId: string) => void,
     enabled: boolean = true
 ) => {
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    /** Map of contractId → last-known updatedAt */
+    const snapshotRef = useRef<Record<string, string | undefined>>({});
 
     const checkSignatures = useCallback(async () => {
-        // console.log('🔄 [SignaturePolling] Checking for signature updates...');
-        // console.log('🔄 [SignaturePolling] Checking', contractIds.length, 'contracts');
-
         for (const contractId of contractIds) {
-            const result = await contractService.checkExternalSignatureStatus(contractId);
-            
-            if (result.success && result.signed) {
-                // console.log('🎉 [SignaturePolling] Signature detected for:', contractId);
-                onSignatureComplete(contractId);
+            try {
+                const result = await contractService.checkExternalSignatureStatus(contractId);
+
+                if (!result.success || !result.contract) continue;
+
+                const freshUpdatedAt = result.contract.updatedAt;
+                const previousUpdatedAt = snapshotRef.current[contractId];
+
+                // First time seeing this contract — just record the snapshot
+                if (previousUpdatedAt === undefined) {
+                    snapshotRef.current[contractId] = freshUpdatedAt;
+                    continue;
+                }
+
+                // Detect any change via updatedAt comparison
+                if (freshUpdatedAt && freshUpdatedAt !== previousUpdatedAt) {
+                    console.log(
+                        `🔄 [SignaturePolling] Change detected for ${contractId} — ` +
+                        `old=${previousUpdatedAt}, new=${freshUpdatedAt}`
+                    );
+                    snapshotRef.current[contractId] = freshUpdatedAt;
+                    onContractChanged(contractId);
+                }
+            } catch (err) {
+                console.warn(`[SignaturePolling] Error checking ${contractId}:`, err);
             }
         }
-    }, [contractIds, onSignatureComplete]);
+    }, [contractIds, onContractChanged]);
+
+    // Clean up stale entries when contractIds changes
+    useEffect(() => {
+        const currentSet = new Set(contractIds);
+        for (const key of Object.keys(snapshotRef.current)) {
+            if (!currentSet.has(key)) {
+                delete snapshotRef.current[key];
+            }
+        }
+    }, [contractIds]);
 
     useEffect(() => {
         if (!enabled || contractIds.length === 0) {
-            console.log('⏸️ [SignaturePolling] Polling disabled or no contracts to check');
             return;
         }
 
-        // console.log('▶️ [SignaturePolling] Starting polling...');
-        // console.log('▶️ [SignaturePolling] Interval:', externalSignatureConfig.settings.pollIntervalMs, 'ms');
-
-        // Initial check
+        // Initial snapshot capture
         checkSignatures();
 
         // Set up interval
@@ -52,7 +77,6 @@ export const useSignaturePolling = (
 
         return () => {
             if (intervalRef.current) {
-                // console.log('⏹️ [SignaturePolling] Stopping polling');
                 clearInterval(intervalRef.current);
             }
         };

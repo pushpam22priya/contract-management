@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { ObjectId } from 'mongodb';
+import { autoAdvanceWorkflow } from '@/lib/workflow/autoAdvance';
 
 export async function POST(
     request: NextRequest,
@@ -173,7 +174,18 @@ export async function POST(
 
         console.log(`✅ [InternalSign] Internal signer ${signerEmail} completed for party ${signer.partyId}`);
 
-        // 8. Check if all signers at current order are complete
+        // 8. Auto-advance to the next signing order if the current one is now complete.
+        //    Returns newly unlocked external signers so the client can email them.
+        let unlockedExternalSigners: { email: string; token: string; name: string; partyLabel: string }[] = [];
+        try {
+            const advanceResult = await autoAdvanceWorkflow(db, id);
+            unlockedExternalSigners = advanceResult.newlyUnlockedExternal;
+        } catch (advanceError) {
+            // Auto-advance failure must never fail the signing response
+            console.error('❌ [InternalSign] Auto-advance error (non-fatal):', advanceError);
+        }
+
+        // 9. Check if all signers at current order are complete (for response metadata)
         const currentOrder = contract.currentSigningOrder;
         const externalSigners = contract.externalSigners || [];
 
@@ -215,6 +227,8 @@ export async function POST(
             partyId: signer.partyId,
             partyLabel: signer.partyLabel,
             currentOrderComplete,
+            // Newly unlocked external signers — client sends signing emails to these
+            unlockedExternalSigners,
         });
 
     } catch (error: any) {

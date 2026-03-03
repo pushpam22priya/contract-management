@@ -11,6 +11,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { ObjectId } from 'mongodb';
+import { autoAdvanceWorkflow } from '@/lib/workflow/autoAdvance';
 
 export async function PUT(
     request: NextRequest,
@@ -326,10 +327,25 @@ export async function PUT(
         console.log(`✅ [SignComplete] Signature completed successfully`);
         console.log(`   New version: ${newVersion}`);
 
+        // Auto-advance to the next signing order for multi-party contracts.
+        // This replaces the manual "Unlock Next Order" action the contractor used to perform.
+        let unlockedExternalSigners: { email: string; token: string; name: string; partyLabel: string }[] = [];
+        if (assignedParty) {
+            try {
+                const advanceResult = await autoAdvanceWorkflow(db, signRequest.contractId);
+                unlockedExternalSigners = advanceResult.newlyUnlockedExternal;
+            } catch (advanceError) {
+                // Auto-advance failure must never fail the signing response
+                console.error('❌ [SignComplete] Auto-advance error (non-fatal):', advanceError);
+            }
+        }
+
         return NextResponse.json({
             success: true,
             message: 'Signature completed',
-            newVersion
+            newVersion,
+            // Newly unlocked external signers — client sends signing emails to these
+            unlockedExternalSigners,
         });
 
     } catch (error: any) {

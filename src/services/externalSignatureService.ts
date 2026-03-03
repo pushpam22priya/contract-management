@@ -463,7 +463,7 @@ export const completeExternalSignature = async (
     fieldValues?: Record<string, string>,
     formFields?: any[],
     isAutoSave?: boolean
-): Promise<{ success: boolean; message?: string; error?: string }> => {
+): Promise<{ success: boolean; message?: string; error?: string; unlockedExternalSigners?: { email: string; token: string; name: string; partyLabel: string }[] }> => {
     try {
         console.log(isAutoSave
             ? '💾 [ExternalSignature] Auto-saving progress...'
@@ -504,7 +504,8 @@ export const completeExternalSignature = async (
             }
         }
 
-        return { success: true };
+        const responseData = await res.json();
+        return { success: true, unlockedExternalSigners: responseData.unlockedExternalSigners };
     } catch (error: any) {
         console.error('Completion error:', error);
         return { success: false, error: error.message };

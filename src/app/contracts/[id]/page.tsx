@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Box,
@@ -23,7 +23,6 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import SendIcon from '@mui/icons-material/Send';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
-import LockOpenIcon from '@mui/icons-material/LockOpen';
 import PersonIcon from '@mui/icons-material/Person';
 import EmailIcon from '@mui/icons-material/Email';
 import AppLayout from '@/components/layout/AppLayout';
@@ -33,12 +32,10 @@ import { contractService } from '@/services/contractService';
 import { apiService } from '@/services/apiService';
 import { templateService } from '@/services/templateService';
 import { sendFinalizedContractEmails } from '@/services/externalSignatureService';
-import { sendSignatureRequestEmail } from '@/services/emailService';
-import { externalSignatureConfig } from '../../../../config/externalSignature';
 import { authService } from '@/services/authService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { Document } from '@/components/contracts/ContractDetailsPanel';
-
+import { useContractPolling } from '@/hooks/useContractPolling';
 import { ContractDetailShimmer } from '@/components/common/ShimmerCard';
 
 export default function ContractViewPage({ params }: { params: Promise<{ id: string }> }) {
@@ -58,11 +55,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const [finalizing, setFinalizing] = useState(false);
     const [finalizeError, setFinalizeError] = useState<string | null>(null);
     const [finalizeSuccess, setFinalizeSuccess] = useState(false);
-
-    // Unlock order state
-    const [unlocking, setUnlocking] = useState(false);
-    const [unlockError, setUnlockError] = useState<string | null>(null);
-    const [unlockSuccess, setUnlockSuccess] = useState<string | null>(null);
 
     // --- ROBUST DATA FETCHING LOGIC ---
     useEffect(() => {
@@ -367,6 +359,51 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
         return () => { isMounted = false; };
     }, [id]);
 
+    // ═══════════════════════════════════════════════════════════════════
+    // REAL-TIME POLLING: Auto-refresh when workflow state changes
+    // ═══════════════════════════════════════════════════════════════════
+    const shouldPoll = !loading && !!contract && (
+        contract.status === 'waiting_for_signature' ||
+        contract.status === 'signed_by_everyone' ||
+        (contract.signatureFlowStatus && contract.signatureFlowStatus !== 'finalized')
+    );
+
+    const handleContractUpdate = useCallback((freshContract: any) => {
+        console.log('🔄 [ContractViewPage] Auto-refresh triggered — updating UI');
+        setContract(freshContract);
+
+        // Rebuild the details/activities from fresh data
+        // (same logic as in loadData, but simplified for the update path)
+        const formatDate = (dateStr: string | undefined): string => {
+            if (!dateStr) return 'Date not available';
+            try {
+                const date = new Date(dateStr);
+                if (isNaN(date.getTime())) return 'Date not available';
+                return date.toLocaleDateString();
+            } catch { return 'Date not available'; }
+        };
+
+        setDetails((prev: any) => ({
+            ...prev,
+            ...freshContract,
+            documents: [{
+                id: 'main-contract',
+                name: `${freshContract.title}.pdf`,
+                size: 'PDF',
+                uploadDate: new Date(freshContract.createdAt).toLocaleDateString(),
+                url: freshContract.fileUrl
+            }],
+        }));
+    }, []);
+
+    useContractPolling(
+        id,
+        contract?.updatedAt,
+        handleContractUpdate,
+        shouldPoll,
+        12000 // 12 seconds
+    );
+
 
     // Handlers
     const handleBack = () => router.back();
@@ -476,87 +513,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     };
 
     /**
-     * Handle unlocking the next signing order
-     */
-    const handleUnlockNextOrder = async () => {
-        if (!contract) return;
-
-        console.log('🔓 [ContractViewPage] Unlocking next order for contract:', contract.id);
-        setUnlocking(true);
-        setUnlockError(null);
-        setUnlockSuccess(null);
-
-        try {
-            const currentUser = authService.getCurrentUser();
-
-            // Call unlock API
-            const response = await fetch(`/api/contracts/${contract.id}/unlock-order`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    unlockedBy: currentUser?.email || 'system',
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to unlock next order');
-            }
-
-            console.log('✅ [ContractViewPage] Order unlocked:', result);
-
-            // Send emails to external signers at the unlocked order
-            if (result.unlockedExternalSigners && result.unlockedExternalSigners.length > 0) {
-                console.log(`📧 [ContractViewPage] Sending emails to ${result.unlockedExternalSigners.length} external signer(s)`);
-
-                const baseUrl = externalSignatureConfig.app.getDynamicBaseUrl();
-                const now = new Date();
-                const expiryDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-                for (const signer of result.unlockedExternalSigners) {
-                    const signingUrl = `${baseUrl}/sign/${signer.token}`;
-                    try {
-                        await sendSignatureRequestEmail({
-                            to_email: signer.email,
-                            contract_title: result.contractTitle || contract.title,
-                            sender_name: currentUser?.email || 'Contract System',
-                            sent_date: now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-                            expiry_date: expiryDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-                            signing_url: signingUrl,
-                        });
-                        console.log(`✅ [ContractViewPage] Email sent to ${signer.email}`);
-                    } catch (emailError) {
-                        console.error(`❌ [ContractViewPage] Failed to send email to ${signer.email}:`, emailError);
-                    }
-                }
-            }
-
-            if (result.allComplete) {
-                setUnlockSuccess('All signing orders completed! You can now finalize the contract.');
-            } else {
-                const internalCount = result.unlockedInternalSigners?.length || 0;
-                const externalCount = result.unlockedExternalSigners?.length || 0;
-                setUnlockSuccess(
-                    `Order ${result.unlockedOrder} unlocked! ${internalCount} internal and ${externalCount} external signer(s) notified.`
-                );
-            }
-
-            // Refresh contract data
-            const updatedContract = await contractService.getContractById(contract.id);
-            if (updatedContract) {
-                setContract(updatedContract);
-            }
-
-        } catch (error: any) {
-            console.error('❌ [ContractViewPage] Unlock error:', error);
-            setUnlockError(error.message || 'Failed to unlock next order');
-        } finally {
-            setUnlocking(false);
-        }
-    };
-
-    /**
      * Check if this is a multi-party contract
      */
     const isMultiPartyContract = (contract?.externalSigners && contract.externalSigners.length > 0) ||
@@ -569,26 +525,13 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
         (contract.externalSigners || []).every((signer: any) => signer.status === 'completed') &&
         (contract.internalSigners || []).every((signer: any) => signer.status === 'completed');
 
-    /**
-     * Check if current order is complete (can unlock next)
-     */
     const currentOrder = contract?.currentSigningOrder;
-    const internalAtCurrentOrder = (contract?.internalSigners || []).filter((s: any) => s.order === currentOrder);
-    const externalAtCurrentOrder = (contract?.externalSigners || []).filter((s: any) => s.order === currentOrder);
-    const currentOrderComplete = currentOrder &&
-        internalAtCurrentOrder.every((s: any) => s.status === 'completed') &&
-        externalAtCurrentOrder.every((s: any) => s.status === 'completed');
 
-    /**
-     * Check if there's a next order to unlock
-     */
     const allOrders = [
         ...(contract?.internalSigners || []).map((s: any) => s.order),
         ...(contract?.externalSigners || []).map((s: any) => s.order),
     ];
     const uniqueOrders = [...new Set(allOrders)].sort((a: number, b: number) => a - b);
-    const nextOrder = currentOrder ? uniqueOrders.find((o: number) => o > currentOrder) : undefined;
-    const canUnlockNextOrder = currentOrderComplete && nextOrder !== undefined;
 
     /**
      * Check if contract can be finalized
@@ -962,39 +905,9 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
                             <Divider sx={{ my: 2 }} />
 
-                            {/* Unlock / Finalize section */}
+                            {/* Finalize / waiting section */}
                             {!isFinalized && (
                                 <Box>
-                                    {/* Unlock next order button */}
-                                    {canUnlockNextOrder && (
-                                        <Box sx={{ mb: 2 }}>
-                                            <Alert severity="info" sx={{ mb: 2 }}>
-                                                <strong>Order {currentOrder} complete!</strong> You can now unlock Order {nextOrder} for the next signers.
-                                            </Alert>
-                                            {unlockError && (
-                                                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setUnlockError(null)}>
-                                                    {unlockError}
-                                                </Alert>
-                                            )}
-                                            {unlockSuccess && (
-                                                <Alert severity="success" sx={{ mb: 2 }} onClose={() => setUnlockSuccess(null)}>
-                                                    {unlockSuccess}
-                                                </Alert>
-                                            )}
-                                            <Button
-                                                variant="contained"
-                                                color="primary"
-                                                onClick={handleUnlockNextOrder}
-                                                disabled={unlocking}
-                                                startIcon={unlocking ? <CircularProgress size={20} color="inherit" /> : <LockOpenIcon />}
-                                                sx={{ fontWeight: 600 }}
-                                            >
-                                                {unlocking ? 'Unlocking...' : `Unlock Order ${nextOrder}`}
-                                            </Button>
-                                        </Box>
-                                    )}
-
-                                    {/* Finalize button */}
                                     {canFinalize ? (
                                         <Box>
                                             <Alert severity="success" sx={{ mb: 2 }}>
@@ -1022,7 +935,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                                 {finalizing ? 'Finalizing...' : 'Finalize Contract'}
                                             </Button>
                                         </Box>
-                                    ) : !canUnlockNextOrder && (
+                                    ) : (
                                         <Alert severity="info">
                                             {currentOrder
                                                 ? `Waiting for signers at Order ${currentOrder} to complete their fields.`

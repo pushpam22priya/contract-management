@@ -635,7 +635,10 @@ class ContractService {
         const contract = await this.getContractById(id);
         return {
             success: true,
-            signed: contract?.status === ContractStatus.SIGNED,
+            signed: contract?.status === ContractStatus.SIGNED ||
+                contract?.status === ContractStatus.SIGNED_BY_EVERYONE,
+            updatedAt: contract?.updatedAt,
+            currentSigningOrder: contract?.currentSigningOrder,
             contract
         };
     }

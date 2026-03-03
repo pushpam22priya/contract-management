@@ -21,7 +21,7 @@ import {
     getSignatureRequestData,
     completeExternalSignature
 } from '@/services/externalSignatureService';
-import { sendSignedCopyEmail } from '@/services/emailService';
+import { sendSignedCopyEmail, sendSignatureRequestEmail } from '@/services/emailService';
 import SignAllDialog from '@/components/contracts/SignAllDialog';
 
 // Dynamically import PDFViewerContainer
@@ -555,6 +555,32 @@ export default function PublicSigningPage() {
                 // Store the signed PDF blob for download
                 setSignedPdfBlob(pdfBlob);
                 setCompleted(true);
+
+                // Send emails to newly unlocked external signers (auto-advance notification)
+                if (result.unlockedExternalSigners?.length > 0 && signatureRequest) {
+                    console.log(`📧 [SignPage] Sending emails to ${result.unlockedExternalSigners.length} newly unlocked external signer(s)...`);
+                    const baseUrl = window.location.origin;
+                    const sentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    const expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    for (const signer of result.unlockedExternalSigners) {
+                        sendSignatureRequestEmail({
+                            to_email: signer.email,
+                            contract_title: signatureRequest.contractTitle,
+                            sender_name: signatureRequest.createdByName || 'Contractor',
+                            sent_date: sentDate,
+                            expiry_date: expiryDate,
+                            signing_url: `${baseUrl}/sign/${signer.token}`,
+                        }).then(emailResult => {
+                            if (emailResult.success) {
+                                console.log(`✅ [SignPage] Email sent to ${signer.email}`);
+                            } else {
+                                console.warn(`⚠️ [SignPage] Email failed for ${signer.email}:`, emailResult.error);
+                            }
+                        }).catch(err => {
+                            console.error(`❌ [SignPage] Email error for ${signer.email}:`, err);
+                        });
+                    }
+                }
 
                 // Send signed copy email to the client (fire-and-forget)
                 // Skip for multi-party flow - the contractor will send finalized emails

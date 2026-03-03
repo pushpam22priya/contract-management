@@ -2,7 +2,7 @@
 
 import { Box, Typography, AlertColor, Paper } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
 import { Contract, ContractStatus } from '@/types/contract';
@@ -13,6 +13,7 @@ import ContractCard from '@/components/contracts/ContractCard';
 import DrawIcon from '@mui/icons-material/Draw';
 import SignaturePadDialog from '@/components/contracts/SignaturePadDialog';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
+import { sendSignatureRequestEmail } from '@/services/emailService';
 import ReusableFilter from '@/components/common/ReusableFilter';
 import { categoryService } from '@/services/categoryService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
@@ -76,6 +77,25 @@ export default function SignaturesPage() {
         loadContracts();
         loadCategories();
     }, []);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // REAL-TIME POLLING: Auto-refresh when new contracts become available
+    // ═══════════════════════════════════════════════════════════════════
+    const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    useEffect(() => {
+        // Don't poll while viewer is open (to avoid refreshing mid-sign)
+        if (viewerOpen) return;
+
+        pollIntervalRef.current = setInterval(() => {
+            loadContracts();
+        }, 12000); // Every 12 seconds
+
+        return () => {
+            if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+            }
+        };
+    }, [viewerOpen]);
 
     const loadCategories = () => {
         const categories = categoryService.getAllCategories();
@@ -254,6 +274,32 @@ export default function SignaturesPage() {
                 const result = await response.json();
 
                 if (result.success) {
+                    // Send emails to newly unlocked external signers (auto-advance notification)
+                    if (result.unlockedExternalSigners?.length > 0) {
+                        console.log(`📧 [SignaturesPage] Sending emails to ${result.unlockedExternalSigners.length} newly unlocked external signer(s)...`);
+                        const baseUrl = window.location.origin;
+                        const sentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                        const expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                        for (const signer of result.unlockedExternalSigners) {
+                            sendSignatureRequestEmail({
+                                to_email: signer.email,
+                                contract_title: selectedContract.title,
+                                sender_name: selectedContract.createdBy,
+                                sent_date: sentDate,
+                                expiry_date: expiryDate,
+                                signing_url: `${baseUrl}/sign/${signer.token}`,
+                            }).then(emailResult => {
+                                if (emailResult.success) {
+                                    console.log(`✅ [SignaturesPage] Email sent to ${signer.email}`);
+                                } else {
+                                    console.warn(`⚠️ [SignaturesPage] Email failed for ${signer.email}:`, emailResult.error);
+                                }
+                            }).catch(err => {
+                                console.error(`❌ [SignaturesPage] Email error for ${signer.email}:`, err);
+                            });
+                        }
+                    }
+
                     showNotification(`Fields for ${internalSigner.partyLabel} completed successfully!`, 'success');
 
                     // ✅ Close the viewer first to prevent stale data display
