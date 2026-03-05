@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import { useRef, useState, useEffect, useMemo } from 'react';
 import BaseDialog from '@/components/common/BaseDialog';
 import ConfirmationDialog from '@/components/common/ConfirmationDialog';
+import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
 import { validatePartyFields } from '@/utils/partyValidation';
 import { PartyConfiguration } from '@/types/template';
 
@@ -357,16 +358,6 @@ export default function DocumentViewerDialog({
         }));
     };
 
-    // Navigate to the first field assigned to the current user's party
-    const navigateToFirstAssignedField = async () => {
-        if (!pdfViewerRef.current) return;
-
-        if (assignedPartyId) {
-            await pdfViewerRef.current.navigateToFirstPartyField([assignedPartyId]);
-        } else if (currentUserRole === 'contractor') {
-            await pdfViewerRef.current.navigateToFirstNonClientField(allClientPartyIds);
-        }
-    };
 
     // ✅ Party validation: detect partially filled parties (same pattern as CreateContractDialog)
     const partyValidationWarning = useMemo(() => {
@@ -799,58 +790,25 @@ export default function DocumentViewerDialog({
                     )}
 
                     {/* ✅ Wrong Party Warning Dialog - for contractor or internal signer trying to edit other party fields */}
-                    {showWrongPartyWarning && (
-                        <Box
-                            sx={{
-                                position: 'fixed',
-                                top: '50%',
-                                left: '50%',
-                                transform: 'translate(-50%, -50%)',
-                                zIndex: 1200,
-                                maxWidth: 420,
-                                minWidth: 340,
-                            }}
-                        >
-                            <Alert
-                                severity="warning"
-                                sx={{
-                                    py: 2,
-                                    px: 2.5,
-                                    boxShadow: 8,
-                                    borderRadius: 2,
-                                    border: '2px solid',
-                                    borderColor: 'warning.main',
-                                }}
-                            >
-                                <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
-                                    {currentUserRole === 'contractor' ? 'Client Party Field' : 'Wrong Party Field'}
-                                </Typography>
-                                <Typography variant="body1" sx={{ mb: 2 }}>
-                                    {currentUserRole === 'contractor'
-                                        ? 'This field is assigned to a client party and cannot be edited by the contractor.'
-                                        : assignedPartyLabel
-                                            ? `You are assigned to fill fields as "${assignedPartyLabel}". This field belongs to another party.`
-                                            : 'This field belongs to another party and cannot be edited by you.'
-                                    }
-                                </Typography>
-                                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                                    Your changes have been automatically reverted. Please only fill the fields that belong to your assigned party.
-                                </Typography>
-                                <Button
-                                    fullWidth
-                                    variant="contained"
-                                    color="warning"
-                                    onClick={() => {
-                                        setShowWrongPartyWarning(false);
-                                        navigateToFirstAssignedField();
-                                    }}
-                                    sx={{ textTransform: 'none', fontWeight: 600 }}
-                                >
-                                    I Understand — Go to My Fields
-                                </Button>
-                            </Alert>
-                        </Box>
-                    )}
+                    <WrongPartyWarningDialog
+                        open={showWrongPartyWarning}
+                        title={currentUserRole === 'contractor' ? 'Client Party Field' : 'Wrong Party Field'}
+                        description={
+                            currentUserRole === 'contractor'
+                                ? 'This field is assigned to a client party and cannot be edited by the contractor.'
+                                : assignedPartyLabel
+                                    ? `You are assigned to fill fields as "${assignedPartyLabel}". This field belongs to another party.`
+                                    : 'This field belongs to another party and cannot be edited by you.'
+                        }
+                        pdfViewerRef={pdfViewerRef}
+                        navigateConfig={
+                            assignedPartyId
+                                ? { type: 'party', partyIds: [assignedPartyId] }
+                                : { type: 'nonClient', excludePartyIds: allClientPartyIds }
+                        }
+                        onClose={() => setShowWrongPartyWarning(false)}
+                        zIndex={1200}
+                    />
                 </Box>
             </Box>
         </BaseDialog>

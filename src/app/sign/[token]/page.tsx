@@ -23,6 +23,7 @@ import {
 } from '@/services/externalSignatureService';
 import { sendSignedCopyEmail, sendSignatureRequestEmail } from '@/services/emailService';
 import SignAllDialog from '@/components/contracts/SignAllDialog';
+import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
 
 // Dynamically import PDFViewerContainer
 const PDFViewerContainer = dynamic(
@@ -81,6 +82,14 @@ export default function PublicSigningPage() {
     const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number } | null>(null);
+
+    // The current user's assigned party IDs (normalised to an array)
+    const userPartyIds = useMemo(() => {
+        if (!signatureRequest?.assignedParty) return [];
+        return Array.isArray(signatureRequest.assignedParty)
+            ? signatureRequest.assignedParty
+            : [signatureRequest.assignedParty];
+    }, [signatureRequest?.assignedParty]);
 
     // Get the user's assigned party label(s) for display
     const userPartyLabels = useMemo(() => {
@@ -144,18 +153,6 @@ export default function PublicSigningPage() {
         }));
     };
 
-    // Navigate to the first field assigned to the current user's party
-    const navigateToFirstAssignedField = async () => {
-        if (!pdfViewerRef.current) return;
-
-        const userPartyIds = Array.isArray(signatureRequest?.assignedParty)
-            ? signatureRequest.assignedParty
-            : signatureRequest?.assignedParty ? [signatureRequest.assignedParty] : [];
-
-        if (userPartyIds.length === 0) return;
-
-        await pdfViewerRef.current.navigateToFirstPartyField(userPartyIds);
-    };
 
     // ✅ Check if ANY other party field has been modified from initial values
     const hasModifiedOtherPartyFields = useMemo(() => {
@@ -799,53 +796,15 @@ export default function PublicSigningPage() {
                 )}
 
                 {/* ✅ Wrong Party Warning Dialog - shows when user edits another party's field or drags a pre-filled signature */}
-                {showWrongPartyWarning && (
-                    <Box
-                        sx={{
-                            position: 'fixed',
-                            top: '50%',
-                            left: '50%',
-                            transform: 'translate(-50%, -50%)',
-                            zIndex: 1100,
-                            maxWidth: 420,
-                            minWidth: 340,
-                        }}
-                    >
-                        <Alert
-                            severity="warning"
-                            sx={{
-                                py: 2,
-                                px: 2.5,
-                                boxShadow: 8,
-                                borderRadius: 2,
-                                border: '2px solid',
-                                borderColor: 'warning.main',
-                            }}
-                        >
-                            <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
-                                Wrong Party Field
-                            </Typography>
-                            <Typography variant="body1" sx={{ mb: 2 }}>
-                                You are assigned to fill fields as <strong>{userPartyLabels}</strong>.
-                            </Typography>
-                            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                                Your changes have been automatically reverted. Please only fill the fields that belong to your assigned party.
-                            </Typography>
-                            <Button
-                                fullWidth
-                                variant="contained"
-                                color="warning"
-                                onClick={() => {
-                                    setShowWrongPartyWarning(false);
-                                    navigateToFirstAssignedField();
-                                }}
-                                sx={{ textTransform: 'none', fontWeight: 600 }}
-                            >
-                                I Understand — Go to My Fields
-                            </Button>
-                        </Alert>
-                    </Box>
-                )}
+                <WrongPartyWarningDialog
+                    open={showWrongPartyWarning}
+                    title="Wrong Party Field"
+                    description={<>You are assigned to fill fields as <strong>{userPartyLabels}</strong>.</>}
+                    pdfViewerRef={pdfViewerRef}
+                    navigateConfig={{ type: 'party', partyIds: userPartyIds }}
+                    onClose={() => setShowWrongPartyWarning(false)}
+                    zIndex={1100}
+                />
 
                 {/* Party Validation Warning Popup */}
                 {partyValidationWarning && !dismissedPartyWarning && (
