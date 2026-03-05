@@ -144,6 +144,19 @@ export default function PublicSigningPage() {
         }));
     };
 
+    // Navigate to the first field assigned to the current user's party
+    const navigateToFirstAssignedField = async () => {
+        if (!pdfViewerRef.current) return;
+
+        const userPartyIds = Array.isArray(signatureRequest?.assignedParty)
+            ? signatureRequest.assignedParty
+            : signatureRequest?.assignedParty ? [signatureRequest.assignedParty] : [];
+
+        if (userPartyIds.length === 0) return;
+
+        await pdfViewerRef.current.navigateToFirstPartyField(userPartyIds);
+    };
+
     // ✅ Check if ANY other party field has been modified from initial values
     const hasModifiedOtherPartyFields = useMemo(() => {
         if (!signatureRequest?.formFields || !signatureRequest?.assignedParty || !initialValuesCapture) {
@@ -557,7 +570,7 @@ export default function PublicSigningPage() {
                 setCompleted(true);
 
                 // Send emails to newly unlocked external signers (auto-advance notification)
-                if (result.unlockedExternalSigners?.length > 0 && signatureRequest) {
+                if (result.unlockedExternalSigners && result.unlockedExternalSigners.length > 0 && signatureRequest) {
                     console.log(`📧 [SignPage] Sending emails to ${result.unlockedExternalSigners.length} newly unlocked external signer(s)...`);
                     const baseUrl = window.location.origin;
                     const sentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -822,10 +835,13 @@ export default function PublicSigningPage() {
                                 fullWidth
                                 variant="contained"
                                 color="warning"
-                                onClick={() => setShowWrongPartyWarning(false)}
+                                onClick={() => {
+                                    setShowWrongPartyWarning(false);
+                                    navigateToFirstAssignedField();
+                                }}
                                 sx={{ textTransform: 'none', fontWeight: 600 }}
                             >
-                                I Understand
+                                I Understand — Go to My Fields
                             </Button>
                         </Alert>
                     </Box>

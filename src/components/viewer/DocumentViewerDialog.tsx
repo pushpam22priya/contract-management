@@ -357,6 +357,17 @@ export default function DocumentViewerDialog({
         }));
     };
 
+    // Navigate to the first field assigned to the current user's party
+    const navigateToFirstAssignedField = async () => {
+        if (!pdfViewerRef.current) return;
+
+        if (assignedPartyId) {
+            await pdfViewerRef.current.navigateToFirstPartyField([assignedPartyId]);
+        } else if (currentUserRole === 'contractor') {
+            await pdfViewerRef.current.navigateToFirstNonClientField(allClientPartyIds);
+        }
+    };
+
     // ✅ Party validation: detect partially filled parties (same pattern as CreateContractDialog)
     const partyValidationWarning = useMemo(() => {
         if (!formFields || !parties) return null;
@@ -829,10 +840,13 @@ export default function DocumentViewerDialog({
                                     fullWidth
                                     variant="contained"
                                     color="warning"
-                                    onClick={() => setShowWrongPartyWarning(false)}
+                                    onClick={() => {
+                                        setShowWrongPartyWarning(false);
+                                        navigateToFirstAssignedField();
+                                    }}
                                     sx={{ textTransform: 'none', fontWeight: 600 }}
                                 >
-                                    I Understand
+                                    I Understand — Go to My Fields
                                 </Button>
                             </Alert>
                         </Box>

@@ -42,7 +42,7 @@ interface PDFViewerContainerProps {
 
 // Import types for multi-party support
 import { PartyConfiguration } from '@/types/template';
-import PDFNavigationButton from './pdfViewer/PDFNavigationButton';
+import PDFNavigationButton, { getFormFieldAnnotations, flashHighlight } from './pdfViewer/PDFNavigationButton';
 import { usePDFAnnotationStore } from './pdfViewer/hooks/usePDFAnnotationStore';
 import { usePDFPropSync } from './pdfViewer/hooks/usePDFPropSync';
 
@@ -75,6 +75,8 @@ export interface PDFViewerHandle {
     applySignatureToAllEmptyFields: () => Promise<number>;
     clearField: (fieldName: string) => boolean;
     restoreFieldValue: (fieldName: string, value: string) => boolean; // Restore a field to a specific value
+    navigateToFirstPartyField: (partyIds: string[]) => Promise<void>;
+    navigateToFirstNonClientField: (excludePartyIds: string[]) => Promise<void>;
     // Multi-party field assignment methods
     assignFieldToParty: (fieldName: string, partyId: string, partyLabel: string, partyColor: string) => boolean;
     getFieldPartyAssignment: (fieldName: string) => { partyId: string; partyLabel: string } | null;
@@ -1598,6 +1600,65 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                 } catch (error) {
                     console.error(`❌ [RESTORE FIELD] Error restoring field ${fieldName}:`, error);
                     return false;
+                }
+            },
+
+            navigateToFirstPartyField: async (partyIds: string[]) => {
+                if (!viewerInstance.current) return;
+                const { Core } = viewerInstance.current;
+                if (!Core) return;
+
+                const annotations = getFormFieldAnnotations(Core, partyIds, 'client');
+                if (annotations.length === 0) return;
+
+                const targetAnnot = annotations[0];
+                const { documentViewer, annotationManager } = Core;
+                try {
+                    const scrollContainer = documentViewer.getScrollViewElement();
+                    if (scrollContainer) scrollContainer.style.scrollBehavior = 'smooth';
+                    annotationManager.deselectAllAnnotations();
+                    if (documentViewer.getCurrentPage() !== targetAnnot.PageNumber) {
+                        documentViewer.setCurrentPage(targetAnnot.PageNumber);
+                        await new Promise(resolve => setTimeout(resolve, 250));
+                    }
+                    annotationManager.selectAnnotation(targetAnnot);
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    annotationManager.jumpToAnnotation(targetAnnot);
+                    flashHighlight(Core, targetAnnot);
+                    setTimeout(() => { if (scrollContainer) scrollContainer.style.scrollBehavior = 'auto'; }, 600);
+                } catch (e) {
+                    console.warn('[NAV] navigateToFirstPartyField failed:', e);
+                }
+            },
+
+            navigateToFirstNonClientField: async (excludePartyIds: string[]) => {
+                if (!viewerInstance.current) return;
+                const { Core } = viewerInstance.current;
+                if (!Core) return;
+
+                const allAnnotations = getFormFieldAnnotations(Core);
+                const targetAnnot = allAnnotations.find((annot: any) => {
+                    const ap = annot.getCustomData('assignedParty');
+                    return !ap || !excludePartyIds.includes(ap);
+                });
+                if (!targetAnnot) return;
+
+                const { documentViewer, annotationManager } = Core;
+                try {
+                    const scrollContainer = documentViewer.getScrollViewElement();
+                    if (scrollContainer) scrollContainer.style.scrollBehavior = 'smooth';
+                    annotationManager.deselectAllAnnotations();
+                    if (documentViewer.getCurrentPage() !== targetAnnot.PageNumber) {
+                        documentViewer.setCurrentPage(targetAnnot.PageNumber);
+                        await new Promise(resolve => setTimeout(resolve, 250));
+                    }
+                    annotationManager.selectAnnotation(targetAnnot);
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    annotationManager.jumpToAnnotation(targetAnnot);
+                    flashHighlight(Core, targetAnnot);
+                    setTimeout(() => { if (scrollContainer) scrollContainer.style.scrollBehavior = 'auto'; }, 600);
+                } catch (e) {
+                    console.warn('[NAV] navigateToFirstNonClientField failed:', e);
                 }
             },
         }));
