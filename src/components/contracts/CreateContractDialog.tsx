@@ -553,8 +553,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 startIcon={<ArrowBack />}
                 // variant="outlined"
                 sx={{
-                    textTransform: 'none',
-                    fontWeight: 600,
+                    padding: '4px 10px',
                     borderRadius: 2,
                 }}
             >
@@ -568,10 +567,8 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                         variant="contained"
                         disabled={!canSave || saving}
                         sx={{
-                            textTransform: 'none',
-                            fontWeight: 600,
                             px: 2,
-                            py: 0.6,
+                            py: 0.5,
                             borderRadius: 2,
                             minWidth: 150,
                             bgcolor: 'primary.main',
@@ -592,10 +589,8 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 onClick={handleReviewClick}
                 disabled={!contractId || saving || !canSave}
                 sx={{
-                    textTransform: 'none',
-                    fontWeight: 600,
                     px: 2,
-                    py: 0.6,
+                    py: 0.5,
                     borderRadius: 2,
                     minWidth: 150,
                     bgcolor: '#2e7d32',
@@ -613,10 +608,8 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 onClick={handleSignatureClick}
                 disabled={!contractId || saving || !canSave}
                 sx={{
-                    textTransform: 'none',
-                    fontWeight: 600,
                     px: 2,
-                    py: 0.6,
+                    py: 0.5,
                     borderRadius: 2,
                     minWidth: 150,
                     bgcolor: '#1565c0',

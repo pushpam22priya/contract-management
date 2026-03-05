@@ -539,8 +539,8 @@ export default function UploadTemplateDialog({
                 onClick={handleBack}
                 startIcon={<ArrowBack />}
                 sx={{
-                    textTransform: 'none',
-                    fontWeight: 600,
+                    padding: '4px 10px',
+                    borderRadius: 2,
                 }}
             >
                 Back
@@ -549,10 +549,9 @@ export default function UploadTemplateDialog({
                 onClick={() => setShowPartyConfigDialog(true)}
                 variant="outlined"
                 sx={{
-                    textTransform: 'none',
-                    fontWeight: 600,
                     px: 2,
                     py: 0.5,
+                    borderRadius: 2,
                 }}
             >
                 {parties.length > 0 ? `${parties.length} Parties` : 'Configure Parties'}
@@ -563,10 +562,8 @@ export default function UploadTemplateDialog({
                 disabled={uploading}
                 startIcon={uploading ? <CircularProgress size={20} color="inherit" /> : null}
                 sx={{
-                    textTransform: 'none',
-                    fontWeight: 600,
                     px: 2,
-                    py: 0.6,
+                    py: 0.5,
                     borderRadius: 2,
                     bgcolor: 'primary.main',
                     boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',

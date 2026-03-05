@@ -540,8 +540,8 @@ export default function EditTemplateDialog({
                 onClick={handleBack}
                 startIcon={<ArrowBack />}
                 sx={{
-                    textTransform: 'none',
-                    fontWeight: 600,
+                    padding: '4px 10px',
+                    borderRadius: 2,
                 }}
             >
                 Back
@@ -552,10 +552,8 @@ export default function EditTemplateDialog({
                 disabled={updating}
                 startIcon={updating ? <CircularProgress size={20} color="inherit" /> : null}
                 sx={{
-                    textTransform: 'none',
-                    fontWeight: 600,
                     px: 2,
-                    py: 0.6,
+                    py: 0.5,
                     borderRadius: 2,
                     bgcolor: 'primary.main',
                     boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
