@@ -8,7 +8,8 @@
  * - Internal users: See the contract in their Signatures page
  * - External clients: Receive email with signing link
  *
- * The contractor manually unlocks each order after the previous one completes.
+ * Order is auto-assigned based on position in the new assignments list.
+ * Drag-and-drop reordering is supported in the new assignments section.
  */
 
 import { useState, useEffect } from 'react';
@@ -28,7 +29,6 @@ import {
     List,
     ListItem,
     ListItemText,
-    ListItemSecondaryAction,
     Paper,
     ToggleButton,
     ToggleButtonGroup,
@@ -37,15 +37,13 @@ import {
 import {
     Send,
     CheckCircle,
-    ContentCopy,
     Add,
     Delete,
     Person,
     Email,
     BusinessCenter,
     Groups,
-    ArrowUpward,
-    ArrowDownward,
+    DragIndicator,
 } from '@mui/icons-material';
 import BaseDialog from '@/components/common/BaseDialog';
 import { PartyConfiguration } from '@/types/template';
@@ -89,10 +87,13 @@ const MultiPartySignatureDialog = ({
     const [email, setEmail] = useState('');
     const [name, setName] = useState('');
     const [selectedUser, setSelectedUser] = useState<RegisteredUser | null>(null);
-    const [order, setOrder] = useState<number>(1);
 
     // Assignments list
     const [assignments, setAssignments] = useState<SignerAssignment[]>([]);
+
+    // Drag-and-drop state
+    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
     // Registered users for internal signer dropdown
     const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>([]);
@@ -108,7 +109,7 @@ const MultiPartySignatureDialog = ({
         if (open) {
             loadRegisteredUsers();
         }
-    }, [open]);
+    }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadRegisteredUsers = async () => {
         setLoadingUsers(true);
@@ -156,33 +157,20 @@ const MultiPartySignatureDialog = ({
         p => !allAssignedPartyIds.includes(p.id) && !contractorFilledPartyIds.includes(p.id)
     );
 
-    // Calculate next order number
-    const getNextOrder = (): number => {
-        const existingOrders = [
-            ...existingExternalSigners.map(s => s.order),
-            ...existingInternalSigners.map(s => s.order),
-            ...assignments.map(a => a.order),
-        ].filter(o => o !== undefined);
-        return existingOrders.length > 0 ? Math.max(...existingOrders) + 1 : 1;
-    };
-
-    // Reset form when party is selected
-    useEffect(() => {
-        if (selectedPartyId && !order) {
-            setOrder(getNextOrder());
-        }
-    }, [selectedPartyId]);
+    // Max order among already-committed signers — new assignments continue from here
+    const existingMaxOrder = [...existingExternalSigners, ...existingInternalSigners]
+        .reduce((max, s) => Math.max(max, s.order ?? 0), 0);
 
     /**
      * Validate email format
      */
-    const isValidEmail = (email: string): boolean => {
+    const isValidEmail = (emailVal: string): boolean => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
+        return emailRegex.test(emailVal);
     };
 
     /**
-     * Add a new assignment
+     * Add a new assignment (order is determined by position in the list)
      */
     const handleAddAssignment = () => {
         if (!selectedPartyId) {
@@ -206,11 +194,6 @@ const MultiPartySignatureDialog = ({
             }
         }
 
-        if (!order || order < 1) {
-            setError('Please enter a valid order number (1 or higher)');
-            return;
-        }
-
         const party = parties.find(p => p.id === selectedPartyId);
         if (!party) return;
 
@@ -222,7 +205,7 @@ const MultiPartySignatureDialog = ({
             email: signerType === 'external' ? email.trim() : selectedUser?.email,
             name: signerType === 'external' ? name.trim() || undefined : selectedUser?.name,
             userId: signerType === 'internal' ? selectedUser?._id : undefined,
-            order: order,
+            order: 0, // placeholder; real order computed from list position at submit
         };
 
         setAssignments([...assignments, newAssignment]);
@@ -233,7 +216,6 @@ const MultiPartySignatureDialog = ({
         setEmail('');
         setName('');
         setSelectedUser(null);
-        setOrder(getNextOrder() + 1);
         setError(null);
     };
 
@@ -244,17 +226,40 @@ const MultiPartySignatureDialog = ({
         setAssignments(assignments.filter(a => a.id !== id));
     };
 
-    /**
-     * Change order of an assignment
-     */
-    const handleChangeOrder = (id: string, newOrder: number) => {
-        setAssignments(assignments.map(a =>
-            a.id === id ? { ...a, order: newOrder } : a
-        ));
+    // ── Drag-and-drop handlers ────────────────────────────────────────────────
+
+    const handleDragStart = (index: number) => {
+        setDraggedIndex(index);
     };
 
+    const handleDragOver = (e: React.DragEvent, index: number) => {
+        e.preventDefault();
+        setDragOverIndex(index);
+    };
+
+    const handleDrop = (_e: React.DragEvent, dropIndex: number) => {
+        if (draggedIndex === null || draggedIndex === dropIndex) {
+            setDraggedIndex(null);
+            setDragOverIndex(null);
+            return;
+        }
+        const reordered = [...assignments];
+        const [moved] = reordered.splice(draggedIndex, 1);
+        reordered.splice(dropIndex, 0, moved);
+        setAssignments(reordered);
+        setDraggedIndex(null);
+        setDragOverIndex(null);
+    };
+
+    const handleDragEnd = () => {
+        setDraggedIndex(null);
+        setDragOverIndex(null);
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
-     * Handle form submission
+     * Handle form submission — injects computed orders before calling onSubmit
      */
     const handleSubmit = async () => {
         if (assignments.length === 0) {
@@ -266,7 +271,12 @@ const MultiPartySignatureDialog = ({
         setError(null);
 
         try {
-            const result = await onSubmit(assignments);
+            // Assign final order numbers based on list position
+            const assignmentsWithOrders = assignments.map((a, i) => ({
+                ...a,
+                order: existingMaxOrder + i + 1,
+            }));
+            const result = await onSubmit(assignmentsWithOrders);
 
             if (result.success) {
                 setSuccess(true);
@@ -290,10 +300,11 @@ const MultiPartySignatureDialog = ({
         setEmail('');
         setName('');
         setSelectedUser(null);
-        setOrder(1);
         setError(null);
         setSuccess(false);
         setLoading(false);
+        setDraggedIndex(null);
+        setDragOverIndex(null);
         onClose();
     };
 
@@ -313,10 +324,7 @@ const MultiPartySignatureDialog = ({
         return party?.label || partyId;
     };
 
-    // Sort assignments by order for display
-    const sortedAssignments = [...assignments].sort((a, b) => a.order - b.order);
-
-    // Combine existing and new for display
+    // Combine existing signers for display
     const allExistingSigners = [
         ...existingInternalSigners.map(s => ({
             partyId: s.partyId,
@@ -503,7 +511,7 @@ const MultiPartySignatureDialog = ({
                                 </Typography>
                             </Box>
 
-                            {/* Row 1: Party Selection and Order */}
+                            {/* Row 1: Party Selection */}
                             <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
                                 <FormControl size="small" sx={{ flex: '1 1 200px', minWidth: 150 }}>
                                     <InputLabel>Party</InputLabel>
@@ -532,17 +540,6 @@ const MultiPartySignatureDialog = ({
                                         ))}
                                     </Select>
                                 </FormControl>
-
-                                <TextField
-                                    size="small"
-                                    label="Order"
-                                    type="number"
-                                    value={order}
-                                    onChange={(e) => setOrder(parseInt(e.target.value) || 1)}
-                                    inputProps={{ min: 1 }}
-                                    sx={{ width: 80, '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
-                                    disabled={loading}
-                                />
                             </Box>
 
                             {/* Row 2: Type Selection */}
@@ -553,7 +550,7 @@ const MultiPartySignatureDialog = ({
                                 <ToggleButtonGroup
                                     value={signerType}
                                     exclusive
-                                    onChange={(e, value) => value && setSignerType(value)}
+                                    onChange={(_e, value) => value && setSignerType(value)}
                                     size="small"
                                     sx={{ bgcolor: '#fff' }}
                                 >
@@ -576,7 +573,7 @@ const MultiPartySignatureDialog = ({
                                         options={registeredUsers}
                                         getOptionLabel={(option) => option.name ? `${option.name} (${option.email})` : option.email}
                                         value={selectedUser}
-                                        onChange={(e, value) => setSelectedUser(value)}
+                                        onChange={(_e, value) => setSelectedUser(value)}
                                         loading={loadingUsers}
                                         sx={{ flex: '1 1 300px', minWidth: 250 }}
                                         renderInput={(params) => (
@@ -664,7 +661,7 @@ const MultiPartySignatureDialog = ({
                     ) : null}
 
                     {/* New Assignments List */}
-                    {sortedAssignments.length > 0 && (
+                    {assignments.length > 0 && (
                         <Paper
                             elevation={0}
                             sx={{
@@ -680,59 +677,82 @@ const MultiPartySignatureDialog = ({
                                     New Assignments
                                 </Typography>
                                 <Chip
-                                    label={sortedAssignments.length}
+                                    label={assignments.length}
                                     size="small"
                                     sx={{ bgcolor: 'primary.main', color: '#fff', fontWeight: 700, height: 20 }}
                                 />
+                                <Typography variant="caption" color="text.disabled" sx={{ ml: 'auto' }}>
+                                    Drag to reorder
+                                </Typography>
                             </Box>
 
-                            <List dense>
-                                {sortedAssignments.map((assignment, index) => (
-                                    <ListItem
-                                        key={assignment.id}
-                                        divider={index < sortedAssignments.length - 1}
-                                        sx={{ py: 1 }}
-                                    >
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 2 }}>
-                                            <Chip
-                                                label={`#${assignment.order}`}
-                                                size="small"
-                                                sx={{ bgcolor: 'grey.700', color: '#fff', fontWeight: 700, height: 22, minWidth: 32 }}
+                            <List dense disablePadding>
+                                {assignments.map((assignment, index) => {
+                                    const computedOrder = existingMaxOrder + index + 1;
+                                    const isDragging = draggedIndex === index;
+                                    const isOver = dragOverIndex === index && draggedIndex !== index;
+                                    return (
+                                        <ListItem
+                                            key={assignment.id}
+                                            divider={index < assignments.length - 1}
+                                            draggable
+                                            onDragStart={() => handleDragStart(index)}
+                                            onDragOver={(e) => handleDragOver(e, index)}
+                                            onDrop={(e) => handleDrop(e, index)}
+                                            onDragEnd={handleDragEnd}
+                                            sx={{
+                                                py: 1,
+                                                cursor: 'grab',
+                                                opacity: isDragging ? 0.35 : 1,
+                                                borderTop: isOver ? '2px solid' : undefined,
+                                                borderTopColor: isOver ? 'primary.main' : undefined,
+                                                transition: 'opacity 0.15s',
+                                            }}
+                                        >
+                                            <DragIndicator
+                                                sx={{ color: 'grey.400', fontSize: 20, mr: 0.5, flexShrink: 0 }}
                                             />
-                                            <Chip
-                                                label={assignment.partyLabel}
-                                                size="small"
-                                                sx={{
-                                                    bgcolor: getPartyColor(assignment.partyId),
-                                                    color: '#fff',
-                                                    fontWeight: 600,
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 2 }}>
+                                                <Chip
+                                                    label={`#${computedOrder}`}
+                                                    size="small"
+                                                    sx={{ bgcolor: 'grey.700', color: '#fff', fontWeight: 700, height: 22, minWidth: 32 }}
+                                                />
+                                                <Chip
+                                                    label={assignment.partyLabel}
+                                                    size="small"
+                                                    sx={{
+                                                        bgcolor: getPartyColor(assignment.partyId),
+                                                        color: '#fff',
+                                                        fontWeight: 600,
+                                                    }}
+                                                />
+                                            </Box>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mr: 1 }}>
+                                                {assignment.type === 'internal' ? (
+                                                    <Chip
+                                                        icon={<Person sx={{ fontSize: 14 }} />}
+                                                        label="Internal"
+                                                        size="small"
+                                                        sx={{ bgcolor: '#e3f2fd', color: '#1565c0', fontWeight: 500, height: 22 }}
+                                                    />
+                                                ) : (
+                                                    <Chip
+                                                        icon={<Email sx={{ fontSize: 14 }} />}
+                                                        label="External"
+                                                        size="small"
+                                                        sx={{ bgcolor: '#fff3e0', color: '#e65100', fontWeight: 500, height: 22 }}
+                                                    />
+                                                )}
+                                            </Box>
+                                            <ListItemText
+                                                primary={assignment.email}
+                                                secondary={assignment.name || 'No name'}
+                                                slotProps={{
+                                                    primary: { sx: { fontWeight: 500, fontSize: '0.9rem' } },
+                                                    secondary: { sx: { fontSize: '0.75rem' } },
                                                 }}
                                             />
-                                        </Box>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mr: 1 }}>
-                                            {assignment.type === 'internal' ? (
-                                                <Chip
-                                                    icon={<Person sx={{ fontSize: 14 }} />}
-                                                    label="Internal"
-                                                    size="small"
-                                                    sx={{ bgcolor: '#e3f2fd', color: '#1565c0', fontWeight: 500, height: 22 }}
-                                                />
-                                            ) : (
-                                                <Chip
-                                                    icon={<Email sx={{ fontSize: 14 }} />}
-                                                    label="External"
-                                                    size="small"
-                                                    sx={{ bgcolor: '#fff3e0', color: '#e65100', fontWeight: 500, height: 22 }}
-                                                />
-                                            )}
-                                        </Box>
-                                        <ListItemText
-                                            primary={assignment.email}
-                                            secondary={assignment.name || 'No name'}
-                                            primaryTypographyProps={{ fontWeight: 500, fontSize: '0.9rem' }}
-                                            secondaryTypographyProps={{ fontSize: '0.75rem' }}
-                                        />
-                                        <ListItemSecondaryAction>
                                             <IconButton
                                                 edge="end"
                                                 onClick={() => handleRemoveAssignment(assignment.id)}
@@ -742,15 +762,15 @@ const MultiPartySignatureDialog = ({
                                             >
                                                 <Delete />
                                             </IconButton>
-                                        </ListItemSecondaryAction>
-                                    </ListItem>
-                                ))}
+                                        </ListItem>
+                                    );
+                                })}
                             </List>
                         </Paper>
                     )}
 
                     {/* Empty State */}
-                    {sortedAssignments.length === 0 && availableParties.length > 0 && (
+                    {assignments.length === 0 && availableParties.length > 0 && (
                         <Paper
                             variant="outlined"
                             sx={{

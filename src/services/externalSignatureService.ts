@@ -556,9 +556,21 @@ export const submitForMixedSignature = async (
 
         console.log(`   Internal: ${internalAssignments.length}, External: ${externalAssignments.length}`);
 
-        // Find minimum order (first signers to act)
+        // Find minimum order among the new assignments
         const minOrder = Math.min(...assignments.map(a => a.order));
         console.log(`   Starting order: ${minOrder}`);
+
+        // Determine if this is the very first assignment batch or a subsequent round.
+        // If existing signers are already present the auto-advance workflow is already
+        // running — new signers must start as 'pending' so they don't get unlocked
+        // prematurely (auto-advance will unlock them when their order is reached).
+        const isFirstBatch =
+            (contract.internalSigners?.length ?? 0) === 0 &&
+            (contract.externalSigners?.length ?? 0) === 0;
+
+        const shouldUnlock = (order: number) => isFirstBatch && order === minOrder;
+
+        console.log(`   First batch: ${isFirstBatch}`);
 
         // Build internal signers array
         const newInternalSigners: InternalSigner[] = internalAssignments.map(a => ({
@@ -568,9 +580,9 @@ export const submitForMixedSignature = async (
             partyId: a.partyId,
             partyLabel: a.partyLabel,
             order: a.order,
-            status: a.order === minOrder ? 'unlocked' : 'pending',
+            status: shouldUnlock(a.order) ? 'unlocked' : 'pending',
             assignedAt: now,
-            unlockedAt: a.order === minOrder ? now : undefined,
+            unlockedAt: shouldUnlock(a.order) ? now : undefined,
         }));
 
         // Build external signers array and create signature requests
@@ -616,8 +628,9 @@ export const submitForMixedSignature = async (
 
             console.log(`✅ [MixedSignature] Signature request created for ${assignment.email}`);
 
-            // Only send email if it's their turn (order === minOrder)
-            if (assignment.order === minOrder) {
+            // Only send email immediately if this is the first batch and it's their turn.
+            // Subsequent-round signers stay pending; auto-advance emails them when unlocked.
+            if (shouldUnlock(assignment.order)) {
                 try {
                     console.log(`📧 [MixedSignature] Sending email to ${assignment.email} (order ${assignment.order})...`);
                     await sendSignatureRequestEmail({
@@ -633,7 +646,7 @@ export const submitForMixedSignature = async (
                     console.error(`❌ [MixedSignature] Email error for ${assignment.email}:`, emailError);
                 }
             } else {
-                console.log(`⏳ [MixedSignature] Email deferred for ${assignment.email} (order ${assignment.order}, waiting for order ${minOrder})`);
+                console.log(`⏳ [MixedSignature] Email deferred for ${assignment.email} (order ${assignment.order}, waiting for prior orders to complete)`);
             }
 
             newExternalSigners.push({
@@ -643,9 +656,9 @@ export const submitForMixedSignature = async (
                 partyLabel: assignment.partyLabel,
                 order: assignment.order,
                 token,
-                status: assignment.order === minOrder ? 'unlocked' : 'pending',
+                status: shouldUnlock(assignment.order) ? 'unlocked' : 'pending',
                 sentAt: now,
-                unlockedAt: assignment.order === minOrder ? now : undefined,
+                unlockedAt: shouldUnlock(assignment.order) ? now : undefined,
             });
         }
 
@@ -656,7 +669,7 @@ export const submitForMixedSignature = async (
             order: a.order,
             assigneeType: a.type,
             assigneeEmail: a.email,
-            status: a.order === minOrder ? 'unlocked' : 'pending',
+            status: shouldUnlock(a.order) ? 'unlocked' : 'pending',
             isContractor: false,
         }));
 
@@ -667,11 +680,18 @@ export const submitForMixedSignature = async (
             ...newPartyCompletions,
         ];
 
-        // Update contract with all tracking data
+        // Update contract with all tracking data.
+        // For subsequent rounds, preserve the existing currentSigningOrder so the
+        // auto-advance workflow continues from where it left off rather than jumping
+        // ahead to the new batch's min order.
+        const currentSigningOrder = isFirstBatch
+            ? minOrder
+            : (contract.currentSigningOrder ?? minOrder);
+
         const contractUpdate = {
             status: 'waiting_for_signature',
             signatureFlowStatus: 'pending_signatures',
-            currentSigningOrder: minOrder,
+            currentSigningOrder,
             internalSigners: [
                 ...(contract.internalSigners || []),
                 ...newInternalSigners,
