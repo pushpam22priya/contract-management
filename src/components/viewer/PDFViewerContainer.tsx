@@ -45,6 +45,7 @@ import { PartyConfiguration } from '@/types/template';
 import PDFNavigationButton, { getFormFieldAnnotations, flashHighlight } from './pdfViewer/PDFNavigationButton';
 import { usePDFAnnotationStore } from './pdfViewer/hooks/usePDFAnnotationStore';
 import { usePDFPropSync } from './pdfViewer/hooks/usePDFPropSync';
+import { installApryseErrorSuppressors } from './pdfViewer/apryseErrorSuppressors';
 
 // Extended FormFieldDefinition with party assignment
 export interface FormFieldDefinitionWithParty {
@@ -1769,6 +1770,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                     console.log('✅ WebViewer instance created');
                     viewerInstance.current = instance;
+                    installApryseErrorSuppressors();
 
                     // Store editableFieldMode on instance for access in event handlers
                     (instance as any).editableFieldMode = editableFieldMode;
