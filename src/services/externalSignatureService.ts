@@ -561,16 +561,24 @@ export const submitForMixedSignature = async (
         console.log(`   Starting order: ${minOrder}`);
 
         // Determine if this is the very first assignment batch or a subsequent round.
-        // If existing signers are already present the auto-advance workflow is already
-        // running — new signers must start as 'pending' so they don't get unlocked
-        // prematurely (auto-advance will unlock them when their order is reached).
         const isFirstBatch =
             (contract.internalSigners?.length ?? 0) === 0 &&
             (contract.externalSigners?.length ?? 0) === 0;
 
-        const shouldUnlock = (order: number) => isFirstBatch && order === minOrder;
+        // The effective current signing order after this update.
+        // - First batch: starts at the lowest new order.
+        // - Subsequent batch: preserve the existing currentSigningOrder (auto-advance owns
+        //   the pointer), but if it is null (all prior orders completed) fall back to the
+        //   lowest new order so the new signers start immediately.
+        const effectiveCurrentOrder = isFirstBatch
+            ? minOrder
+            : (contract.currentSigningOrder ?? minOrder);
 
-        console.log(`   First batch: ${isFirstBatch}`);
+        // A new signer should be immediately unlocked (and emailed) when their order
+        // matches the effective current order — meaning it is already their turn.
+        const shouldUnlock = (order: number) => order === effectiveCurrentOrder;
+
+        console.log(`   First batch: ${isFirstBatch}, effective current order: ${effectiveCurrentOrder}`);
 
         // Build internal signers array
         const newInternalSigners: InternalSigner[] = internalAssignments.map(a => ({
@@ -680,18 +688,10 @@ export const submitForMixedSignature = async (
             ...newPartyCompletions,
         ];
 
-        // Update contract with all tracking data.
-        // For subsequent rounds, preserve the existing currentSigningOrder so the
-        // auto-advance workflow continues from where it left off rather than jumping
-        // ahead to the new batch's min order.
-        const currentSigningOrder = isFirstBatch
-            ? minOrder
-            : (contract.currentSigningOrder ?? minOrder);
-
         const contractUpdate = {
             status: 'waiting_for_signature',
             signatureFlowStatus: 'pending_signatures',
-            currentSigningOrder,
+            currentSigningOrder: effectiveCurrentOrder,
             internalSigners: [
                 ...(contract.internalSigners || []),
                 ...newInternalSigners,
