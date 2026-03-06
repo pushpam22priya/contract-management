@@ -29,6 +29,8 @@ interface BaseDialogProps {
     open: boolean;
     onClose: () => void;
     title: string;
+    /** Optional extra content rendered in the header bar, between the title and the close button */
+    titleExtra?: React.ReactNode;
     children: React.ReactNode;
     actions?: React.ReactNode;
     maxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
@@ -44,6 +46,7 @@ export default function BaseDialog({
     open,
     onClose,
     title,
+    titleExtra,
     children,
     actions,
     maxWidth = 'sm',
@@ -117,6 +120,11 @@ export default function BaseDialog({
                 >
                     {title}
                 </Typography>
+                {titleExtra && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, ml: 2 }}>
+                        {titleExtra}
+                    </Box>
+                )}
                 <IconButton
                     onClick={onClose}
                     sx={{

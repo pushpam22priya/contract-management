@@ -41,15 +41,18 @@ export default function SignaturesPage() {
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
 
     // ✅ Get the current user's internal signer assignment for the selected contract
+    //    Includes both 'unlocked' (active signing) and 'completed' (view-only after submission)
     const currentUserInternalSigner = useMemo(() => {
         const currentUser = authService.getCurrentUser();
         if (!currentUser || !selectedContract?.internalSigners) return null;
 
-        const signer = selectedContract.internalSigners.find(
-            s => s.email === currentUser.email && s.status === 'unlocked'
-        );
-        return signer || null;
+        return selectedContract.internalSigners.find(
+            s => s.email === currentUser.email && (s.status === 'unlocked' || s.status === 'completed')
+        ) || null;
     }, [selectedContract]);
+
+    // True when the current user already submitted their part — open viewer in read-only mode
+    const isInternalSignerCompleted = currentUserInternalSigner?.status === 'completed';
 
     // ✅ Get the party configuration for the internal signer's assigned party
     const assignedPartyConfig = useMemo(() => {
@@ -124,22 +127,18 @@ export default function SignaturesPage() {
 
         const allContracts = await contractService.getAllContracts();
 
-        // Filter contracts waiting for signature by current user
+        // Filter contracts assigned to current user for signature
         const assignedContracts = allContracts.filter(c => {
-            // Must be waiting for signature
-            if (c.status !== ContractStatus.WAITING_FOR_SIGNATURE) {
-                return false;
-            }
-
-            // Check 1: Legacy single-signer flow (c.signer?.email)
-            if (c.signer?.email === currentUser.email) {
+            // Check 1: Legacy single-signer flow — only while contract is waiting for signature
+            if (c.signer?.email === currentUser.email && c.status === ContractStatus.WAITING_FOR_SIGNATURE) {
                 return true;
             }
 
-            // Check 2: Multi-party internal signer with status 'unlocked'
+            // Check 2: Multi-party internal signer — always show once unlocked or completed,
+            // regardless of overall contract status (stays visible even after everyone signs)
             const internalSigners = c.internalSigners || [];
             const isInternalSigner = internalSigners.some(
-                s => s.email === currentUser.email && s.status === 'unlocked'
+                s => s.email === currentUser.email && (s.status === 'unlocked' || s.status === 'completed')
             );
             if (isInternalSigner) {
                 return true;
@@ -184,6 +183,13 @@ export default function SignaturesPage() {
      */
     const showNotification = (message: string, severity: AlertColor = 'success') => {
         setSnackbar({ open: true, message, severity });
+    };
+
+    /**
+     * Download contract PDF via the existing download API
+     */
+    const handleDownload = (id: string) => {
+        window.open(`/api/contracts/${id}/download`, '_blank');
     };
 
     /**
@@ -460,6 +466,7 @@ export default function SignaturesPage() {
                                     key={contract.id}
                                     contract={contract}
                                     onView={handleView}
+                                    onDownload={handleDownload}
                                 />
                             ))
                         )}
@@ -505,17 +512,19 @@ export default function SignaturesPage() {
                         // ✅ CRITICAL: Load XFDF to display form fields and annotations
                         initialXfdf={selectedContract.xfdfData}
                         contractId={selectedContract.id}
-                        onSave={handleSaveSignature}
-                        clientSigningMode={true}
+                        // Read-only after the user has already submitted their part
+                        readOnly={isInternalSignerCompleted}
+                        onSave={isInternalSignerCompleted ? undefined : handleSaveSignature}
+                        clientSigningMode={!isInternalSignerCompleted}
                         currentUserRole="client"
                         // Use contract's formFields (with saved ReadOnly flags)
                         formFields={selectedContract.formFields}
-                        // ✅ CRITICAL: External signers can only edit empty fields, filled fields are read-only
-                        editableFieldMode="empty-only"
+                        // Completed signers are view-only; active signers can only edit empty fields
+                        editableFieldMode={isInternalSignerCompleted ? 'none' : 'empty-only'}
                         // ✅ Pass parties for party validation (must complete all fields of a party)
                         parties={selectedContract.parties}
                         // ✅ Show navigation button so internal signer can jump between their assigned fields
-                        showAnnotationNavigation={true}
+                        showAnnotationNavigation={!isInternalSignerCompleted}
                         // ✅ Pass assigned party info for internal signers
                         assignedPartyId={currentUserInternalSigner?.partyId}
                         assignedPartyLabel={currentUserInternalSigner?.partyLabel || assignedPartyConfig?.label}

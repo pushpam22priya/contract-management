@@ -648,6 +648,33 @@ export default function DocumentViewerDialog({
             open={open}
             onClose={handleCloseAttempt}
             title={title || fileName || 'Document Viewer'}
+            titleExtra={assignedPartyId && assignedPartyLabel ? (
+                <>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                        Your fields:
+                    </Typography>
+                    <Chip
+                        label={assignedPartyLabel}
+                        size="small"
+                        sx={{
+                            ml: 0.75,
+                            bgcolor: assignedPartyColor || '#1976d2',
+                            color: '#fff',
+                            fontWeight: 600,
+                            fontSize: '0.75rem',
+                        }}
+                    />
+                    {!hasFilledAllAssignedFields && unfilledFieldCount > 0 ? (
+                        <Typography variant="caption" sx={{ ml: 0.75, color: 'warning.main', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                            ({unfilledFieldCount} field{unfilledFieldCount > 1 ? 's' : ''} remaining)
+                        </Typography>
+                    ) : hasFilledAllAssignedFields ? (
+                        <Typography variant="caption" sx={{ ml: 0.75, color: 'success.main', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                            (All fields complete)
+                        </Typography>
+                    ) : null}
+                </>
+            ) : undefined}
             maxWidth="lg"
             fullWidth
             fullScreen
@@ -655,45 +682,6 @@ export default function DocumentViewerDialog({
             actions={dialogActions}
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                {/* ✅ Party Assignment Header - shows which party the internal signer is filling */}
-                {assignedPartyId && assignedPartyLabel && (
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            px: 2,
-                            py: 0.75,
-                            bgcolor: 'primary.50',
-                            borderBottom: '1px solid',
-                            borderColor: 'primary.100',
-                        }}
-                    >
-                        <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                            Your assigned fields:
-                        </Typography>
-                        <Chip
-                            label={assignedPartyLabel}
-                            size="small"
-                            sx={{
-                                bgcolor: assignedPartyColor || '#1976d2',
-                                color: '#fff',
-                                fontWeight: 600,
-                                fontSize: '0.75rem',
-                            }}
-                        />
-                        {!hasFilledAllAssignedFields && unfilledFieldCount > 0 && (
-                            <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 500 }}>
-                                ({unfilledFieldCount} field{unfilledFieldCount > 1 ? 's' : ''} remaining)
-                            </Typography>
-                        )}
-                        {hasFilledAllAssignedFields && (
-                            <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 500 }}>
-                                (All fields complete)
-                            </Typography>
-                        )}
-                    </Box>
-                )}
                 <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
                     <PDFViewerContainer
                         ref={pdfViewerRef}

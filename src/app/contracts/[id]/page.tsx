@@ -591,11 +591,41 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     };
 
     // Helper: Status Color
+    const getStatusLabel = (status: string): string => {
+        switch (status) {
+            case 'active': return 'Active';
+            case 'expiring': return 'Expiring';
+            case 'expired': return 'Expired';
+            case 'draft': return 'Draft';
+            case 'in_review': return 'In Review';
+            case 'in_approval': return 'In Approval';
+            case 'reviewed': return 'Reviewed';
+            case 'approved': return 'Approved';
+            case 'waiting_for_signature': return 'Waiting for Signature';
+            case 'signed_by_everyone': return 'Signed by Assigned Parties';
+            case 'signed': return 'Signed';
+            case 'rejected': return 'Rejected';
+            case 'rejected_by_reviewer': return 'Rejected by Reviewer';
+            case 'rejected_by_approver': return 'Rejected by Approver';
+            default: return status;
+        }
+    };
+
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'active': return { bgcolor: '#d1fae5', color: '#065f46' };
+            case 'active':
+            case 'signed': return { bgcolor: '#d1fae5', color: '#065f46' };
             case 'expiring': return { bgcolor: '#fef3c7', color: '#92400e' };
-            case 'expired': return { bgcolor: '#fee2e2', color: '#991b1b' };
+            case 'expired':
+            case 'rejected':
+            case 'rejected_by_reviewer':
+            case 'rejected_by_approver': return { bgcolor: '#fee2e2', color: '#991b1b' };
+            case 'in_review': return { bgcolor: '#ede9fe', color: '#5b21b6' };
+            case 'in_approval': return { bgcolor: '#fef9c3', color: '#92400e' };
+            case 'reviewed':
+            case 'approved': return { bgcolor: '#d1fae5', color: '#065f46' };
+            case 'waiting_for_signature': return { bgcolor: '#fff9c4', color: '#f57f17' };
+            case 'signed_by_everyone': return { bgcolor: '#e3f2fd', color: '#1565c0' };
             default: return { bgcolor: '#e5e7eb', color: '#374151' };
         }
     };
@@ -681,14 +711,13 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                         {contract.title}
                                     </Typography>
                                     <Chip
-                                        label={contract.status}
+                                        label={getStatusLabel(contract.status)}
                                         size="small"
                                         sx={{
                                             bgcolor: statusColors.bgcolor,
                                             color: statusColors.color,
                                             fontWeight: 600,
                                             fontSize: '0.75rem',
-                                            textTransform: 'capitalize',
                                             height: 24,
                                             borderRadius: 1.5,
                                         }}

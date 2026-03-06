@@ -1,5 +1,5 @@
 import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
-import { Visibility, Share } from '@mui/icons-material';
+import { Visibility, Share, Download } from '@mui/icons-material';
 import { Contract, ContractStatus } from '@/types/contract';
 
 /**
@@ -11,6 +11,7 @@ interface ContractCardProps {
     contract: Contract;
     onView?: (id: string) => void;
     onShare?: (id: string) => void;
+    onDownload?: (id: string) => void;
     /**
      * Variant determines the card behavior:
      * - 'draft': Shows share button always (for review submission), handles "changes_requested" status
@@ -23,8 +24,32 @@ const ContractCard = ({
     contract,
     onView,
     onShare,
+    onDownload,
     variant = 'contract'
 }: ContractCardProps) => {
+    /**
+     * For multi-party sequential signing, returns the position of the current
+     * active order (1-based) and the total number of orders, or null when:
+     *  - there are no multi-party signers
+     *  - only one unique order exists (no ordering UX needed)
+     *  - currentSigningOrder is absent or not in the orders list
+     */
+    const getMultiPartySigningProgress = (): { orderIndex: number; totalOrders: number } | null => {
+        const allSigners = [
+            ...(contract.internalSigners || []),
+            ...(contract.externalSigners || []),
+        ];
+        if (allSigners.length === 0 || !contract.currentSigningOrder) return null;
+
+        const uniqueOrders = [...new Set(allSigners.map(s => s.order))].sort((a, b) => a - b);
+        if (uniqueOrders.length <= 1) return null;
+
+        const orderIndex = uniqueOrders.indexOf(contract.currentSigningOrder);
+        if (orderIndex === -1) return null;
+
+        return { orderIndex, totalOrders: uniqueOrders.length };
+    };
+
     /**
      * Format status for display
      */
@@ -51,10 +76,15 @@ const ContractCard = ({
                 return 'Reviewed';
             case ContractStatus.APPROVED:
                 return 'Approved';
-            case ContractStatus.WAITING_FOR_SIGNATURE:
+            case ContractStatus.WAITING_FOR_SIGNATURE: {
+                const progress = getMultiPartySigningProgress();
+                if (progress) {
+                    return `Order ${progress.orderIndex + 1}/${progress.totalOrders} Signing`;
+                }
                 return 'Waiting for Signature';
+            }
             case ContractStatus.SIGNED_BY_EVERYONE:
-                return 'Signed by Everyone';
+                return 'Signed by Assigned Parties';
             case ContractStatus.DRAFT:
                 return 'Draft';
             case ContractStatus.SIGNED:
@@ -94,8 +124,14 @@ const ContractCard = ({
                 return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' };
             case ContractStatus.APPROVED:
                 return { bg: '#d1fae5', color: '#065f46', border: '#34d399' };
-            case ContractStatus.WAITING_FOR_SIGNATURE:
+            case ContractStatus.WAITING_FOR_SIGNATURE: {
+                const progress = getMultiPartySigningProgress();
+                if (progress && progress.orderIndex > 0) {
+                    // Later orders: blue-teal to show signing is progressing
+                    return { bg: '#e0f7fa', color: '#00695c', border: '#80cbc4' };
+                }
                 return { bg: '#fff9c4', color: '#f57f17', border: '#fff176' };
+            }
             case ContractStatus.SIGNED_BY_EVERYONE:
                 return { bg: '#e3f2fd', color: '#1565c0', border: '#90caf9' };
             case ContractStatus.DRAFT:
@@ -350,6 +386,14 @@ const ContractCard = ({
                         color: 'primary.main',
                         shadow: 'rgba(15, 118, 110, 0.2)',
                         show: true
+                    },
+                    {
+                        title: 'Download PDF',
+                        icon: <Download sx={{ fontSize: '1.1rem' }} />,
+                        onClick: () => onDownload?.(contract.id),
+                        color: 'primary.main',
+                        shadow: 'rgba(15, 118, 110, 0.2)',
+                        show: !!onDownload
                     },
                     {
                         title: getShareTooltip(),
