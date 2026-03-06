@@ -7,7 +7,7 @@ interface ContractsPieChartProps {
     stats: {
         draftCount: number;
         underReviewCount: number;
-        approvedCount: number;
+        underApprovalCount: number;
         activeCount: number;
         expiringCount: number;
         expiredCount: number;
@@ -28,8 +28,8 @@ export default function ContractsPieChart({ stats }: ContractsPieChartProps) {
             color: '#3b82f6',
         },
         {
-            name: 'Approved',
-            value: stats.approvedCount,
+            name: 'Under Approval',
+            value: stats.underApprovalCount,
             color: '#14b8a6',
         },
         {

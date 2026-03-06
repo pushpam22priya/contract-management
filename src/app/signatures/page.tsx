@@ -17,6 +17,13 @@ import { sendSignatureRequestEmail } from '@/services/emailService';
 import ReusableFilter from '@/components/common/ReusableFilter';
 import { categoryService } from '@/services/categoryService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
+import { useSearchParams } from 'next/navigation';
+
+const signingStatusOptions = [
+    { label: 'All Status', value: 'all' },
+    { label: 'Pending My Signature', value: 'pending' },
+    { label: 'Signed', value: 'completed' },
+];
 
 /**
  * Signatures Page
@@ -28,6 +35,7 @@ export default function SignaturesPage() {
 
     // Filter state
     const [searchQuery, setSearchQuery] = useState('');
+    const [signingStatusFilter, setSigningStatusFilter] = useState(signingStatusOptions[0]);
     const [categoryFilter, setCategoryFilter] = useState({ label: 'All Categories', value: 'all' });
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
@@ -35,6 +43,16 @@ export default function SignaturesPage() {
     const [categoryOptions, setCategoryOptions] = useState<{ label: string; value: string }[]>([
         { label: 'All Categories', value: 'all' }
     ]);
+
+    // Sync URL param → signing status filter on initial navigation (e.g. from dashboard)
+    const searchParams = useSearchParams();
+    useEffect(() => {
+        const param = searchParams.get('status');
+        if (!param) return;
+        const matched = signingStatusOptions.find(opt => opt.value === param);
+        if (matched) setSigningStatusFilter(matched);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Viewer state
     const [viewerOpen, setViewerOpen] = useState(false);
@@ -156,6 +174,31 @@ export default function SignaturesPage() {
 
     // Filter Logic
     const filteredContracts = contracts.filter(contract => {
+        const currentUser = authService.getCurrentUser();
+
+        // Signing Status Filter — based on THIS user's signer status, not contract status
+        if (signingStatusFilter.value !== 'all') {
+            const internalSigner = (contract.internalSigners || []).find(
+                s => s.email === currentUser?.email
+            );
+
+            if (signingStatusFilter.value === 'pending') {
+                // User has not signed yet: unlocked internal signer OR legacy waiting
+                const isPending =
+                    (internalSigner?.status === 'unlocked') ||
+                    (!internalSigner && contract.signer?.email === currentUser?.email &&
+                        contract.status === ContractStatus.WAITING_FOR_SIGNATURE);
+                if (!isPending) return false;
+            } else if (signingStatusFilter.value === 'completed') {
+                // User already signed: completed internal signer OR legacy signed
+                const isCompleted =
+                    (internalSigner?.status === 'completed') ||
+                    (!internalSigner && contract.signer?.email === currentUser?.email &&
+                        contract.status !== ContractStatus.WAITING_FOR_SIGNATURE);
+                if (!isCompleted) return false;
+            }
+        }
+
         // Search Filter
         const matchesSearch = searchQuery === '' ||
             contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -406,6 +449,12 @@ export default function SignaturesPage() {
                     onSearchChange={setSearchQuery}
                     searchPlaceholder="Search contracts or clients..."
                     filters={[
+                        {
+                            label: 'Status',
+                            value: signingStatusFilter,
+                            onChange: (newValue) => setSigningStatusFilter(newValue || signingStatusOptions[0]),
+                            options: signingStatusOptions,
+                        },
                         {
                             label: 'Category',
                             value: categoryFilter,

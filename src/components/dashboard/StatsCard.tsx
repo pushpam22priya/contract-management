@@ -7,13 +7,18 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
+import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
+import PendingActionsOutlinedIcon from '@mui/icons-material/PendingActionsOutlined';
+import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined';
+import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
+import BoltOutlinedIcon from '@mui/icons-material/BoltOutlined';
 import { useState, useEffect } from 'react';
 
 interface StatsCardProps {
     title: string;
     value: number;
     description: string;
-    icon: 'check' | 'warning' | 'clock' | 'document' | 'hourglass' | 'cancel';
+    icon: 'check' | 'warning' | 'clock' | 'document' | 'hourglass' | 'cancel' | 'send' | 'pending' | 'taskalt' | 'gavel' | 'bolt';
     iconColor: string;
     iconBgColor: string;
     index?: number;
@@ -27,6 +32,11 @@ const iconMap = {
     document: DescriptionOutlinedIcon,
     hourglass: HourglassEmptyIcon,
     cancel: CancelOutlinedIcon,
+    send: SendOutlinedIcon,
+    pending: PendingActionsOutlinedIcon,
+    taskalt: TaskAltOutlinedIcon,
+    gavel: GavelOutlinedIcon,
+    bolt: BoltOutlinedIcon,
 };
 
 export default function StatsCard({

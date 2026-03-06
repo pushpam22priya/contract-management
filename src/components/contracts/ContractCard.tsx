@@ -67,9 +67,9 @@ const ContractCard = ({
             case ContractStatus.EXPIRED:
                 return 'Expired';
             case ContractStatus.IN_REVIEW:
-                return 'In Review';
+                return 'Under Review';
             case ContractStatus.IN_APPROVAL:
-                return 'In Approval';
+                return 'Under Approval';
             case ContractStatus.REVIEW_APPROVAL:
                 return 'Review and Approval';
             case ContractStatus.REVIEWED:

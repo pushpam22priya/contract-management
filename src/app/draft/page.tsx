@@ -323,6 +323,8 @@ export default function DraftPage() {
     const statusOptions = [
         { label: 'All Status', value: 'all' },
         { label: 'Draft', value: ContractStatus.DRAFT },
+        { label: 'Under Review', value: ContractStatus.IN_REVIEW },
+        { label: 'Under Approval', value: ContractStatus.IN_APPROVAL },
         { label: 'Review and Approve', value: ContractStatus.REVIEW_APPROVAL },
         { label: 'Rejected by Reviewer', value: ContractStatus.REJECTED_BY_REVIEWER },
         { label: 'Rejected by Approver', value: ContractStatus.REJECTED_BY_APPROVER },
@@ -340,15 +342,18 @@ export default function DraftPage() {
     // URL params for deep linking (e.g. from Dashboard)
     const searchParams = useSearchParams();
 
+    // Sync URL param → status filter dropdown on initial navigation
+    useEffect(() => {
+        const statusParam = searchParams.get('status');
+        if (!statusParam) return;
+        const matched = statusOptions.find(opt => opt.value === statusParam);
+        if (matched) setStatusFilter(matched);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // Filter logic
     const filteredDrafts = draftContracts.filter(contract => {
-        // Status Param Filter (from URL)
-        const statusParam = searchParams.get('status');
-        if (statusParam && contract.status !== statusParam) {
-            return false;
-        }
-
-        // Local Status Filter
+        // Local Status Filter (pre-populated from URL param on mount)
         const matchesStatus = statusFilter.value === 'all' ||
             contract.status === statusFilter.value;
 
@@ -399,7 +404,9 @@ export default function DraftPage() {
                             }}
                         >
                             {/* Dynamic Title based on filter? Or just keep generic */}
-                            {searchParams.get('status') === 'review_approval' ? 'Pending Approvals' : 'Draft Contracts'}
+                            {statusFilter.value === ContractStatus.IN_REVIEW ? 'Under Review Contracts'
+                                : statusFilter.value === ContractStatus.IN_APPROVAL ? 'Under Approval Contracts'
+                                : 'Draft Contracts'}
                         </Typography>
                         <Typography
                             variant="body2"

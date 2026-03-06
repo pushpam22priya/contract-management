@@ -17,13 +17,15 @@ import { ContractStatus } from '@/types/contract';
 export default function DashboardPage() {
     const router = useRouter();
     const [stats, setStats] = useState({
-        totalCount: 0,
         draftCount: 0,
         underReviewCount: 0,
-        approvedCount: 0,
+        underApprovalCount: 0,
         activeCount: 0,
         expiringCount: 0,
-        expiredCount: 0
+        expiredCount: 0,
+        requestedCount: 0,
+        receivedSignedCount: 0,
+        waitingForSigCount: 0,
     });
 
     useEffect(() => {
@@ -35,42 +37,65 @@ export default function DashboardPage() {
                 const allContracts = await contractService.getAllContracts();
 
                 // Count logic for all statuses
-                let total = 0;
                 let draft = 0;
                 let underReview = 0;
-                let approved = 0;
+                let underApproval = 0;
                 let active = 0;
                 let expiring = 0;
                 let expired = 0;
+                let requested = 0;
+                let receivedSigned = 0;
+                let waitingForSig = 0;
 
                 if (Array.isArray(allContracts)) {
                     allContracts.forEach(c => {
-                        const isRelevant = c.createdBy === currentUser.email || c.signer?.email === currentUser.email;
+                        const isCreator = c.createdBy === currentUser.email;
+                        // Unlocked internal signer = it's their turn to sign
+                        const isInternalSignerPending = (c.internalSigners || []).some(
+                            (s: any) => s.email === currentUser.email && s.status === 'unlocked'
+                        );
+                        // Legacy single-signer flow
+                        const isLegacySigner = c.signer?.email === currentUser.email;
 
-                        // Only count if relevant to the user
+                        const isRelevant = isCreator || isInternalSignerPending || isLegacySigner;
                         if (!isRelevant) return;
 
-                        total++;
+                        // Creator-owned contract counters
+                        if (isCreator) {
+                            if (c.status === ContractStatus.DRAFT) draft++;
+                            if (c.status === ContractStatus.IN_REVIEW) underReview++;
+                            if (c.status === ContractStatus.IN_APPROVAL) underApproval++;
+                            if (c.status === ContractStatus.ACTIVE) active++;
+                            if (c.status === ContractStatus.EXPIRING) expiring++;
+                            if (c.status === ContractStatus.EXPIRED) expired++;
+                            // Shared but not all signed yet
+                            if (c.status === ContractStatus.WAITING_FOR_SIGNATURE) requested++;
+                            // All assigned parties have signed
+                            if (c.status === ContractStatus.SIGNED_BY_EVERYONE) receivedSigned++;
+                        }
 
-                        if (c.status === ContractStatus.DRAFT) draft++;
-                        if (c.status === ContractStatus.REVIEW_APPROVAL) underReview++;
-                        if (c.status === ContractStatus.APPROVED || c.status === ContractStatus.WAITING_FOR_SIGNATURE) approved++;
-                        if (c.status === ContractStatus.ACTIVE) active++;
-                        if (c.status === ContractStatus.EXPIRING) expiring++;
-                        if (c.status === ContractStatus.EXPIRED) expired++;
+                        // Contracts THIS user still needs to sign (not yet completed)
+                        if (
+                            isInternalSignerPending ||
+                            (isLegacySigner && c.status === ContractStatus.WAITING_FOR_SIGNATURE)
+                        ) {
+                            waitingForSig++;
+                        }
                     });
                 } else {
                     console.error("DashboardPage: getAllContracts returned non-array", allContracts);
                 }
 
                 setStats({
-                    totalCount: total,
                     draftCount: draft,
                     underReviewCount: underReview,
-                    approvedCount: approved,
+                    underApprovalCount: underApproval,
                     activeCount: active,
                     expiringCount: expiring,
-                    expiredCount: expired
+                    expiredCount: expired,
+                    requestedCount: requested,
+                    receivedSignedCount: receivedSigned,
+                    waitingForSigCount: waitingForSig,
                 });
             } catch (error) {
                 console.error("DashboardPage: Failed to load stats", error);
@@ -82,22 +107,13 @@ export default function DashboardPage() {
 
     const statsData = [
         {
-            title: 'Total Contracts',
-            value: stats.totalCount,
-            description: 'All contracts',
-            icon: 'document' as const,
-            iconColor: '#6366f1',
-            iconBgColor: '#e0e7ff',
-            path: '/contracts'
-        },
-        {
             title: 'Draft',
             value: stats.draftCount,
             description: 'In draft status',
-            icon: 'hourglass' as const,
-            iconColor: '#8b5cf6',
-            iconBgColor: '#ede9fe',
-            path: '/draft?status=draft'
+            icon: 'document' as const,
+            iconColor: '#57a8deff',
+            iconBgColor: '#ddf8ffff',
+            path: '/draft'
         },
         {
             title: 'Under Review',
@@ -106,22 +122,22 @@ export default function DashboardPage() {
             icon: 'clock' as const,
             iconColor: '#3b82f6',
             iconBgColor: '#dbeafe',
-            path: '/draft?status=review_approval'
+            path: '/draft?status=in_review'
         },
         {
-            title: 'Approved',
-            value: stats.approvedCount,
-            description: 'Approved contracts',
-            icon: 'check' as const,
-            iconColor: '#14b8a6',
-            iconBgColor: '#ccfbf1',
-            path: '/contracts?status=approved'
+            title: 'Under Approval',
+            value: stats.underApprovalCount,
+            description: 'Awaiting approval',
+            icon: 'hourglass' as const,
+            iconColor: '#f65cb1ff',
+            iconBgColor: '#fee9f6ff',
+            path: '/draft?status=in_approval'
         },
         {
             title: 'Active Contracts',
             value: stats.activeCount,
             description: 'Currently active',
-            icon: 'check' as const,
+            icon: 'bolt' as const,
             iconColor: '#10b981',
             iconBgColor: '#d1fae5',
             path: '/contracts?status=active'
@@ -143,6 +159,33 @@ export default function DashboardPage() {
             iconColor: '#ef4444',
             iconBgColor: '#fee2e2',
             path: '/contracts?status=expired'
+        },
+        {
+            title: 'Requested Contracts',
+            value: stats.requestedCount,
+            description: 'Shared, awaiting signatures',
+            icon: 'send' as const,
+            iconColor: '#7c3aed',
+            iconBgColor: '#ede9fe',
+            path: '/contracts?status=waiting_for_signature'
+        },
+        {
+            title: 'Received Signed',
+            value: stats.receivedSignedCount,
+            description: 'All parties signed',
+            icon: 'taskalt' as const,
+            iconColor: '#2563eb',
+            iconBgColor: '#dbeafe',
+            path: '/contracts?status=signed_by_everyone'
+        },
+        {
+            title: 'Waiting for My Signature',
+            value: stats.waitingForSigCount,
+            description: 'Pending your signature',
+            icon: 'pending' as const,
+            iconColor: '#e1781dff',
+            iconBgColor: '#fff2e4ff',
+            path: '/signatures?status=pending'
         },
     ];
 
@@ -210,7 +253,7 @@ export default function DashboardPage() {
                         stats={{
                             draftCount: stats.draftCount,
                             underReviewCount: stats.underReviewCount,
-                            approvedCount: stats.approvedCount,
+                            underApprovalCount: stats.underApprovalCount,
                             activeCount: stats.activeCount,
                             expiringCount: stats.expiringCount,
                             expiredCount: stats.expiredCount,
