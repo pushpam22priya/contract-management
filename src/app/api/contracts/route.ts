@@ -20,6 +20,7 @@ function calculateDynamicStatus(contract: any): { status: ContractStatus; expire
         ContractStatus.REVIEW_APPROVAL,
         ContractStatus.REVIEWED,
         ContractStatus.APPROVED,
+        ContractStatus.READY_FOR_SIGNATURE,
         ContractStatus.WAITING_FOR_SIGNATURE,
         ContractStatus.REJECTED
     ];

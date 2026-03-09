@@ -76,6 +76,8 @@ const ContractCard = ({
                 return 'Reviewed';
             case ContractStatus.APPROVED:
                 return 'Approved';
+            case ContractStatus.READY_FOR_SIGNATURE:
+                return 'Ready for Signature';
             case ContractStatus.WAITING_FOR_SIGNATURE: {
                 const progress = getMultiPartySigningProgress();
                 if (progress) {
@@ -124,6 +126,9 @@ const ContractCard = ({
                 return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' };
             case ContractStatus.APPROVED:
                 return { bg: '#d1fae5', color: '#065f46', border: '#34d399' };
+            case ContractStatus.READY_FOR_SIGNATURE:
+                // Teal/Cyan theme to differentiate from plain green approved
+                return { bg: '#e0f2f1', color: '#00695c', border: '#4db6ac' };
             case ContractStatus.WAITING_FOR_SIGNATURE: {
                 const progress = getMultiPartySigningProgress();
                 if (progress && progress.orderIndex > 0) {
@@ -163,8 +168,9 @@ const ContractCard = ({
             return true;
         }
 
-        // Contract variant: only show for APPROVED or WAITING_FOR_SIGNATURE (for signature requests)
+        // Contract variant: only show for APPROVED, READY_FOR_SIGNATURE, or WAITING_FOR_SIGNATURE
         return contract.status === ContractStatus.APPROVED ||
+            contract.status === ContractStatus.READY_FOR_SIGNATURE ||
             contract.status === ContractStatus.WAITING_FOR_SIGNATURE ||
             contract.status === ContractStatus.SIGNED_BY_EVERYONE;
     };

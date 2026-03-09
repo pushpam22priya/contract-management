@@ -22,7 +22,9 @@ import ConfirmationDialog from '@/components/common/ConfirmationDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import RequestReviewDialog from '@/components/contracts/RequestReviewDialog';
 import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
+import MultiPartySignatureDialog from '@/components/contracts/MultiPartySignatureDialog';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
+import { submitForMixedSignature } from '@/services/externalSignatureService';
 import { templateService } from '@/services/templateService';
 import { contractService } from '@/services/contractService';
 import { apiService } from '@/services/apiService';
@@ -36,10 +38,11 @@ import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
 interface CreateContractDialogProps {
     open: boolean;
     onClose: () => void;
+    onSuccess?: () => void;
     initialTemplateName?: string;
 }
 
-const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateContractDialogProps) => {
+const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }: CreateContractDialogProps) => {
     const router = useRouter();
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
 
@@ -82,6 +85,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
     // Dialog states for Review & Signature
     const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
     const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
+    const [multiPartyDialogOpen, setMultiPartyDialogOpen] = useState(false);
 
     // Track filled field values
     // Explanation: This stores the values user enters in form fields (e.g., {"client_name": "John Doe"})
@@ -220,25 +224,25 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
         };
     }, [isDragging]);
 
-    const handleSave = async () => {
+    const handleSave = async (): Promise<string | null> => {
         if (!selectedTemplate) {
             setError('Please select a template');
-            return;
+            return null;
         }
 
         if (!contractTitle.trim()) {
             setError('Contract title is required');
-            return;
+            return null;
         }
 
         if (!clientName.trim()) {
             setError('Client name is required');
-            return;
+            return null;
         }
 
         if (!documentLoaded) {
             setError('Please wait for the document to load');
-            return;
+            return null;
         }
 
         setSaving(true);
@@ -248,7 +252,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
             const currentUser = authService.getCurrentUser();
             if (!currentUser) {
                 setError('You must be logged in to create a contract');
-                return;
+                return null;
             }
 
             console.log('═══════════════════════════════════════════════════════════════════');
@@ -279,7 +283,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
             if (!exportResult || !exportResult.blob) {
                 console.error('❌ PDF export returned empty or null');
                 setError('Failed to export PDF data. Please try again.');
-                return;
+                return null;
             }
 
             const { blob: pdfBlob, xfdfString } = exportResult;
@@ -363,7 +367,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 const updateResult = await apiService.updateContractMetadata(contractId, contractData);
                 if (!updateResult.success) {
                     setError(updateResult.message || 'Failed to update contract');
-                    return;
+                    return null;
                 }
                 console.log('✅ Contract metadata updated');
             } else {
@@ -376,7 +380,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 } else {
                     console.error('❌ Contract creation failed:', result.message);
                     setError(result.message);
-                    return;
+                    return null;
                 }
             }
 
@@ -395,16 +399,18 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                     console.error('❌ Failed to upload PDF binary');
                     setError('Contract saved but PDF upload failed');
                     setSaving(false);
-                    return;
+                    return null;
                 }
             }
 
             console.log('Contract saved successfully with PDF!');
 
             setSnackbar({ open: true, message: 'Contract Saved successfully!', severity: 'success' });
+            return activeContractId;
         } catch (err) {
             console.error('❌ Error creating contract:', err);
             setError('Failed to create contract. Please try again.');
+            return null;
         } finally {
             setSaving(false);
         }
@@ -454,7 +460,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
     };
 
     const handleReviewClick = () => {
-        if (hasUnsavedChanges()) {
+        if (hasUnsavedChanges() || !contractId) {
             setPendingAction('review');
             setShowUnsavedDialog(true);
         } else {
@@ -463,24 +469,46 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
     };
 
     const handleSignatureClick = () => {
-        if (hasUnsavedChanges()) {
+        if (hasUnsavedChanges() || !contractId) {
             setPendingAction('signature');
             setShowUnsavedDialog(true);
-        } else {
-            setSignatureDialogOpen(true);
+        } else if (contractId) {
+            // Check if contract has multiple parties with fields (same logic as ContractsPage)
+            const partiesWithFields = (selectedTemplate?.parties || []).filter((party: any) => {
+                return (selectedTemplate?.formFields || []).some((field: any) => field.assignedParty === party.id);
+            });
+
+            console.log(`📋 [CreateContractDialog] Signature click, parties with fields: ${partiesWithFields.length}`);
+
+            if (partiesWithFields.length > 1) {
+                setMultiPartyDialogOpen(true);
+            } else {
+                setSignatureDialogOpen(true);
+            }
         }
     };
 
     const handleUnsavedYes = async () => {
         setShowUnsavedDialog(false);
-        await handleSave();
+        const savedId = await handleSave();
+        if (!savedId) return; // Save failed
+
         if (pendingAction === 'close') {
             handleClose();
             router.push('/draft');
         } else if (pendingAction === 'review') {
             setReviewDialogOpen(true);
         } else if (pendingAction === 'signature') {
-            setSignatureDialogOpen(true);
+            // Check parties with fields to decide which dialog to open
+            const partiesWithFields = (selectedTemplate?.parties || []).filter((party: any) => {
+                return (selectedTemplate?.formFields || []).some((field: any) => field.assignedParty === party.id);
+            });
+
+            if (partiesWithFields.length > 1) {
+                setMultiPartyDialogOpen(true);
+            } else {
+                setSignatureDialogOpen(true);
+            }
         }
         setPendingAction(null);
     };
@@ -496,6 +524,53 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
     const handleUnsavedClose = () => {
         setShowUnsavedDialog(false);
         setPendingAction(null);
+    };
+
+    /**
+     * Handle mixed signature submission (internal + external signers with order)
+     */
+    const handleMixedSignatureSubmit = async (assignments: any[]) => {
+        if (!contractId) return { success: false, error: 'Contract not saved' };
+
+        const currentUser = authService.getCurrentUser();
+        const senderName = currentUser?.email || 'Contract System';
+
+        try {
+            // Re-fetch or reconstruct contract object for externalSignatureService
+            const contractMock = {
+                id: contractId,
+                title: contractTitle,
+                client: clientName,
+                parties: selectedTemplate?.parties,
+                formFields: selectedTemplate?.formFields,
+                fieldValues: filledFieldValues
+            } as any;
+
+            const result = await submitForMixedSignature(
+                contractMock,
+                assignments,
+                senderName
+            );
+
+            if (result.success) {
+                setSnackbar({ open: true, message: 'Mixed signature assignments created successfully', severity: 'success' });
+                setMultiPartyDialogOpen(false);
+                // After submitting for signature, close dialog and redirect
+                setTimeout(() => {
+                    handleClose();
+                    onSuccess?.(); // Trigger refresh if provided
+                    router.push('/contracts');
+                }, 1500);
+                return { success: true };
+            } else {
+                setError(result.error || 'Failed to create assignments');
+                return { success: false, error: result.error };
+            }
+        } catch (error: any) {
+            console.error('❌ Mixed signature error:', error);
+            setError(error.message || 'An unexpected error occurred');
+            return { success: false, error: error.message };
+        }
     };
 
     const handleNextStep = () => {
@@ -587,8 +662,10 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
             <Button
                 variant="contained"
                 onClick={handleReviewClick}
-                disabled={!contractId || saving || !canSave}
+                disabled={saving || !canSave}
                 sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
                     px: 2,
                     py: 0.5,
                     borderRadius: 2,
@@ -606,8 +683,10 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
             <Button
                 variant="contained"
                 onClick={handleSignatureClick}
-                disabled={!contractId || saving || !canSave}
+                disabled={saving || !canSave}
                 sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
                     px: 2,
                     py: 0.5,
                     borderRadius: 2,
@@ -969,6 +1048,13 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                         if (result.success) {
                             setSnackbar({ open: true, message: result.message, severity: 'success' });
                             setReviewDialogOpen(false);
+                            // After submitting for review, we should close the create dialog 
+                            // as the contract is no longer in "Edit/Draft" mode
+                            setTimeout(() => {
+                                handleClose();
+                                onSuccess?.(); // Trigger refresh if provided
+                                router.push('/draft');
+                            }, 1500);
                         } else {
                             setSnackbar({ open: true, message: result.message, severity: 'error' });
                         }
@@ -976,7 +1062,7 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                 />
             )}
 
-            {/* Submit for Signature Dialog */}
+            {/* Submit for Signature Dialog (Legacy/Single) */}
             {contractId && (
                 <SubmitForSignatureDialog
                     open={signatureDialogOpen}
@@ -992,9 +1078,28 @@ const CreateContractDialog = ({ open, onClose, initialTemplateName }: CreateCont
                         if (result.success) {
                             setSnackbar({ open: true, message: result.message, severity: 'success' });
                             setSignatureDialogOpen(false);
+                            // After submitting for signature, close dialog and redirect
+                            setTimeout(() => {
+                                handleClose();
+                                onSuccess?.(); // Trigger refresh if provided
+                                router.push('/contracts');
+                            }, 1500);
                         }
                         return result;
                     }}
+                />
+            )}
+
+            {/* Multi-Party Signature Dialog */}
+            {contractId && selectedTemplate && (
+                <MultiPartySignatureDialog
+                    open={multiPartyDialogOpen}
+                    onClose={() => setMultiPartyDialogOpen(false)}
+                    onSubmit={handleMixedSignatureSubmit}
+                    contractTitle={contractTitle}
+                    parties={selectedTemplate.parties || []}
+                    formFields={selectedTemplate.formFields}
+                    fieldValues={filledFieldValues}
                 />
             )}
 

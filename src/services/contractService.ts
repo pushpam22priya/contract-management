@@ -364,8 +364,8 @@ class ContractService {
                     // Case 3: Has approver — auto-transition to IN_APPROVAL
                     updates.status = ContractStatus.IN_APPROVAL;
                 } else {
-                    // Case 1: No approver — auto-transition directly to APPROVED
-                    updates.status = ContractStatus.APPROVED;
+                    // Case 1: No approver — auto-transition directly to READY_FOR_SIGNATURE
+                    updates.status = ContractStatus.READY_FOR_SIGNATURE;
                     updates.approvalStatus = 'approved';
                 }
             }
@@ -471,7 +471,7 @@ class ContractService {
             const updates = {
                 approver: approverUpdate,
                 approvalStatus: 'approved',
-                status: ContractStatus.APPROVED
+                status: ContractStatus.READY_FOR_SIGNATURE
             };
 
             const result = await apiService.updateContractMetadata(contractId, updates);

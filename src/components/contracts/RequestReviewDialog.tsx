@@ -322,6 +322,10 @@ export default function RequestReviewDialog({
     const READ_ONLY_STATUSES: string[] = [
         ContractStatus.IN_REVIEW,
         ContractStatus.IN_APPROVAL,
+        ContractStatus.APPROVED,
+        ContractStatus.READY_FOR_SIGNATURE,
+        ContractStatus.REJECTED_BY_REVIEWER,
+        ContractStatus.REJECTED_BY_APPROVER,
         ContractStatus.WAITING_FOR_SIGNATURE,
         ContractStatus.SIGNED,
         ContractStatus.SIGNED_BY_EVERYONE,
@@ -400,22 +404,46 @@ export default function RequestReviewDialog({
                     </Typography>
                 </Box>
 
-                {/* READ-ONLY STATUS BANNER — shown when contract is In Review or In Approval */}
-                {isReadOnly && (contractStatus === ContractStatus.IN_REVIEW || contractStatus === ContractStatus.IN_APPROVAL) && (
+                {/* READ-ONLY STATUS BANNER */}
+                {isReadOnly && (
                     <Alert
-                        severity="info"
+                        severity={
+                            contractStatus === ContractStatus.REJECTED_BY_REVIEWER ||
+                                contractStatus === ContractStatus.REJECTED_BY_APPROVER
+                                ? "error" : "info"
+                        }
                         sx={{
                             '& .MuiAlert-message': { width: '100%' },
                             borderRadius: 1.5,
                         }}
                     >
                         <Typography variant="body2" fontWeight={600} sx={{ mb: 0.25 }}>
-                            {contractStatus === ContractStatus.IN_REVIEW ? 'Contract is currently In Review' : 'Contract is currently In Approval'}
+                            {(() => {
+                                switch (contractStatus) {
+                                    case ContractStatus.IN_REVIEW: return 'Contract is currently In Review';
+                                    case ContractStatus.IN_APPROVAL: return 'Contract is currently In Approval';
+                                    case ContractStatus.APPROVED:
+                                    case ContractStatus.READY_FOR_SIGNATURE: return 'Contract has been Approved';
+                                    case ContractStatus.REJECTED_BY_REVIEWER: return 'Contract was Rejected by Reviewer';
+                                    case ContractStatus.REJECTED_BY_APPROVER: return 'Contract was Rejected by Approver';
+                                    case ContractStatus.WAITING_FOR_SIGNATURE: return 'Contract is Waiting for Signature';
+                                    case ContractStatus.SIGNED:
+                                    case ContractStatus.SIGNED_BY_EVERYONE: return 'Contract has been Signed';
+                                    case ContractStatus.ACTIVE: return 'Contract is Active';
+                                    default: return `Contract Status: ${contractStatus}`;
+                                }
+                            })()}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                            {contractStatus === ContractStatus.IN_REVIEW
-                                ? 'Assigned reviewer(s) are shown below. No changes can be made at this stage.'
-                                : 'Assigned approver is shown below. No changes can be made at this stage.'}
+                            {(() => {
+                                if (contractStatus === ContractStatus.REJECTED_BY_REVIEWER || contractStatus === ContractStatus.REJECTED_BY_APPROVER) {
+                                    return 'This contract has been rejected and cannot be modified further in this flow.';
+                                }
+                                if (contractStatus === ContractStatus.APPROVED || contractStatus === ContractStatus.READY_FOR_SIGNATURE) {
+                                    return 'Review and approval process is complete. Contract is ready for signatures.';
+                                }
+                                return 'No changes can be made at this stage.';
+                            })()}
                         </Typography>
                     </Alert>
                 )}

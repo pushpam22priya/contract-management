@@ -31,6 +31,7 @@ const statusOptions = [
     { label: 'Active', value: ContractStatus.ACTIVE },
     { label: 'Expiring', value: ContractStatus.EXPIRING },
     { label: 'Approved', value: ContractStatus.APPROVED },
+    { label: 'Ready for Signature', value: ContractStatus.READY_FOR_SIGNATURE },
     { label: 'Waiting for Signature', value: ContractStatus.WAITING_FOR_SIGNATURE },
     { label: 'Signed by Assigned Parties', value: ContractStatus.SIGNED_BY_EVERYONE },
     { label: 'Signed', value: ContractStatus.SIGNED },
@@ -161,6 +162,7 @@ export default function ContractsPage() {
                 if (isCreator) {
                     return [
                         ContractStatus.APPROVED,
+                        ContractStatus.READY_FOR_SIGNATURE,
                         ContractStatus.WAITING_FOR_SIGNATURE,
                         ContractStatus.SIGNED_BY_EVERYONE,
                         ContractStatus.SIGNED,
@@ -469,7 +471,11 @@ export default function ContractsPage() {
                 </Box>
 
                 {/* Create Contract Dialog with PDFTron */}
-                <CreateContractDialog open={wizardOpen} onClose={() => setWizardOpen(false)} />
+                <CreateContractDialog
+                    open={wizardOpen}
+                    onClose={() => setWizardOpen(false)}
+                    onSuccess={loadContracts}
+                />
 
                 {selectedContract && (
                     <DocumentViewerDialog
@@ -477,6 +483,7 @@ export default function ContractsPage() {
                         onClose={() => {
                             setContractViewerOpen(false);
                             setSelectedContract(null);
+                            loadContracts(); // ✅ Reload to reflect any status changes
                         }}
                         fileUrl={(() => {
                             // ✅ CRITICAL FIX: Load contract's saved PDF, not template

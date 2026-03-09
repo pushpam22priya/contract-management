@@ -140,6 +140,7 @@ export enum ContractStatus {
     REVIEW_APPROVAL = 'review_approval', // Legacy: kept for backward compatibility
     REVIEWED = 'reviewed',           // Legacy: kept for backward compatibility
     APPROVED = 'approved',       // Gate: Approved, ready for signature
+    READY_FOR_SIGNATURE = 'ready_for_signature', // Transition: Approved, waiting for contractor action
     WAITING_FOR_SIGNATURE = 'waiting_for_signature',
     SIGNED_BY_EVERYONE = 'signed_by_everyone', // All external signers completed
     SIGNED = 'signed',           // Signed (future start date)

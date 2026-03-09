@@ -116,16 +116,22 @@ export default function ReviewApprovalPage() {
         }
 
         const allContracts = await contractService.getAllContracts();
-        // Filter contracts for review/approval (including approved and rejected for history)
-        const assignedContracts = allContracts.filter(c =>
-            c.status === ContractStatus.IN_REVIEW ||
-            c.status === ContractStatus.IN_APPROVAL ||
-            c.status === ContractStatus.REVIEW_APPROVAL || // backward compat
-            c.status === ContractStatus.REVIEWED ||        // backward compat
-            c.status === ContractStatus.APPROVED ||
-            c.status === ContractStatus.REJECTED_BY_REVIEWER ||
-            c.status === ContractStatus.REJECTED_BY_APPROVER
-        );
+        // Filter contracts where the current user is (or was) a reviewer or approver.
+        // We intentionally do NOT filter by contract status here so that History cards
+        // persist even after the contract moves to later stages (e.g. ACTIVE, WAITING_FOR_SIGNATURE).
+        const assignedContracts = allContracts.filter(c => {
+            const isReviewer = c.reviewers?.some(r => r.email === currentUser.email);
+            const isApprover = c.approver?.email === currentUser.email;
+            // Always include if the contract is currently in review/approval workflow stages
+            const inWorkflow =
+                c.status === ContractStatus.IN_REVIEW ||
+                c.status === ContractStatus.IN_APPROVAL ||
+                c.status === ContractStatus.REVIEW_APPROVAL ||
+                c.status === ContractStatus.REVIEWED ||
+                c.status === ContractStatus.REJECTED_BY_REVIEWER ||
+                c.status === ContractStatus.REJECTED_BY_APPROVER;
+            return inWorkflow || isReviewer || isApprover;
+        });
         setContracts(assignedContracts);
         setLoading(false);
     };
