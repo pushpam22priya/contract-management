@@ -295,7 +295,7 @@ export default function PartyAssignmentPanel({
                 <Collapse in={partiesSectionExpanded}>
                     {/* Party scroll container */}
                     <Box sx={{
-                        maxHeight: 160,
+                        maxHeight: 140,
                         overflowY: 'auto',
                         overflowX: 'hidden',
                         padding: 0.2
@@ -473,12 +473,10 @@ export default function PartyAssignmentPanel({
 
                         <Collapse in={expandedParty === 'unassigned'}>
                             <Box sx={{
-                                maxHeight: 160,
+                                maxHeight: 180,
                                 overflowY: 'auto',
                                 overflowX: 'hidden',
-                                pl: 2,
-                                pr: 1,
-                                pb: 1,
+                                p: 1,
                             }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                                     <Checkbox
