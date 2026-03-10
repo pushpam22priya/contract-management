@@ -547,6 +547,17 @@ export default function EditTemplateDialog({
                 Back
             </Button>
             <Button
+                onClick={() => setShowPartyConfigDialog(true)}
+                variant="outlined"
+                sx={{
+                    px: 2,
+                    py: 0.5,
+                    borderRadius: 2,
+                }}
+            >
+                {parties.length > 0 ? `${parties.length} Parties` : 'Configure Parties'}
+            </Button>
+            <Button
                 onClick={handleSubmit}
                 variant="contained"
                 disabled={updating}
