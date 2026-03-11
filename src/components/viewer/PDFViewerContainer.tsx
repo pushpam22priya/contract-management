@@ -1842,6 +1842,30 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             }
                         }
 
+                        // ✅ Reorder signature dialog tabs: Type first, then Draw, then Upload
+                        // WebViewer 11 Modular UI doesn't expose a setSignatureModes API,
+                        // so we inject CSS into the WebViewer iframe to visually reorder the flexbox tabs
+                        try {
+                            const iframeDoc = (instance as any).iframeWindow?.document;
+                            if (iframeDoc) {
+                                const style = iframeDoc.createElement('style');
+                                style.textContent = `
+                                    /* Reorder signature modal tabs: Type (1st), Draw (2nd), Upload (3rd) */
+                                    [data-element="textSignaturePanelButton"] { order: -1 !important; }
+                                    [data-element="inkSignaturePanelButton"] { order: 0 !important; }
+                                    [data-element="imageSignaturePanelButton"] { order: 1 !important; }
+                                `;
+                                iframeDoc.head.appendChild(style);
+                                console.log('✅ Signature tabs reordered via CSS: Type, Draw, Upload');
+                            }
+
+                            // Set the default selected tab to "Type" when signature modal opens
+                            UI.setSelectedTab('signatureModal', 'textSignaturePanelButton');
+                            console.log('✅ Default signature tab set to Type');
+                        } catch (tabErr) {
+                            console.warn('⚠️ Could not reorder signature tabs:', tabErr);
+                        }
+
                         // ✅ Only show "Sign here" placeholder on empty signature fields
                         if (signatureTool && signatureTool.setCustomCreateSignHereElementHandler) {
                             signatureTool.setCustomCreateSignHereElementHandler((widget: any) => {
