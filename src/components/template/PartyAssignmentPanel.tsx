@@ -357,7 +357,10 @@ export default function PartyAssignmentPanel({
                                                         <Typography variant="body2" fontWeight="medium">
                                                             {party.label}
                                                         </Typography>
-                                                        <Chip
+                                                         <Typography variant="caption" fontWeight="medium">
+                                                            {`${partyFields.length} field(s)`}
+                                                        </Typography>
+                                                        {/* <Chip
                                                             label={`Order ${party.order}`}
                                                             size="small"
                                                             sx={{
@@ -366,10 +369,10 @@ export default function PartyAssignmentPanel({
                                                                 bgcolor: party.color,
                                                                 color: 'white',
                                                             }}
-                                                        />
+                                                        /> */}
                                                     </Box>
                                                 }
-                                                secondary={`${partyFields.length} field(s)`}
+                                                // secondary={`${partyFields.length} field(s)`}
                                             />
 
                                             {partyFields.length > 0 && (

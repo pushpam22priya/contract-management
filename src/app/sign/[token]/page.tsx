@@ -10,10 +10,9 @@ import {
     Button,
     Paper,
     Tooltip,
-    IconButton,
     Chip,
 } from '@mui/material';
-import { CheckCircle, Error, Save, Download, Close } from '@mui/icons-material';
+import { CheckCircle, Error, Save, Download } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
 import { SignatureRequest } from '@/types/signature';
 import { PartyConfiguration } from '@/types/template';
@@ -24,6 +23,7 @@ import {
 import { sendSignedCopyEmail, sendSignatureRequestEmail } from '@/services/emailService';
 import SignAllDialog from '@/components/contracts/SignAllDialog';
 import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
+import PartyValidationWarningPopup from '@/components/viewer/pdfViewer/PartyValidationWarningPopup';
 
 // Dynamically import PDFViewerContainer
 const PDFViewerContainer = dynamic(
@@ -65,9 +65,6 @@ export default function PublicSigningPage() {
     const [emptySignFieldCount, setEmptySignFieldCount] = useState(0);
     const [hasDeclinedSignAll, setHasDeclinedSignAll] = useState(false);
 
-    // Track if user dismissed the party validation warning popup
-    const [dismissedPartyWarning, setDismissedPartyWarning] = useState(false);
-
     // ✅ Wrong party warning - shows when user tries to edit another party's field (empty or pre-filled)
     // Also shows when user tries to drag a pre-filled signature
     const [showWrongPartyWarning, setShowWrongPartyWarning] = useState(false);
@@ -77,11 +74,6 @@ export default function PublicSigningPage() {
 
     // ✅ Track if user has interacted with the document (clicked/focused on a field)
     const userHasInteractedRef = useRef(false);
-
-    // Draggable popup state
-    const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
-    const [isDragging, setIsDragging] = useState(false);
-    const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number } | null>(null);
 
     // The current user's assigned party IDs (normalised to an array)
     const userPartyIds = useMemo(() => {
@@ -287,52 +279,6 @@ export default function PublicSigningPage() {
             totalAssignedFieldCount: editableUserFields.length
         };
     }, [filledFieldValues, signatureRequest]);
-
-    // Reset dismissed state when warning content changes (user fills more fields)
-    useEffect(() => {
-        if (partyValidationWarning) {
-            setDismissedPartyWarning(false);
-        }
-    }, [JSON.stringify(partyValidationWarning)]);
-
-    // Drag handlers for warning popup
-    const handleDragStart = (e: React.MouseEvent) => {
-        e.preventDefault();
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        dragStartRef.current = {
-            x: e.clientX,
-            y: e.clientY,
-            posX: popupPosition?.x ?? rect.left,
-            posY: popupPosition?.y ?? rect.top,
-        };
-        setIsDragging(true);
-    };
-
-    useEffect(() => {
-        if (!isDragging) return;
-
-        const handleMouseMove = (e: MouseEvent) => {
-            if (!dragStartRef.current) return;
-            const dx = e.clientX - dragStartRef.current.x;
-            const dy = e.clientY - dragStartRef.current.y;
-            setPopupPosition({
-                x: dragStartRef.current.posX + dx,
-                y: dragStartRef.current.posY + dy,
-            });
-        };
-
-        const handleMouseUp = () => {
-            setIsDragging(false);
-            dragStartRef.current = null;
-        };
-
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-        return () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-        };
-    }, [isDragging]);
 
     // ✅ Merge fieldValues into formFields for party validation
     const formFieldsWithValues = useMemo(() => {
@@ -806,68 +752,10 @@ export default function PublicSigningPage() {
                     zIndex={1100}
                 />
 
-                {/* Party Validation Warning Popup */}
-                {partyValidationWarning && !dismissedPartyWarning && (
-                    <Box
-                        sx={{
-                            ...(popupPosition ? {
-                                top: popupPosition.y,
-                                left: popupPosition.x,
-                                transform: 'none',
-                                position: 'fixed',
-                            } : {
-                                position: 'absolute',
-                                top: 8,
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                            }),
-                            zIndex: 1000,
-                            maxWidth: '90%',
-                            minWidth: 300,
-                        }}
-                    >
-                        <Alert
-                            severity="warning"
-                            sx={{
-                                py: 0.5,
-                                boxShadow: 3,
-                                borderRadius: 2,
-                                pr: 5,
-                                cursor: isDragging ? 'grabbing' : 'grab',
-                                userSelect: 'none',
-                            }}
-                            onMouseDown={handleDragStart}
-                            action={
-                                <IconButton
-                                    size="small"
-                                    onClick={() => setDismissedPartyWarning(true)}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    sx={{ position: 'absolute', top: 4, right: 4 }}
-                                >
-                                    <Close fontSize="small" />
-                                </IconButton>
-                            }
-                        >
-                            <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
-                                Complete all fields for the party you started filling:
-                            </Typography>
-                            <Box sx={{ maxHeight: 100, overflowY: 'auto' }}>
-                                {partyValidationWarning.map(({ party, filled, total, missing }) => (
-                                    <Box key={party.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                                        <Chip
-                                            label={party.label}
-                                            size="small"
-                                            sx={{ bgcolor: party.color, color: '#fff', fontWeight: 600, minWidth: 32 }}
-                                        />
-                                        <Typography variant="caption">
-                                            {filled}/{total} fields filled — missing: {missing.join(', ')}
-                                        </Typography>
-                                    </Box>
-                                ))}
-                            </Box>
-                        </Alert>
-                    </Box>
-                )}
+                <PartyValidationWarningPopup
+                    partyValidationWarning={partyValidationWarning}
+                    onNavigateToField={(name) => pdfViewerRef.current?.navigateToField(name)}
+                />
             </Box>
         </Box>
     );

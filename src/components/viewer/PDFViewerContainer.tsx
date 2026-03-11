@@ -78,6 +78,7 @@ export interface PDFViewerHandle {
     restoreFieldValue: (fieldName: string, value: string) => boolean; // Restore a field to a specific value
     navigateToFirstPartyField: (partyIds: string[]) => Promise<void>;
     navigateToFirstNonClientField: (excludePartyIds: string[]) => Promise<void>;
+    navigateToField: (fieldName: string) => Promise<void>;
     // Multi-party field assignment methods
     assignFieldToParty: (fieldName: string, partyId: string, partyLabel: string, partyColor: string) => boolean;
     getFieldPartyAssignment: (fieldName: string) => { partyId: string; partyLabel: string } | null;
@@ -1660,6 +1661,41 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     setTimeout(() => { if (scrollContainer) scrollContainer.style.scrollBehavior = 'auto'; }, 600);
                 } catch (e) {
                     console.warn('[NAV] navigateToFirstNonClientField failed:', e);
+                }
+            },
+
+            navigateToField: async (fieldName: string) => {
+                if (!viewerInstance.current) return;
+                const { Core } = viewerInstance.current;
+                if (!Core) return;
+
+                const allAnnotations = Core.annotationManager.getAnnotationsList();
+                const targetAnnot = allAnnotations.find((annot: any) => {
+                    if (!(annot instanceof Core.Annotations.WidgetAnnotation)) return false;
+                    const field = annot.getField?.();
+                    return field?.name === fieldName;
+                });
+                if (!targetAnnot) {
+                    console.warn(`[NAV] navigateToField: field "${fieldName}" not found`);
+                    return;
+                }
+
+                const { documentViewer, annotationManager } = Core;
+                try {
+                    const scrollContainer = documentViewer.getScrollViewElement();
+                    if (scrollContainer) scrollContainer.style.scrollBehavior = 'smooth';
+                    annotationManager.deselectAllAnnotations();
+                    if (documentViewer.getCurrentPage() !== targetAnnot.PageNumber) {
+                        documentViewer.setCurrentPage(targetAnnot.PageNumber);
+                        await new Promise(resolve => setTimeout(resolve, 250));
+                    }
+                    annotationManager.selectAnnotation(targetAnnot);
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    annotationManager.jumpToAnnotation(targetAnnot);
+                    flashHighlight(Core, targetAnnot);
+                    setTimeout(() => { if (scrollContainer) scrollContainer.style.scrollBehavior = 'auto'; }, 600);
+                } catch (e) {
+                    console.warn('[NAV] navigateToField failed:', e);
                 }
             },
         }));
