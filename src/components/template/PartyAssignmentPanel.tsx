@@ -298,7 +298,7 @@ export default function PartyAssignmentPanel({
                         maxHeight: 140,
                         overflowY: 'auto',
                         overflowX: 'hidden',
-                        padding: 0.2
+                        padding: 1
                     }}>
                         <List dense disablePadding>
                             {parties.map((party) => {

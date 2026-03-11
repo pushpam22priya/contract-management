@@ -322,8 +322,6 @@ export default function TemplatePage() {
                         template={templateToEdit}
                         onSuccess={() => {
                             loadTemplates();
-                            setEditDialogOpen(false);
-                            setTemplateToEdit(null);
                         }}
                     />
                 )}

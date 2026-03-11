@@ -12,6 +12,7 @@ import {
     alpha,
     CircularProgress,
     Alert,
+    AlertColor,
 } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -23,6 +24,8 @@ import ArrowBack from '@mui/icons-material/ArrowBack';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import { authService } from '@/services/authService';
+import ConfirmationDialog from '@/components/common/ConfirmationDialog';
+import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import PDFViewerContainer, { PDFViewerHandle, FormFieldDefinitionWithParty } from '@/components/viewer/PDFViewerContainer';
 import PartyConfigDialog from '@/components/template/PartyConfigDialog';
 import PartyAssignmentPanel from '@/components/template/PartyAssignmentPanel';
@@ -300,6 +303,11 @@ export default function UploadTemplateDialog({
     };
 
 
+    // Unsaved changes confirmation dialog
+    const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: AlertColor }>({ open: false, message: '', severity: 'success' });
+    const [savedTemplateId, setSavedTemplateId] = useState<string | null>(null);
+
     // State for modification tracking
     const [pdfModified, setPdfModified] = useState(false);
 
@@ -320,28 +328,28 @@ export default function UploadTemplateDialog({
     };
 
     // Handle submit
-    const handleSubmit = async () => {
+    const handleSubmit = async (): Promise<boolean> => {
         setError('');
         setSuccess('');
 
         // Validate form
         if (!templateName.trim()) {
             setError('Please enter a template name');
-            return;
+            return false;
         }
         if (!selectedCategory) {
             setError('Please select a category');
-            return;
+            return false;
         }
         if (!selectedFile) {
             setError('Please upload a file');
-            return;
+            return false;
         }
 
         const currentUser = authService.getCurrentUser();
         if (!currentUser) {
             setError('You must be logged in to upload templates');
-            return;
+            return false;
         }
 
         setUploading(true);
@@ -357,7 +365,7 @@ export default function UploadTemplateDialog({
                     console.error('❌ [SUBMIT] Failed to switch to View mode — aborting upload');
                     setError('Failed to switch to View mode. Please try again.');
                     setUploading(false);
-                    return;
+                    return false;
                 }
                 console.log('✅ [SUBMIT] View mode switch verified — proceeding with export');
             }
@@ -440,23 +448,50 @@ export default function UploadTemplateDialog({
             // - formFields is populated from fresh export
 
 
-            console.log('💾 Saving template via Service...');
-            console.log(`  - Parties: ${parties.length}`);
-            console.log(`  - Form fields: ${formFields.length}`);
-            const savedTemplate = await templateService.saveTemplate({
-                name: templateName.trim(),
-                description: description.trim(),
-                category: selectedCategory,
-                fileName: selectedFile.name,
-                file: fileToUpload,   // ✅ Pass File/Blob directly
-                xfdfData: xfdfData,   // ✅ Pass XFDF string
-                formFields: formFields,
-                parties: parties.length > 0 ? parties : undefined,  // ✅ Include parties if configured
-            }, currentUser.email);
+            let templateId = savedTemplateId;
 
-            console.log('✅ Template saved successfully!', savedTemplate.template?.id);
-
-            setSuccess('Template uploaded successfully!');
+            if (templateId) {
+                // Already saved once — update instead of creating a new template
+                console.log('💾 Updating existing template via Service (re-save)...', templateId);
+                const updateData: any = {
+                    name: templateName.trim(),
+                    description: description.trim(),
+                    category: selectedCategory,
+                    formFields: formFields,
+                    hasFormFields: formFields.length > 0,
+                    xfdfData: xfdfData,
+                    parties: parties.length > 0 ? parties : undefined,
+                };
+                if (fileToUpload !== selectedFile || pdfModified) {
+                    updateData.file = fileToUpload;
+                    updateData.fileName = selectedFile.name;
+                    updateData.fileType = 'pdf';
+                }
+                const result = await templateService.updateTemplate(templateId, updateData, currentUser.email);
+                if (!result.success) {
+                    setError(result.message || 'Failed to update template. Please try again.');
+                    return false;
+                }
+                console.log('✅ Template updated successfully!', templateId);
+            } else {
+                // First save — create new template
+                console.log('💾 Saving template via Service...');
+                console.log(`  - Parties: ${parties.length}`);
+                console.log(`  - Form fields: ${formFields.length}`);
+                const savedTemplate = await templateService.saveTemplate({
+                    name: templateName.trim(),
+                    description: description.trim(),
+                    category: selectedCategory,
+                    fileName: selectedFile.name,
+                    file: fileToUpload,
+                    xfdfData: xfdfData,
+                    formFields: formFields,
+                    parties: parties.length > 0 ? parties : undefined,
+                }, currentUser.email);
+                templateId = (savedTemplate as any).id || null;
+                setSavedTemplateId(templateId);
+                console.log('✅ Template saved successfully!', templateId);
+            }
 
             // ✅ Set toolbar to View mode after success
             if (pdfViewerRef.current && pdfViewerRef.current.setToolbarGroup) {
@@ -464,18 +499,44 @@ export default function UploadTemplateDialog({
                 pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
             }
 
-            setTimeout(() => {
-                handleClose();
-                onSuccess?.();
-            }, 2000); // 2 second delay as requested
+            setSnackbar({ open: true, message: 'Template saved successfully!', severity: 'success' });
+            onSuccess?.();
+            return true;
         } catch (err: any) {
             console.error('❌ Error uploading template:', err);
             setError(err.message || 'Failed to upload template. Please try again.');
+            return false;
         } finally {
             setUploading(false);
         }
     };
 
+
+    // Handle close attempt — show confirmation if user has entered any data
+    const handleCloseAttempt = () => {
+        if (uploading) return;
+        const hasData = !!(templateName || selectedCategory || selectedFile || currentStep === 2);
+        if (hasData) {
+            setShowUnsavedDialog(true);
+        } else {
+            handleClose();
+        }
+    };
+
+    const handleUnsavedYes = async () => {
+        setShowUnsavedDialog(false);
+        const saved = await handleSubmit();
+        if (saved) handleClose();
+    };
+
+    const handleUnsavedNo = () => {
+        setShowUnsavedDialog(false);
+        handleClose();
+    };
+
+    const handleUnsavedCancel = () => {
+        setShowUnsavedDialog(false);
+    };
 
     // Handle close
     const handleClose = () => {
@@ -489,7 +550,8 @@ export default function UploadTemplateDialog({
             setShowNewCategoryInput(false);
             setError('');
             setSuccess('');
-            setPdfModified(false); // Reset modification state
+            setPdfModified(false);
+            setSavedTemplateId(null); // Reset so next open starts fresh
             // Reset party state
             setParties([]);
             setFormFields([]);
@@ -581,9 +643,10 @@ export default function UploadTemplateDialog({
     const dialogActions = currentStep === 1 ? step1Actions : step2Actions;
 
     return (
+        <>
         <BaseDialog
             open={open}
-            onClose={handleClose}
+            onClose={handleCloseAttempt}
             title={currentStep === 1 ? "Upload Template - Step 1: Basic Information" : "Upload Template - Step 2: Add Form Fields"}
             actions={dialogActions}
             maxWidth={currentStep === 1 ? 'sm' : 'xl'}
@@ -1069,5 +1132,23 @@ export default function UploadTemplateDialog({
                 initialParties={parties}
             />
         </BaseDialog>
+
+        {/* Unsaved Changes Confirmation Dialog */}
+        <ConfirmationDialog
+            open={showUnsavedDialog}
+            title="Unsaved Changes"
+            message="Do you want to save changes?"
+            onYes={handleUnsavedYes}
+            onNo={handleUnsavedNo}
+            onClose={handleUnsavedCancel}
+            loading={uploading}
+        />
+        <NotificationSnackbar
+            open={snackbar.open}
+            message={snackbar.message}
+            severity={snackbar.severity}
+            onClose={() => setSnackbar({ ...snackbar, open: false })}
+        />
+        </>
     );
 }

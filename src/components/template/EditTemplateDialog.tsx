@@ -12,6 +12,7 @@ import {
     alpha,
     CircularProgress,
     Alert,
+    AlertColor,
 } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
@@ -23,6 +24,8 @@ import ArrowBack from '@mui/icons-material/ArrowBack';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import { authService } from '@/services/authService';
+import ConfirmationDialog from '@/components/common/ConfirmationDialog';
+import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { Template, PartyConfiguration, FormFieldDefinition } from '@/types/template';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import PartyConfigDialog from '@/components/template/PartyConfigDialog';
@@ -329,35 +332,37 @@ export default function EditTemplateDialog({
         setDocumentLoaded(false);
     };
 
+    // Unsaved changes confirmation dialog
+    const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: AlertColor }>({ open: false, message: '', severity: 'success' });
+
     // State for modification tracking
     const [pdfModified, setPdfModified] = useState(false);
 
     // Handle submit (Update)
-    const handleSubmit = async () => {
+    const handleSubmit = async (): Promise<boolean> => {
         setError('');
         setSuccess('');
 
         // Validate form
         if (!templateName.trim()) {
             setError('Please enter a template name');
-            return;
+            return false;
         }
         if (!selectedCategory) {
             setError('Please select a category');
-            return;
+            return false;
         }
 
         const currentUser = authService.getCurrentUser();
         if (!currentUser) {
             setError('You must be logged in to update templates');
-            return;
+            return false;
         }
 
         setUpdating(true);
 
         try {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
             if (pdfViewerRef.current) {
                 pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
                 pdfViewerRef.current.setToolMode('Pan');
@@ -459,19 +464,41 @@ export default function EditTemplateDialog({
 
             if (result.success) {
                 console.log('✅ Template updated successfully!', result.template?.id);
-                setSuccess(result.message);
-                // Close immediately after success since we already waited
-                handleClose();
+                setSnackbar({ open: true, message: result.message || 'Template updated successfully!', severity: 'success' });
                 onSuccess?.();
+                return true;
             } else {
                 setError(result.message);
+                return false;
             }
         } catch (err: any) {
             console.error('❌ Error updating template:', err);
             setError('Failed to update template. Please try again.');
+            return false;
         } finally {
             setUpdating(false);
         }
+    };
+
+    // Handle close attempt — always show confirmation for edit dialog
+    const handleCloseAttempt = () => {
+        if (updating) return;
+        setShowUnsavedDialog(true);
+    };
+
+    const handleUnsavedYes = async () => {
+        setShowUnsavedDialog(false);
+        const saved = await handleSubmit();
+        if (saved) handleClose();
+    };
+
+    const handleUnsavedNo = () => {
+        setShowUnsavedDialog(false);
+        handleClose();
+    };
+
+    const handleUnsavedCancel = () => {
+        setShowUnsavedDialog(false);
     };
 
     // Handle close
@@ -582,9 +609,10 @@ export default function EditTemplateDialog({
     const dialogActions = currentStep === 1 ? step1Actions : step2Actions;
 
     return (
+        <>
         <BaseDialog
             open={open}
-            onClose={handleClose}
+            onClose={handleCloseAttempt}
             title={currentStep === 1 ? "Edit Template - Step 1: Basic Information" : "Edit Template - Step 2: Edit Form Fields"}
             actions={dialogActions}
             maxWidth={currentStep === 1 ? 'sm' : 'xl'}
@@ -1100,5 +1128,23 @@ export default function EditTemplateDialog({
                 initialParties={parties}
             />
         </BaseDialog>
+
+        {/* Unsaved Changes Confirmation Dialog */}
+        <ConfirmationDialog
+            open={showUnsavedDialog}
+            title="Unsaved Changes"
+            message="Do you want to save changes?"
+            onYes={handleUnsavedYes}
+            onNo={handleUnsavedNo}
+            onClose={handleUnsavedCancel}
+            loading={updating}
+        />
+        <NotificationSnackbar
+            open={snackbar.open}
+            message={snackbar.message}
+            severity={snackbar.severity}
+            onClose={() => setSnackbar({ ...snackbar, open: false })}
+        />
+        </>
     );
 }
