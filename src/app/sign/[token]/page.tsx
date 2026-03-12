@@ -729,6 +729,7 @@ export default function PublicSigningPage() {
                         clientSigningMode={true}
                         readOnly={false}
                         currentUserRole="client"
+                        currentUserEmail={signatureRequest.signerEmail}
                         onFieldChange={handleFieldChange}
                         showAnnotationNavigation={true}
                         onSignatureApplied={handleSignatureApplied}

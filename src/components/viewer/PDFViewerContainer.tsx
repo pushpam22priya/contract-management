@@ -38,6 +38,7 @@ interface PDFViewerContainerProps {
     enablePartyAssignment?: boolean;          // Enable party assignment mode (for template creation)
     onPartyAssigned?: (fieldName: string, partyId: string, partyLabel: string) => void; // Callback when field is assigned to party
     onFieldsWithPartyExported?: (fields: FormFieldDefinitionWithParty[]) => void; // Callback with fields including party data
+    currentUserEmail?: string; // ✅ Pre-populate typed signature with this email (for external signers who have no session)
 }
 
 // Import types for multi-party support
@@ -87,7 +88,7 @@ export interface PDFViewerHandle {
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole, currentUserEmail }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const [loading, setLoading] = useState(true);
@@ -1862,6 +1863,20 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             // Set the default selected tab to "Type" when signature modal opens
                             UI.setSelectedTab('signatureModal', 'textSignaturePanelButton');
                             console.log('✅ Default signature tab set to Type');
+
+                            // Pre-populate the "Type" signature input with the current user's email.
+                            // External signers don't have a session, so the email is passed via the
+                            // currentUserEmail prop. Internal users fall back to sessionStorage.
+                            const emailForSignature = currentUserEmail || (() => {
+                                try {
+                                    const raw = sessionStorage.getItem('cms_current_user');
+                                    return raw ? JSON.parse(raw)?.email : null;
+                                } catch { return null; }
+                            })();
+                            if (emailForSignature) {
+                                Core.annotationManager.setCurrentUser(emailForSignature);
+                                console.log('✅ Typed signature pre-populated with:', emailForSignature);
+                            }
                         } catch (tabErr) {
                             console.warn('⚠️ Could not reorder signature tabs:', tabErr);
                         }
