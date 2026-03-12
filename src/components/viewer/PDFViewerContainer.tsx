@@ -1874,8 +1874,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 } catch { return null; }
                             })();
                             if (emailForSignature) {
-                                Core.annotationManager.setCurrentUser(emailForSignature);
-                                console.log('✅ Typed signature pre-populated with:', emailForSignature);
+                               const nameFromEmail = emailForSignature.split('@')[0];
+                                Core.annotationManager.setCurrentUser(nameFromEmail);
+                                console.log('✅ Typed signature pre-populated with:', nameFromEmail);
                             }
                         } catch (tabErr) {
                             console.warn('⚠️ Could not reorder signature tabs:', tabErr);
