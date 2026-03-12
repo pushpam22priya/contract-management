@@ -739,6 +739,14 @@ export default function PublicSigningPage() {
                         editableParties={editableParties}
                         // ✅ Protect signatures belonging to other parties (client can only modify their own party's signatures)
                         protectedPartyIds={protectedPartyIds}
+                        // ✅ Auto-scroll to first assigned field after document loads
+                        onDocumentLoaded={() => {
+                            if (userPartyIds.length > 0) {
+                                setTimeout(() => {
+                                    pdfViewerRef.current?.navigateToFirstPartyField(userPartyIds);
+                                }, 500);
+                            }
+                        }}
                     />
                 )}
 

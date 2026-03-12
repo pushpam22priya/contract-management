@@ -656,6 +656,12 @@ export default function DocumentViewerDialog({
                         }
                         // ✅ For internal signer: Restrict editing to only assigned party's fields
                         editableParties={assignedPartyId ? [assignedPartyId] : undefined}
+                        // ✅ Auto-scroll to first assigned field after document loads (internal signers only)
+                        onDocumentLoaded={assignedPartyId ? () => {
+                            setTimeout(() => {
+                                pdfViewerRef.current?.navigateToFirstPartyField([assignedPartyId]);
+                            }, 500);
+                        } : undefined}
                     />
 
                     <PartyValidationWarningPopup
