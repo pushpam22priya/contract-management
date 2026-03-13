@@ -157,6 +157,15 @@ const MultiPartySignatureDialog = ({
         p => !allAssignedPartyIds.includes(p.id) && !contractorFilledPartyIds.includes(p.id)
     );
 
+    // Filter assigned users from internal user dropdown
+    const availableUsers = registeredUsers.filter(user => {
+        // Filter out if user is already in existingInternalSigners
+        const isExisting = existingInternalSigners.some(s => s.email === user.email);
+        // Filter out if user is already in new assignments
+        const isInNew = assignments.some(a => a.type === 'internal' && a.email === user.email);
+        return !isExisting && !isInNew;
+    });
+
     // Max order among already-committed signers — new assignments continue from here
     const existingMaxOrder = [...existingExternalSigners, ...existingInternalSigners]
         .reduce((max, s) => Math.max(max, s.order ?? 0), 0);
@@ -570,7 +579,7 @@ const MultiPartySignatureDialog = ({
                                 {signerType === 'internal' ? (
                                     <Autocomplete
                                         size="small"
-                                        options={registeredUsers}
+                                        options={availableUsers}
                                         getOptionLabel={(option) => option.name ? `${option.name} (${option.email})` : option.email}
                                         value={selectedUser}
                                         onChange={(_e, value) => setSelectedUser(value)}
@@ -584,20 +593,23 @@ const MultiPartySignatureDialog = ({
                                                 sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
                                             />
                                         )}
-                                        renderOption={(props, option) => (
-                                            <li {...props}>
-                                                <Box>
-                                                    <Typography variant="body2" fontWeight={500}>
-                                                        {option.name || option.email}
-                                                    </Typography>
-                                                    {option.name && (
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            {option.email}
+                                        renderOption={(props, option) => {
+                                            const { key, ...otherProps } = props as any;
+                                            return (
+                                                <li key={key} {...otherProps}>
+                                                    <Box>
+                                                        <Typography variant="body2" fontWeight={500}>
+                                                            {option.name || option.email}
                                                         </Typography>
-                                                    )}
-                                                </Box>
-                                            </li>
-                                        )}
+                                                        {option.name && (
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {option.email}
+                                                            </Typography>
+                                                        )}
+                                                    </Box>
+                                                </li>
+                                            );
+                                        }}
                                         disabled={loading}
                                     />
                                 ) : (

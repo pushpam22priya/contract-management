@@ -916,7 +916,7 @@ export default function UploadTemplateDialog({
                                         />
                                     )}
                                     renderOption={(props, option) => {
-                                        const { key, ...otherProps } = props;
+                                        const { key, ...otherProps } = props as any;
                                         return (
                                             <li key={key} {...otherProps} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                                                 <Chip
