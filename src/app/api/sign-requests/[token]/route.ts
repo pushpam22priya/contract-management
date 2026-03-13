@@ -96,6 +96,28 @@ export async function GET(
             console.warn(`⚠️ [SignRequest GET] Could not fetch contract for request`);
         }
 
+        // Refresh contractVersion to the current contract version.
+        // This prevents false 409 VERSION_MISMATCH errors caused by any contract
+        // update (another signer, contractor edit, etc.) that happened after this
+        // signing request was created. The file endpoint always serves the latest
+        // PDF, so the signer is already working with the current version.
+        const freshContractVersion = linkedContract?.version ?? signatureRequest.contractVersion;
+        if (
+            linkedContract &&
+            linkedContract.version !== undefined &&
+            linkedContract.version !== signatureRequest.contractVersion
+        ) {
+            try {
+                await db.collection('signature_requests').updateOne(
+                    { token },
+                    { $set: { contractVersion: linkedContract.version } }
+                );
+                console.log(`🔄 [SignRequest GET] Refreshed contractVersion: ${signatureRequest.contractVersion} → ${linkedContract.version}`);
+            } catch (versionSyncErr) {
+                console.warn('⚠️ [SignRequest GET] Could not refresh contractVersion:', versionSyncErr);
+            }
+        }
+
         // Return data in expected format (combining request with contract data)
         const responseData: Record<string, any> = {
             ...signatureRequest,
@@ -119,7 +141,7 @@ export async function GET(
             // Always include party assignment from the request itself
             assignedParty: signatureRequest.assignedParty,
             assignedPartyLabel: signatureRequest.assignedPartyLabel,
-            contractVersion: signatureRequest.contractVersion,
+            contractVersion: freshContractVersion,
         };
 
         return NextResponse.json({
