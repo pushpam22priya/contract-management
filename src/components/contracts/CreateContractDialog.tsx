@@ -24,6 +24,7 @@ import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureD
 import MultiPartySignatureDialog from '@/components/contracts/MultiPartySignatureDialog';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import PartyValidationWarningPopup from '@/components/viewer/pdfViewer/PartyValidationWarningPopup';
+import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
 import { submitForMixedSignature } from '@/services/externalSignatureService';
 import { templateService } from '@/services/templateService';
 import { contractService } from '@/services/contractService';
@@ -94,6 +95,26 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }:
     // These values are specific to THIS contract only - template remains unchanged
     const [filledFieldValues, setFilledFieldValues] = useState<Record<string, string>>({});
 
+    // ✅ Contractor party restriction: contractor may only fill ONE party's fields
+    const [showWrongPartyWarning, setShowWrongPartyWarning] = useState(false);
+
+    // The party the contractor has committed to (first party where they filled any field)
+    const contractorPartyId = useMemo(() => {
+        if (!selectedTemplate?.formFields) return null;
+        for (const field of selectedTemplate.formFields) {
+            if (field.assignedParty && filledFieldValues[field.name]?.trim()) {
+                return field.assignedParty as string;
+            }
+        }
+        return null;
+    }, [filledFieldValues, selectedTemplate?.formFields]);
+
+    // Refs so handleFieldChange (called via viewer ref) always sees the latest values
+    const contractorPartyIdRef = useRef<string | null>(null);
+    const filledFieldValuesRef = useRef<Record<string, string>>({});
+    useEffect(() => { contractorPartyIdRef.current = contractorPartyId; }, [contractorPartyId]);
+    useEffect(() => { filledFieldValuesRef.current = filledFieldValues; }, [filledFieldValues]);
+
 
     // Load templates when dialog opens
     useEffect(() => {
@@ -128,6 +149,21 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }:
     // and stores it in filledFieldValues state so we can save it with the contract
     const handleFieldChange = (fieldName: string, value: any) => {
         console.log(`📝 Field changed: ${fieldName} = ${value}`);
+
+        // ✅ Restrict contractor to filling only ONE party's fields
+        const field = (selectedTemplate?.formFields || []).find((f: any) => f.name === fieldName);
+        if (field?.assignedParty && contractorPartyIdRef.current && field.assignedParty !== contractorPartyIdRef.current) {
+            setShowWrongPartyWarning(true);
+            // Revert the field to its previous value
+            const prevValue = filledFieldValuesRef.current[fieldName] || '';
+            if (prevValue) {
+                pdfViewerRef.current?.restoreFieldValue(fieldName, prevValue);
+            } else {
+                pdfViewerRef.current?.clearField(fieldName);
+            }
+            return;
+        }
+
         setFilledFieldValues(prev => ({
             ...prev,
             [fieldName]: value?.toString() || ''
@@ -777,6 +813,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }:
                                 onChange={(e) => setContractTitle(e.target.value)}
                                 required
                                 placeholder="e.g., Software License Agreement"
+                                inputProps={{ maxLength: 50 }}
                                 sx={{
                                     '& .MuiInputBase-input': {
                                         padding: '10px 12px',
@@ -798,6 +835,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }:
                                 onChange={(e) => setClientName(e.target.value)}
                                 required
                                 placeholder="e.g., ABC Corp"
+                                inputProps={{ maxLength: 50 }}
                                 sx={{
                                     '& .MuiInputBase-input': {
                                         padding: '10px 12px',
@@ -893,6 +931,21 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }:
                                 <PartyValidationWarningPopup
                                     partyValidationWarning={validationTriggered ? partyValidationWarning : null}
                                     onNavigateToField={(name) => pdfViewerRef.current?.navigateToField(name)}
+                                />
+
+                                {/* ✅ Warn contractor when they try to fill a second party's fields */}
+                                <WrongPartyWarningDialog
+                                    open={showWrongPartyWarning}
+                                    title="Single Party Restriction"
+                                    description={
+                                        contractorPartyId
+                                            ? <>You have already started filling <strong>{selectedTemplate?.parties?.find((p: PartyConfiguration) => p.id === contractorPartyId)?.label || contractorPartyId}</strong> fields. You can only fill one party&apos;s fields.</>
+                                            : <>You can only fill one party&apos;s fields.</>
+                                    }
+                                    pdfViewerRef={pdfViewerRef}
+                                    navigateConfig={contractorPartyId ? { type: 'party', partyIds: [contractorPartyId] } : { type: 'party', partyIds: [] }}
+                                    onClose={() => setShowWrongPartyWarning(false)}
+                                    zIndex={1400}
                                 />
                             </Box>
                         ) : (

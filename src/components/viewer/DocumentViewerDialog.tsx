@@ -186,7 +186,6 @@ export default function DocumentViewerDialog({
     // ✅ Track if user has interacted with the document (to avoid warning on initial load)
     const userHasInteractedRef = useRef(false);
 
-
     // Track field changes during client signing (same pattern as CreateContractDialog)
     // ✅ CRITICAL FIX: Initialize with existing field values from formFields
     // so that pre-filled fields (from a previously saved contract) are recognized
@@ -201,6 +200,16 @@ export default function DocumentViewerDialog({
         console.log(`📋 [DocumentViewerDialog] Initialized filledFieldValues from ${Object.keys(initial).length} pre-filled formFields`);
         return initial;
     });
+
+    // ✅ Contractor single-party restriction.
+    // Managed as explicit state+ref (NOT derived from filledFieldValues) to avoid:
+    //   - stale closure / async useEffect timing issues
+    //   - false positives during the 2-second PDF load window
+    // The ref is updated SYNCHRONOUSLY inside handleFieldChange so it is always current.
+    const [contractorCommittedPartyId, setContractorCommittedPartyId] = useState<string | null>(null);
+    const contractorCommittedPartyIdRef = useRef<string | null>(null);
+    // Tracks which kind of warning to show ('client-party' or 'single-party')
+    const [contractorWarnType, setContractorWarnType] = useState<'client-party' | 'single-party'>('client-party');
 
     // ✅ CRITICAL FIX: Reset all transient state when dialog reopens
     // If user closed without saving, discard in-session edits and re-seed from formFields
@@ -223,6 +232,19 @@ export default function DocumentViewerDialog({
             setShowWrongPartyWarning(false);
             setShowUnsavedDialog(false);
             setValidationTriggered(false);
+
+            // ✅ Initialise contractor committed party from pre-filled values
+            // (the party the contractor filled when they created the contract)
+            if (currentUserRole === 'contractor' && formFields) {
+                const firstFilledParty = (formFields as any[]).find(
+                    (f) => f.assignedParty && initial[f.name]?.trim()
+                )?.assignedParty ?? null;
+                setContractorCommittedPartyId(firstFilledParty);
+                contractorCommittedPartyIdRef.current = firstFilledParty;
+            } else {
+                setContractorCommittedPartyId(null);
+                contractorCommittedPartyIdRef.current = null;
+            }
             // ✅ Capture initial values for contractor protection (to restore if they edit client fields)
             initialFieldValuesRef.current = { ...initial };
             // ✅ Track last saved values to detect unsaved changes
@@ -253,9 +275,10 @@ export default function DocumentViewerDialog({
         const initialValue = initialFieldValuesRef.current[fieldName] || '';
         const newValue = value?.toString() || '';
 
-        // ✅ Skip protection for signature imports (value 'signed' is only used during import/tracking)
-        // Also skip if value matches initial (restore/reload)
-        if (newValue === 'signed' || newValue === initialValue) {
+        // ✅ Skip if value matches initial (restore/reload — field is returning to its saved state)
+        // NOTE: Do NOT skip 'signed' unconditionally — user-placed signatures also emit 'signed',
+        // so skipping it would let contractors bypass signature-field protection.
+        if (newValue === initialValue) {
             // Still update state for tracking
             setFilledFieldValues(prev => ({
                 ...prev,
@@ -302,43 +325,46 @@ export default function DocumentViewerDialog({
             }
         }
 
-        // ✅ CONTRACTOR PROTECTION: Prevent contractor from editing ANY client party fields
-        // (both external client parties AND internal client parties)
-        // Contractor CAN only edit their own party fields (fields NOT assigned to any signer)
+        // ✅ CONTRACTOR PROTECTION (unified)
         const isContractor = currentUserRole === 'contractor';
-        const hasClientParties = allClientPartyIds.length > 0;
 
-        if (isContractor && hasClientParties && hasFormFields) {
-            const field = formFields.find((f: any) => f.name === fieldName);
-            const fieldParty = field?.assignedParty;
+        if (isContractor && hasFormFields) {
+            const field = formFields!.find((f: any) => f.name === fieldName);
+            const fieldParty = (field as any)?.assignedParty;
 
-            // Block if field is assigned to ANY client party (external or internal signer)
-            // Contractor CAN only edit fields assigned to contractor parties or unassigned fields
-            const isClientPartyField = fieldParty && allClientPartyIds.includes(fieldParty);
+            if (fieldParty) {
+                const revert = () => {
+                    const orig = initialFieldValuesRef.current[fieldName] || '';
+                    if (orig) pdfViewerRef.current?.restoreFieldValue?.(fieldName, orig);
+                    else pdfViewerRef.current?.clearField?.(fieldName);
+                };
 
-            if (isClientPartyField) {
-                console.log(`🚫 [DocumentViewerDialog] BLOCKING! Contractor tried to edit client party field: ${fieldName} (party: ${fieldParty})`);
-                setShowWrongPartyWarning(true);
-
-                // Get the original value and restore it
-                const originalValue = initialFieldValuesRef.current[fieldName] || '';
-                setFilledFieldValues(prev => ({
-                    ...prev,
-                    [fieldName]: originalValue
-                }));
-
-                // Restore the field in the PDF viewer
-                if (originalValue) {
-                    if (pdfViewerRef.current?.restoreFieldValue) {
-                        pdfViewerRef.current.restoreFieldValue(fieldName, originalValue);
-                    }
-                } else {
-                    if (pdfViewerRef.current?.clearField) {
-                        pdfViewerRef.current.clearField(fieldName);
-                    }
+                // Case 1: Field belongs to an already-assigned signer party — block after interaction starts
+                // (userHasInteractedRef guard prevents false positives during XFDF restoration on load)
+                if (allClientPartyIds.includes(fieldParty) && userHasInteractedRef.current) {
+                    console.log(`🚫 [DocumentViewerDialog] Contractor blocked — client party field: ${fieldName} (${fieldParty})`);
+                    setContractorWarnType('client-party');
+                    setShowWrongPartyWarning(true);
+                    revert();
+                    return;
                 }
 
-                return; // Don't save the change
+                // Case 2: Single-party restriction — only apply after interaction tracking starts
+                // (avoids false positives during the 2-second PDF load window)
+                if (userHasInteractedRef.current) {
+                    if (contractorCommittedPartyIdRef.current === null) {
+                        // First party the contractor fills → commit to it (update ref synchronously)
+                        contractorCommittedPartyIdRef.current = fieldParty;
+                        setContractorCommittedPartyId(fieldParty);
+                    } else if (contractorCommittedPartyIdRef.current !== fieldParty) {
+                        // Different party → block
+                        console.log(`🚫 [DocumentViewerDialog] Contractor blocked — already committed to ${contractorCommittedPartyIdRef.current}, tried ${fieldParty}`);
+                        setContractorWarnType('single-party');
+                        setShowWrongPartyWarning(true);
+                        revert();
+                        return;
+                    }
+                }
             }
         }
 
@@ -652,7 +678,15 @@ export default function DocumentViewerDialog({
                         // ✅ For contractor: Show warning when signature position is restored (silent restore + warning)
                         silentPositionRestore={readOnly}
                         // ✅ Show warning when signature position is restored (for both contractor and internal signer)
-                        onSignaturePositionRestored={(currentUserRole === 'contractor' || assignedPartyId) ? () => setShowWrongPartyWarning(true) : undefined}
+                        // onSignaturePositionRestored only fires for CLIENT party signatures (protectedPartyIds match),
+                        // so for contractors we must always reset contractorWarnType to 'client-party' here —
+                        // otherwise a stale 'single-party' type from a previous text-field warning would show.
+                        onSignaturePositionRestored={(currentUserRole === 'contractor' || assignedPartyId) ? () => {
+                            if (currentUserRole === 'contractor') {
+                                setContractorWarnType('client-party');
+                            }
+                            setShowWrongPartyWarning(true);
+                        } : undefined}
                         // ✅ For contractor: Protect ALL client signatures (external + internal)
                         // ✅ For internal signer: Protect other party signatures (all parties except assigned)
                         protectedPartyIds={
@@ -680,10 +714,18 @@ export default function DocumentViewerDialog({
                     {/* ✅ Wrong Party Warning Dialog - for contractor or internal signer trying to edit other party fields */}
                     <WrongPartyWarningDialog
                         open={showWrongPartyWarning}
-                        title={currentUserRole === 'contractor' ? 'Client Party Field' : 'Wrong Party Field'}
+                        title={
+                            currentUserRole === 'contractor'
+                                ? contractorWarnType === 'single-party'
+                                    ? 'One Party Per Contractor'
+                                    : 'Client Party Field'
+                                : 'Wrong Party Field'
+                        }
                         description={
                             currentUserRole === 'contractor'
-                                ? 'This field is assigned to a client party and cannot be edited by the contractor.'
+                                ? contractorWarnType === 'single-party'
+                                    ? <>You have already started filling <strong>{parties?.find((p: any) => p.id === contractorCommittedPartyId)?.label || contractorCommittedPartyId}</strong> fields. You can only fill one party&apos;s fields — assign the other parties to signers.</>
+                                    : 'This field is assigned to a client party and cannot be edited by the contractor.'
                                 : assignedPartyLabel
                                     ? `You are assigned to fill fields as "${assignedPartyLabel}". This field belongs to another party.`
                                     : 'This field belongs to another party and cannot be edited by you.'
@@ -692,7 +734,9 @@ export default function DocumentViewerDialog({
                         navigateConfig={
                             assignedPartyId
                                 ? { type: 'party', partyIds: [assignedPartyId] }
-                                : { type: 'nonClient', excludePartyIds: allClientPartyIds }
+                                : contractorWarnType === 'single-party' && contractorCommittedPartyId
+                                    ? { type: 'party', partyIds: [contractorCommittedPartyId] }
+                                    : { type: 'nonClient', excludePartyIds: allClientPartyIds }
                         }
                         onClose={() => setShowWrongPartyWarning(false)}
                         zIndex={1200}
