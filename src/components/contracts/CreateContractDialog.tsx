@@ -67,6 +67,8 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }:
 
     // Saving state
     const [saving, setSaving] = useState(false);
+    // ✅ Track if validation has been triggered (by clicking save)
+    const [validationTriggered, setValidationTriggered] = useState(false);
 
     // Snackbar state
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: AlertColor }>({
@@ -172,6 +174,13 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }:
     const hasPartialParty = !!partyValidationWarning;
 
     const handleSave = async (): Promise<string | null> => {
+        // ✅ Check for party validation before proceeding
+        if (hasPartialParty) {
+            console.warn('📋 [SAVE BLOCKED] Partial party fields detected');
+            setValidationTriggered(true);
+            return null;
+        }
+
         if (!selectedTemplate) {
             setError('Please select a template');
             return null;
@@ -377,6 +386,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }:
         setError('');
         setContractId(null); // Reset so next dialog creates a new contract
         setFilledFieldValues({}); // Reset for next contract
+        setValidationTriggered(false);
 
         // Dispose PDF viewer
         pdfViewerRef.current?.dispose();
@@ -539,7 +549,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }:
         setCurrentStep(2);
     };
 
-    const canSave = selectedTemplate && contractTitle.trim() && clientName.trim() && documentLoaded && !hasPartialParty;
+    const canSave = selectedTemplate && contractTitle.trim() && clientName.trim() && documentLoaded && (!validationTriggered || !hasPartialParty);
 
     // Step 1: Contract Details Actions
     const step1Actions = (
@@ -881,7 +891,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }:
                                 />
 
                                 <PartyValidationWarningPopup
-                                    partyValidationWarning={partyValidationWarning}
+                                    partyValidationWarning={validationTriggered ? partyValidationWarning : null}
                                     onNavigateToField={(name) => pdfViewerRef.current?.navigateToField(name)}
                                 />
                             </Box>

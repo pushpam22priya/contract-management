@@ -119,13 +119,13 @@ export default function DocumentViewerDialog({
 
     const pdfViewerRef = useRef<any>(null);
     const [saving, setSaving] = useState(false);
+    const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
     const [signatureCommitted, setSignatureCommitted] = useState(false);
+    // ✅ Track if validation has been triggered (by clicking save)
+    const [validationTriggered, setValidationTriggered] = useState(false);
 
     // ✅ Wrong party warning for contractor - shows when contractor tries to edit client party field
     const [showWrongPartyWarning, setShowWrongPartyWarning] = useState(false);
-
-    // ✅ Unsaved changes confirmation dialog state
-    const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
     // Track values at last save to detect unsaved changes
     const lastSavedValuesRef = useRef<Record<string, string>>({});
 
@@ -222,6 +222,7 @@ export default function DocumentViewerDialog({
             setSignatureCommitted(false);
             setShowWrongPartyWarning(false);
             setShowUnsavedDialog(false);
+            setValidationTriggered(false);
             // ✅ Capture initial values for contractor protection (to restore if they edit client fields)
             initialFieldValuesRef.current = { ...initial };
             // ✅ Track last saved values to detect unsaved changes
@@ -477,6 +478,13 @@ export default function DocumentViewerDialog({
             return;
         }
 
+        // ✅ Check for validation before proceeding
+        if (hasPartialParty || (assignedPartyId && !hasFilledAllAssignedFields)) {
+            console.warn(`📋 [SAVE BLOCKED] Required fields missing. PartialParty: ${hasPartialParty}, AllAssigned: ${hasFilledAllAssignedFields}`);
+            setValidationTriggered(true);
+            return;
+        }
+
         setSaving(true);
 
         try {
@@ -560,8 +568,8 @@ export default function DocumentViewerDialog({
         return '';
     };
 
-    const saveDisabled = saving || hasPartialParty ||
-        (assignedPartyId ? !hasFilledAllAssignedFields : (clientSigningMode && !signatureCommitted));
+    const saveDisabled = saving || (validationTriggered && (hasPartialParty || (assignedPartyId && !hasFilledAllAssignedFields))) ||
+        (!validationTriggered && clientSigningMode && !assignedPartyId && !signatureCommitted);
 
     // Action buttons for dialog footer
     // ✅ Show save button if onSave callback is provided
@@ -665,7 +673,7 @@ export default function DocumentViewerDialog({
                     />
 
                     <PartyValidationWarningPopup
-                        partyValidationWarning={partyValidationWarning}
+                        partyValidationWarning={validationTriggered ? partyValidationWarning : null}
                         onNavigateToField={(name) => pdfViewerRef.current?.navigateToField(name)}
                     />
 

@@ -75,6 +75,9 @@ export default function PublicSigningPage() {
     // ✅ Track if user has interacted with the document (clicked/focused on a field)
     const userHasInteractedRef = useRef(false);
 
+    // ✅ Track if validation has been triggered (by clicking submit)
+    const [validationTriggered, setValidationTriggered] = useState(false);
+
     // The current user's assigned party IDs (normalised to an array)
     const userPartyIds = useMemo(() => {
         if (!signatureRequest?.assignedParty) return [];
@@ -470,6 +473,13 @@ export default function PublicSigningPage() {
     const handleSubmitSignature = async () => {
         if (!pdfViewerRef.current) return;
 
+        // ✅ Check for validation before proceeding
+        if (!hasFilledAllAssignedFields || hasPartialParty) {
+            console.warn(`📋 [SUBMIT BLOCKED] Required fields missing. PartialParty: ${hasPartialParty}, AllAssigned: ${hasFilledAllAssignedFields}`);
+            setValidationTriggered(true);
+            return;
+        }
+
         setSubmitting(true);
 
         try {
@@ -698,7 +708,7 @@ export default function PublicSigningPage() {
                             size="small"
                             startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <Save />}
                             onClick={handleSubmitSignature}
-                            disabled={submitting || !hasFilledAllAssignedFields || hasPartialParty || hasModifiedOtherPartyFields}
+                            disabled={submitting || (validationTriggered && (!hasFilledAllAssignedFields || hasPartialParty)) || hasModifiedOtherPartyFields}
                             sx={{
                                 bgcolor: 'white',
                                 color: 'primary.main',
@@ -762,7 +772,7 @@ export default function PublicSigningPage() {
                 />
 
                 <PartyValidationWarningPopup
-                    partyValidationWarning={partyValidationWarning}
+                    partyValidationWarning={validationTriggered ? partyValidationWarning : null}
                     onNavigateToField={(name) => pdfViewerRef.current?.navigateToField(name)}
                 />
             </Box>
