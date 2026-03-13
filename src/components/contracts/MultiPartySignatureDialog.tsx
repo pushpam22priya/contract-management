@@ -203,6 +203,19 @@ const MultiPartySignatureDialog = ({
             }
         }
 
+        const targetEmail = (signerType === 'external' ? email.trim() : selectedUser?.email)?.toLowerCase();
+        if (!targetEmail) return;
+
+        // Check if this email is already assigned to any party (existing or new)
+        const isAlreadyAssigned =
+            allExistingSigners.some(s => s.email?.toLowerCase() === targetEmail) ||
+            assignments.some(a => a.email?.toLowerCase() === targetEmail);
+
+        if (isAlreadyAssigned) {
+            setError(`User with email ${targetEmail} is already assigned to another party.`);
+            return;
+        }
+
         const party = parties.find(p => p.id === selectedPartyId);
         if (!party) return;
 

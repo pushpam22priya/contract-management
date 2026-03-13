@@ -83,7 +83,7 @@ export default function WrongPartyWarningDialog({
                     {description}
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                    Your changes have been automatically reverted. Please only fill the fields that belong to your assigned party.
+                    Please only fill the fields that belong to you.
                 </Typography>
                 <Button
                     fullWidth
