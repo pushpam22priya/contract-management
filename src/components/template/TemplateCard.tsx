@@ -103,17 +103,19 @@ export default function TemplateCard({
                         />
                     </Box>
 
-                    <Chip
-                        label={category}
-                        size="small"
-                        sx={{
-                            bgcolor: 'rgba(0, 0, 0, 0.04)',
-                            color: 'text.secondary',
-                            fontWeight: 500,
-                            fontSize: '0.75rem',
-                            height: 24,
-                        }}
-                    />
+                    <Tooltip title={category} arrow placement="top">
+                        <Chip
+                            label={truncateText(category, 15)}
+                            size="small"
+                            sx={{
+                                bgcolor: 'rgba(0, 0, 0, 0.04)',
+                                color: 'text.secondary',
+                                fontWeight: 500,
+                                fontSize: '0.75rem',
+                                height: 24,
+                            }}
+                        />
+                    </Tooltip>
                 </Box>
 
                 {/* Title and Description */}

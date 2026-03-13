@@ -823,6 +823,7 @@ export default function UploadTemplateDialog({
                             placeholder="Enter template name"
                             value={templateName}
                             onChange={(e) => setTemplateName(e.target.value)}
+                            inputProps={{ maxLength: 50 }}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
@@ -860,6 +861,7 @@ export default function UploadTemplateDialog({
                             placeholder="Enter template description (optional)"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
+                            inputProps={{ maxLength: 200 }}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,

@@ -1,4 +1,5 @@
 import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
+import dayjs from 'dayjs';
 import { Visibility, Share, Download } from '@mui/icons-material';
 import { Contract, ContractStatus } from '@/types/contract';
 
@@ -145,11 +146,12 @@ const ContractCard = ({
         }
     };
 
-    const getExpiryText = (days: number) => {
-        if (days < 0) return 'Expired';
-        if (days === 0) return 'Today';
-        if (days === 1) return '1 day';
-        return `${days} days`;
+    const getExpiryDisplay = () => {
+        if (contract.endDate) {
+            return dayjs(contract.endDate).format('DD MMM YYYY');
+        }
+        // Fallback to calculating from expiresInDays if endDate is missing
+        return dayjs().add(contract.expiresInDays, 'day').format('DD MMM YYYY');
     };
 
     const truncateText = (text: string, maxLength: number) => {
@@ -193,14 +195,15 @@ const ContractCard = ({
                 borderRadius: 3,
                 p: 1,
                 border: '1px solid',
-                // borderColor: 'divider',
+                borderColor: 'rgba(0, 0, 0, 0.08)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 position: 'relative',
                 overflow: 'hidden',
                 '&:hover': {
                     boxShadow: '0 12px 24px rgba(0,0,0,0.1)',
                     transform: 'translateY(-4px)',
-                    borderColor: 'primary.main',
+                    borderColor: statusColors.border,
                     '& .action-buttons': {
                         opacity: 1,
                     },
@@ -233,26 +236,28 @@ const ContractCard = ({
                             flex: 1,
                         }}
                     >
-                        {truncateText(contract.title, 25)}
+                        {truncateText(contract.title, 20)}
                     </Typography>
                 </Tooltip>
 
-                <Chip
-                    label={getStatusLabel(contract.status)}
-                    size="small"
-                    sx={{
-                        bgcolor: statusColors.bg,
-                        color: statusColors.color,
-                        border: `1px solid ${statusColors.border}`,
-                        fontWeight: 600,
-                        fontSize: '0.75rem',
-                        height: '24px',
-                        minWidth: '70px',
-                        '& .MuiChip-label': {
-                            px: 1.5,
-                        },
-                    }}
-                />
+                <Tooltip title={getStatusLabel(contract.status)} arrow placement="top">
+                    <Chip
+                        label={truncateText(getStatusLabel(contract.status), 18)}
+                        size="small"
+                        sx={{
+                            bgcolor: statusColors.bg,
+                            color: statusColors.color,
+                            border: `1px solid ${statusColors.border}`,
+                            fontWeight: 600,
+                            fontSize: '0.7rem',
+                            height: '24px',
+                            minWidth: '70px',
+                            '& .MuiChip-label': {
+                                px: 1.5,
+                            },
+                        }}
+                    />
+                </Tooltip>
             </Box>
 
             {/* Description */}
@@ -298,16 +303,18 @@ const ContractCard = ({
                     >
                         Client
                     </Typography>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: 'text.primary',
-                            fontWeight: 500,
-                            fontSize: '0.75rem',
-                        }}
-                    >
-                        {truncateText(contract.client, 10)}
-                    </Typography>
+                    <Tooltip title={contract.client} arrow placement="top">
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: 'text.primary',
+                                fontWeight: 500,
+                                fontSize: '0.75rem',
+                            }}
+                        >
+                            {truncateText(contract.client, 10)}
+                        </Typography>
+                    </Tooltip>
                 </Box>
 
                 {/* Category */}
@@ -326,16 +333,18 @@ const ContractCard = ({
                     >
                         Category
                     </Typography>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: 'text.primary',
-                            fontWeight: 500,
-                            fontSize: '0.75rem',
-                        }}
-                    >
-                        {contract.category}
-                    </Typography>
+                    <Tooltip title={contract.category} arrow placement="top">
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: 'text.primary',
+                                fontWeight: 500,
+                                fontSize: '0.75rem',
+                            }}
+                        >
+                            {truncateText(contract.category, 15)}
+                        </Typography>
+                    </Tooltip>
                 </Box>
 
                 {/* Expires */}
@@ -362,7 +371,7 @@ const ContractCard = ({
                             fontSize: '0.75rem',
                         }}
                     >
-                        {getExpiryText(contract.expiresInDays)}
+                        {getExpiryDisplay()}
                     </Typography>
                 </Box>
             </Box>

@@ -57,10 +57,12 @@ export default function CriticalAlerts() {
                 const timeDiff = endDate.getTime() - today.getTime();
                 const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
 
+                const expiryDate = endDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
                 return {
                     id: c.id,
                     title: 'Contract Expiring Soon',
-                    description: `${c.title} - ${c.client} expires in ${daysRemaining} days`,
+                    description: `${c.title} - ${c.client} expires on ${expiryDate}`,
                     daysRemaining,
                     contractTitle: c.title,
                     clientName: c.client
