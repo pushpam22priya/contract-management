@@ -2407,6 +2407,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         });
 
                                         if (overlappingWidget) {
+                                            // Remove from capture ref so the 1200ms widget-rebuild timer doesn't restore it
+                                            capturedSignatureAnnotationsRef.current.delete(drawing.Id);
                                             Core.annotationManager.deleteAnnotation(drawing, { force: true, source: 'cleanup_script' } as any);
                                             deletedCount++;
                                         }

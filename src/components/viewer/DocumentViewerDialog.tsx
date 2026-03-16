@@ -243,7 +243,7 @@ export default function DocumentViewerDialog({
             // (the party the contractor filled when they created the contract)
             if (currentUserRole === 'contractor' && formFields) {
                 const firstFilledParty = (formFields as any[]).find(
-                    (f) => f.assignedParty && initial[f.name]?.trim()
+                    (f) => f.assignedParty && initial[f.name]?.trim() && !allClientPartyIds.includes(f.assignedParty)
                 )?.assignedParty ?? null;
                 setContractorCommittedPartyId(firstFilledParty);
                 contractorCommittedPartyIdRef.current = firstFilledParty;

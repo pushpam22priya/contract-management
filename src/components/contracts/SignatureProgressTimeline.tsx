@@ -313,10 +313,7 @@ export default function SignatureProgressTimeline({
                         </Box>
                     ) : (
                         <Alert severity="info" sx={{ py: 0.25, '& .MuiAlert-message': { fontSize: '0.8rem' } }}>
-                            {currentOrder
-                                ? `Waiting for Order ${currentOrder} signers to complete.`
-                                : 'Waiting for all parties to complete before finalization.'
-                            }
+                           Waiting for all parties to complete before finalization.
                         </Alert>
                     )}
                 </Box>
