@@ -2,7 +2,7 @@
 
 import { Box, Typography, AlertColor, Paper } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
 import { Contract, ContractStatus } from '@/types/contract';
@@ -25,6 +25,16 @@ const signingStatusOptions = [
     { label: 'Signed', value: 'completed' },
 ];
 
+function SearchParamsReader({ onStatus }: { onStatus: (status: string) => void }) {
+    const searchParams = useSearchParams();
+    useEffect(() => {
+        const param = searchParams.get('status');
+        if (param) onStatus(param);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    return null;
+}
+
 /**
  * Signatures Page
  * Shows contracts assigned to the current user for signature
@@ -45,14 +55,6 @@ export default function SignaturesPage() {
     ]);
 
     // Sync URL param → signing status filter on initial navigation (e.g. from dashboard)
-    const searchParams = useSearchParams();
-    useEffect(() => {
-        const param = searchParams.get('status');
-        if (!param) return;
-        const matched = signingStatusOptions.find(opt => opt.value === param);
-        if (matched) setSigningStatusFilter(matched);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     // Viewer state
     const [viewerOpen, setViewerOpen] = useState(false);
@@ -426,6 +428,12 @@ export default function SignaturesPage() {
 
     return (
         <AppLayout>
+            <Suspense fallback={null}>
+                <SearchParamsReader onStatus={(status) => {
+                    const matched = signingStatusOptions.find(opt => opt.value === status);
+                    if (matched) setSigningStatusFilter(matched);
+                }} />
+            </Suspense>
             <Box>
                 {/* Header Section */}
                 <Box sx={{ mb: 1 }}>
