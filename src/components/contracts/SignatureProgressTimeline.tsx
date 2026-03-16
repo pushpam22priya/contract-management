@@ -150,47 +150,50 @@ export default function SignatureProgressTimeline({
                                 )}
                             </Box>
 
+                            {/* Background card wrapping label + signer cards — color varies by state */}
+                            <Box sx={{
+                                mt: 0.5,
+                                mx: 0.25,
+                                p: 0.75,
+                                borderRadius: 1.5,
+                                width: 'calc(100% - 4px)',
+                                border: '1px solid',
+                                bgcolor: allComplete
+                                    ? '#e8f5e9'
+                                    : isCurrentOrder
+                                        ? 'rgba(15,118,110,0.06)'
+                                        : '#f5f5f5',
+                                borderColor: allComplete
+                                    ? '#c8e6c9'
+                                    : isCurrentOrder
+                                        ? 'rgba(15,118,110,0.22)'
+                                        : '#e0e0e0',
+                            }}>
                             {/* Order label */}
-                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25, mt: 0.5, mb: 0.5 }}>
-                                <Typography variant="caption" sx={{
-                                    fontWeight: 700,
-                                    fontSize: '0.65rem',
-                                    color: allComplete ? '#2e7d32' : isCurrentOrder ? '#0f766e' : 'text.secondary',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.5px',
-                                }}>
-                                    Order {order}
-                                </Typography>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25, mb: 0.5 }}>
                                 {isCurrentOrder && !allComplete && (
-                                    <Box sx={{
-                                        px: 0.75,
-                                        py: 0.1,
-                                        borderRadius: 0.75,
-                                        bgcolor: 'rgba(15,118,110,0.08)',
+                                    <Typography variant="caption" sx={{
+                                        fontSize: '0.55rem',
+                                        color: '#0f766e',
+                                        fontWeight: 700,
                                     }}>
-                                        <Typography variant="caption" sx={{
-                                            fontSize: '0.55rem',
-                                            color: '#0f766e',
-                                            fontWeight: 600,
-                                        }}>
-                                            In Progress
-                                        </Typography>
-                                    </Box>
+                                        In Progress
+                                    </Typography>
                                 )}
-                                {isFutureOrder && !allComplete && (
+                                {!isCurrentOrder && !allComplete && (
                                     <Typography variant="caption" sx={{ fontSize: '0.55rem', color: 'text.disabled' }}>
-                                        Queued
+                                        Pending
                                     </Typography>
                                 )}
                                 {allComplete && (
-                                    <Typography variant="caption" sx={{ fontSize: '0.55rem', color: '#66bb6a' }}>
+                                    <Typography variant="caption" sx={{ fontSize: '0.55rem', color: '#2e7d32', fontWeight: 700 }}>
                                         Done
                                     </Typography>
                                 )}
                             </Box>
 
                             {/* Signers cards — stacked below */}
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, width: '100%', px: 0.5 }}>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, width: '100%' }}>
                                 {allAtOrder.map((signer: any, index: number) => {
                                     const isInternal = internalAtOrder.includes(signer);
                                     const partyColor = contract.parties?.find((p: any) => p.id === signer.partyId)?.color || '#666';
@@ -202,7 +205,7 @@ export default function SignatureProgressTimeline({
                                             key={signer.token || signer.email || index}
                                             sx={{
                                                 display: 'flex',
-                                                alignItems: 'center',
+                                                alignItems: 'flex-start',
                                                 gap: 0.75,
                                                 py: 0.5,
                                                 px: 1,
@@ -256,16 +259,18 @@ export default function SignatureProgressTimeline({
                                                         <EmailIcon sx={{ fontSize: 11, color: '#ffb74d' }} />
                                                     )}
                                                 </Box>
-                                                {isCompleted && signer.completedAt && (
-                                                    <Typography variant="caption" sx={{ fontSize: '0.55rem', color: '#66bb6a', lineHeight: 1 }}>
-                                                        {new Date(signer.completedAt).toLocaleDateString()}
-                                                    </Typography>
-                                                )}
                                             </Box>
+                                            {/* Completion date — top-right corner */}
+                                            {isCompleted && signer.completedAt && (
+                                                <Typography variant="caption" sx={{ fontSize: '0.55rem', color: '#66bb6a', lineHeight: 1, flexShrink: 0, mt: 0.25 }}>
+                                                    {new Date(signer.completedAt).toLocaleDateString()}
+                                                </Typography>
+                                            )}
                                         </Box>
                                     );
                                 })}
                             </Box>
+                            </Box>{/* end background card */}
                         </Box>
                     );
                 })}

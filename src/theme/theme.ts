@@ -43,7 +43,7 @@ const theme = createTheme({
         primary: {
             main: '#0f766e',
             dark: '#0d5f57',
-            light: '#2dd4bf',
+            light: '#c2ffbf70',
         },
         secondary: {
             main: '#64748b',

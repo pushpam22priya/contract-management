@@ -661,7 +661,7 @@ export default function PublicSigningPage() {
                 bgcolor: 'primary.main',
                 color: 'white',
                 px: 2,
-                py: 1,
+                py: 0.5,
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
@@ -706,7 +706,6 @@ export default function PublicSigningPage() {
                         <Button
                             variant="contained"
                             size="small"
-                            startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <Save />}
                             onClick={handleSubmitSignature}
                             disabled={submitting || (validationTriggered && (!hasFilledAllAssignedFields || hasPartialParty)) || hasModifiedOtherPartyFields}
                             sx={{
@@ -719,7 +718,7 @@ export default function PublicSigningPage() {
                                 py: 0.5
                             }}
                         >
-                            {submitting ? 'Submitting...' : 'Submit Signature'}
+                            {submitting ? 'Sending...' : 'Send'}
                         </Button>
                     </span>
                 </Tooltip>

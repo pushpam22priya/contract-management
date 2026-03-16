@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Box,
     Typography,
@@ -86,6 +86,27 @@ export default function PartyAssignmentPanel({
     const [selectedFieldIds, setSelectedFieldIds] = useState<string[]>([]);
     const [manuallyUncheckedIds, setManuallyUncheckedIds] = useState<string[]>([]);
     const [dragOverParty, setDragOverParty] = useState<string | null>(null);
+
+    // Resizable divider between Parties and Unassigned sections
+    const [partiesHeight, setPartiesHeight] = useState(140);
+    const [isDividerHovered, setIsDividerHovered] = useState(false);
+
+    const handleDividerMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const startY = e.clientY;
+        const startHeight = partiesHeight;
+
+        const onMouseMove = (ev: MouseEvent) => {
+            const delta = ev.clientY - startY;
+            setPartiesHeight(Math.max(60, Math.min(380, startHeight + delta)));
+        };
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    };
 
     // Auto-add each newly selected field (from PDF click) into selectedFieldIds
     // so multiple fields accumulate as checked without replacing the previous one.
@@ -293,9 +314,9 @@ export default function PartyAssignmentPanel({
                 </ListItem>
 
                 <Collapse in={partiesSectionExpanded}>
-                    {/* Party scroll container */}
+                    {/* Party scroll container — height controlled by resizable divider */}
                     <Box sx={{
-                        maxHeight: 140,
+                        height: partiesHeight,
                         overflowY: 'auto',
                         overflowX: 'hidden',
                         padding: 1
@@ -446,7 +467,30 @@ export default function PartyAssignmentPanel({
                 {/* Unassigned fields section */}
                 {hasUnassignedFields && (
                     <>
-                        <Divider sx={{ my: 1 }} />
+                        {/* Draggable resize handle */}
+                        <Box
+                            onMouseDown={handleDividerMouseDown}
+                            onMouseEnter={() => setIsDividerHovered(true)}
+                            onMouseLeave={() => setIsDividerHovered(false)}
+                            sx={{
+                                height: 8,
+                                cursor: 'row-resize',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                bgcolor: isDividerHovered ? 'primary.main' : 'divider',
+                                transition: 'background-color 0.15s',
+                                userSelect: 'none',
+                                mx: 0,
+                            }}
+                        >
+                            {/* Grip dots */}
+                            <Box sx={{ display: 'flex', gap: '3px' }}>
+                                {[0, 1, 2, 3].map(i => (
+                                    <Box key={i} sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: isDividerHovered ? '#fff' : 'text.disabled' }} />
+                                ))}
+                            </Box>
+                        </Box>
                         <ListItem
                             sx={{
                                 borderRadius: 1,
@@ -476,7 +520,7 @@ export default function PartyAssignmentPanel({
 
                         <Collapse in={expandedParty === 'unassigned'}>
                             <Box sx={{
-                                maxHeight: 180,
+                                maxHeight: Math.max(80, 320 - partiesHeight),
                                 overflowY: 'auto',
                                 overflowX: 'hidden',
                                 p: 1,
@@ -511,7 +555,7 @@ export default function PartyAssignmentPanel({
                                                 py: 0.75,
                                                 px: 1,
                                                 borderRadius: 1,
-                                                bgcolor: isChecked ? 'primary.light' : isSelected ? 'primary.main' : 'warning.light',
+                                                bgcolor: isChecked ? 'primary.main' : isSelected ? 'primary.main' : 'warning.light',
                                                 color: (isChecked || isSelected) ? 'white' : 'inherit',
                                                 mb: 0.5,
                                                 cursor: 'grab',
