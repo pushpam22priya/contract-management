@@ -1061,6 +1061,7 @@ export default function UploadTemplateDialog({
                                     ref={pdfViewerRef}
                                     documentUrl={documentUrl}
                                     isReadOnly={false}
+                                    canAddFormFields={true}
                                     initialToolbarGroup="toolbarGroup-Forms"
                                     parties={parties}
                                     enablePartyAssignment={parties.length > 0}
