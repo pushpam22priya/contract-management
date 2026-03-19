@@ -1,10 +1,11 @@
 'use client';
 
-import { Box, Typography, Tooltip, IconButton } from '@mui/material';
+import { Box, Typography, Tooltip, IconButton, Button, Chip } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
-import AddIcon from '@mui/icons-material/Add';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import FolderIcon from '@mui/icons-material/Folder';
 import ContractCard from '@/components/contracts/ContractCard';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
 import { Contract, ContractStatus } from '@/types/contract';
@@ -13,14 +14,38 @@ import RequestReviewDialog from '@/components/contracts/RequestReviewDialog';
 import { authService } from '@/services/authService';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { AlertColor } from '@mui/material';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import ReusableFilter from '@/components/common/ReusableFilter';
 import { apiService } from '@/services/apiService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
+import TeamCard from '@/components/teams/TeamCard';
+import RenameTeamDialog from '@/components/teams/RenameTeamDialog';
+import { Team } from '@/types/team';
+
+// Draft-page relevant statuses
+const DRAFT_PAGE_STATUSES = [
+    ContractStatus.DRAFT,
+    ContractStatus.IN_REVIEW,
+    ContractStatus.IN_APPROVAL,
+    ContractStatus.REVIEW_APPROVAL,
+    ContractStatus.REVIEWED,
+    ContractStatus.REJECTED_BY_REVIEWER,
+    ContractStatus.REJECTED_BY_APPROVER,
+];
 
 export default function DraftPage() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
+    // Team navigation state
+    const activeTeamId = searchParams.get('team');
+    const [teams, setTeams] = useState<Team[]>([]);
+    const [teamsLoading, setTeamsLoading] = useState(true);
+    const [renameTeamOpen, setRenameTeamOpen] = useState(false);
+    const [teamToRename, setTeamToRename] = useState<Team | null>(null);
+
     const [draftContracts, setDraftContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -43,12 +68,6 @@ export default function DraftPage() {
     ]);
     const [categoryFilter, setCategoryFilter] = useState({ label: 'All Categories', value: 'all' });
 
-    // Load draft contracts
-    useEffect(() => {
-        loadDrafts();
-        loadCategories();
-    }, []);
-
     const loadCategories = () => {
         const categories = categoryService.getAllCategories();
         const options = [
@@ -57,6 +76,24 @@ export default function DraftPage() {
         ];
         setCategoryOptions(options);
     };
+
+    const loadTeams = useCallback(async () => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) { setTeamsLoading(false); return; }
+        setTeamsLoading(true);
+        try {
+            const res = await fetch(`/api/teams?createdBy=${encodeURIComponent(currentUser.email)}`);
+            if (res.ok) setTeams(await res.json());
+        } catch { /* silently fail */ }
+        finally { setTeamsLoading(false); }
+    }, []);
+
+    // Load draft contracts
+    useEffect(() => {
+        loadDrafts();
+        loadTeams();
+        loadCategories();
+    }, []);
 
     /**
      * Show snackbar notification
@@ -301,7 +338,6 @@ export default function DraftPage() {
                 }
 
                 if (Object.keys(metadataUpdates).length > 0) {
-                    // const { apiService } = await import('@/services/apiService');
                     await apiService.updateContractMetadata(selectedContract.id, metadataUpdates);
                     console.log('✅ [DraftPage] Field metadata updated successfully');
                 }
@@ -332,16 +368,11 @@ export default function DraftPage() {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState(statusOptions[0]);
-    // categoryFilter removed (declared above)
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-    const totalDrafts = draftContracts.length;
-
     // URL params for deep linking (e.g. from Dashboard)
-    const searchParams = useSearchParams();
-
     // Sync URL param → status filter dropdown on initial navigation
     useEffect(() => {
         const statusParam = searchParams.get('status');
@@ -351,8 +382,25 @@ export default function DraftPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Filter logic
-    const filteredDrafts = draftContracts.filter(contract => {
+    // ─── Derived data ─────────────────────────────────────────────────────────
+    const activeTeam = teams.find(t => t._id === activeTeamId) ?? null;
+
+    // Teams that have at least one draft-status contract
+    const teamsWithDrafts = teams.filter(t =>
+        draftContracts.some(c => c.teamId === t._id)
+    );
+
+    // Contracts shown when inside a team
+    const teamDraftContracts = activeTeamId
+        ? draftContracts.filter(c => c.teamId === activeTeamId)
+        : draftContracts;
+
+    // Count draft contracts per team (for TeamCard badge)
+    const draftCountByTeam = (teamId: string) =>
+        draftContracts.filter(c => c.teamId === teamId).length;
+
+    // Filter logic (applied only when inside a team)
+    const filteredDrafts = teamDraftContracts.filter(contract => {
         // Local Status Filter (pre-populated from URL param on mount)
         const matchesStatus = statusFilter.value === 'all' ||
             contract.status === statusFilter.value;
@@ -377,7 +425,18 @@ export default function DraftPage() {
         return matchesStatus && matchesSearch && matchesCategory && matchesDate;
     });
 
-    const filteredCount = filteredDrafts.length;
+    // ─── Team handlers ─────────────────────────────────────────────────────────
+    const handleTeamClick = (teamId: string) => router.push(`/draft?team=${teamId}`);
+
+    const handleRenameTeam = (team: Team) => {
+        setTeamToRename(team);
+        setRenameTeamOpen(true);
+    };
+
+    const handleTeamRenamed = (updated: Team) => {
+        setTeams(prev => prev.map(t => t._id === updated._id ? updated : t));
+        showNotification(`Team renamed to "${updated.name}"`, 'success');
+    };
 
     return (
         <AppLayout>
@@ -393,59 +452,67 @@ export default function DraftPage() {
                         mb: 1,
                     }}
                 >
-                    {/* Title and Subtitle */}
-                    <Box>
-                        <Typography
-                            // variant="h3"
-                            fontWeight={600}
-                            sx={{
-                                color: 'primary.main',
-                                fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' },
-                            }}
-                        >
-                            {/* Dynamic Title based on filter? Or just keep generic */}
-                            {statusFilter.value === ContractStatus.IN_REVIEW ? 'Under Review Contracts'
-                                : statusFilter.value === ContractStatus.IN_APPROVAL ? 'Under Approval Contracts'
-                                : 'Draft Contracts'}
-                        </Typography>
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: 'text.secondary',
-                                // fontSize: { xs: '0.95rem', sm: '1rem' },
-                            }}
-                        >
-                            Review and manage your draft contracts
-                        </Typography>
-                    </Box>
-
-                    {/* Create Draft Button */}
-                    {/* <Box
-                        sx={{
-                            display: 'flex',
-                            justifyContent: { xs: 'flex-end', sm: 'flex-start' },
-                        }}
-                    >
-                        <Tooltip title="Create New Draft" arrow>
-                            <IconButton
+                    {/* Title / breadcrumb */}
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                        {activeTeamId && (
+                            <Tooltip title="Back to Teams" arrow>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => router.push('/draft')}
+                                    sx={{
+                                        mt: '2px',
+                                        color: 'text.secondary',
+                                        '&:hover': { color: 'primary.main', bgcolor: 'rgba(15,118,110,0.06)' },
+                                    }}
+                                >
+                                    <ArrowBackIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                        <Box>
+                            {/* Title — just the page/team name */}
+                            <Typography
+                                fontWeight={600}
                                 sx={{
-                                    bgcolor: 'primary.main',
-                                    color: 'white',
-                                    width: 44,
-                                    height: 44,
-                                    boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
-                                    transition: 'all 0.3s',
-                                    '&:hover': {
-                                        bgcolor: 'primary.dark',
-                                        transform: 'translateY(-2px)',
-                                        boxShadow: '0 6px 16px rgba(15, 118, 110, 0.35)',
-                                    },
+                                    color: 'primary.main',
+                                    fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' },
                                 }}
                             >
-                                <AddIcon />
-                            </IconButton>
-                        </Tooltip>
-                    </Box> */}
+                                {activeTeam
+                                    ? activeTeam.name
+                                    : (statusFilter.value === ContractStatus.IN_REVIEW ? 'Under Review Contracts'
+                                        : statusFilter.value === ContractStatus.IN_APPROVAL ? 'Under Approval Contracts'
+                                        : 'Draft Contracts')}
+                            </Typography>
+
+                            {/* Subtitle — breadcrumb when inside team, generic text at root */}
+                            {activeTeamId ? (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{ color: 'text.secondary', cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
+                                        onClick={() => router.push('/draft')}
+                                    >
+                                        Drafts
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ color: 'text.disabled' }}>/</Typography>
+                                    <FolderIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                        {activeTeam?.name}
+                                    </Typography>
+                                    <Chip
+                                        label={`${filteredDrafts.length} draft${filteredDrafts.length !== 1 ? 's' : ''}`}
+                                        size="small"
+                                        sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'rgba(15,118,110,0.08)', color: 'primary.main' }}
+                                    />
+                                </Box>
+                            ) : (
+                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                    Review and manage your draft contracts
+                                </Typography>
+                            )}
+                        </Box>
+                    </Box>
                 </Box>
 
                 {/* Filter Section */}
@@ -475,12 +542,12 @@ export default function DraftPage() {
                     showAdvancedFilters={showAdvancedFilters}
                     onAdvancedFiltersToggle={() => setShowAdvancedFilters(!showAdvancedFilters)}
                     dateFilterTitle="Filter by Draft Date Range"
-                    filteredCount={filteredCount}
-                    totalCount={totalDrafts}
-                    countLabel="drafts"
+                    filteredCount={activeTeamId ? filteredDrafts.length : teamsWithDrafts.length}
+                    totalCount={activeTeamId ? teamDraftContracts.length : teamsWithDrafts.length}
+                    countLabel={activeTeamId ? 'drafts' : 'teams'}
                 />
 
-                {/* Drafts Grid */}
+                {/* Grid */}
                 <Box
                     sx={{
                         display: 'grid',
@@ -492,21 +559,57 @@ export default function DraftPage() {
                         gap: 0.75,
                     }}
                 >
-                    {loading ? (
-                        <ShimmerCardGrid count={12} variant="contract" />
+                    {activeTeamId ? (
+                        /* ── Inside a team: show draft contract cards ── */
+                        loading ? (
+                            <ShimmerCardGrid count={8} variant="contract" />
+                        ) : filteredDrafts.length === 0 ? (
+                            <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                                <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                                <Typography color="text.secondary">
+                                    No draft contracts in this team yet.
+                                </Typography>
+                            </Box>
+                        ) : (
+                            filteredDrafts.map((contract) => (
+                                <ContractCard variant="draft"
+                                    key={contract.id}
+                                    contract={contract}
+                                    onView={handleView}
+                                    onShare={handleShare}
+                                />
+                            ))
+                        )
                     ) : (
-                        filteredDrafts.map((contract) => (
-                            <ContractCard variant="draft"
-                                key={contract.id}
-                                contract={contract}
-                                onView={handleView}
-                                onShare={handleShare}
-                            />
-                        ))
+                        /* ── Root: show team cards (only teams with ≥1 draft contract) ── */
+                        teamsLoading || loading ? (
+                            <ShimmerCardGrid count={6} variant="contract" />
+                        ) : teamsWithDrafts.length === 0 ? (
+                            <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                                <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                                <Typography color="text.secondary" gutterBottom>
+                                    No teams with draft contracts yet.
+                                </Typography>
+                                <Typography variant="body2" color="text.disabled">
+                                    Create contracts inside a team from the Contracts page.
+                                </Typography>
+                            </Box>
+                        ) : (
+                            teamsWithDrafts.map(team => (
+                                <TeamCard
+                                    key={team._id}
+                                    team={team}
+                                    contractCount={draftCountByTeam(team._id)}
+                                    onClick={handleTeamClick}
+                                    onRename={handleRenameTeam}
+                                />
+                            ))
+                        )
                     )}
                 </Box>
             </Box>
-            {/* ← ADD VIEWER DIALOG */}
+
+            {/* ← VIEWER DIALOG */}
             {selectedContract && viewerData && (
                 <DocumentViewerDialog
                     open={viewerOpen}
@@ -556,6 +659,14 @@ export default function DraftPage() {
                     onSubmit={handleSubmitForReview}
                 />
             )}
+
+            {/* Rename Team Dialog */}
+            <RenameTeamDialog
+                open={renameTeamOpen}
+                team={teamToRename}
+                onClose={() => setRenameTeamOpen(false)}
+                onRenamed={handleTeamRenamed}
+            />
 
             {/* Notification Snackbar */}
             <NotificationSnackbar

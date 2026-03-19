@@ -1,8 +1,11 @@
 'use client';
 
-import { Box, Typography, Tooltip, IconButton, Button } from '@mui/material';
+import { Box, Typography, Tooltip, IconButton, Button, Chip } from '@mui/material';
 import { useState, useEffect, useCallback } from 'react';
 import AddIcon from '@mui/icons-material/Add';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import FolderIcon from '@mui/icons-material/Folder';
+import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined';
 import AppLayout from '@/components/layout/AppLayout';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -24,7 +27,22 @@ import { categoryService } from '@/services/categoryService';
 import ReusableFilter from '@/components/common/ReusableFilter';
 import { useSignaturePolling } from '@/hooks/useSignaturePolling';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
+import TeamCard from '@/components/teams/TeamCard';
+import CreateTeamDialog from '@/components/teams/CreateTeamDialog';
+import RenameTeamDialog from '@/components/teams/RenameTeamDialog';
+import { Team } from '@/types/team';
 
+// Statuses that belong on the Contracts page
+const CONTRACT_PAGE_STATUSES = [
+    ContractStatus.APPROVED,
+    ContractStatus.READY_FOR_SIGNATURE,
+    ContractStatus.WAITING_FOR_SIGNATURE,
+    ContractStatus.SIGNED_BY_EVERYONE,
+    ContractStatus.SIGNED,
+    ContractStatus.ACTIVE,
+    ContractStatus.EXPIRING,
+    ContractStatus.EXPIRED,
+];
 
 const statusOptions = [
     { label: 'All Status', value: 'all' },
@@ -40,6 +58,15 @@ const statusOptions = [
 
 export default function ContractsPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+
+    // Team navigation state
+    const activeTeamId = searchParams.get('team');
+    const [teams, setTeams] = useState<Team[]>([]);
+    const [teamsLoading, setTeamsLoading] = useState(true);
+    const [createTeamOpen, setCreateTeamOpen] = useState(false);
+    const [renameTeamOpen, setRenameTeamOpen] = useState(false);
+    const [teamToRename, setTeamToRename] = useState<Team | null>(null);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState(statusOptions[0]);
@@ -52,7 +79,6 @@ export default function ContractsPage() {
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Track which contract to view and whether the viewer dialog is open.
     const [contractViewerOpen, setContractViewerOpen] = useState(false);
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
 
@@ -74,324 +100,256 @@ export default function ContractsPage() {
         setSnackbar({ open: true, message, severity });
     };
 
-    // Get contracts waiting for signature (for polling)
+    const [categoryOptions, setCategoryOptions] = useState<{ label: string; value: string }[]>([
+        { label: 'All Categories', value: 'all' }
+    ]);
+
+    // ─── Data loading ────────────────────────────────────────────────────────
+    const loadCategories = () => {
+        const categories = categoryService.getAllCategories();
+        setCategoryOptions([
+            { label: 'All Categories', value: 'all' },
+            ...categories.map(cat => ({ label: cat.name, value: cat.name }))
+        ]);
+    };
+
+    const loadTeams = useCallback(async () => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) { setTeamsLoading(false); return; }
+        setTeamsLoading(true);
+        try {
+            const res = await fetch(`/api/teams?createdBy=${encodeURIComponent(currentUser.email)}`);
+            if (res.ok) setTeams(await res.json());
+        } catch { /* silently fail */ }
+        finally { setTeamsLoading(false); }
+    }, []);
+
+    const loadContracts = useCallback(async () => {
+        setLoading(true);
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) { setContracts([]); setLoading(false); return; }
+
+        try {
+            const allContracts = await contractService.getAllContracts();
+            if (!Array.isArray(allContracts)) { setContracts([]); setLoading(false); return; }
+
+            const relevantContracts = allContracts.filter(c => {
+                const isCreator = c.createdBy === currentUser.email;
+                const isSigner = c.signer?.email === currentUser.email;
+                const isValidSignerStatus = ['signed', 'active', 'expiring', 'expired'].includes(c.status);
+                const isSignerAndVisible = isSigner && isValidSignerStatus;
+
+                if (isCreator) return CONTRACT_PAGE_STATUSES.includes(c.status);
+                return isSignerAndVisible;
+            });
+
+            setContracts(relevantContracts);
+        } catch { setContracts([]); }
+        finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => {
+        const statusParam = searchParams.get('status');
+        const searchParam = searchParams.get('search');
+        if (statusParam) {
+            const found = statusOptions.find(opt => opt.value === statusParam);
+            if (found) setStatusFilter(found);
+        }
+        if (searchParam) setSearchQuery(searchParam);
+    }, [searchParams]);
+
+    useEffect(() => {
+        loadContracts();
+        loadTeams();
+        loadCategories();
+    }, []);
+
+    // ─── Derived data ─────────────────────────────────────────────────────────
+    // Contracts visible on this page (creator or signer)
+    const activeTeam = teams.find(t => t._id === activeTeamId) ?? null;
+
+    // Contracts shown inside a team (or all when no team selected)
+    const teamContracts = activeTeamId
+        ? contracts.filter(c => c.teamId === activeTeamId)
+        : contracts;
+
+    const filteredContracts = teamContracts.filter(contract => {
+        const matchesSearch = searchQuery === '' ||
+            contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            contract.client?.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesStatus = statusFilter.value === 'all' || contract.status === statusFilter.value;
+        const matchesCategory = categoryFilter.value === 'all' || contract.category === categoryFilter.value;
+        let matchesDate = true;
+        if (startDate || endDate) {
+            const d = dayjs(contract.createdAt);
+            if (startDate && d.isBefore(startDate, 'day')) matchesDate = false;
+            if (endDate && d.isAfter(endDate, 'day')) matchesDate = false;
+        }
+        return matchesSearch && matchesStatus && matchesCategory && matchesDate;
+    });
+
+    // Count of contract-page-status contracts per team (for TeamCard badge)
+    const contractCountByTeam = (teamId: string) =>
+        contracts.filter(c => c.teamId === teamId).length;
+
+    // ─── Polling ──────────────────────────────────────────────────────────────
     const waitingForSignatureIds = contracts
         .filter(c => c.status === ContractStatus.WAITING_FOR_SIGNATURE)
         .map(c => c.id);
 
-    // Callback when signature is detected
     const handleSignatureComplete = useCallback((contractId: string) => {
-        console.log('🎉 [ContractsPage] Signature completed for contract:', contractId);
         const contract = contracts.find(c => c.id === contractId);
         showNotification(`Contract "${contract?.title || contractId}" has been signed!`, 'success');
         loadContracts();
     }, [contracts]);
 
-    // Start polling for signature updates
-    useSignaturePolling(
-        waitingForSignatureIds,
-        handleSignatureComplete,
-        waitingForSignatureIds.length > 0
-    );
+    useSignaturePolling(waitingForSignatureIds, handleSignatureComplete, waitingForSignatureIds.length > 0);
 
-    const searchParams = useSearchParams();
-
-    useEffect(() => {
-        // Handle URL filters
-        const statusParam = searchParams.get('status');
-        const searchParam = searchParams.get('search');
-
-        if (statusParam) {
-            const foundStatus = statusOptions.find(opt => opt.value === statusParam);
-            if (foundStatus) setStatusFilter(foundStatus);
-        }
-
-        if (searchParam) {
-            setSearchQuery(searchParam);
-        }
-    }, [searchParams]);
-
-    const [categoryOptions, setCategoryOptions] = useState<{ label: string; value: string }[]>([
-        { label: 'All Categories', value: 'all' }
-    ]);
-
-    useEffect(() => {
-        loadContracts();
-        loadCategories();
-    }, []);
-
-    const loadCategories = () => {
-        const categories = categoryService.getAllCategories();
-        const options = [
-            { label: 'All Categories', value: 'all' },
-            ...categories.map(cat => ({ label: cat.name, value: cat.name }))
-        ];
-        setCategoryOptions(options);
-    };
-
-    const loadContracts = async () => {
-        setLoading(true);
-        // ... (rest of loadContracts logic)
-        const currentUser = authService.getCurrentUser();
-
-        if (!currentUser) {
-            setContracts([]);
-            setLoading(false);
-            return;
-        }
-
-        try {
-            const allContracts = await contractService.getAllContracts(); // Fetch ALL to filter
-
-            if (!Array.isArray(allContracts)) {
-                console.error("ContractsPage: getAllContracts returned non-array", allContracts);
-                setContracts([]);
-                setLoading(false);
-                return;
-            }
-
-            // Show contracts created by user OR signed by user
-            const relevantContracts = allContracts.filter(c => {
-                const isCreator = c.createdBy === currentUser.email;
-
-                // For signer: show if they are the signer AND status is one of the lifecycle statuses
-                const isSigner = c.signer?.email === currentUser.email;
-                const isValidSignerStatus = ['signed', 'active', 'expiring', 'expired'].includes(c.status);
-                const isSignerAndVisible = isSigner && isValidSignerStatus;
-
-                if (isCreator) {
-                    return [
-                        ContractStatus.APPROVED,
-                        ContractStatus.READY_FOR_SIGNATURE,
-                        ContractStatus.WAITING_FOR_SIGNATURE,
-                        ContractStatus.SIGNED_BY_EVERYONE,
-                        ContractStatus.SIGNED,
-                        ContractStatus.ACTIVE,
-                        ContractStatus.EXPIRING,
-                        ContractStatus.EXPIRED
-                    ].includes(c.status);
-                }
-
-                return isSignerAndVisible;
-            });
-
-            setContracts(relevantContracts || []);
-        } catch (error) {
-            console.error("ContractsPage: Failed to load contracts", error);
-            setContracts([]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const totalContracts = contracts.length;
-
-    // Filter Logic
-    const filteredContracts = contracts.filter(contract => {
-        // Search Filter
-        const matchesSearch = searchQuery === '' ||
-            contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            contract.client?.toLowerCase().includes(searchQuery.toLowerCase());
-
-        // Status Filter
-        const matchesStatus = statusFilter.value === 'all' ||
-            contract.status === statusFilter.value;
-
-        // Category Filter
-        const matchesCategory = categoryFilter.value === 'all' ||
-            contract.category === categoryFilter.value;
-
-        // Date Filter
-        let matchesDate = true;
-        if (startDate || endDate) {
-            const contractDate = dayjs(contract.createdAt); // Using createdAt primarily, could be startDate
-            if (startDate && contractDate.isBefore(startDate, 'day')) matchesDate = false;
-            if (endDate && contractDate.isAfter(endDate, 'day')) matchesDate = false;
-        }
-
-        return matchesSearch && matchesStatus && matchesCategory && matchesDate;
-    });
-
-    const filteredCount = filteredContracts.length;
-
-    const handleViewContract = (id: string) => {
-        console.log('📄 View Contract Clicked:', id);
-        // Navigate to the details page
-        router.push(`/contracts/${id}`);
-    };
+    // ─── Handlers ─────────────────────────────────────────────────────────────
+    const handleViewContract = (id: string) => router.push(`/contracts/${id}`);
 
     const handleShareContract = (id: string) => {
         const contract = contracts.find(c => c.id === id);
         if (!contract) return;
-
         setContractForSignature(contract);
-
-        // Check if contract has multiple parties with fields
-        const partiesWithFields = (contract.parties || []).filter((party: any) => {
-            return (contract.formFields || []).some((field: any) => field.assignedParty === party.id);
-        });
-
-        console.log(`📋 [ContractsPage] Share contract: ${contract.id}`);
-        console.log(`   Parties with fields: ${partiesWithFields.length}`);
-
-        if (partiesWithFields.length > 1) {
-            // Multiple parties - use multi-party dialog
-            console.log(`   Using multi-party dialog`);
-            setMultiPartyDialogOpen(true);
-        } else {
-            // Single party or no parties - use legacy dialog
-            console.log(`   Using legacy single-signer dialog`);
-            setSignatureDialogOpen(true);
-        }
+        const partiesWithFields = (contract.parties || []).filter((party: any) =>
+            (contract.formFields || []).some((field: any) => field.assignedParty === party.id)
+        );
+        if (partiesWithFields.length > 1) setMultiPartyDialogOpen(true);
+        else setSignatureDialogOpen(true);
     };
-
 
     const handleSignatureSubmit = async (signerEmail: string): Promise<{ success: boolean; signingUrl?: string }> => {
-        console.log('📝 [ContractsPage] Handling signature submit...');
-        console.log('📝 [ContractsPage] Contract:', contractForSignature?.id);
-        console.log('📝 [ContractsPage] Signer:', signerEmail);
-
-        if (!contractForSignature) {
-            console.error('❌ [ContractsPage] No contract selected for signature');
-            return { success: false };
-        }
-
-        // Get current user for sender name
+        if (!contractForSignature) return { success: false };
         const currentUser = authService.getCurrentUser();
-        const senderName = currentUser?.email || 'Contract System';
-
-        console.log('📝 [ContractsPage] Sender:', senderName);
-
-        // Call the signature submission method
-        const result = await contractService.submitForSignature(
-            contractForSignature.id,
-            signerEmail
-        );
-
+        const result = await contractService.submitForSignature(contractForSignature.id, signerEmail);
         if (result.success) {
-            console.log('✅ [ContractsPage] Signature request sent successfully');
-            console.log('✅ [ContractsPage] Signing URL:', result.signingUrl);
             showNotification('Signature request sent to ' + signerEmail, 'success');
-            loadContracts();  // Reload to show updated status
+            loadContracts();
             return { success: true, signingUrl: result.signingUrl };
-        } else {
-            console.error('❌ [ContractsPage] Failed to send signature request:', result.message);
-            showNotification(result.message, 'error');
-            return { success: false };
         }
+        showNotification(result.message, 'error');
+        return { success: false };
     };
 
-    /**
-     * Handle mixed signature submission (internal + external signers with order)
-     */
-    const handleMixedSignatureSubmit = async (
-        assignments: SignerAssignment[]
-    ): Promise<{ success: boolean; error?: string }> => {
-        console.log('📝 [ContractsPage] Handling mixed signature submit...');
-        console.log('   Contract:', contractForSignature?.id);
-        console.log('   Assignments:', assignments.length);
-
-        if (!contractForSignature) {
-            console.error('❌ [ContractsPage] No contract selected for signature');
-            return { success: false, error: 'No contract selected' };
-        }
-
-        // Get current user for sender name
+    const handleMixedSignatureSubmit = async (assignments: SignerAssignment[]): Promise<{ success: boolean; error?: string }> => {
+        if (!contractForSignature) return { success: false, error: 'No contract selected' };
         const currentUser = authService.getCurrentUser();
         const senderName = currentUser?.email || 'Contract System';
-
-        const internalCount = assignments.filter(a => a.type === 'internal').length;
-        const externalCount = assignments.filter(a => a.type === 'external').length;
-        console.log('   Sender:', senderName);
-        console.log(`   Internal: ${internalCount}, External: ${externalCount}`);
-
         try {
-            const result = await submitForMixedSignature(
-                contractForSignature,
-                assignments,
-                senderName
-            );
-
+            const result = await submitForMixedSignature(contractForSignature, assignments, senderName);
             if (result.success) {
-                console.log('✅ [ContractsPage] Mixed signature assignments created successfully');
-                showNotification(
-                    `Assignments created: ${internalCount} internal, ${externalCount} external signers`,
-                    'success'
-                );
-                loadContracts();  // Reload to show updated status
-
-                // Refresh the contract data so dialog shows updated signers
+                const internalCount = assignments.filter(a => a.type === 'internal').length;
+                const externalCount = assignments.filter(a => a.type === 'external').length;
+                showNotification(`Assignments created: ${internalCount} internal, ${externalCount} external signers`, 'success');
+                loadContracts();
                 try {
                     const refreshRes = await fetch(`/api/contracts/${contractForSignature.id}`);
-                    if (refreshRes.ok) {
-                        const refreshed = await refreshRes.json();
-                        setContractForSignature(refreshed);
-                    }
-                } catch (e) {
-                    console.warn('Could not refresh contract data:', e);
-                }
-
+                    if (refreshRes.ok) setContractForSignature(await refreshRes.json());
+                } catch { /* ignore */ }
                 return { success: true };
-            } else {
-                console.error('❌ [ContractsPage] Failed to create mixed signature assignments:', result.error);
-                showNotification(result.error || 'Failed to create assignments', 'error');
-                return { success: false, error: result.error };
             }
+            showNotification(result.error || 'Failed to create assignments', 'error');
+            return { success: false, error: result.error };
         } catch (error: any) {
-            console.error('❌ [ContractsPage] Error in mixed signature submit:', error);
             showNotification(error.message || 'An unexpected error occurred', 'error');
             return { success: false, error: error.message };
         }
     };
 
+    const handleTeamClick = (teamId: string) => router.push(`/contracts?team=${teamId}`);
 
+    const handleRenameTeam = (team: Team) => {
+        setTeamToRename(team);
+        setRenameTeamOpen(true);
+    };
+
+    const handleTeamRenamed = (updated: Team) => {
+        setTeams(prev => prev.map(t => t._id === updated._id ? updated : t));
+        showNotification(`Team renamed to "${updated.name}"`, 'success');
+    };
+
+    const handleTeamCreated = (team: Team) => {
+        setTeams(prev => [team, ...prev]);
+        showNotification(`Team "${team.name}" created`, 'success');
+    };
+
+    // ─── Render ───────────────────────────────────────────────────────────────
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs}>
             <AppLayout>
                 <Box>
-                    {/* Header Section */}
+                    {/* Header */}
                     <Box
                         sx={{
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: { xs: 'flex-start', md: 'center' },
                             flexDirection: { xs: 'column', md: 'row' },
-                            gap: { xs: 3, md: 2 },
+                            gap: { xs: 2, md: 2 },
                             mb: 1,
                         }}
                     >
-                        {/* Title and Subtitle */}
-                        <Box>
-                            <Typography
-                                fontWeight={600}
-                                sx={{
-                                    color: 'primary.main',
-                                    fontSize: { xs: '1rem', sm: '1.5rem', md: '20px' },
-                                }}
-                            >
-                                Contracts
-                            </Typography>
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    color: 'text.secondary',
-                                    // fontSize: { xs: '0.95rem', sm: '1rem' },
-                                }}
-                            >
-                                Manage your contracts and relationships
-                            </Typography>
+                        {/* Title / breadcrumb */}
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                            {activeTeamId && (
+                                <Tooltip title="Back to Teams" arrow>
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => router.push('/contracts')}
+                                        sx={{
+                                            mt: '2px',
+                                            color: 'text.secondary',
+                                            '&:hover': { color: 'primary.main', bgcolor: 'rgba(15,118,110,0.06)' },
+                                        }}
+                                    >
+                                        <ArrowBackIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+                            <Box>
+                                {/* Title — just the page/team name */}
+                                <Typography
+                                    fontWeight={600}
+                                    sx={{ color: 'primary.main', fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' } }}
+                                >
+                                    {activeTeam ? activeTeam.name : 'Contracts'}
+                                </Typography>
+
+                                {/* Subtitle — breadcrumb when inside team, generic text at root */}
+                                {activeTeamId ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                                        <Typography
+                                            variant="body2"
+                                            sx={{ color: 'text.secondary', cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
+                                            onClick={() => router.push('/contracts')}
+                                        >
+                                            Contracts
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ color: 'text.disabled' }}>/</Typography>
+                                        <FolderIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                            {activeTeam?.name}
+                                        </Typography>
+                                        <Chip
+                                            label={`${filteredContracts.length} contract${filteredContracts.length !== 1 ? 's' : ''}`}
+                                            size="small"
+                                            sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'rgba(15,118,110,0.08)', color: 'primary.main' }}
+                                        />
+                                    </Box>
+                                ) : (
+                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                        Manage your teams and contracts
+                                    </Typography>
+                                )}
+                            </Box>
                         </Box>
 
-                        {/* Create Contract Button */}
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                justifyContent: { xs: 'flex-end', sm: 'flex-start' },
-                            }}
-                        >
-                            <Tooltip title="Create Contract" arrow>
+                        {/* Action button — circular icon button for both states */}
+                        <Box sx={{ display: 'flex', justifyContent: { xs: 'flex-end', sm: 'flex-start' } }}>
+                            <Tooltip title={activeTeamId ? 'Create Contract' : 'Create Team'} arrow>
                                 <IconButton
-                                    onClick={() => setWizardOpen(true)}
+                                    onClick={() => activeTeamId ? setWizardOpen(true) : setCreateTeamOpen(true)}
                                     sx={{
                                         bgcolor: 'primary.main',
                                         color: 'white',
@@ -406,12 +364,13 @@ export default function ContractsPage() {
                                         },
                                     }}
                                 >
-                                    <AddIcon />
+                                    {activeTeamId ? <AddIcon /> : <CreateNewFolderOutlinedIcon />}
                                 </IconButton>
                             </Tooltip>
                         </Box>
                     </Box>
-                    {/* Filter Section */}
+
+                    {/* Filter (unchanged) */}
                     <ReusableFilter
                         searchQuery={searchQuery}
                         onSearchChange={setSearchQuery}
@@ -438,77 +397,105 @@ export default function ContractsPage() {
                         showAdvancedFilters={showAdvancedFilters}
                         onAdvancedFiltersToggle={() => setShowAdvancedFilters(!showAdvancedFilters)}
                         dateFilterTitle="Filter by Contract Date Range"
-                        filteredCount={filteredCount}
-                        totalCount={totalContracts}
-                        countLabel="contracts"
+                        filteredCount={activeTeamId ? filteredContracts.length : teams.length}
+                        totalCount={activeTeamId ? teamContracts.length : teams.length}
+                        countLabel={activeTeamId ? 'contracts' : 'teams'}
                     />
 
-                    {/* Contracts Grid */}
+                    {/* Grid */}
                     <Box
                         sx={{
                             display: 'grid',
-                            gridTemplateColumns: {
-                                xs: '1fr',
-                                sm: 'repeat(2, 1fr)',
-                                lg: 'repeat(4, 1fr)',
-                            },
+                            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
                             gap: 0.75,
                         }}
                     >
-                        {loading ? (
-                            <ShimmerCardGrid count={12} variant="contract" />
+                        {activeTeamId ? (
+                            /* ── Inside a team: show contract cards ── */
+                            loading ? (
+                                <ShimmerCardGrid count={8} variant="contract" />
+                            ) : filteredContracts.length === 0 ? (
+                                <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                                    <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                                    <Typography color="text.secondary">
+                                        No contracts in this team yet. Click <strong>+</strong> to create one.
+                                    </Typography>
+                                </Box>
+                            ) : (
+                                filteredContracts.map(contract => (
+                                    <ContractCard
+                                        key={contract.id}
+                                        contract={contract}
+                                        onView={handleViewContract}
+                                        onShare={handleShareContract}
+                                    />
+                                ))
+                            )
                         ) : (
-                            (filteredContracts || []).map((contract) => (
-                                <ContractCard
-                                    key={contract.id}
-                                    contract={contract}
-                                    onView={handleViewContract}
-                                    onShare={handleShareContract}
-                                />
-                            ))
+                            /* ── Root: show team cards ── */
+                            teamsLoading ? (
+                                <ShimmerCardGrid count={6} variant="contract" />
+                            ) : teams.length === 0 ? (
+                                <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                                    <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                                    <Typography color="text.secondary" gutterBottom>
+                                        No teams yet.
+                                    </Typography>
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<AddIcon />}
+                                        onClick={() => setCreateTeamOpen(true)}
+                                        size="small"
+                                    >
+                                        Create your first team
+                                    </Button>
+                                </Box>
+                            ) : (
+                                teams.map(team => (
+                                    <TeamCard
+                                        key={team._id}
+                                        team={team}
+                                        contractCount={contractCountByTeam(team._id)}
+                                        onClick={handleTeamClick}
+                                        onRename={handleRenameTeam}
+                                    />
+                                ))
+                            )
                         )}
                     </Box>
                 </Box>
 
-                {/* Create Contract Dialog with PDFTron */}
+                {/* Dialogs */}
                 <CreateContractDialog
                     open={wizardOpen}
                     onClose={() => setWizardOpen(false)}
                     onSuccess={loadContracts}
+                    teamId={activeTeamId}
+                />
+
+                <CreateTeamDialog
+                    open={createTeamOpen}
+                    onClose={() => setCreateTeamOpen(false)}
+                    onCreated={handleTeamCreated}
+                />
+
+                <RenameTeamDialog
+                    open={renameTeamOpen}
+                    team={teamToRename}
+                    onClose={() => setRenameTeamOpen(false)}
+                    onRenamed={handleTeamRenamed}
                 />
 
                 {selectedContract && (
                     <DocumentViewerDialog
                         open={contractViewerOpen}
-                        onClose={() => {
-                            setContractViewerOpen(false);
-                            setSelectedContract(null);
-                            loadContracts(); // ✅ Reload to reflect any status changes
-                        }}
+                        onClose={() => { setContractViewerOpen(false); setSelectedContract(null); loadContracts(); }}
                         fileUrl={(() => {
-                            // ✅ CRITICAL FIX: Load contract's saved PDF, not template
-                            // Priority 1: Use contract's fileUrl (points to saved contract PDF with signatures)
-                            if (selectedContract.fileUrl) {
-                                console.log('📄 [Contracts] Using contract.fileUrl (contract PDF)');
-                                return selectedContract.fileUrl;
-                            }
-                            // Priority 2: Use fileData (base64) if available
-                            if (selectedContract.fileData) {
-                                console.log('📄 [Contracts] Using contract.fileData (base64)');
-                                return selectedContract.fileData;
-                            }
-                            // Priority 3: Use signedPdfBase64 if available
-                            if (selectedContract.signedPdfBase64) {
-                                console.log('📄 [Contracts] Using signedPdfBase64');
-                                return `data:application/pdf;base64,${selectedContract.signedPdfBase64}`;
-                            }
-                            // Priority 4: Fall back to template URL (last resort)
-                            if (selectedContract.templateId) {
-                                const url = `/api/file/${selectedContract.templateId}?type=template`;
-                                console.log('📄 [Contracts] Fallback: Using template URL:', url);
-                                return url;
-                            }
-                            return "";
+                            if (selectedContract.fileUrl) return selectedContract.fileUrl;
+                            if (selectedContract.fileData) return selectedContract.fileData;
+                            if (selectedContract.signedPdfBase64) return `data:application/pdf;base64,${selectedContract.signedPdfBase64}`;
+                            if (selectedContract.templateId) return `/api/file/${selectedContract.templateId}?type=template`;
+                            return '';
                         })()}
                         fileName={`${selectedContract.title}.pdf`}
                         title={selectedContract.title}
@@ -516,26 +503,13 @@ export default function ContractsPage() {
                         templateDocxBase64={selectedContract.templateDocxBase64}
                         fieldValues={selectedContract.fieldValues}
                         signatureImage={selectedContract.signer?.signatureImage}
-                        // ✅ CRITICAL FIX: Do NOT import XFDF when loading a saved contract PDF
-                        // The PDF already has annotations embedded. Importing XFDF causes
-                        // "appearanceReference" errors because XFDF references appearance
-                        // streams that are now baked into the PDF.
                         initialXfdf={(() => {
-                            // Skip XFDF if contract has its own saved PDF
-                            if (selectedContract.fileUrl || selectedContract.fileData || selectedContract.signedPdfBase64) {
-                                console.log('📄 [Contracts] Skipping XFDF - using saved contract PDF');
-                                return undefined;
-                            }
-                            // Only use XFDF when falling back to template
-                            console.log('📄 [Contracts] Using XFDF - falling back to template');
+                            if (selectedContract.fileUrl || selectedContract.fileData || selectedContract.signedPdfBase64) return undefined;
                             return selectedContract.xfdfData;
                         })()}
                         contractId={selectedContract.id}
-                        // ✅ Same logic for form fields
                         formFields={(() => {
-                            if (selectedContract.fileUrl || selectedContract.fileData || selectedContract.signedPdfBase64) {
-                                return undefined;
-                            }
+                            if (selectedContract.fileUrl || selectedContract.fileData || selectedContract.signedPdfBase64) return undefined;
                             return selectedContract.formFields;
                         })()}
                         currentUserRole="contractor"
@@ -550,7 +524,6 @@ export default function ContractsPage() {
                     contractTitle={contractForSignature?.title}
                 />
 
-                {/* Multi-Party Signature Dialog (supports internal + external with order) */}
                 <MultiPartySignatureDialog
                     open={multiPartyDialogOpen}
                     onClose={() => setMultiPartyDialogOpen(false)}
