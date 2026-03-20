@@ -53,10 +53,9 @@ export default function StatsCard({
     const [isHovered, setIsHovered] = useState(false);
     const IconComponent = iconMap[icon];
 
-    // Animated counter effect
     useEffect(() => {
-        const duration = 1000; // 1 second
-        const steps = 30;
+        const duration = 800;
+        const steps = 25;
         const stepValue = value / steps;
         const stepDuration = duration / steps;
         let currentStep = 0;
@@ -75,106 +74,100 @@ export default function StatsCard({
     }, [value]);
 
     return (
-        <Grow in timeout={600 + index * 150}>
+        <Grow in timeout={250 + index * 60}>
             <Paper
                 elevation={0}
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
                 onClick={onClick}
                 sx={{
-                    p: 2,
-                    height: '100%',
-                    borderRadius: 3,
-                    border: '1px solid',
-                    borderColor: isHovered ? iconColor : 'rgba(0, 0, 0, 0.08)',
-                    bgcolor: 'white',
+                    p: 1,
+                    borderRadius: 2.5,
+                    border:'1px solid',
+                    borderColor: isHovered ? `${iconColor}70` : 'rgba(0, 0, 0, 0.08)',
+                    // bgcolor: isHovered ? `${iconColor}08` : 'white',
+                    cursor: onClick ? 'pointer' : 'default',
+                    transition: 'all 0.22s ease',
+                    transform: isHovered ? 'translateY(-5px)' : 'translateY(0)',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                     position: 'relative',
                     overflow: 'hidden',
-                    cursor: onClick ? 'pointer' : 'default',
-                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                    transform: isHovered ? 'translateY(-8px)' : 'translateY(0)',
-                    boxShadow: isHovered
-                        ? `0 12px 24px ${iconColor}20`
-                        : '0 2px 8px rgba(0, 0, 0, 0.05)',
+                    // Left accent bar
                     '&::before': {
                         content: '""',
                         position: 'absolute',
-                        top: 0,
                         left: 0,
-                        right: 0,
-                        height: '3px',
+                        top: 0,
+                        bottom: 0,
+                        width: '3px',
                         bgcolor: iconColor,
-                        transform: isHovered ? 'scaleX(1)' : 'scaleX(0)',
-                        transformOrigin: 'left',
-                        transition: 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                        opacity: isHovered ? 1 : 0.35,
+                        transition: 'opacity 0.22s ease',
+                        borderRadius: '4px 0 0 4px',
                     },
                 }}
             >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    {/* Left Side - Text Content */}
-                    <Box sx={{ flex: 1 }}>
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: 'text.secondary',
-                                fontWeight: 500,
-                                mb: 1,
-                                fontSize: { xs: '0.875rem', sm: '0.9rem' },
-                            }}
-                        >
-                            {title}
-                        </Typography>
-
-                        <Typography
-                            variant="h3"
-                            sx={{
-                                fontWeight: 700,
-                                color: 'text.primary',
-                                mb: 1,
-                                fontSize: { xs: '2.5rem', sm: '3rem' },
-                                lineHeight: 1,
-                            }}
-                        >
-                            {displayValue}
-                        </Typography>
-
-                        <Typography
-                            variant="caption"
-                            sx={{
-                                color: 'text.secondary',
-                                fontSize: { xs: '0.75rem', sm: '0.8rem' },
-                                display: 'block',
-                                fontWeight: 500,
-                            }}
-                        >
-                            {description}
-                        </Typography>
-                    </Box>
-
-                    {/* Right Side - Icon */}
+                {/* Top row: icon badge + value */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                     <Box
                         sx={{
-                            width: { xs: 48, sm: 56 },
-                            height: { xs: 48, sm: 56 },
-                            borderRadius: '50%',
+                            width: 36,
+                            height: 36,
+                            borderRadius: 1.5,
                             bgcolor: iconBgColor,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             flexShrink: 0,
-                            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                            transform: isHovered ? 'scale(1.1) rotate(10deg)' : 'scale(1) rotate(0deg)',
+                            transition: 'transform 0.22s ease',
+                            transform: isHovered ? 'scale(1.08)' : 'scale(1)',
                         }}
                     >
-                        <IconComponent
-                            sx={{
-                                fontSize: { xs: 24, sm: 28 },
-                                color: iconColor,
-                                transition: 'transform 0.3s',
-                            }}
-                        />
+                        <IconComponent sx={{ fontSize: 18, color: iconColor }} />
                     </Box>
+
+                    <Typography
+                        sx={{
+                            fontSize: '1.9rem',
+                            fontWeight: 700,
+                            color: isHovered ? iconColor : 'text.primary',
+                            lineHeight: 1,
+                            transition: 'color 0.22s ease',
+                        }}
+                    >
+                        {displayValue}
+                    </Typography>
                 </Box>
+
+                {/* Title */}
+                <Typography
+                    sx={{
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        color: 'text.primary',
+                        lineHeight: 1.3,
+                        mb: 0.25,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                    }}
+                >
+                    {title}
+                </Typography>
+
+                {/* Description */}
+                {/* <Typography
+                    sx={{
+                        fontSize: '0.68rem',
+                        color: 'text.secondary',
+                        lineHeight: 1.3,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                    }}
+                >
+                    {description}
+                </Typography> */}
             </Paper>
         </Grow>
     );

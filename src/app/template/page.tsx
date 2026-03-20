@@ -26,7 +26,7 @@ export default function TemplatePage() {
     const [selectedTemplateForUse, setSelectedTemplateForUse] = useState<string | undefined>(undefined);
     const [templates, setTemplates] = useState<Template[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState<string>('All Categories');
+    const [selectedCategory, setSelectedCategory] = useState<{ label: string; value: string }[]>([{ label: 'All Categories', value: 'All Categories' }]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -145,16 +145,17 @@ export default function TemplatePage() {
         }
     };
 
-    const hasActiveFilters = searchQuery !== '' || selectedCategory !== 'All Categories';
+    const hasActiveFilters = searchQuery !== '' || selectedCategory.every(f => f.value !== 'All Categories');
 
     const handleClearFilters = () => {
         setSearchQuery('');
-        setSelectedCategory('All Categories');
+        setSelectedCategory([{ label: 'All Categories', value: 'All Categories' }]);
     };
 
     // Filter templates
     const filteredTemplates = templates.filter(template => {
-        const matchesCategory = selectedCategory === 'All Categories' || template.category === selectedCategory;
+        const matchesCategory = selectedCategory.some(f => f.value === 'All Categories') ||
+            selectedCategory.some(f => f.value === template.category);
         const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             template.description?.toLowerCase().includes(searchQuery.toLowerCase());
         return matchesCategory && matchesSearch;
@@ -241,9 +242,10 @@ export default function TemplatePage() {
                     filters={[
                         {
                             label: 'Category',
-                            value: { label: selectedCategory, value: selectedCategory },
-                            onChange: (newValue) => setSelectedCategory(newValue?.value || 'All Categories'),
+                            value: selectedCategory,
+                            onChange: (newValue) => setSelectedCategory(newValue || [{ label: 'All Categories', value: 'All Categories' }]),
                             options: categories.map(c => ({ label: c, value: c })),
+                            multiple: true,
                         }
                     ]}
                     showCounts={false}

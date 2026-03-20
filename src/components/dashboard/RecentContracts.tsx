@@ -63,17 +63,28 @@ export default function RecentContracts() {
                     const totalDays = Math.max(1, end.diff(start, 'day'));
                     const daysLeft = Math.max(0, end.diff(today, 'day'));
 
-                    // Navigate to draft page if review_approval, otherwise contracts page
-                    // Add search parameter to filter by contract title
-                    const basePath = c.status === ContractStatus.REVIEW_APPROVAL ? `/draft` : `/contracts`;
-                    const params = new URLSearchParams();
-                    params.set('search', c.title);
-                    const path = `${basePath}?${params.toString()}`;
+                    // Navigate to the appropriate page based on status:
+                    // draft-lifecycle statuses (created by user) → draft page flat view
+                    // all others → contract detail page directly
+                    const draftPageStatuses = [
+                        ContractStatus.DRAFT,
+                        ContractStatus.IN_REVIEW,
+                        ContractStatus.IN_APPROVAL,
+                        ContractStatus.REVIEW_APPROVAL,
+                        ContractStatus.REJECTED_BY_REVIEWER,
+                        ContractStatus.REJECTED_BY_APPROVER,
+                    ];
+                    let path: string;
+                    if (draftPageStatuses.includes(c.status)) {
+                        path = `/draft?status=${encodeURIComponent(c.status)}&search=${encodeURIComponent(c.title)}`;
+                    } else {
+                        path = `/contracts/${c.id}`;
+                    }
 
                     return {
                         id: c.id,
                         title: c.title,
-                        company: c.client || 'Unknown Client', // Fallback
+                        company: c.client || 'Unknown Client',
                         status: c.status,
                         daysLeft: daysLeft,
                         totalDays: totalDays,
@@ -95,16 +106,18 @@ export default function RecentContracts() {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'active':
-                return { bg: '#d1fae5', text: '#10b981' };
-            case 'expiring':
-                return { bg: '#fef3c7', text: '#f59e0b' };
-            case 'review_approval':
-                return { bg: '#dbeafe', text: '#3b82f6' };
-            case 'draft':
-                return { bg: '#f3f4f6', text: '#6b7280' };
-            default:
-                return { bg: '#e5e7eb', text: '#374151' };
+            case 'active':       return { bg: '#d1fae5', text: '#059669', border: '#6ee7b7', accent: '#10b981' };
+            case 'expiring':     return { bg: '#fef3c7', text: '#d97706', border: '#fcd34d', accent: '#f59e0b' };
+            case 'signed':       return { bg: '#e0f2f1', text: '#00695c', border: '#80cbc4', accent: '#00897b' };
+            case 'in_review':
+            case 'review_approval': return { bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd', accent: '#3b82f6' };
+            case 'in_approval':  return { bg: '#ede9fe', text: '#6d28d9', border: '#c4b5fd', accent: '#7c3aed' };
+            case 'draft':        return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', accent: '#94a3b8' };
+            case 'rejected_by_reviewer':
+            case 'rejected_by_approver': return { bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5', accent: '#ef4444' };
+            case 'expired':
+            case 'terminated':   return { bg: '#fef2f2', text: '#991b1b', border: '#fecaca', accent: '#dc2626' };
+            default:             return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', accent: '#94a3b8' };
         }
     };
 
@@ -112,8 +125,11 @@ export default function RecentContracts() {
         switch (status) {
             case 'active': return '#10b981';
             case 'expiring': return '#f59e0b';
+            case 'in_review':
             case 'review_approval': return '#3b82f6';
-            default: return '#9ca3af';
+            case 'in_approval': return '#7c3aed';
+            case 'signed': return '#00897b';
+            default: return '#94a3b8';
         }
     };
 
@@ -133,7 +149,7 @@ export default function RecentContracts() {
                 <Paper
                     elevation={0}
                     sx={{
-                        p: { xs: 1.5, sm: 2 },
+                        p: { xs: 1.5, sm: 1.5 },
                         borderRadius: 3,
                         border: '1px solid',
                         borderColor: 'rgba(0, 0, 0, 0.08)',
@@ -141,10 +157,10 @@ export default function RecentContracts() {
                     }}
                 >
                     <Box sx={{ mb: 1 }}>
-                        <Typography variant="h6" fontWeight={700} sx={{ color: 'text.primary', fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
+                        <Typography variant="subtitle1" fontWeight={700} sx={{ color: 'text.primary', fontSize: '0.95rem' }}>
                             Recent Contracts
                         </Typography>
-                        <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
                             No recent activity found.
                         </Typography>
                     </Box>
@@ -158,60 +174,39 @@ export default function RecentContracts() {
             <Paper
                 elevation={0}
                 sx={{
-                    p: { xs: 1.5, sm: 2 },
+                    p: 1.5,
                     borderRadius: 3,
                     border: '1px solid',
-                    borderColor: 'rgba(0, 0, 0, 0.08)',
+                    borderColor: 'rgba(0,0,0,0.08)',
                     bgcolor: 'white',
-                    height: '100%', // Match height of neighbors if needed
+                    height: '100%',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                 }}
             >
                 {/* Header */}
-                <Box
-                    sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: { xs: 'flex-start', sm: 'center' },
-                        flexDirection: { xs: 'column', sm: 'row' },
-                        gap: { xs: 2, sm: 0 },
-                        mb: 1,
-                    }}
-                >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                     <Box>
-                        <Typography
-                            variant="h6"
-                            fontWeight={700}
-                            sx={{
-                                color: 'text.primary',
-                                fontSize: { xs: '1.1rem', sm: '1.25rem' },
-                                // mb: 0.5,
-                            }}
-                        >
+                        <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.05rem', color: 'text.primary', }}>
                             Recent Contracts
                         </Typography>
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: 'text.secondary',
-                                fontSize: { xs: '0.85rem', sm: '0.875rem' },
-                            }}
-                        >
+                        <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', }}>
                             Latest contract activity
                         </Typography>
                     </Box>
-
                     <Button
-                        variant="text"
+                        variant="outlined"
+                        size="small"
                         onClick={() => router.push('/contracts')}
                         sx={{
                             textTransform: 'none',
-                            fontWeight: 600,
-                            fontSize: '0.95rem',
+                            fontSize: '0.8rem',
                             color: 'primary.main',
-                            alignSelf: { xs: 'flex-end', sm: 'auto' },
-                            '&:hover': {
-                                bgcolor: 'rgba(15, 118, 110, 0.08)',
-                            },
+                            borderColor: 'primary.main',
+                            borderRadius: 2,
+                            py: 0.4,
+                            px: 1.5,
+                            minWidth: 0,
+                            '&:hover': { bgcolor: 'rgba(15,118,110,0.06)' },
                         }}
                     >
                         View All
@@ -227,160 +222,100 @@ export default function RecentContracts() {
                         const isHovered = hoveredId === contract.id;
 
                         return (
-                            <Grow
-                                key={contract.id}
-                                in
-                                timeout={800 + index * 200}
-                                style={{ transformOrigin: '0 0 0' }}
-                            >
+                            <Grow key={contract.id} in timeout={600 + index * 150} style={{ transformOrigin: '0 0 0' }}>
                                 <Box
                                     onMouseEnter={() => setHoveredId(contract.id)}
                                     onMouseLeave={() => setHoveredId(null)}
                                     onClick={() => router.push(contract.path)}
                                     sx={{
-                                        p: { xs: 1, sm: 1 },
+                                        p: 1,
                                         borderRadius: 2.5,
                                         border: '1px solid',
-                                        borderColor: isHovered ? 'primary.main' : 'rgba(0, 0, 0, 0.08)',
-                                        bgcolor: isHovered ? 'rgba(15, 118, 110, 0.02)' : 'transparent',
-                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        borderColor: isHovered ? statusColors.accent : 'rgba(0,0,0,0.08)',
+                                        borderLeft: `4px solid ${statusColors.accent}`,
+                                        bgcolor: isHovered ? `${statusColors.accent}0d` : 'white',
+                                        transition: 'all 0.25s ease',
                                         cursor: 'pointer',
-                                        '&:hover': {
-                                            boxShadow: '0 4px 12px rgba(15, 118, 110, 0.1)',
-                                        },
+                                        boxShadow: isHovered ? `0 4px 14px ${statusColors.accent}22` : '0 1px 3px rgba(0,0,0,0.04)',
+                                        '&:hover': { transform: 'translateY(-1px)' },
                                     }}
                                 >
-                                    {/* Contract Header */}
-                                    <Box
-                                        sx={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'flex-start',
-                                            mb: 1.5,
-                                            flexWrap: 'wrap',
-                                            gap: 1,
-                                        }}
-                                    >
-                                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
-                                                <Typography
-                                                    variant="subtitle1"
-                                                    fontWeight={700}
-                                                    sx={{
-                                                        color: 'text.primary',
-                                                        fontSize: { xs: '0.95rem', sm: '1rem' },
-                                                        // Truncate long titles
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
-                                                        whiteSpace: 'nowrap',
-                                                        maxWidth: '300px'
-                                                    }}
-                                                >
-                                                    {contract.title}
-                                                </Typography>
-                                                <Chip
-                                                    label={contract.status
-                                                        .split('_')
-                                                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                                                        .join(' ')}
-                                                    size="small"
-                                                    sx={{
-                                                        bgcolor: statusColors.bg,
-                                                        color: statusColors.text,
-                                                        fontWeight: 600,
-                                                        fontSize: '0.75rem',
-                                                        height: 24,
-                                                        '& .MuiChip-label': {
-                                                            px: 1.5,
-                                                        },
-                                                    }}
-                                                />
-                                            </Box>
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    color: 'text.secondary',
-                                                    fontSize: { xs: '0.85rem', sm: '0.875rem' },
-                                                }}
-                                            >
-                                                {contract.company}
-                                            </Typography>
-                                        </Box>
-
-                                        {/* <Typography
-                                            variant="h6"
+                                    {/* Title + Status chip */}
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                                        <Typography
                                             fontWeight={700}
                                             sx={{
+                                                fontSize: '0.92rem',
                                                 color: 'text.primary',
-                                                fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                                                flex: 1,
+                                                minWidth: 0,
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
                                             }}
                                         >
-                                            {contract.value}
-                                        </Typography> */}
-                                    </Box>
-
-                                    {/* Progress Bar (Only for active/expiring/etc with dates) */}
-                                    {/* If pending/draft, maybe show something else or hide? Keeping it consistent for now */}
-                                    <Box sx={{ mb: 1 }}>
-                                        <LinearProgress
-                                            variant="determinate"
-                                            value={progressValue}
+                                            {contract.title}
+                                        </Typography>
+                                        <Chip
+                                            label={contract.status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                            size="small"
                                             sx={{
-                                                height: 6,
-                                                borderRadius: 3,
-                                                bgcolor: 'rgba(0, 0, 0, 0.06)',
-                                                '& .MuiLinearProgress-bar': {
-                                                    bgcolor: progressColor,
-                                                    borderRadius: 3,
-                                                    transition: 'all 0.4s ease-in-out',
-                                                },
+                                                bgcolor: statusColors.bg,
+                                                color: statusColors.text,
+                                                border: `1px solid ${statusColors.border}`,
+                                                fontWeight: 600,
+                                                fontSize: '0.7rem',
+                                                height: 22,
+                                                flexShrink: 0,
+                                                '& .MuiChip-label': { px: 1 },
                                             }}
                                         />
                                     </Box>
 
-                                    {/* Footer */}
-                                    <Box
-                                        sx={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            flexWrap: 'wrap',
-                                            gap: 1,
-                                        }}
-                                    >
-                                        <Typography
-                                            variant="caption"
-                                            sx={{
-                                                color: 'text.secondary',
-                                                fontSize: { xs: '0.75rem', sm: '0.8rem' },
-                                                fontWeight: 500,
-                                            }}
-                                        >
-                                            {/* Show "days left" or generic status text */}
-                                            {contract.status === 'review_approval' ? 'Waiting for approval' :
-                                                contract.status === 'draft' ? 'Draft in progress' :
-                                                    `${contract.daysLeft} days left`}
-                                        </Typography>
+                                    {/* Client */}
+                                    <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mb: 1 }}>
+                                        {contract.company}
+                                    </Typography>
 
+                                    {/* Progress bar */}
+                                    <LinearProgress
+                                        variant="determinate"
+                                        value={progressValue}
+                                        sx={{
+                                            height: 5,
+                                            borderRadius: 3,
+                                            mb: 1,
+                                            bgcolor: 'rgba(0,0,0,0.06)',
+                                            '& .MuiLinearProgress-bar': { bgcolor: progressColor, borderRadius: 3 },
+                                        }}
+                                    />
+
+                                    {/* Footer */}
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.78rem', fontWeight: 500 }}>
+                                            {(contract.status === ContractStatus.IN_REVIEW || contract.status === ContractStatus.REVIEW_APPROVAL)
+                                                ? 'Waiting for review'
+                                                : contract.status === ContractStatus.IN_APPROVAL
+                                                    ? 'Waiting for approval'
+                                                    : contract.status === ContractStatus.DRAFT
+                                                        ? 'Draft in progress'
+                                                        : `${contract.daysLeft} days left`}
+                                        </Typography>
                                         <Button
-                                            variant={isHovered ? 'contained' : 'text'}
                                             size="small"
-                                            onClick={(e) => {
-                                                e.stopPropagation(); // prevent double nav
-                                                router.push(contract.path);
-                                            }}
+                                            variant={isHovered ? 'contained' : 'text'}
+                                            onClick={(e) => { e.stopPropagation(); router.push(contract.path); }}
                                             sx={{
                                                 textTransform: 'none',
+                                                fontSize: '0.78rem',
                                                 fontWeight: 600,
-                                                fontSize: '0.875rem',
-                                                minWidth: 80,
-                                                bgcolor: isHovered ? 'primary.main' : 'transparent',
-                                                color: isHovered ? 'white' : 'text.primary',
-                                                transition: 'all 0.3s',
-                                                '&:hover': {
-                                                    bgcolor: 'primary.main',
-                                                    color: 'white',
-                                                },
+                                                py: 0.3,
+                                                px: 1.25,
+                                                minWidth: 0,
+                                                borderRadius: 1.5,
+                                                color: isHovered ? 'white' : statusColors.accent,
+                                                bgcolor: isHovered ? statusColors.accent : 'transparent',
+                                                '&:hover': { bgcolor: statusColors.accent, color: 'white' },
                                             }}
                                         >
                                             View

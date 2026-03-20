@@ -14,7 +14,7 @@ import DrawIcon from '@mui/icons-material/Draw';
 import SignaturePadDialog from '@/components/contracts/SignaturePadDialog';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
 import { sendSignatureRequestEmail } from '@/services/emailService';
-import ReusableFilter from '@/components/common/ReusableFilter';
+import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
 import { categoryService } from '@/services/categoryService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import { useSearchParams } from 'next/navigation';
@@ -45,12 +45,12 @@ export default function SignaturesPage() {
 
     // Filter state
     const [searchQuery, setSearchQuery] = useState('');
-    const [signingStatusFilter, setSigningStatusFilter] = useState(signingStatusOptions[0]);
-    const [categoryFilter, setCategoryFilter] = useState({ label: 'All Categories', value: 'all' });
+    const [signingStatusFilter, setSigningStatusFilter] = useState<FilterOption[]>([signingStatusOptions[0]]);
+    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-    const [categoryOptions, setCategoryOptions] = useState<{ label: string; value: string }[]>([
+    const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([
         { label: 'All Categories', value: 'all' }
     ]);
 
@@ -178,27 +178,31 @@ export default function SignaturesPage() {
     const filteredContracts = contracts.filter(contract => {
         const currentUser = authService.getCurrentUser();
 
-        // Signing Status Filter — based on THIS user's signer status, not contract status
-        if (signingStatusFilter.value !== 'all') {
+        // Signing Status Filter (multiselect) — based on THIS user's signer status
+        const signingStatusActive = signingStatusFilter.length > 0 &&
+            !signingStatusFilter.some(f => f.value === 'all');
+        if (signingStatusActive) {
             const internalSigner = (contract.internalSigners || []).find(
                 s => s.email === currentUser?.email
             );
-
-            if (signingStatusFilter.value === 'pending') {
-                // User has not signed yet: unlocked internal signer OR legacy waiting
+            const wantsPending = signingStatusFilter.some(f => f.value === 'pending');
+            const wantsCompleted = signingStatusFilter.some(f => f.value === 'completed');
+            let passes = false;
+            if (wantsPending) {
                 const isPending =
                     (internalSigner?.status === 'unlocked') ||
                     (!internalSigner && contract.signer?.email === currentUser?.email &&
                         contract.status === ContractStatus.WAITING_FOR_SIGNATURE);
-                if (!isPending) return false;
-            } else if (signingStatusFilter.value === 'completed') {
-                // User already signed: completed internal signer OR legacy signed
+                if (isPending) passes = true;
+            }
+            if (wantsCompleted) {
                 const isCompleted =
                     (internalSigner?.status === 'completed') ||
                     (!internalSigner && contract.signer?.email === currentUser?.email &&
                         contract.status !== ContractStatus.WAITING_FOR_SIGNATURE);
-                if (!isCompleted) return false;
+                if (isCompleted) passes = true;
             }
+            if (!passes) return false;
         }
 
         // Search Filter
@@ -206,9 +210,9 @@ export default function SignaturesPage() {
             contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             contract.client?.toLowerCase().includes(searchQuery.toLowerCase());
 
-        // Category Filter
-        const matchesCategory = categoryFilter.value === 'all' ||
-            contract.category === categoryFilter.value;
+        // Category Filter (multiselect)
+        const matchesCategory = categoryFilter.some(f => f.value === 'all') ||
+            categoryFilter.some(f => f.value === contract.category);
 
         // Date Filter
         let matchesDate = true;
@@ -431,7 +435,7 @@ export default function SignaturesPage() {
             <Suspense fallback={null}>
                 <SearchParamsReader onStatus={(status) => {
                     const matched = signingStatusOptions.find(opt => opt.value === status);
-                    if (matched) setSigningStatusFilter(matched);
+                    if (matched) setSigningStatusFilter([matched]);
                 }} />
             </Suspense>
             <Box>
@@ -460,14 +464,16 @@ export default function SignaturesPage() {
                         {
                             label: 'Status',
                             value: signingStatusFilter,
-                            onChange: (newValue) => setSigningStatusFilter(newValue || signingStatusOptions[0]),
+                            onChange: (newValue) => setSigningStatusFilter(newValue || [signingStatusOptions[0]]),
                             options: signingStatusOptions,
+                            multiple: true,
                         },
                         {
                             label: 'Category',
                             value: categoryFilter,
-                            onChange: (newValue) => setCategoryFilter(newValue || categoryOptions[0]),
+                            onChange: (newValue) => setCategoryFilter(newValue || [{ label: 'All Categories', value: 'all' }]),
                             options: categoryOptions,
+                            multiple: true,
                         }
                     ]}
                     enableDateFilter={true}
@@ -481,6 +487,20 @@ export default function SignaturesPage() {
                     filteredCount={filteredCount}
                     totalCount={totalContracts}
                     countLabel="contracts"
+                    hasActiveFilters={
+                        searchQuery !== '' ||
+                        signingStatusFilter.every(f => f.value !== 'all') ||
+                        categoryFilter.every(f => f.value !== 'all') ||
+                        startDate !== null || endDate !== null
+                    }
+                    onClearFilters={() => {
+                        setSearchQuery('');
+                        setSigningStatusFilter([signingStatusOptions[0]]);
+                        setCategoryFilter([{ label: 'All Categories', value: 'all' }]);
+                        setStartDate(null);
+                        setEndDate(null);
+                        setShowAdvancedFilters(false);
+                    }}
                 />
 
                 {/* Contracts Grid */}

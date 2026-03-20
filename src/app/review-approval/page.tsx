@@ -49,13 +49,10 @@ export default function ReviewApprovalPage() {
         severity: 'success' as AlertColor,
     });
 
-    // Filter state
-    const ALL_ROLES: FilterOption = { label: 'All Roles', value: 'all' };
-    const ALL_STATUS: FilterOption = { label: 'All Status', value: 'all' };
-
+    // Filter state (multiselect — empty array = no filter applied)
     const [searchQuery, setSearchQuery] = useState('');
-    const [roleFilterValue, setRoleFilterValue] = useState<FilterOption>(ALL_ROLES);
-    const [statusFilterValue, setStatusFilterValue] = useState<FilterOption>(ALL_STATUS);
+    const [roleFilterValues, setRoleFilterValues] = useState<FilterOption[]>([]);
+    const [statusFilterValues, setStatusFilterValues] = useState<FilterOption[]>([]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -90,8 +87,8 @@ export default function ReviewApprovalPage() {
     const handleTabChange = (newValue: number) => {
         setTabValue(newValue);
         setSearchQuery('');
-        setStatusFilterValue(ALL_STATUS);
-        setRoleFilterValue(ALL_ROLES);
+        setRoleFilterValues([]);
+        setStatusFilterValues([]);
         setStartDate(null);
         setEndDate(null);
         setShowAdvancedFilters(false);
@@ -99,16 +96,16 @@ export default function ReviewApprovalPage() {
 
     const handleClearFilters = () => {
         setSearchQuery('');
-        setRoleFilterValue(ALL_ROLES);
-        setStatusFilterValue(ALL_STATUS);
+        setRoleFilterValues([]);
+        setStatusFilterValues([]);
         setStartDate(null);
         setEndDate(null);
     };
 
     const hasActiveFilters =
         searchQuery !== '' ||
-        roleFilterValue.value !== 'all' ||
-        statusFilterValue.value !== 'all' ||
+        roleFilterValues.length > 0 ||
+        statusFilterValues.length > 0 ||
         startDate !== null ||
         endDate !== null;
 
@@ -125,6 +122,10 @@ export default function ReviewApprovalPage() {
         } else if (tabParam === 'reviewer') {
             setTabValue(0);
         }
+
+        // Pre-populate search from URL (e.g. from dashboard Recent Contracts)
+        const searchParam = searchParams.get('search');
+        if (searchParam) setSearchQuery(searchParam);
     }, [searchParams]);
 
     /**
@@ -217,9 +218,9 @@ export default function ReviewApprovalPage() {
             );
         }
 
-        // Role filter
-        if (roleFilterValue.value !== 'all') {
-            filtered = filtered.filter(item => item.role === roleFilterValue.value);
+        // Role filter (multiselect — OR logic)
+        if (roleFilterValues.length > 0) {
+            filtered = filtered.filter(item => roleFilterValues.some(r => r.value === item.role));
         }
 
         // Date filter — by sentAt (when contract was sent for review/approval)
@@ -241,8 +242,8 @@ export default function ReviewApprovalPage() {
             });
         }
 
-        // Status filter
-        if (statusFilterValue.value !== 'all') {
+        // Status filter (multiselect — OR logic)
+        if (statusFilterValues.length > 0) {
             filtered = filtered.filter(item => {
                 const c = item.contract;
                 const currentUser = authService.getCurrentUser();
@@ -250,23 +251,25 @@ export default function ReviewApprovalPage() {
                 const allReviewersComplete = !c.reviewers || c.reviewers.length === 0 ||
                     c.reviewers.every(r => r.status === 'reviewed');
 
-                if (tabValue === 0) {
-                    switch (statusFilterValue.value) {
-                        case 'pending_review': return item.role === 'reviewer';
-                        case 'ready_approval': return item.role === 'approver' && allReviewersComplete;
-                        case 'awaiting_reviews': return item.role === 'approver' && !allReviewersComplete;
-                        default: return true;
+                return statusFilterValues.some(sv => {
+                    if (tabValue === 0) {
+                        switch (sv.value) {
+                            case 'pending_review': return item.role === 'reviewer';
+                            case 'ready_approval': return item.role === 'approver' && allReviewersComplete;
+                            case 'awaiting_reviews': return item.role === 'approver' && !allReviewersComplete;
+                            default: return false;
+                        }
+                    } else {
+                        switch (sv.value) {
+                            case 'reviewed': return item.role === 'reviewer' && myReviewerInfo?.status === 'reviewed';
+                            case 'approved': return item.role === 'approver' && c.approver?.status === 'approved';
+                            case 'rejected':
+                                return (item.role === 'reviewer' && myReviewerInfo?.status === 'rejected') ||
+                                       (item.role === 'approver' && c.approver?.status === 'rejected');
+                            default: return false;
+                        }
                     }
-                } else {
-                    switch (statusFilterValue.value) {
-                        case 'reviewed': return item.role === 'reviewer' && myReviewerInfo?.status === 'reviewed';
-                        case 'approved': return item.role === 'approver' && c.approver?.status === 'approved';
-                        case 'rejected':
-                            return (item.role === 'reviewer' && myReviewerInfo?.status === 'rejected') ||
-                                   (item.role === 'approver' && c.approver?.status === 'rejected');
-                        default: return true;
-                    }
-                }
+                });
             });
         }
 
@@ -487,16 +490,18 @@ export default function ReviewApprovalPage() {
                             searchPlaceholder="Search by contract or client name"
                             filters={[
                                 {
-                                    label: 'All Roles',
-                                    value: roleFilterValue,
-                                    onChange: setRoleFilterValue,
-                                    options: roleOptions,
+                                    label: 'Role',
+                                    value: roleFilterValues,
+                                    onChange: setRoleFilterValues,
+                                    options: roleOptions.filter(o => o.value !== 'all'),
+                                    multiple: true,
                                 },
                                 {
-                                    label: 'All Status',
-                                    value: statusFilterValue,
-                                    onChange: setStatusFilterValue,
-                                    options: getStatusOptions(),
+                                    label: 'Status',
+                                    value: statusFilterValues,
+                                    onChange: setStatusFilterValues,
+                                    options: getStatusOptions().filter(o => o.value !== 'all'),
+                                    multiple: true,
                                 },
                             ]}
                             enableDateFilter={true}

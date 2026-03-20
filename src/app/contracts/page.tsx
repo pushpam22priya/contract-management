@@ -62,6 +62,9 @@ export default function ContractsPage() {
 
     // Team navigation state
     const activeTeamId = searchParams.get('team');
+    const statusFromUrl = searchParams.get('status');
+    // Flat view: no team selected but a status param exists (e.g. from dashboard card)
+    const isFlatView = !activeTeamId && statusFromUrl !== null;
     const [teams, setTeams] = useState<Team[]>([]);
     const [teamsLoading, setTeamsLoading] = useState(true);
     const [createTeamOpen, setCreateTeamOpen] = useState(false);
@@ -69,9 +72,9 @@ export default function ContractsPage() {
     const [teamToRename, setTeamToRename] = useState<Team | null>(null);
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState(statusOptions[0]);
-    const [categoryFilter, setCategoryFilter] = useState({ label: 'All Categories', value: 'all' });
-    const [teamFilterValue, setTeamFilterValue] = useState<FilterOption>({ label: 'All Teams', value: 'all' });
+    const [statusFilter, setStatusFilter] = useState<FilterOption[]>([statusOptions[0]]);
+    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
+    const [teamFilterValue, setTeamFilterValue] = useState<FilterOption[]>([{ label: 'All Teams', value: 'all' }]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -101,7 +104,7 @@ export default function ContractsPage() {
         setSnackbar({ open: true, message, severity });
     };
 
-    const [categoryOptions, setCategoryOptions] = useState<{ label: string; value: string }[]>([
+    const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([
         { label: 'All Categories', value: 'all' }
     ]);
 
@@ -154,7 +157,9 @@ export default function ContractsPage() {
         const searchParam = searchParams.get('search');
         if (statusParam) {
             const found = statusOptions.find(opt => opt.value === statusParam);
-            if (found) setStatusFilter(found);
+            setStatusFilter(found ? [found] : [statusOptions[0]]);
+        } else {
+            setStatusFilter([statusOptions[0]]);
         }
         if (searchParam) setSearchQuery(searchParam);
     }, [searchParams]);
@@ -168,11 +173,28 @@ export default function ContractsPage() {
     // Reset search + team filter when switching between root and team view
     useEffect(() => {
         setSearchQuery('');
-        setTeamFilterValue({ label: 'All Teams', value: 'all' });
+        setTeamFilterValue([{ label: 'All Teams', value: 'all' }]);
     }, [activeTeamId]);
 
     // ─── Derived data ─────────────────────────────────────────────────────────
     const activeTeam = teams.find(t => t._id === activeTeamId) ?? null;
+
+    // Flat view: map URL status values to page titles
+    const statusLabelMap: Record<string, string> = {
+        [ContractStatus.ACTIVE]: 'Active Contracts',
+        [ContractStatus.EXPIRING]: 'Expiring Soon',
+        [ContractStatus.EXPIRED]: 'Expired / Terminated',
+        [ContractStatus.WAITING_FOR_SIGNATURE]: 'Requested Contracts',
+        [ContractStatus.SIGNED_BY_EVERYONE]: 'Received Signed',
+        [ContractStatus.APPROVED]: 'Approved Contracts',
+        [ContractStatus.READY_FOR_SIGNATURE]: 'Ready for Signature',
+        [ContractStatus.SIGNED]: 'Signed Contracts',
+    };
+    const flatViewTitle = statusFromUrl ? (statusLabelMap[statusFromUrl] ?? 'Contracts') : 'Contracts';
+    // Total count for flat view = contracts matching only the URL status (before additional filters)
+    const flatViewBaseContracts = isFlatView && statusFromUrl
+        ? contracts.filter(c => c.status === statusFromUrl)
+        : contracts;
 
     // Root-level: team filter options + filtered teams list
     const teamFilterOptions: FilterOption[] = [
@@ -181,7 +203,7 @@ export default function ContractsPage() {
     ];
     const filteredTeams = teams.filter(t => {
         const matchesSearch = searchQuery === '' || t.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesFilter = teamFilterValue.value === 'all' || t._id === teamFilterValue.value;
+        const matchesFilter = teamFilterValue.some(f => f.value === 'all') || teamFilterValue.some(f => f.value === t._id);
         let matchesDate = true;
         if (startDate || endDate) {
             const d = dayjs(t.createdAt);
@@ -200,8 +222,8 @@ export default function ContractsPage() {
         const matchesSearch = searchQuery === '' ||
             contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             contract.client?.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesStatus = statusFilter.value === 'all' || contract.status === statusFilter.value;
-        const matchesCategory = categoryFilter.value === 'all' || contract.category === categoryFilter.value;
+        const matchesStatus = statusFilter.some(f => f.value === 'all') || statusFilter.some(f => f.value === contract.status);
+        const matchesCategory = categoryFilter.some(f => f.value === 'all') || categoryFilter.some(f => f.value === contract.category);
         let matchesDate = true;
         if (startDate || endDate) {
             const d = dayjs(contract.createdAt);
@@ -315,8 +337,8 @@ export default function ContractsPage() {
                     >
                         {/* Title / breadcrumb */}
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                            {activeTeamId && (
-                                <Tooltip title="Back to Teams" arrow>
+                            {(activeTeamId || isFlatView) && (
+                                <Tooltip title={isFlatView ? 'Back to Contracts' : 'Back to Teams'} arrow>
                                     <IconButton
                                         size="small"
                                         onClick={() => router.push('/contracts')}
@@ -336,10 +358,10 @@ export default function ContractsPage() {
                                     fontWeight={600}
                                     sx={{ color: 'primary.main', fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' } }}
                                 >
-                                    {activeTeam ? activeTeam.name : 'Contracts'}
+                                    {activeTeam ? activeTeam.name : isFlatView ? flatViewTitle : 'Contracts'}
                                 </Typography>
 
-                                {/* Subtitle — breadcrumb when inside team, generic text at root */}
+                                {/* Subtitle — breadcrumb when inside team or flat view, generic text at root */}
                                 {activeTeamId ? (
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
                                         <Typography
@@ -360,6 +382,25 @@ export default function ContractsPage() {
                                             sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'rgba(15,118,110,0.08)', color: 'primary.main' }}
                                         />
                                     </Box>
+                                ) : isFlatView ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                                        <Typography
+                                            variant="body2"
+                                            sx={{ color: 'text.secondary', cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
+                                            onClick={() => router.push('/contracts')}
+                                        >
+                                            Contracts
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ color: 'text.disabled' }}>/</Typography>
+                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                            {flatViewTitle}
+                                        </Typography>
+                                        <Chip
+                                            label={`${filteredContracts.length} contract${filteredContracts.length !== 1 ? 's' : ''}`}
+                                            size="small"
+                                            sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'rgba(15,118,110,0.08)', color: 'primary.main' }}
+                                        />
+                                    </Box>
                                 ) : (
                                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                                         Manage your teams and contracts
@@ -368,55 +409,60 @@ export default function ContractsPage() {
                             </Box>
                         </Box>
 
-                        {/* Action button — circular icon button for both states */}
-                        <Box sx={{ display: 'flex', justifyContent: { xs: 'flex-end', sm: 'flex-start' } }}>
-                            <Tooltip title={activeTeamId ? 'Create Contract' : 'Create Team'} arrow>
-                                <IconButton
-                                    onClick={() => activeTeamId ? setWizardOpen(true) : setCreateTeamOpen(true)}
-                                    sx={{
-                                        bgcolor: 'primary.main',
-                                        color: 'white',
-                                        width: 44,
-                                        height: 44,
-                                        boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
-                                        transition: 'all 0.3s',
-                                        '&:hover': {
-                                            bgcolor: 'primary.dark',
-                                            transform: 'translateY(-2px)',
-                                            boxShadow: '0 6px 16px rgba(15, 118, 110, 0.35)',
-                                        },
-                                    }}
-                                >
-                                    {activeTeamId ? <AddIcon /> : <CreateNewFolderOutlinedIcon />}
-                                </IconButton>
-                            </Tooltip>
-                        </Box>
+                        {/* Action button — hidden in flat cross-team view (no team context for creation) */}
+                        {!isFlatView && (
+                            <Box sx={{ display: 'flex', justifyContent: { xs: 'flex-end', sm: 'flex-start' } }}>
+                                <Tooltip title={activeTeamId ? 'Create Contract' : 'Create Team'} arrow>
+                                    <IconButton
+                                        onClick={() => activeTeamId ? setWizardOpen(true) : setCreateTeamOpen(true)}
+                                        sx={{
+                                            bgcolor: 'primary.main',
+                                            color: 'white',
+                                            width: 44,
+                                            height: 44,
+                                            boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
+                                            transition: 'all 0.3s',
+                                            '&:hover': {
+                                                bgcolor: 'primary.dark',
+                                                transform: 'translateY(-2px)',
+                                                boxShadow: '0 6px 16px rgba(15, 118, 110, 0.35)',
+                                            },
+                                        }}
+                                    >
+                                        {activeTeamId ? <AddIcon /> : <CreateNewFolderOutlinedIcon />}
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+                        )}
                     </Box>
 
                     {/* Filter */}
                     <ReusableFilter
                         searchQuery={searchQuery}
                         onSearchChange={setSearchQuery}
-                        searchPlaceholder={activeTeamId ? 'Search contracts or clients' : 'Search teams'}
-                        filters={activeTeamId ? [
+                        searchPlaceholder={activeTeamId || isFlatView ? 'Search contracts or clients' : 'Search teams'}
+                        filters={activeTeamId || isFlatView ? [
                             {
                                 label: 'Status',
                                 value: statusFilter,
-                                onChange: (newValue) => setStatusFilter(newValue || statusOptions[0]),
+                                onChange: (newValue) => setStatusFilter(newValue || [statusOptions[0]]),
                                 options: statusOptions,
+                                multiple: true,
                             },
                             {
                                 label: 'Category',
                                 value: categoryFilter,
-                                onChange: (newValue) => setCategoryFilter(newValue || categoryOptions[0]),
+                                onChange: (newValue) => setCategoryFilter(newValue || [{ label: 'All Categories', value: 'all' }]),
                                 options: categoryOptions,
+                                multiple: true,
                             },
                         ] : [
                             {
                                 label: 'Team',
                                 value: teamFilterValue,
-                                onChange: (newValue) => setTeamFilterValue(newValue || { label: 'All Teams', value: 'all' }),
+                                onChange: (newValue) => setTeamFilterValue(newValue || [{ label: 'All Teams', value: 'all' }]),
                                 options: teamFilterOptions,
+                                multiple: true,
                             },
                         ]}
                         enableDateFilter={true}
@@ -426,19 +472,25 @@ export default function ContractsPage() {
                         onEndDateChange={setEndDate}
                         showAdvancedFilters={showAdvancedFilters}
                         onAdvancedFiltersToggle={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                        dateFilterTitle={activeTeamId ? 'Filter by Contract Date Range' : 'Filter by Team Creation Date'}
-                        filteredCount={activeTeamId ? filteredContracts.length : filteredTeams.length}
-                        totalCount={activeTeamId ? teamContracts.length : teams.length}
-                        countLabel={activeTeamId ? 'contracts' : 'teams'}
-                        hasActiveFilters={activeTeamId
-                            ? (searchQuery !== '' || statusFilter.value !== 'all' || categoryFilter.value !== 'all' || startDate !== null || endDate !== null)
-                            : (searchQuery !== '' || teamFilterValue.value !== 'all' || startDate !== null || endDate !== null)
+                        dateFilterTitle={activeTeamId || isFlatView ? 'Filter by Contract Date Range' : 'Filter by Team Creation Date'}
+                        filteredCount={activeTeamId || isFlatView ? filteredContracts.length : filteredTeams.length}
+                        totalCount={activeTeamId ? teamContracts.length : isFlatView ? flatViewBaseContracts.length : teams.length}
+                        countLabel={activeTeamId || isFlatView ? 'contracts' : 'teams'}
+                        hasActiveFilters={
+                            (activeTeamId || isFlatView)
+                                ? (searchQuery !== '' || statusFilter.every(f => f.value !== 'all') || categoryFilter.every(f => f.value !== 'all') || startDate !== null || endDate !== null)
+                                : (searchQuery !== '' || teamFilterValue.every(f => f.value !== 'all') || startDate !== null || endDate !== null)
                         }
                         onClearFilters={() => {
                             setSearchQuery('');
-                            setStatusFilter(statusOptions[0]);
-                            setCategoryFilter({ label: 'All Categories', value: 'all' });
-                            setTeamFilterValue({ label: 'All Teams', value: 'all' });
+                            if (isFlatView && statusFromUrl) {
+                                const found = statusOptions.find(opt => opt.value === statusFromUrl);
+                                setStatusFilter(found ? [found] : [statusOptions[0]]);
+                            } else {
+                                setStatusFilter([statusOptions[0]]);
+                            }
+                            setCategoryFilter([{ label: 'All Categories', value: 'all' }]);
+                            setTeamFilterValue([{ label: 'All Teams', value: 'all' }]);
                             setStartDate(null);
                             setEndDate(null);
                             setShowAdvancedFilters(false);
@@ -453,7 +505,28 @@ export default function ContractsPage() {
                             gap: 0.75,
                         }}
                     >
-                        {activeTeamId ? (
+                        {isFlatView ? (
+                            /* ── Flat cross-team view: all contracts filtered by URL status ── */
+                            loading ? (
+                                <ShimmerCardGrid count={8} variant="contract" />
+                            ) : filteredContracts.length === 0 ? (
+                                <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                                    <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                                    <Typography color="text.secondary">
+                                        No contracts found with the selected filters.
+                                    </Typography>
+                                </Box>
+                            ) : (
+                                filteredContracts.map(contract => (
+                                    <ContractCard
+                                        key={contract.id}
+                                        contract={contract}
+                                        onView={handleViewContract}
+                                        onShare={handleShareContract}
+                                    />
+                                ))
+                            )
+                        ) : activeTeamId ? (
                             /* ── Inside a team: show contract cards ── */
                             loading ? (
                                 <ShimmerCardGrid count={8} variant="contract" />

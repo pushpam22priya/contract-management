@@ -1,43 +1,69 @@
 'use client';
 
-import { Box, Typography, Paper, Button, Fade, Grow } from '@mui/material';
+import { Box, Typography, Paper, Fade, Grow } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useState } from 'react';
 
 interface QuickAction {
     id: number;
     label: string;
+    description: string;
     icon: React.ReactNode;
     actionKey: string;
+    iconBg: string;
+    iconColor: string;
+    hoverBg: string;
+    hoverBorder: string;
 }
 
 const actions: QuickAction[] = [
     {
         id: 1,
         label: 'Create New Contract',
-        icon: <AddIcon />,
+        description: 'Start a new contract draft',
+        icon: <AddIcon sx={{ fontSize: 18 }} />,
         actionKey: 'create',
+        iconBg: '#d1fae5',
+        iconColor: '#059669',
+        hoverBg: '#f0fdf4',
+        hoverBorder: '#6ee7b7',
     },
     {
         id: 2,
         label: 'Browse Templates',
-        icon: <DescriptionOutlinedIcon />,
+        description: 'Use a pre-built template',
+        icon: <DescriptionOutlinedIcon sx={{ fontSize: 18 }} />,
         actionKey: 'templates',
+        iconBg: '#dbeafe',
+        iconColor: '#1d4ed8',
+        hoverBg: '#eff6ff',
+        hoverBorder: '#93c5fd',
     },
     {
         id: 3,
         label: 'Review Expiring Contracts',
-        icon: <WarningAmberOutlinedIcon />,
+        description: 'Contracts expiring soon',
+        icon: <WarningAmberOutlinedIcon sx={{ fontSize: 18 }} />,
         actionKey: 'expiring',
+        iconBg: '#fef3c7',
+        iconColor: '#d97706',
+        hoverBg: '#fffbeb',
+        hoverBorder: '#fcd34d',
     },
     {
         id: 4,
         label: 'Pending Approvals',
-        icon: <AccessTimeOutlinedIcon />,
+        description: 'Contracts awaiting approval',
+        icon: <AccessTimeOutlinedIcon sx={{ fontSize: 18 }} />,
         actionKey: 'approvals',
+        iconBg: '#ede9fe',
+        iconColor: '#6d28d9',
+        hoverBg: '#f5f3ff',
+        hoverBorder: '#c4b5fd',
     },
 ];
 
@@ -53,102 +79,98 @@ export default function QuickActions({ onActionClick }: QuickActionsProps) {
             <Paper
                 elevation={0}
                 sx={{
-                    p: { xs: 1.5, sm: 2 },
+                    p: 1.5,
                     height: '100%',
                     borderRadius: 3,
                     border: '1px solid',
-                    borderColor: 'rgba(0, 0, 0, 0.08)',
+                    borderColor: 'rgba(0,0,0,0.08)',
                     bgcolor: 'white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                 }}
             >
                 {/* Header */}
                 <Box sx={{ mb: 1 }}>
-                    <Typography
-                        variant="h6"
-                        fontWeight={700}
-                        sx={{
-                            color: 'text.primary',
-                            fontSize: { xs: '1.1rem', sm: '1.25rem' },
-                        }}
-                    >
+                    <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.05rem', color: 'text.primary', }}>
                         Quick Actions
                     </Typography>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: 'text.secondary',
-                            fontSize: { xs: '0.85rem', sm: '0.875rem' },
-                        }}
-                    >
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', }}>
                         Common tasks
                     </Typography>
                 </Box>
 
-                {/* Action Buttons */}
+                {/* Action Items */}
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                     {actions.map((action, index) => {
                         const isHovered = hoveredId === action.id;
 
                         return (
-                            <Grow
-                                key={action.id}
-                                in
-                                timeout={800 + index * 150}
-                                style={{ transformOrigin: '0 0 0' }}
-                            >
-                                <Button
-                                    variant="outlined"
+                            <Grow key={action.id} in timeout={600 + index * 120} style={{ transformOrigin: '0 0 0' }}>
+                                <Box
                                     onMouseEnter={() => setHoveredId(action.id)}
                                     onMouseLeave={() => setHoveredId(null)}
                                     onClick={() => onActionClick && onActionClick(action.actionKey)}
                                     sx={{
                                         display: 'flex',
-                                        justifyContent: 'flex-start',
                                         alignItems: 'center',
-                                        gap: 2,
+                                        gap: 1.5,
                                         p: 1,
-                                        borderRadius: 2,
-                                        textTransform: 'none',
-                                        borderColor: isHovered ? 'primary.main' : 'rgba(0, 0, 0, 0.12)',
-                                        bgcolor: isHovered ? 'rgba(15, 118, 110, 0.04)' : 'transparent',
-                                        color: 'text.primary',
-                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                        '&:hover': {
-                                            borderColor: 'primary.main',
-                                            bgcolor: 'rgba(15, 118, 110, 0.04)',
-                                            transform: 'translateX(4px)',
-                                            boxShadow: '0 2px 8px rgba(15, 118, 110, 0.12)',
-                                        },
-                                        '& .MuiButton-startIcon': {
-                                            margin: 0,
-                                        },
+                                        borderRadius: 2.5,
+                                        border: '1px solid',
+                                        borderColor: isHovered ? action.hoverBorder : 'rgba(0,0,0,0.07)',
+                                        bgcolor: isHovered ? action.hoverBg : 'white',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: isHovered ? `0 2px 10px ${action.hoverBorder}66` : '0 1px 2px rgba(0,0,0,0.03)',
+                                        transform: isHovered ? 'translateX(3px)' : 'none',
                                     }}
-                                    startIcon={
-                                        <Box
-                                            sx={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                fontSize: 20,
-                                                color: isHovered ? 'primary.main' : 'text.secondary',
-                                                transition: 'all 0.3s',
-                                            }}
-                                        >
-                                            {action.icon}
-                                        </Box>
-                                    }
                                 >
-                                    <Typography
-                                        variant="body1"
-                                        fontWeight={isHovered ? 600 : 500}
+                                    {/* Icon Badge */}
+                                    <Box
                                         sx={{
-                                            fontSize: { xs: '0.95rem', sm: '1rem' },
-                                            transition: 'font-weight 0.3s',
+                                            width: 36,
+                                            height: 36,
+                                            borderRadius: 2,
+                                            bgcolor: action.iconBg,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: action.iconColor,
+                                            flexShrink: 0,
+                                            transition: 'transform 0.2s ease',
+                                            transform: isHovered ? 'scale(1.08)' : 'scale(1)',
                                         }}
                                     >
-                                        {action.label}
-                                    </Typography>
-                                </Button>
+                                        {action.icon}
+                                    </Box>
+
+                                    {/* Text */}
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                        <Typography
+                                            fontWeight={600}
+                                            sx={{
+                                                fontSize: '0.875rem',
+                                                color: isHovered ? action.iconColor : 'text.primary',
+                                                transition: 'color 0.2s',
+                                            }}
+                                        >
+                                            {action.label}
+                                        </Typography>
+                                        <Typography variant="caption" sx={{ fontSize: '0.72rem', color: 'text.secondary' }}>
+                                            {action.description}
+                                        </Typography>
+                                    </Box>
+
+                                    {/* Chevron */}
+                                    <ChevronRightIcon
+                                        sx={{
+                                            fontSize: 18,
+                                            color: isHovered ? action.iconColor : 'text.disabled',
+                                            transition: 'all 0.2s ease',
+                                            transform: isHovered ? 'translateX(2px)' : 'none',
+                                            flexShrink: 0,
+                                        }}
+                                    />
+                                </Box>
                             </Grow>
                         );
                     })}

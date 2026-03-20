@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Typography, TextField, InputAdornment, Autocomplete, Collapse, Tooltip, IconButton } from '@mui/material';
+import { Box, Typography, TextField, InputAdornment, Autocomplete, Collapse, Tooltip, IconButton, Chip } from '@mui/material';
 import { Search, FilterList, ExpandMore, ExpandLess, FilterListOff } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -14,10 +14,11 @@ export interface FilterOption {
 
 export interface FilterConfig {
     label: string; // The placeholder/label for the input
-    value: any; // The current value (object or string depending on implementation, but typically the option object for Autocomplete)
+    value: any; // Single FilterOption or FilterOption[] when multiple=true
     onChange: (newValue: any) => void;
     options: FilterOption[];
     minWidth?: number | string;
+    multiple?: boolean; // Enable multi-select mode
 }
 
 interface ReusableFilterProps {
@@ -84,7 +85,9 @@ const ReusableFilter = ({
         '& .MuiOutlinedInput-root': {
             bgcolor: '#f8fafc',
             borderRadius: 2,
-            padding: 0.2,
+            // Do NOT set padding here — MUI Autocomplete manages root padding
+            // internally (chips, clear button, arrow). Overriding it causes
+            // padding to jump after focus/interaction cycles.
             '&:hover': {
                 bgcolor: '#f1f5f9',
             },
@@ -187,27 +190,71 @@ const ReusableFilter = ({
                     )}
 
                     {/* Dynamic Filters */}
-                    {filters.map((filter, index) => (
-                        <Autocomplete
-                            key={index}
-                            value={filter.value}
-                            onChange={(event, newValue) => {
-                                filter.onChange(newValue);
-                            }}
-                            options={filter.options}
-                            disableClearable
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    placeholder={filter.label}
-                                    sx={commonInputSx}
-                                />
-                            )}
-                            sx={{
-                                minWidth: filter.minWidth,
-                            }}
-                        />
-                    ))}
+                    {filters.map((filter, index) =>
+                        filter.multiple ? (
+                            <Autocomplete
+                                key={index}
+                                size="small"
+                                multiple
+                                value={filter.value || []}
+                                onChange={(_, newValue) => filter.onChange(newValue)}
+                                options={filter.options}
+                                getOptionLabel={(option) => option.label}
+                                isOptionEqualToValue={(option, value) => option.value === value.value}
+                                disableCloseOnSelect
+                                renderTags={(tagValue, getTagProps) => {
+                                    const shown = tagValue.slice(0, 1);
+                                    const extra = tagValue.length - 1;
+                                    return (
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, overflow: 'hidden', flexWrap: 'nowrap' }}>
+                                            {shown.map((opt, idx) => {
+                                                const { key, ...tagProps } = getTagProps({ index: idx });
+                                                return (
+                                                    <Chip
+                                                        key={key}
+                                                        {...tagProps}
+                                                        label={opt.label}
+                                                        size="small"
+                                                        sx={{ maxWidth: 90, fontSize: '0.72rem', height: 20 }}
+                                                    />
+                                                );
+                                            })}
+                                            {extra > 0 && (
+                                                <Typography variant="caption" sx={{ ml: 0.25, whiteSpace: 'nowrap', color: 'text.secondary' }}>
+                                                    +{extra}
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                    );
+                                }}
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        placeholder={(filter.value?.length ?? 0) === 0 ? filter.label : ''}
+                                        sx={commonInputSx}
+                                    />
+                                )}
+                                sx={{ minWidth: filter.minWidth }}
+                            />
+                        ) : (
+                            <Autocomplete
+                                key={index}
+                                size="small"
+                                value={filter.value}
+                                onChange={(_, newValue) => filter.onChange(newValue)}
+                                options={filter.options}
+                                disableClearable
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        placeholder={filter.label}
+                                        sx={commonInputSx}
+                                    />
+                                )}
+                                sx={{ minWidth: filter.minWidth }}
+                            />
+                        )
+                    )}
 
                     {/* More Filters + Clear Filters — icon-only, same row */}
                     {(enableDateFilter || (hasActiveFilters && onClearFilters)) && (

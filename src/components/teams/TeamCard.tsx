@@ -21,7 +21,7 @@ export default function TeamCard({ team, contractCount, onClick, onRename }: Tea
             sx={{
                 bgcolor: 'background.paper',
                 borderRadius: 3,
-                p: 1.5,
+                p: 1,
                 border: '1px solid',
                 borderColor: 'rgba(0, 0, 0, 0.08)',
                 boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',

@@ -41,6 +41,9 @@ export default function DraftPage() {
 
     // Team navigation state
     const activeTeamId = searchParams.get('team');
+    const statusFromUrl = searchParams.get('status');
+    // Flat view: no team selected but a status param exists (e.g. from dashboard Recent Contracts)
+    const isFlatView = !activeTeamId && statusFromUrl !== null;
     const [teams, setTeams] = useState<Team[]>([]);
     const [teamsLoading, setTeamsLoading] = useState(true);
     const [renameTeamOpen, setRenameTeamOpen] = useState(false);
@@ -63,10 +66,10 @@ export default function DraftPage() {
         severity: 'success' as AlertColor,
     });
 
-    const [categoryOptions, setCategoryOptions] = useState<{ label: string; value: string }[]>([
+    const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([
         { label: 'All Categories', value: 'all' }
     ]);
-    const [categoryFilter, setCategoryFilter] = useState({ label: 'All Categories', value: 'all' });
+    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
 
     const loadCategories = () => {
         const categories = categoryService.getAllCategories();
@@ -356,41 +359,64 @@ export default function DraftPage() {
     };
 
     // Filter states
-    const statusOptions = [
+    const statusOptions: FilterOption[] = [
         { label: 'All Status', value: 'all' },
         { label: 'Draft', value: ContractStatus.DRAFT },
         { label: 'Under Review', value: ContractStatus.IN_REVIEW },
         { label: 'Under Approval', value: ContractStatus.IN_APPROVAL },
         { label: 'Review and Approve', value: ContractStatus.REVIEW_APPROVAL },
+        { label: 'Reviewed', value: ContractStatus.REVIEWED },
         { label: 'Rejected by Reviewer', value: ContractStatus.REJECTED_BY_REVIEWER },
         { label: 'Rejected by Approver', value: ContractStatus.REJECTED_BY_APPROVER },
     ];
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState(statusOptions[0]);
-    const [teamFilterValue, setTeamFilterValue] = useState<FilterOption>({ label: 'All Teams', value: 'all' });
+    const [statusFilter, setStatusFilter] = useState<FilterOption[]>([{ label: 'All Status', value: 'all' }]);
+    const [teamFilterValue, setTeamFilterValue] = useState<FilterOption[]>([{ label: 'All Teams', value: 'all' }]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-    // URL params for deep linking (e.g. from Dashboard)
-    // Sync URL param → status filter dropdown on initial navigation
+    // URL params for deep linking (e.g. from Dashboard Recent Contracts)
+    // Supports comma-separated status values, e.g. ?status=draft,in_review
     useEffect(() => {
         const statusParam = searchParams.get('status');
-        if (!statusParam) return;
-        const matched = statusOptions.find(opt => opt.value === statusParam);
-        if (matched) setStatusFilter(matched);
+        const searchParam = searchParams.get('search');
+        if (statusParam) {
+            const statusValues = statusParam.split(',');
+            const matched = statusOptions.filter(opt => statusValues.includes(opt.value));
+            setStatusFilter(matched.length > 0 ? matched : [statusOptions[0]]);
+        } else {
+            setStatusFilter([statusOptions[0]]);
+        }
+        if (searchParam) setSearchQuery(searchParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [searchParams]);
 
     // Reset search + team filter when switching between root and team view
+    // (but preserve search if URL has a search param, e.g. from dashboard Recent Contracts)
     useEffect(() => {
-        setSearchQuery('');
-        setTeamFilterValue({ label: 'All Teams', value: 'all' });
-    }, [activeTeamId]);
+        if (!searchParams.get('search')) {
+            setSearchQuery('');
+        }
+        setTeamFilterValue([{ label: 'All Teams', value: 'all' }]);
+    }, [activeTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ─── Derived data ─────────────────────────────────────────────────────────
     const activeTeam = teams.find(t => t._id === activeTeamId) ?? null;
+
+    // Flat view: map single URL status values to page titles
+    const draftStatusLabelMap: Record<string, string> = {
+        [ContractStatus.DRAFT]: 'Draft Contracts',
+        [ContractStatus.IN_REVIEW]: 'Under Review',
+        [ContractStatus.IN_APPROVAL]: 'Under Approval',
+        [ContractStatus.REVIEWED]: 'Reviewed',
+        [ContractStatus.REJECTED_BY_REVIEWER]: 'Rejected by Reviewer',
+        [ContractStatus.REJECTED_BY_APPROVER]: 'Rejected by Approver',
+    };
+    // ?title= param takes priority (set by dashboard cards for multi-status presets)
+    const titleParam = searchParams.get('title');
+    const flatViewTitle = titleParam || (statusFromUrl ? (draftStatusLabelMap[statusFromUrl] ?? 'Draft Contracts') : 'Draft Contracts');
 
     // Teams that have at least one draft-status contract
     const teamsWithDrafts = teams.filter(t =>
@@ -404,7 +430,7 @@ export default function DraftPage() {
     ];
     const filteredTeamsWithDrafts = teamsWithDrafts.filter(t => {
         const matchesSearch = searchQuery === '' || t.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesFilter = teamFilterValue.value === 'all' || t._id === teamFilterValue.value;
+        const matchesFilter = teamFilterValue.some(f => f.value === 'all') || teamFilterValue.some(f => f.value === t._id);
         let matchesDate = true;
         if (startDate || endDate) {
             const d = dayjs(t.createdAt);
@@ -423,20 +449,22 @@ export default function DraftPage() {
     const draftCountByTeam = (teamId: string) =>
         draftContracts.filter(c => c.teamId === teamId).length;
 
-    // Filter logic (applied only when inside a team)
+    // Filter logic (applied when inside a team or in flat view)
     const filteredDrafts = teamDraftContracts.filter(contract => {
-        // Local Status Filter (pre-populated from URL param on mount)
-        const matchesStatus = statusFilter.value === 'all' ||
-            contract.status === statusFilter.value;
+        // Multiselect status filter — empty or 'all' = show all
+        const matchesStatus = statusFilter.length === 0 ||
+            statusFilter.some(f => f.value === 'all') ||
+            statusFilter.some(f => contract.status === f.value);
 
         // Search Filter
         const matchesSearch = searchQuery === '' ||
             contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             contract.client?.toLowerCase().includes(searchQuery.toLowerCase());
 
-        // Category Filter
-        const matchesCategory = categoryFilter.value === 'all' ||
-            contract.category === categoryFilter.value;
+        // Category Filter — multiselect, 'all' = show all
+        const matchesCategory = categoryFilter.length === 0 ||
+            categoryFilter.some(f => f.value === 'all') ||
+            categoryFilter.some(f => contract.category === f.value);
 
         // Date Filter
         let matchesDate = true;
@@ -478,8 +506,8 @@ export default function DraftPage() {
                 >
                     {/* Title / breadcrumb */}
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                        {activeTeamId && (
-                            <Tooltip title="Back to Teams" arrow>
+                        {(activeTeamId || isFlatView) && (
+                            <Tooltip title={isFlatView ? 'Back to Drafts' : 'Back to Teams'} arrow>
                                 <IconButton
                                     size="small"
                                     onClick={() => router.push('/draft')}
@@ -494,22 +522,15 @@ export default function DraftPage() {
                             </Tooltip>
                         )}
                         <Box>
-                            {/* Title — just the page/team name */}
+                            {/* Title */}
                             <Typography
                                 fontWeight={600}
-                                sx={{
-                                    color: 'primary.main',
-                                    fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' },
-                                }}
+                                sx={{ color: 'primary.main', fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' } }}
                             >
-                                {activeTeam
-                                    ? activeTeam.name
-                                    : (statusFilter.value === ContractStatus.IN_REVIEW ? 'Under Review Contracts'
-                                        : statusFilter.value === ContractStatus.IN_APPROVAL ? 'Under Approval Contracts'
-                                        : 'Draft Contracts')}
+                                {activeTeam ? activeTeam.name : isFlatView ? flatViewTitle : 'Draft Contracts'}
                             </Typography>
 
-                            {/* Subtitle — breadcrumb when inside team, generic text at root */}
+                            {/* Subtitle — breadcrumb when inside team or flat view, generic text at root */}
                             {activeTeamId ? (
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
                                     <Typography
@@ -530,6 +551,25 @@ export default function DraftPage() {
                                         sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'rgba(15,118,110,0.08)', color: 'primary.main' }}
                                     />
                                 </Box>
+                            ) : isFlatView ? (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{ color: 'text.secondary', cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
+                                        onClick={() => router.push('/draft')}
+                                    >
+                                        Drafts
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ color: 'text.disabled' }}>/</Typography>
+                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                        {flatViewTitle}
+                                    </Typography>
+                                    <Chip
+                                        label={`${filteredDrafts.length} contract${filteredDrafts.length !== 1 ? 's' : ''}`}
+                                        size="small"
+                                        sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'rgba(15,118,110,0.08)', color: 'primary.main' }}
+                                    />
+                                </Box>
                             ) : (
                                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                                     Review and manage your draft contracts
@@ -543,26 +583,29 @@ export default function DraftPage() {
                 <ReusableFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder={activeTeamId ? 'Search drafts or clients' : 'Search teams'}
-                    filters={activeTeamId ? [
+                    searchPlaceholder={activeTeamId || isFlatView ? 'Search drafts or clients' : 'Search teams'}
+                    filters={activeTeamId || isFlatView ? [
                         {
                             label: 'Status',
                             value: statusFilter,
-                            onChange: (newValue) => setStatusFilter(newValue || statusOptions[0]),
+                            onChange: (newValue) => setStatusFilter(newValue || []),
                             options: statusOptions,
+                            multiple: true,
                         },
                         {
                             label: 'Category',
                             value: categoryFilter,
-                            onChange: (newValue) => setCategoryFilter(newValue || { label: 'All Categories', value: 'all' }),
+                            onChange: (newValue) => setCategoryFilter(newValue || [{ label: 'All Categories', value: 'all' }]),
                             options: categoryOptions,
+                            multiple: true,
                         },
                     ] : [
                         {
                             label: 'Team',
                             value: teamFilterValue,
-                            onChange: (newValue) => setTeamFilterValue(newValue || { label: 'All Teams', value: 'all' }),
+                            onChange: (newValue) => setTeamFilterValue(newValue || [{ label: 'All Teams', value: 'all' }]),
                             options: teamFilterOptions,
+                            multiple: true,
                         },
                     ]}
                     enableDateFilter={true}
@@ -572,19 +615,26 @@ export default function DraftPage() {
                     onEndDateChange={setEndDate}
                     showAdvancedFilters={showAdvancedFilters}
                     onAdvancedFiltersToggle={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                    dateFilterTitle={activeTeamId ? 'Filter by Draft Date Range' : 'Filter by Team Creation Date'}
-                    filteredCount={activeTeamId ? filteredDrafts.length : filteredTeamsWithDrafts.length}
-                    totalCount={activeTeamId ? teamDraftContracts.length : teamsWithDrafts.length}
-                    countLabel={activeTeamId ? 'drafts' : 'teams'}
-                    hasActiveFilters={activeTeamId
-                        ? (searchQuery !== '' || statusFilter.value !== 'all' || categoryFilter.value !== 'all' || startDate !== null || endDate !== null)
-                        : (searchQuery !== '' || teamFilterValue.value !== 'all' || startDate !== null || endDate !== null)
+                    dateFilterTitle={activeTeamId || isFlatView ? 'Filter by Draft Date Range' : 'Filter by Team Creation Date'}
+                    filteredCount={activeTeamId || isFlatView ? filteredDrafts.length : filteredTeamsWithDrafts.length}
+                    totalCount={activeTeamId || isFlatView ? teamDraftContracts.length : teamsWithDrafts.length}
+                    countLabel={activeTeamId || isFlatView ? 'drafts' : 'teams'}
+                    hasActiveFilters={
+                        (activeTeamId || isFlatView)
+                            ? (searchQuery !== '' || statusFilter.every(f => f.value !== 'all') || categoryFilter.every(f => f.value !== 'all') || startDate !== null || endDate !== null)
+                            : (searchQuery !== '' || teamFilterValue.every(f => f.value !== 'all') || startDate !== null || endDate !== null)
                     }
                     onClearFilters={() => {
                         setSearchQuery('');
-                        setStatusFilter(statusOptions[0]);
-                        setCategoryFilter({ label: 'All Categories', value: 'all' });
-                        setTeamFilterValue({ label: 'All Teams', value: 'all' });
+                        // In flat view, restore URL-specified statuses; otherwise reset to All Status
+                        if (isFlatView && statusFromUrl) {
+                            const statusValues = statusFromUrl.split(',');
+                            setStatusFilter(statusOptions.filter(opt => statusValues.includes(opt.value)));
+                        } else {
+                            setStatusFilter([{ label: 'All Status', value: 'all' }]);
+                        }
+                        setCategoryFilter([{ label: 'All Categories', value: 'all' }]);
+                        setTeamFilterValue([{ label: 'All Teams', value: 'all' }]);
                         setStartDate(null);
                         setEndDate(null);
                         setShowAdvancedFilters(false);
@@ -603,7 +653,26 @@ export default function DraftPage() {
                         gap: 0.75,
                     }}
                 >
-                    {activeTeamId ? (
+                    {isFlatView ? (
+                        /* ── Flat cross-team view (from dashboard Recent Contracts) ── */
+                        loading ? (
+                            <ShimmerCardGrid count={8} variant="contract" />
+                        ) : filteredDrafts.length === 0 ? (
+                            <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                                <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                                <Typography color="text.secondary">No draft contracts found.</Typography>
+                            </Box>
+                        ) : (
+                            filteredDrafts.map((contract) => (
+                                <ContractCard variant="draft"
+                                    key={contract.id}
+                                    contract={contract}
+                                    onView={handleView}
+                                    onShare={handleShare}
+                                />
+                            ))
+                        )
+                    ) : activeTeamId ? (
                         /* ── Inside a team: show draft contract cards ── */
                         loading ? (
                             <ShimmerCardGrid count={8} variant="contract" />

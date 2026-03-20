@@ -16,6 +16,10 @@ import { ContractStatus } from '@/types/contract';
 
 export default function DashboardPage() {
     const router = useRouter();
+    const currentUser = authService.getCurrentUser();
+    const displayName = currentUser?.email
+        ? currentUser.email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+        : 'there';
     const [stats, setStats] = useState({
         draftCount: 0,
         underReviewCount: 0,
@@ -63,8 +67,14 @@ export default function DashboardPage() {
                         // Creator-owned contract counters
                         if (isCreator) {
                             if (c.status === ContractStatus.DRAFT) draft++;
-                            if (c.status === ContractStatus.IN_REVIEW) underReview++;
-                            if (c.status === ContractStatus.IN_APPROVAL) underApproval++;
+                            if (
+                                c.status === ContractStatus.IN_REVIEW ||
+                                c.status === ContractStatus.REVIEW_APPROVAL
+                            ) underReview++;
+                            if (
+                                c.status === ContractStatus.IN_APPROVAL ||
+                                c.status === ContractStatus.REVIEWED
+                            ) underApproval++;
                             if (c.status === ContractStatus.ACTIVE) active++;
                             if (c.status === ContractStatus.EXPIRING) expiring++;
                             if (c.status === ContractStatus.EXPIRED) expired++;
@@ -111,27 +121,45 @@ export default function DashboardPage() {
             value: stats.draftCount,
             description: 'In draft status',
             icon: 'document' as const,
-            iconColor: '#57a8deff',
-            iconBgColor: '#ddf8ffff',
-            path: '/draft'
+            iconColor: '#57a8de',
+            iconBgColor: '#ddf8ff',
+            path: '/draft?status=draft'
         },
         {
-            title: 'Under Review',
-            value: stats.underReviewCount,
-            description: 'Awaiting review',
+            title: 'In Progress',
+            value: stats.underReviewCount + stats.underApprovalCount,
+            description: 'Under review or approval',
             icon: 'clock' as const,
-            iconColor: '#3b82f6',
-            iconBgColor: '#dbeafe',
-            path: '/draft?status=in_review'
+            iconColor: '#ed3a88',
+            iconBgColor: '#fee9f3',
+            path: '/draft?title=In+Progress&status=draft,in_review,in_approval,review_approval,reviewed'
         },
         {
-            title: 'Under Approval',
-            value: stats.underApprovalCount,
-            description: 'Awaiting approval',
-            icon: 'hourglass' as const,
-            iconColor: '#f65cb1ff',
-            iconBgColor: '#fee9f6ff',
-            path: '/draft?status=in_approval'
+            title: 'Requested for Signature',
+            value: stats.requestedCount,
+            description: 'Shared, awaiting signatures',
+            icon: 'send' as const,
+            iconColor: '#7c3aed',
+            iconBgColor: '#ede9fe',
+            path: '/contracts?status=waiting_for_signature'
+        },
+        {
+            title: 'Waiting for My Signature',
+            value: stats.waitingForSigCount,
+            description: 'Pending your signature',
+            icon: 'pending' as const,
+            iconColor: '#e1781d',
+            iconBgColor: '#fff2e4',
+            path: '/signatures?status=pending'
+        },
+        {
+            title: 'Signed Contracts',
+            value: stats.receivedSignedCount,
+            description: 'All parties signed',
+            icon: 'taskalt' as const,
+            iconColor: '#2563eb',
+            iconBgColor: '#dbeafe',
+            path: '/contracts?status=signed_by_everyone'
         },
         {
             title: 'Active Contracts',
@@ -159,33 +187,6 @@ export default function DashboardPage() {
             iconColor: '#ef4444',
             iconBgColor: '#fee2e2',
             path: '/contracts?status=expired'
-        },
-        {
-            title: 'Requested Contracts',
-            value: stats.requestedCount,
-            description: 'Shared, awaiting signatures',
-            icon: 'send' as const,
-            iconColor: '#7c3aed',
-            iconBgColor: '#ede9fe',
-            path: '/contracts?status=waiting_for_signature'
-        },
-        {
-            title: 'Received Signed',
-            value: stats.receivedSignedCount,
-            description: 'All parties signed',
-            icon: 'taskalt' as const,
-            iconColor: '#2563eb',
-            iconBgColor: '#dbeafe',
-            path: '/contracts?status=signed_by_everyone'
-        },
-        {
-            title: 'Waiting for My Signature',
-            value: stats.waitingForSigCount,
-            description: 'Pending your signature',
-            icon: 'pending' as const,
-            iconColor: '#e1781dff',
-            iconBgColor: '#fff2e4ff',
-            path: '/signatures?status=pending'
         },
     ];
 
@@ -215,7 +216,7 @@ export default function DashboardPage() {
                     Dashboard
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Welcome back! Here's your contract overview
+                    Welcome back, <strong>{displayName}</strong> ! Here's your contract overview
                 </Typography>
 
                 {/* Critical Alerts Section */}
@@ -249,7 +250,7 @@ export default function DashboardPage() {
                     ))}
 
                     {/* Pie Chart in the 8th position */}
-                    <ContractsPieChart
+                    {/* <ContractsPieChart
                         stats={{
                             draftCount: stats.draftCount,
                             underReviewCount: stats.underReviewCount,
@@ -258,7 +259,7 @@ export default function DashboardPage() {
                             expiringCount: stats.expiringCount,
                             expiredCount: stats.expiredCount,
                         }}
-                    />
+                    /> */}
                 </Box>
 
                 {/* Recent Contracts and Quick Actions Section */}
