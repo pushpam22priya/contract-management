@@ -1,7 +1,7 @@
 'use client';
 
-import { Box, Typography, TextField, InputAdornment, Autocomplete, Collapse, Button, Tooltip, IconButton } from '@mui/material';
-import { Search, FilterList, ExpandMore, ExpandLess } from '@mui/icons-material';
+import { Box, Typography, TextField, InputAdornment, Autocomplete, Collapse, Tooltip, IconButton } from '@mui/material';
+import { Search, FilterList, ExpandMore, ExpandLess, FilterListOff } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -45,6 +45,10 @@ interface ReusableFilterProps {
     totalCount?: number;
     countLabel?: string; // e.g. "contracts", "drafts", "templates"
 
+    // Clear Filters
+    hasActiveFilters?: boolean;
+    onClearFilters?: () => void;
+
     // Extra actions (optional, for things not covered)
     extraActions?: React.ReactNode;
 }
@@ -70,6 +74,8 @@ const ReusableFilter = ({
     filteredCount = 0,
     totalCount = 0,
     countLabel = 'items',
+    hasActiveFilters = false,
+    onClearFilters,
     extraActions,
 }: ReusableFilterProps) => {
 
@@ -78,17 +84,13 @@ const ReusableFilter = ({
         '& .MuiOutlinedInput-root': {
             bgcolor: '#f8fafc',
             borderRadius: 2,
-            padding: 0.5,
+            padding: 0.2,
             '&:hover': {
                 bgcolor: '#f1f5f9',
             },
             '&.Mui-focused': {
                 bgcolor: 'background.paper',
             },
-        },
-        '& .MuiOutlinedInput-input': {
-            fontSize: '0.95rem',
-            fontWeight: 500,
         },
     };
 
@@ -118,8 +120,8 @@ const ReusableFilter = ({
                 '& .MuiInput-root': {
                     bgcolor: 'background.paper',
                     borderRadius: 2,
-                    px: 1.5,
-                    py: 0.5,
+                    // px: 1,
+                    // py: 0.2,
                     '&:before': { display: 'none' },
                     '&:after': { display: 'none' },
                     '&:hover': { bgcolor: '#f1f5f9' },
@@ -207,34 +209,50 @@ const ReusableFilter = ({
                         />
                     ))}
 
-                    {/* More Filters Button (Date Toggle) */}
-                    {enableDateFilter && onAdvancedFiltersToggle && (
-                        <Tooltip title={showAdvancedFilters ? "Hide date filters" : "Show date filters"} arrow>
-                            <Button
-                                startIcon={<FilterList />}
-                                endIcon={showAdvancedFilters ? <ExpandLess /> : <ExpandMore />}
-                                onClick={onAdvancedFiltersToggle}
-                                sx={{
-                                    textTransform: 'none',
-                                    color: 'primary.main',
-                                    fontWeight: 500,
-                                    fontSize: '0.95rem',
-                                    px: 2,
-                                    py: 0.75,
-                                    borderRadius: 2,
-                                    bgcolor: showAdvancedFilters ? 'primary.lighter' : 'transparent',
-                                    whiteSpace: 'nowrap',
-                                    gridColumn: { xs: '1', sm: '1 / -1', md: 'auto' },
-                                    justifySelf: { xs: 'stretch', sm: 'stretch', md: 'start' },
-                                    '&:hover': {
-                                        bgcolor: 'primary.lighter',
-                                    },
-                                    transition: 'all 0.3s ease',
-                                }}
-                            >
-                                More Filters
-                            </Button>
-                        </Tooltip>
+                    {/* More Filters + Clear Filters — icon-only, same row */}
+                    {(enableDateFilter || (hasActiveFilters && onClearFilters)) && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            {enableDateFilter && onAdvancedFiltersToggle && (
+                                <Tooltip title={showAdvancedFilters ? 'Hide More Filters' : 'Show More Filters'} arrow>
+                                    <IconButton
+                                        onClick={onAdvancedFiltersToggle}
+                                        size="small"
+                                        sx={{
+                                            color: 'primary.main',
+                                            bgcolor: showAdvancedFilters ? 'primary.lighter' : 'transparent',
+                                            borderRadius: 2,
+                                            p: 0.75,
+                                            '&:hover': { bgcolor: 'primary.lighter' },
+                                            transition: 'all 0.3s ease',
+                                        }}
+                                    >
+                                        <FilterList fontSize="small" />
+                                        {showAdvancedFilters
+                                            ? <ExpandLess fontSize="small" sx={{ ml: 0.25 }} />
+                                            : <ExpandMore fontSize="small" sx={{ ml: 0.25 }} />}
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+
+                            {hasActiveFilters && onClearFilters && (
+                                <Tooltip title="Clear all filters" arrow>
+                                    <IconButton
+                                        onClick={onClearFilters}
+                                        size="small"
+                                        sx={{
+                                            color: 'error.main',
+                                            bgcolor: 'transparent',
+                                            borderRadius: 2,
+                                            p: 0.75,
+                                            '&:hover': { bgcolor: 'rgba(211,47,47,0.06)' },
+                                            transition: 'all 0.2s ease',
+                                        }}
+                                    >
+                                        <FilterListOff fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+                        </Box>
                     )}
 
                     {/* Extra Actions */}
@@ -250,8 +268,8 @@ const ReusableFilter = ({
                     <Collapse in={showAdvancedFilters} timeout="auto">
                         <Box
                             sx={{
-                                mb: 2,
-                                p: 2,
+                                mb: 1,
+                                p: 1,
                                 bgcolor: '#f8fafc',
                                 borderRadius: 2,
                                 border: '1px solid',
@@ -263,7 +281,7 @@ const ReusableFilter = ({
                                 sx={{
                                     color: 'text.secondary',
                                     fontWeight: 600,
-                                    mb: 2,
+                                    mb: 1,
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: 1,

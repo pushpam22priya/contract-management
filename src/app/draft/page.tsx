@@ -17,7 +17,7 @@ import { AlertColor } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
-import ReusableFilter from '@/components/common/ReusableFilter';
+import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
 import { apiService } from '@/services/apiService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import TeamCard from '@/components/teams/TeamCard';
@@ -368,6 +368,7 @@ export default function DraftPage() {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState(statusOptions[0]);
+    const [teamFilterValue, setTeamFilterValue] = useState<FilterOption>({ label: 'All Teams', value: 'all' });
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -382,6 +383,12 @@ export default function DraftPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Reset search + team filter when switching between root and team view
+    useEffect(() => {
+        setSearchQuery('');
+        setTeamFilterValue({ label: 'All Teams', value: 'all' });
+    }, [activeTeamId]);
+
     // ─── Derived data ─────────────────────────────────────────────────────────
     const activeTeam = teams.find(t => t._id === activeTeamId) ?? null;
 
@@ -389,6 +396,23 @@ export default function DraftPage() {
     const teamsWithDrafts = teams.filter(t =>
         draftContracts.some(c => c.teamId === t._id)
     );
+
+    // Root-level: team filter options + filtered teams list
+    const teamFilterOptions: FilterOption[] = [
+        { label: 'All Teams', value: 'all' },
+        ...teamsWithDrafts.map(t => ({ label: t.name, value: t._id })),
+    ];
+    const filteredTeamsWithDrafts = teamsWithDrafts.filter(t => {
+        const matchesSearch = searchQuery === '' || t.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesFilter = teamFilterValue.value === 'all' || t._id === teamFilterValue.value;
+        let matchesDate = true;
+        if (startDate || endDate) {
+            const d = dayjs(t.createdAt);
+            if (startDate && d.isBefore(startDate, 'day')) matchesDate = false;
+            if (endDate && d.isAfter(endDate, 'day')) matchesDate = false;
+        }
+        return matchesSearch && matchesFilter && matchesDate;
+    });
 
     // Contracts shown when inside a team
     const teamDraftContracts = activeTeamId
@@ -519,8 +543,8 @@ export default function DraftPage() {
                 <ReusableFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search drafts or clients..."
-                    filters={[
+                    searchPlaceholder={activeTeamId ? 'Search drafts or clients' : 'Search teams'}
+                    filters={activeTeamId ? [
                         {
                             label: 'Status',
                             value: statusFilter,
@@ -532,7 +556,14 @@ export default function DraftPage() {
                             value: categoryFilter,
                             onChange: (newValue) => setCategoryFilter(newValue || { label: 'All Categories', value: 'all' }),
                             options: categoryOptions,
-                        }
+                        },
+                    ] : [
+                        {
+                            label: 'Team',
+                            value: teamFilterValue,
+                            onChange: (newValue) => setTeamFilterValue(newValue || { label: 'All Teams', value: 'all' }),
+                            options: teamFilterOptions,
+                        },
                     ]}
                     enableDateFilter={true}
                     startDate={startDate}
@@ -541,10 +572,23 @@ export default function DraftPage() {
                     onEndDateChange={setEndDate}
                     showAdvancedFilters={showAdvancedFilters}
                     onAdvancedFiltersToggle={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                    dateFilterTitle="Filter by Draft Date Range"
-                    filteredCount={activeTeamId ? filteredDrafts.length : teamsWithDrafts.length}
+                    dateFilterTitle={activeTeamId ? 'Filter by Draft Date Range' : 'Filter by Team Creation Date'}
+                    filteredCount={activeTeamId ? filteredDrafts.length : filteredTeamsWithDrafts.length}
                     totalCount={activeTeamId ? teamDraftContracts.length : teamsWithDrafts.length}
                     countLabel={activeTeamId ? 'drafts' : 'teams'}
+                    hasActiveFilters={activeTeamId
+                        ? (searchQuery !== '' || statusFilter.value !== 'all' || categoryFilter.value !== 'all' || startDate !== null || endDate !== null)
+                        : (searchQuery !== '' || teamFilterValue.value !== 'all' || startDate !== null || endDate !== null)
+                    }
+                    onClearFilters={() => {
+                        setSearchQuery('');
+                        setStatusFilter(statusOptions[0]);
+                        setCategoryFilter({ label: 'All Categories', value: 'all' });
+                        setTeamFilterValue({ label: 'All Teams', value: 'all' });
+                        setStartDate(null);
+                        setEndDate(null);
+                        setShowAdvancedFilters(false);
+                    }}
                 />
 
                 {/* Grid */}
@@ -594,8 +638,13 @@ export default function DraftPage() {
                                     Create contracts inside a team from the Contracts page.
                                 </Typography>
                             </Box>
+                        ) : filteredTeamsWithDrafts.length === 0 ? (
+                            <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                                <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                                <Typography color="text.secondary">No teams match your search.</Typography>
+                            </Box>
                         ) : (
-                            teamsWithDrafts.map(team => (
+                            filteredTeamsWithDrafts.map(team => (
                                 <TeamCard
                                     key={team._id}
                                     team={team}

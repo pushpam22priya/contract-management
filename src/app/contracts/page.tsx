@@ -24,7 +24,7 @@ import { submitForMixedSignature } from '@/services/externalSignatureService';
 import { AlertColor } from '@mui/material';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
-import ReusableFilter from '@/components/common/ReusableFilter';
+import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
 import { useSignaturePolling } from '@/hooks/useSignaturePolling';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import TeamCard from '@/components/teams/TeamCard';
@@ -71,6 +71,7 @@ export default function ContractsPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState(statusOptions[0]);
     const [categoryFilter, setCategoryFilter] = useState({ label: 'All Categories', value: 'all' });
+    const [teamFilterValue, setTeamFilterValue] = useState<FilterOption>({ label: 'All Teams', value: 'all' });
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -164,9 +165,31 @@ export default function ContractsPage() {
         loadCategories();
     }, []);
 
+    // Reset search + team filter when switching between root and team view
+    useEffect(() => {
+        setSearchQuery('');
+        setTeamFilterValue({ label: 'All Teams', value: 'all' });
+    }, [activeTeamId]);
+
     // ─── Derived data ─────────────────────────────────────────────────────────
-    // Contracts visible on this page (creator or signer)
     const activeTeam = teams.find(t => t._id === activeTeamId) ?? null;
+
+    // Root-level: team filter options + filtered teams list
+    const teamFilterOptions: FilterOption[] = [
+        { label: 'All Teams', value: 'all' },
+        ...teams.map(t => ({ label: t.name, value: t._id })),
+    ];
+    const filteredTeams = teams.filter(t => {
+        const matchesSearch = searchQuery === '' || t.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesFilter = teamFilterValue.value === 'all' || t._id === teamFilterValue.value;
+        let matchesDate = true;
+        if (startDate || endDate) {
+            const d = dayjs(t.createdAt);
+            if (startDate && d.isBefore(startDate, 'day')) matchesDate = false;
+            if (endDate && d.isAfter(endDate, 'day')) matchesDate = false;
+        }
+        return matchesSearch && matchesFilter && matchesDate;
+    });
 
     // Contracts shown inside a team (or all when no team selected)
     const teamContracts = activeTeamId
@@ -241,7 +264,7 @@ export default function ContractsPage() {
             if (result.success) {
                 const internalCount = assignments.filter(a => a.type === 'internal').length;
                 const externalCount = assignments.filter(a => a.type === 'external').length;
-                showNotification(`Assignments created: ${internalCount} internal, ${externalCount} external signers`, 'success');
+                showNotification(`Send successfully`, 'success');
                 loadContracts();
                 try {
                     const refreshRes = await fetch(`/api/contracts/${contractForSignature.id}`);
@@ -370,12 +393,12 @@ export default function ContractsPage() {
                         </Box>
                     </Box>
 
-                    {/* Filter (unchanged) */}
+                    {/* Filter */}
                     <ReusableFilter
                         searchQuery={searchQuery}
                         onSearchChange={setSearchQuery}
-                        searchPlaceholder="Search contracts or clients..."
-                        filters={[
+                        searchPlaceholder={activeTeamId ? 'Search contracts or clients' : 'Search teams'}
+                        filters={activeTeamId ? [
                             {
                                 label: 'Status',
                                 value: statusFilter,
@@ -387,7 +410,14 @@ export default function ContractsPage() {
                                 value: categoryFilter,
                                 onChange: (newValue) => setCategoryFilter(newValue || categoryOptions[0]),
                                 options: categoryOptions,
-                            }
+                            },
+                        ] : [
+                            {
+                                label: 'Team',
+                                value: teamFilterValue,
+                                onChange: (newValue) => setTeamFilterValue(newValue || { label: 'All Teams', value: 'all' }),
+                                options: teamFilterOptions,
+                            },
                         ]}
                         enableDateFilter={true}
                         startDate={startDate}
@@ -396,10 +426,23 @@ export default function ContractsPage() {
                         onEndDateChange={setEndDate}
                         showAdvancedFilters={showAdvancedFilters}
                         onAdvancedFiltersToggle={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                        dateFilterTitle="Filter by Contract Date Range"
-                        filteredCount={activeTeamId ? filteredContracts.length : teams.length}
+                        dateFilterTitle={activeTeamId ? 'Filter by Contract Date Range' : 'Filter by Team Creation Date'}
+                        filteredCount={activeTeamId ? filteredContracts.length : filteredTeams.length}
                         totalCount={activeTeamId ? teamContracts.length : teams.length}
                         countLabel={activeTeamId ? 'contracts' : 'teams'}
+                        hasActiveFilters={activeTeamId
+                            ? (searchQuery !== '' || statusFilter.value !== 'all' || categoryFilter.value !== 'all' || startDate !== null || endDate !== null)
+                            : (searchQuery !== '' || teamFilterValue.value !== 'all' || startDate !== null || endDate !== null)
+                        }
+                        onClearFilters={() => {
+                            setSearchQuery('');
+                            setStatusFilter(statusOptions[0]);
+                            setCategoryFilter({ label: 'All Categories', value: 'all' });
+                            setTeamFilterValue({ label: 'All Teams', value: 'all' });
+                            setStartDate(null);
+                            setEndDate(null);
+                            setShowAdvancedFilters(false);
+                        }}
                     />
 
                     {/* Grid */}
@@ -450,8 +493,13 @@ export default function ContractsPage() {
                                         Create your first team
                                     </Button>
                                 </Box>
+                            ) : filteredTeams.length === 0 ? (
+                                <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                                    <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                                    <Typography color="text.secondary">No teams match your search.</Typography>
+                                </Box>
                             ) : (
-                                teams.map(team => (
+                                filteredTeams.map(team => (
                                     <TeamCard
                                         key={team._id}
                                         team={team}

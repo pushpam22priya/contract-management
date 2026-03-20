@@ -390,16 +390,19 @@ export default function RequestReviewDialog({
                 <Box
                     sx={{
                         bgcolor: '#f8fafc',
-                        p: 1,
+                        p: 0.8,
                         borderRadius: 2,
                         border: '1px solid',
                         borderColor: 'rgba(0, 0, 0, 0.08)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1
                     }}
                 >
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                        Contract
+                    <Typography variant="body1" color="text.secondary" sx={{ display: 'block', fontWeight: 600 }}>
+                        Contract:
                     </Typography>
-                    <Typography variant="body1" fontWeight={600}>
+                    <Typography variant="body1">
                         {contractTitle}
                     </Typography>
                 </Box>
@@ -415,6 +418,7 @@ export default function RequestReviewDialog({
                         sx={{
                             '& .MuiAlert-message': { width: '100%' },
                             borderRadius: 1.5,
+                            p: 1
                         }}
                     >
                         <Typography variant="body2" fontWeight={600} sx={{ mb: 0.25 }}>
@@ -442,7 +446,7 @@ export default function RequestReviewDialog({
                                 if (contractStatus === ContractStatus.APPROVED || contractStatus === ContractStatus.READY_FOR_SIGNATURE) {
                                     return 'Review and approval process is complete. Contract is ready for signatures.';
                                 }
-                                return 'No changes can be made at this stage.';
+                                // return 'No changes can be made at this stage.';
                             })()}
                         </Typography>
                     </Alert>
@@ -702,7 +706,7 @@ export default function RequestReviewDialog({
                                 fontWeight={500}
                                 sx={{ display: 'block', mb: 1, color: '#00695c' }}
                             >
-                                Message to Reviewers (optional)
+                                Message to Reviewers
                             </Typography>
                             <TextField
                                 multiline
@@ -888,7 +892,7 @@ export default function RequestReviewDialog({
                                         fontWeight={500}
                                         sx={{ display: 'block', mb: 1, color: '#00695c' }}
                                     >
-                                        Message to Approver (optional)
+                                        Message to Approver
                                     </Typography>
                                     <TextField
                                         multiline
@@ -903,13 +907,13 @@ export default function RequestReviewDialog({
                                                 bgcolor: 'white',
                                                 fontSize: '0.875rem',
                                                 '& fieldset': {
-                                                    borderColor: 'rgba(230, 81, 0, 0.2)',
+                                                    borderColor: 'rgba(0, 105, 92, 0.2)',
                                                 },
                                                 '&:hover fieldset': {
-                                                    borderColor: 'rgba(230, 81, 0, 0.4)',
+                                                    borderColor: 'rgba(0, 105, 92, 0.4)',
                                                 },
                                                 '&.Mui-focused fieldset': {
-                                                    borderColor: '#e65100',
+                                                    borderColor: '#00695c',
                                                 },
                                             },
                                         }}

@@ -145,6 +145,13 @@ export default function TemplatePage() {
         }
     };
 
+    const hasActiveFilters = searchQuery !== '' || selectedCategory !== 'All Categories';
+
+    const handleClearFilters = () => {
+        setSearchQuery('');
+        setSelectedCategory('All Categories');
+    };
+
     // Filter templates
     const filteredTemplates = templates.filter(template => {
         const matchesCategory = selectedCategory === 'All Categories' || template.category === selectedCategory;
@@ -230,17 +237,18 @@ export default function TemplatePage() {
                 <ReusableFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search templates..."
+                    searchPlaceholder="Search templates"
                     filters={[
                         {
                             label: 'Category',
                             value: { label: selectedCategory, value: selectedCategory },
                             onChange: (newValue) => setSelectedCategory(newValue?.value || 'All Categories'),
                             options: categories.map(c => ({ label: c, value: c })),
-                            minWidth: 220
                         }
                     ]}
                     showCounts={false}
+                    hasActiveFilters={hasActiveFilters}
+                    onClearFilters={handleClearFilters}
                 />
 
                 {/* Template Cards Grid */}

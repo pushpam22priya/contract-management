@@ -752,14 +752,14 @@ export default function DocumentViewerDialog({
                         title={
                             currentUserRole === 'contractor'
                                 ? contractorWarnType === 'single-party'
-                                    ? 'One Party Per Contractor'
+                                    ? 'Single Party Restriction'
                                     : 'Client Party Field'
                                 : 'Wrong Party Field'
                         }
                         description={
                             currentUserRole === 'contractor'
                                 ? contractorWarnType === 'single-party'
-                                    ? <>You have already started filling <strong>{parties?.find((p: any) => p.id === contractorCommittedPartyId)?.label || contractorCommittedPartyId}</strong> fields. You can only fill one party&apos;s fields — assign the other parties to signers.</>
+                                    ? <>You have already started filling <strong>{parties?.find((p: any) => p.id === contractorCommittedPartyId)?.label || contractorCommittedPartyId}</strong> fields. You can only fill one party&apos;s fields.</>
                                     : 'This field is assigned to a client party and cannot be edited by the contractor.'
                                 : assignedPartyLabel
                                     ? `You are assigned to fill fields as "${assignedPartyLabel}". This field belongs to another party.`

@@ -455,7 +455,7 @@ export default function SignaturesPage() {
                 <ReusableFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search contracts or clients..."
+                    searchPlaceholder="Search contracts or clients"
                     filters={[
                         {
                             label: 'Status',

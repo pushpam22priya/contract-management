@@ -1,7 +1,7 @@
 'use client';
 
 import { Box, Typography, Chip, IconButton, Tooltip, Button } from '@mui/material';
-import { Visibility, CheckCircle, AccessTime, Person, Message, Groups, Cancel } from '@mui/icons-material';
+import { Visibility, CheckCircle, AccessTime, Person, AccountCircle, Message, Groups, Cancel } from '@mui/icons-material';
 import { Contract } from '@/types/contract';
 import { useState } from 'react';
 import { authService } from '@/services/authService';
@@ -15,6 +15,11 @@ interface ReviewApprovalCardProps {
     onRequestModification: (id: string, comments: string) => void;
     onReject: (id: string) => void;
 }
+
+const truncate = (text: string | undefined, maxLen: number) => {
+    if (!text) return '';
+    return text.length > maxLen ? text.slice(0, maxLen) + '…' : text;
+};
 
 /**
  * Format a date string to a readable format
@@ -202,7 +207,7 @@ export default function ReviewApprovalCard({
                 border: '1px solid',
                 borderColor: 'rgba(0, 0, 0, 0.08)',
                 borderRadius: 2.5,
-                p: 0,
+                // p: 0,
                 bgcolor: 'white',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 overflow: 'hidden',
@@ -216,7 +221,7 @@ export default function ReviewApprovalCard({
             {/* Header with status */}
             <Box
                 sx={{
-                    p: 1.5,
+                    p: 1,
                     bgcolor: statusColors.bg,
                     borderBottom: '1px solid',
                     borderColor: statusColors.border,
@@ -243,37 +248,49 @@ export default function ReviewApprovalCard({
             {/* Content */}
             <Box sx={{ p: 1 }}>
                 {/* Title */}
-                <Typography variant="h6" fontWeight={600} sx={{ mb: 1, fontSize: '1rem' }}>
-                    {contract.title}
-                </Typography>
-
-                {/* Client */}
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    <strong>Client:</strong> {contract.client}
-                </Typography>
+                <Tooltip title={contract.title?.length > 28 ? contract.title : ''} arrow placement="top">
+                    <Typography variant="h6" fontWeight={600} sx={{ fontSize: '0.95rem' }}>
+                        {truncate(contract.title, 28)}
+                    </Typography>
+                </Tooltip>
 
                 {/* Sender Info Section */}
                 <Box
                     sx={{
-                        mb: 2,
-                        p: 1.5,
+                        mt: 0.75,
+                        mb: 1,
+                        p: 1,
                         bgcolor: senderInfoColors.bg,
                         borderRadius: 1.5,
                         border: '1px solid',
                         borderColor: senderInfoColors.border,
                     }}
                 >
+                    {/* Client */}
+                    {contract.client && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                            <AccountCircle sx={{ fontSize: 14, color: senderInfoColors.icon }} />
+                            <Tooltip title={contract.client.length > 22 ? contract.client : ''} arrow>
+                                <Typography variant="caption" sx={{ fontWeight: 500 }}>
+                                    Client: {truncate(contract.client, 22)}
+                                </Typography>
+                            </Tooltip>
+                        </Box>
+                    )}
+
                     {/* Sender Email */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                         <Person sx={{ fontSize: 14, color: senderInfoColors.icon }} />
-                        <Typography variant="caption" sx={{ fontWeight: 500 }}>
-                            From: {senderInfo.sentBy || 'Unknown'}
-                        </Typography>
+                        <Tooltip title={(senderInfo.sentBy?.length ?? 0) > 25 ? senderInfo.sentBy : ''} arrow>
+                            <Typography variant="caption" sx={{ fontWeight: 500 }}>
+                                From: {truncate(senderInfo.sentBy, 25) || 'Unknown'}
+                            </Typography>
+                        </Tooltip>
                     </Box>
 
                     {/* Sent Time */}
                     {senderInfo.sentAt && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                             <AccessTime sx={{ fontSize: 14, color: senderInfoColors.icon }} />
                             <Typography variant="caption" color="text.secondary">
                                 {formatDateTime(senderInfo.sentAt)}
@@ -283,21 +300,23 @@ export default function ReviewApprovalCard({
 
                     {/* Message */}
                     {senderInfo.message && (
-                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, mt: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75 }}>
                             <Message sx={{ fontSize: 14, color: senderInfoColors.icon, mt: 0.25 }} />
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    fontStyle: 'italic',
-                                    color: 'text.secondary',
-                                    display: '-webkit-box',
-                                    WebkitLineClamp: 2,
-                                    WebkitBoxOrient: 'vertical',
-                                    overflow: 'hidden',
-                                }}
-                            >
-                                "{senderInfo.message}"
-                            </Typography>
+                            <Tooltip title={senderInfo.message.length > 60 ? senderInfo.message : ''} arrow placement="top">
+                                <Typography
+                                    variant="caption"
+                                    sx={{
+                                        fontStyle: 'italic',
+                                        color: 'text.secondary',
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    "{truncate(senderInfo.message, 60)}"
+                                </Typography>
+                            </Tooltip>
                         </Box>
                     )}
                 </Box>
