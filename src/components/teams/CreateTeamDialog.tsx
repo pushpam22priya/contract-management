@@ -80,15 +80,14 @@ export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTea
             disableBackdropClick={loading}
             actions={
                 <Box sx={{ display: 'flex', gap: 1, px: 0.5 }}>
-                    <Button onClick={handleClose} disabled={loading} variant="outlined" size="small" color="inherit">
+                    <Button onClick={handleClose} disabled={loading} variant="outlined" color="inherit">
                         Cancel
                     </Button>
                     <Button
                         onClick={handleCreate}
                         disabled={loading || !name.trim()}
                         variant="contained"
-                        size="small"
-                        sx={{ minWidth: 110 }}
+                        // size="small"
                     >
                         {loading ? 'Creating…' : 'Create Team'}
                     </Button>
@@ -101,10 +100,10 @@ export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTea
 
             {/* Icon + description */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
-                <Box
+                {/* <Box
                     sx={{
-                        width: 44,
-                        height: 44,
+                        // width: 44,
+                        // height: 44,
                         borderRadius: 2,
                         bgcolor: 'primary.main',
                         display: 'flex',
@@ -113,10 +112,10 @@ export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTea
                         flexShrink: 0,
                     }}
                 >
-                    <FolderIcon sx={{ color: 'white', fontSize: 24 }} />
-                </Box>
+                    <FolderIcon sx={{ color: 'white', fontSize: 'medium' }} />
+                </Box> */}
                 <Typography variant="body2" color="text.secondary">
-                    Teams group your contracts together. You can create contracts inside a team and they'll stay organised in one place.
+                    Create team to group contracts together.
                 </Typography>
             </Box>
 

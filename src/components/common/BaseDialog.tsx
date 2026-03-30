@@ -40,6 +40,8 @@ interface BaseDialogProps {
     customHeight?: string; // Allow custom height like '100vh', '90vh', etc.
     disableEnforceFocus?: boolean; // Disable focus enforcement for embedded editors like PDFTron
     disableBackdropClick?: boolean; // Prevent closing dialog when clicking backdrop
+    /** Override sx for the DialogActions area — useful to adjust button padding per dialog */
+    actionsSx?: object;
 }
 
 export default function BaseDialog({
@@ -56,6 +58,7 @@ export default function BaseDialog({
     customHeight,
     disableEnforceFocus = true, // Default to true for better compatibility with PDFTron
     disableBackdropClick = false,
+    actionsSx,
 }: BaseDialogProps) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -165,12 +168,14 @@ export default function BaseDialog({
             {actions && (
                 <DialogActions
                     sx={{
-                        p: isFullScreen ? 0.5 : 1,
+                        p: isFullScreen ? 0.5 : 0.8,
                         borderTop: '1px solid',
                         borderColor: 'rgba(0, 0, 0, 0.08)',
                         bgcolor: '#fafafa',
                         gap: 1,
                         borderRadius: isFullScreen ? 0 : "0 0 16px 16px",
+                        '& .MuiButton-root': { py: 0.5, px: 1.5 },
+                        ...actionsSx,
                     }}
                 >
                     {actions}

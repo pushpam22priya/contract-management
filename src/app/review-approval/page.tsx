@@ -298,7 +298,8 @@ export default function ReviewApprovalPage() {
 
         if (result.success) {
             showNotification(result.message, 'success');
-            loadContracts();
+            await loadContracts();
+            setTabValue(1);
         } else {
             showNotification(result.message, 'error');
         }

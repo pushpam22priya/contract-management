@@ -372,7 +372,7 @@ const MultiPartySignatureDialog = ({
         <BaseDialog
             open={open}
             onClose={loading ? () => { } : handleClose}
-            title={success ? 'Assignments Created!' : 'Assign Signers'}
+            title={success ? 'Send Successfully' : 'Assign Signers'}
             maxWidth="md"
             actions={
                 success ? (
@@ -414,9 +414,9 @@ const MultiPartySignatureDialog = ({
                         <br />
                         <strong>External clients</strong> will receive an email with a signing link when it's their turn.
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    {/* <Typography variant="body2" color="text.secondary">
                         You can unlock each order from the contract details page after the previous order completes.
-                    </Typography>
+                    </Typography> */}
                 </Box>
             ) : (
                 <Box>

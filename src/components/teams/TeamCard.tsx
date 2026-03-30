@@ -29,12 +29,13 @@ export default function TeamCard({ team, contractCount, onClick, onRename }: Tea
                 position: 'relative',
                 overflow: 'hidden',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                '& .team-folder-icon': { color: 'primary.main' },
                 '&:hover': {
                     boxShadow: '0 12px 24px rgba(0,0,0,0.1)',
                     transform: 'translateY(-4px)',
                     borderColor: 'primary.light',
                     '& .team-action-buttons': { opacity: 1 },
-                    '& .team-folder-icon': { color: 'primary.main' },
+                    // '& .team-folder-icon': { color: 'primary.main' },
                 },
                 '&::before': {
                     content: '""',

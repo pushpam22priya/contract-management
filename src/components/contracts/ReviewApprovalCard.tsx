@@ -259,6 +259,7 @@ export default function ReviewApprovalCard({
                     open={Boolean(actionsAnchor)}
                     anchorEl={actionsAnchor}
                     onClose={() => setActionsAnchor(null)}
+                    onClick={(e) => e.stopPropagation()}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                     transformOrigin={{ vertical: 'top', horizontal: 'right' }}
                     slotProps={{

@@ -106,30 +106,53 @@ export default function RecentContracts() {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'active':       return { bg: '#d1fae5', text: '#059669', border: '#6ee7b7', accent: '#10b981' };
-            case 'expiring':     return { bg: '#fef3c7', text: '#d97706', border: '#fcd34d', accent: '#f59e0b' };
-            case 'signed':       return { bg: '#e0f2f1', text: '#00695c', border: '#80cbc4', accent: '#00897b' };
+            // ── Draft / early workflow ──────────────────────────────────────
+            case 'draft':               return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', accent: '#94a3b8' };  // slate
+            // ── Review pipeline ─────────────────────────────────────────────
             case 'in_review':
-            case 'review_approval': return { bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd', accent: '#3b82f6' };
-            case 'in_approval':  return { bg: '#ede9fe', text: '#6d28d9', border: '#c4b5fd', accent: '#7c3aed' };
-            case 'draft':        return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', accent: '#94a3b8' };
+            case 'review_approval':     return { bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd', accent: '#3b82f6' };  // blue
+            case 'reviewed':            return { bg: '#e0e7ff', text: '#3730a3', border: '#a5b4fc', accent: '#4f46e5' };  // indigo
+            case 'in_approval':         return { bg: '#ede9fe', text: '#6d28d9', border: '#c4b5fd', accent: '#7c3aed' };  // purple
+            case 'approved':            return { bg: '#f7fee7', text: '#3f6212', border: '#bef264', accent: '#65a30d' };  // lime
+            // ── Signature pipeline ──────────────────────────────────────────
+            case 'ready_for_signature': return { bg: '#fff7ed', text: '#c2410c', border: '#fdba74', accent: '#ea580c' };  // orange
+            case 'waiting_for_signature': return { bg: '#fdf4ff', text: '#86198f', border: '#f0abfc', accent: '#c026d3' }; // fuchsia
+            case 'signed_by_everyone':  return { bg: '#cffafe', text: '#0e7490', border: '#67e8f9', accent: '#0891b2' };  // cyan
+            case 'signed':              return { bg: '#e0f2f1', text: '#00695c', border: '#80cbc4', accent: '#00897b' };  // teal
+            // ── Active ──────────────────────────────────────────────────────
+            case 'active':              return { bg: '#d1fae5', text: '#059669', border: '#6ee7b7', accent: '#10b981' };  // emerald
+            case 'expiring':            return { bg: '#fef3c7', text: '#d97706', border: '#fcd34d', accent: '#f59e0b' };  // amber
+            // ── Rejections ──────────────────────────────────────────────────
+            case 'rejected':            return { bg: '#fff1f2', text: '#9f1239', border: '#fda4af', accent: '#e11d48' };  // rose
             case 'rejected_by_reviewer':
-            case 'rejected_by_approver': return { bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5', accent: '#ef4444' };
+            case 'rejected_by_approver': return { bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5', accent: '#ef4444' }; // red
+            // ── End of life ─────────────────────────────────────────────────
             case 'expired':
-            case 'terminated':   return { bg: '#fef2f2', text: '#991b1b', border: '#fecaca', accent: '#dc2626' };
-            default:             return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', accent: '#94a3b8' };
+            case 'terminated':          return { bg: '#fef2f2', text: '#991b1b', border: '#fecaca', accent: '#dc2626' };  // dark-red
+            default:                    return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', accent: '#94a3b8' };
         }
     };
 
     const getProgressColor = (status: string) => {
         switch (status) {
-            case 'active': return '#10b981';
-            case 'expiring': return '#f59e0b';
+            case 'draft':               return '#94a3b8';
             case 'in_review':
-            case 'review_approval': return '#3b82f6';
-            case 'in_approval': return '#7c3aed';
-            case 'signed': return '#00897b';
-            default: return '#94a3b8';
+            case 'review_approval':     return '#3b82f6';
+            case 'reviewed':            return '#4f46e5';
+            case 'in_approval':         return '#7c3aed';
+            case 'approved':            return '#65a30d';
+            case 'ready_for_signature': return '#ea580c';
+            case 'waiting_for_signature': return '#c026d3';
+            case 'signed_by_everyone':  return '#0891b2';
+            case 'signed':              return '#00897b';
+            case 'active':              return '#10b981';
+            case 'expiring':            return '#f59e0b';
+            case 'rejected':            return '#e11d48';
+            case 'rejected_by_reviewer':
+            case 'rejected_by_approver': return '#ef4444';
+            case 'expired':
+            case 'terminated':          return '#dc2626';
+            default:                    return '#94a3b8';
         }
     };
 
