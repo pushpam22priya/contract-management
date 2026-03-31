@@ -57,16 +57,16 @@ export default function ReviewConfirmationDialog({
             actions={dialogActions}
             maxWidth="sm"
         >
-            <Box sx={{ py: 2 }}>
+            <Box>
                 {/* Contract Info */}
                 <Box
                     sx={{
                         bgcolor: '#f8fafc',
-                        p: 2,
+                        p: 1,
                         borderRadius: 2,
                         border: '1px solid',
                         borderColor: 'rgba(0, 0, 0, 0.08)',
-                        mb: 3,
+                        mb: 1,
                     }}
                 >
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
@@ -77,17 +77,13 @@ export default function ReviewConfirmationDialog({
                     </Typography>
                 </Box>
 
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    You're about to mark this contract as reviewed. What would you like to do?
-                </Typography>
-
                 {/* Options */}
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {/* Option 1: Just Mark as Reviewed */}
                     <Box
                         onClick={handleMarkAsReviewed}
                         sx={{
-                            p: 2.5,
+                            p: 1,
                             border: '2px solid',
                             borderColor: '#e0f2f1',
                             borderRadius: 2,
@@ -130,7 +126,7 @@ export default function ReviewConfirmationDialog({
                     <Box
                         onClick={handleMarkAndSendForFurtherReview}
                         sx={{
-                            p: 2.5,
+                            p: 1,
                             border: '2px solid',
                             borderColor: '#e3f2fd',
                             borderRadius: 2,
