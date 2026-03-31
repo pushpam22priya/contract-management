@@ -91,8 +91,8 @@ function calculateDynamicStatus(contract: any): { status: ContractStatus; expire
         else if (endDate && today > endDate) {
             status = ContractStatus.EXPIRED;
         }
-        // Check if contract is expiring (30 days or less)
-        else if (endDate && expiresInDays <= 30 && expiresInDays >= 0) {
+        // Check if contract is expiring (60 days or less)
+        else if (endDate && expiresInDays <= 60 && expiresInDays >= 0) {
             status = ContractStatus.EXPIRING;
         }
         // Contract is active (started and more than 30 days until end)

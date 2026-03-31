@@ -448,6 +448,7 @@ export default function ContractsPage() {
                                 onChange: (newValue) => setStatusFilter(newValue || [statusOptions[0]]),
                                 options: statusOptions,
                                 multiple: true,
+                                disabled: isFlatView && !!statusFromUrl && statusFromUrl !== 'all',
                             },
                             {
                                 label: 'Category',
@@ -478,7 +479,7 @@ export default function ContractsPage() {
                         countLabel={activeTeamId || isFlatView ? 'contracts' : 'teams'}
                         hasActiveFilters={
                             (activeTeamId || isFlatView)
-                                ? (searchQuery !== '' || statusFilter.every(f => f.value !== 'all') || categoryFilter.every(f => f.value !== 'all') || startDate !== null || endDate !== null)
+                                ? (searchQuery !== '' || (!(isFlatView && statusFromUrl && statusFromUrl !== 'all') && statusFilter.every(f => f.value !== 'all')) || categoryFilter.every(f => f.value !== 'all') || startDate !== null || endDate !== null)
                                 : (searchQuery !== '' || teamFilterValue.every(f => f.value !== 'all') || startDate !== null || endDate !== null)
                         }
                         onClearFilters={() => {

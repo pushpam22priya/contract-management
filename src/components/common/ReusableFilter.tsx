@@ -19,6 +19,7 @@ export interface FilterConfig {
     options: FilterOption[];
     minWidth?: number | string;
     multiple?: boolean; // Enable multi-select mode
+    disabled?: boolean; // Lock the filter (shows value but prevents changes)
 }
 
 interface ReusableFilterProps {
@@ -196,6 +197,7 @@ const ReusableFilter = ({
                                 key={index}
                                 size="small"
                                 multiple
+                                disabled={filter.disabled}
                                 value={filter.value || []}
                                 onChange={(_, newValue) => filter.onChange(newValue)}
                                 options={filter.options}
@@ -240,6 +242,7 @@ const ReusableFilter = ({
                             <Autocomplete
                                 key={index}
                                 size="small"
+                                disabled={filter.disabled}
                                 value={filter.value}
                                 onChange={(_, newValue) => filter.onChange(newValue)}
                                 options={filter.options}

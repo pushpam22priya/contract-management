@@ -220,7 +220,7 @@ export default function DashboardPage() {
                 </Typography>
 
                 {/* Critical Alerts Section */}
-                <CriticalAlerts />
+                {/* <CriticalAlerts /> */}
 
                 {/* Stats Cards Grid with Pie Chart */}
                 <Box
