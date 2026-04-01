@@ -3,9 +3,9 @@ import clientPromise from '@/lib/db';
 import { ObjectId } from 'mongodb';
 
 // PATCH /api/teams/[id]  — rename
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { id } = params;
+        const { id } = await params;
         const { name, createdBy } = await request.json();
 
         const trimmedName = (name || '').trim();
@@ -45,9 +45,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 // DELETE /api/teams/[id]  — only if no contracts belong to it
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { id } = params;
+        const { id } = await params;
 
         const client = await clientPromise;
         const db = client.db();
