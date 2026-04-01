@@ -111,7 +111,7 @@ const ReusableFilter = ({
             },
         },
         '& .MuiOutlinedInput-input': {
-            py: 1.25,
+            py: 1,
             fontSize: '0.95rem',
         },
     };
@@ -165,9 +165,11 @@ const ReusableFilter = ({
                         gridTemplateColumns: {
                             xs: '1fr',
                             sm: 'repeat(2, 1fr)',
-                            md: `2fr ${filters.length > 0 ? `repeat(${filters.length}, 1fr)` : ''} auto`,
+                            md: filters.length >= 3
+                                ? `1.5fr ${`repeat(${filters.length}, 1fr)`} auto`
+                                : `2fr ${filters.length > 0 ? `repeat(${filters.length}, 1fr)` : ''} auto`,
                         },
-                        gap: 2,
+                        gap: 1,
                         mb: 1,
                         alignItems: 'center',
                     }}
