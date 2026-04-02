@@ -2,12 +2,13 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
-import { Box, Button, Alert, Typography, Chip, Tooltip } from '@mui/material';
+import { Box, Button, Alert, AlertColor, Typography, Chip, Tooltip } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import dynamic from 'next/dynamic';
 import { useRef, useState, useEffect, useMemo } from 'react';
 import BaseDialog from '@/components/common/BaseDialog';
 import ConfirmationDialog from '@/components/common/ConfirmationDialog';
+import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
 import PartyValidationWarningPopup from '@/components/viewer/pdfViewer/PartyValidationWarningPopup';
 import { validatePartyFields } from '@/utils/partyValidation';
@@ -129,6 +130,11 @@ export default function DocumentViewerDialog({
     // Track values at last save to detect unsaved changes
     const lastSavedValuesRef = useRef<Record<string, string>>({});
 
+    // Notification snackbar
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: AlertColor }>({
+        open: false, message: '', severity: 'success',
+    });
+
     // ✅ Calculate client party IDs (parties that have external signers assigned)
     const clientPartyIds = useMemo(() => {
         console.log(`📋 [DocumentViewerDialog] Computing clientPartyIds from externalSigners:`, externalSigners);
@@ -237,7 +243,7 @@ export default function DocumentViewerDialog({
             // (the party the contractor filled when they created the contract)
             if (currentUserRole === 'contractor' && formFields) {
                 const firstFilledParty = (formFields as any[]).find(
-                    (f) => f.assignedParty && initial[f.name]?.trim()
+                    (f) => f.assignedParty && initial[f.name]?.trim() && !allClientPartyIds.includes(f.assignedParty)
                 )?.assignedParty ?? null;
                 setContractorCommittedPartyId(firstFilledParty);
                 contractorCommittedPartyIdRef.current = firstFilledParty;
@@ -462,28 +468,51 @@ export default function DocumentViewerDialog({
         return false;
     };
 
+    // true = dialog was opened by the Send button; false = opened by the close button
+    const [isSendConfirm, setIsSendConfirm] = useState(false);
+
     // ✅ Handle close attempt - always show confirmation dialog when onSave is available (edit mode)
     const handleCloseAttempt = () => {
         if (onSave) {
-            // Edit mode: always show confirmation dialog
+            setIsSendConfirm(false);
             setShowUnsavedDialog(true);
         } else {
-            // Read-only mode: close directly
             onClose();
         }
     };
 
+    // ✅ Handle Send button click (internal signers only) — validate first, then confirm
+    const handleSendButtonClick = () => {
+        if (hasPartialParty || (assignedPartyId && !hasFilledAllAssignedFields)) {
+            setValidationTriggered(true);
+            return;
+        }
+        setIsSendConfirm(true);
+        setShowUnsavedDialog(true);
+    };
+
     // ✅ Handle confirmation dialog: Yes - save and close
     const handleUnsavedYes = async () => {
+        // If required fields are missing, trigger validation and keep the main dialog open.
+        // (Yes button is disabled in this state, but guard here too for safety.)
+        if (hasPartialParty || (assignedPartyId && !hasFilledAllAssignedFields)) {
+            setShowUnsavedDialog(false);
+            setValidationTriggered(true);
+            return;
+        }
         setShowUnsavedDialog(false);
         await handleSaveClick();
         onClose();
     };
 
-    // ✅ Handle confirmation dialog: No - close without saving
+    // ✅ Handle confirmation dialog: No
+    // Send-confirm mode: just dismiss the dialog, keep editor open
+    // Close mode: close the editor without saving
     const handleUnsavedNo = () => {
         setShowUnsavedDialog(false);
-        onClose();
+        if (!isSendConfirm) {
+            onClose();
+        }
     };
 
     // ✅ Handle confirmation dialog: Cancel - stay in dialog
@@ -569,6 +598,13 @@ export default function DocumentViewerDialog({
                 lastSavedValuesRef.current = { ...filledFieldValues };
                 console.log('📝 [DocumentViewerDialog] Updated lastSavedValuesRef after save');
 
+                // ✅ Show success notification
+                setSnackbar({
+                    open: true,
+                    message: assignedPartyId ? 'Fields sent successfully!' : 'Changes saved successfully!',
+                    severity: 'success',
+                });
+
                 // ✅ NOTE: Don't close dialog after saving - user can continue editing
                 // Dialog closes when user clicks the close button (with unsaved changes confirmation)
             }
@@ -607,12 +643,11 @@ export default function DocumentViewerDialog({
                     <span>
                         <Button
                             variant="contained"
-                            startIcon={<SaveIcon />}
-                            onClick={handleSaveClick}
+                            onClick={assignedPartyId ? handleSendButtonClick : handleSaveClick}
                             disabled={saveDisabled}
                             sx={{ py: 0.6 }}
                         >
-                            {saving ? 'Saving...' : 'Save Changes'}
+                            {saving ? (assignedPartyId ? 'Sending...' : 'Saving...') : (assignedPartyId ? 'Send' : 'Save Changes')}
                         </Button>
                     </span>
                 </Tooltip>
@@ -745,15 +780,28 @@ export default function DocumentViewerDialog({
             </Box>
         </BaseDialog>
 
-        {/* ✅ Unsaved Changes Confirmation Dialog */}
+        <NotificationSnackbar
+            open={snackbar.open}
+            message={snackbar.message}
+            severity={snackbar.severity}
+            onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+            autoHideDuration={3000}
+        />
+
+        {/* ✅ Unsaved Changes / Send Confirmation Dialog */}
         <ConfirmationDialog
             open={showUnsavedDialog}
-            title="Unsaved Changes"
-            message="Do you want to save changes?"
+            title={isSendConfirm ? 'Confirm Send' : 'Unsaved Changes'}
+            message={isSendConfirm
+                ? 'Are you sure you want to send your completed fields? This will submit your signature and fields to the contract.'
+                : 'Do you want to save changes?'
+            }
             onYes={handleUnsavedYes}
             onNo={handleUnsavedNo}
             onClose={handleUnsavedCancel}
             loading={saving}
+            disableYes={saveDisabled}
+            yesTooltip={getSaveDisabledReason()}
         />
         </>
     );

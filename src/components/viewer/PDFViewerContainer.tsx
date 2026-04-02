@@ -88,7 +88,7 @@ export interface PDFViewerHandle {
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole, currentUserEmail }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole, currentUserEmail, canAddFormFields = false }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const [loading, setLoading] = useState(true);
@@ -2407,6 +2407,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         });
 
                                         if (overlappingWidget) {
+                                            // Remove from capture ref so the 1200ms widget-rebuild timer doesn't restore it
+                                            capturedSignatureAnnotationsRef.current.delete(drawing.Id);
                                             Core.annotationManager.deleteAnnotation(drawing, { force: true, source: 'cleanup_script' } as any);
                                             deletedCount++;
                                         }
@@ -2457,14 +2459,15 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     const fieldValue = field?.getValue?.();
 
                                     if (isEditableParty) {
-                                        // This party's field is editable
+                                        // This party's field is editable (can fill value)
+                                        // ReadOnly=false allows form input; Locked=true + NoMove=true prevents moving/resizing the widget
                                         if (field?.flags) {
                                             (field.flags as any).ReadOnly = false;
                                         }
                                         annot.ReadOnly = false;
-                                        annot.Locked = false;
+                                        annot.Locked = true;       // Prevent widget from being moved/resized in annotation edit mode
                                         annot.LockedContents = false;
-                                        // Note: NoMove remains true - signatures should never be draggable
+                                        annot.NoMove = true;       // Explicit drag prevention
                                         (annot as any).Opacity = 1;
 
                                         // Visual indicator: highlight editable fields
@@ -2556,6 +2559,26 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     }
                                 } catch (e) {
                                     console.warn('⚠️ Could not apply party-specific CSS pointer-events:', e);
+                                }
+                            }
+
+                            // ══════════════════════════════════════════════════════════════════
+                            // CONTRACTOR / SIGNING MODE WIDGET POSITION LOCK
+                            // When canAddFormFields is false (contractor, internal, external signing),
+                            // and the multi-party editableParties block did NOT run (contractor case),
+                            // lock all widget positions so no one can drag/resize form field boxes.
+                            // ReadOnly stays false so values can still be filled.
+                            // ══════════════════════════════════════════════════════════════════
+                            if (!canAddFormFields && !effectiveReadOnly && !(editableParties && editableParties.length > 0)) {
+                                const allWidgets = Core.annotationManager.getAnnotationsList().filter(
+                                    (a: any) => a instanceof Core.Annotations.WidgetAnnotation
+                                );
+                                allWidgets.forEach((annot: any) => {
+                                    annot.NoMove = true;
+                                    annot.Locked = true;
+                                });
+                                if (allWidgets.length > 0) {
+                                    console.log(`🔒 [FIELD LOCK] Locked positions of ${allWidgets.length} widget annotations (signing mode, canAddFormFields=false)`);
                                 }
                             }
 
@@ -3346,6 +3369,17 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     });
                                 });
                             } else {
+                                // ══════════════════════════════════════════════════════════════════
+                                // SIGNING MODE: Disable Forms toolbar for non-creators
+                                // canAddFormFields=true only for template editors; for all signers
+                                // (contractor, internal, external) it is false, so they cannot
+                                // open the Forms toolbar and drag/resize/delete form field widgets.
+                                // ══════════════════════════════════════════════════════════════════
+                                if (!canAddFormFields) {
+                                    instance.UI.disableElements(['toolbarGroup-Forms']);
+                                    console.log('🔒 [FIELD LOCK] Disabled Forms toolbar (canAddFormFields=false — signing mode)');
+                                }
+
                                 // ══════════════════════════════════════════════════════════════════
                                 // AUTO-SAVE: Set up change listeners (only if not read-only)
                                 // ══════════════════════════════════════════════════════════════════
