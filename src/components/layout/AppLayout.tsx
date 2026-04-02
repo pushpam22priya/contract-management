@@ -52,7 +52,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <Box
                 component="main"
                 sx={{
-                    flexGrow: 1,
+                    // flexGrow: 1,
                     p: 1.5,
                     width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
                     mt: '40px',

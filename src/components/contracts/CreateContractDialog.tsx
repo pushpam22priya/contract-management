@@ -41,9 +41,10 @@ interface CreateContractDialogProps {
     onClose: () => void;
     onSuccess?: () => void;
     initialTemplateName?: string;
+    teamId?: string | null;
 }
 
-const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }: CreateContractDialogProps) => {
+const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, teamId }: CreateContractDialogProps) => {
     const router = useRouter();
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
 
@@ -349,6 +350,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName }:
                 formFields: exportedFormFields, // Save field definitions
                 hasFormFields: (exportedFormFields?.length ?? 0) > 0 || selectedTemplate.hasFormFields || false, // ✅ Use template flag or check fields
                 parties: selectedTemplate.parties,  // ✅ Include parties for external signer validation
+                teamId: teamId || null,              // Which team this contract belongs to
             };
 
             let activeContractId = contractId;

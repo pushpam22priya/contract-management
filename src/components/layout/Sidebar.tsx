@@ -28,8 +28,8 @@ const menuItems = [
     { text: 'Dashboard', icon: <DashboardOutlinedIcon />, path: '/dashboard' },
     { text: 'Template', icon: <DescriptionOutlinedIcon />, path: '/template' },
     { text: 'Contracts', icon: <ArticleOutlinedIcon />, path: '/contracts' },
-    { text: 'Draft', icon: <DraftsIcon />, path: '/draft' },
-    { text: 'Review & Approval', icon: <RateReviewIcon />, path: '/review-approval' },
+    { text: 'Draft', icon: <RateReviewIcon />, path: '/draft' },
+    { text: 'Review & Approval', icon: <DraftsIcon />, path: '/review-approval' },
     { text: 'Contract for Signature', icon: <DrawIcon />, path: '/signatures' },
 ];
 

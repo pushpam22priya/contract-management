@@ -252,6 +252,9 @@ export interface Contract {
     // When the contract was finalized (all signatures complete, emails sent)
     finalizedAt?: string;
     finalizedBy?: string;
+
+    // Team (folder) this contract belongs to
+    teamId?: string | null;
 }
 
 /**

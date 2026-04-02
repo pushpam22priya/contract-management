@@ -50,7 +50,7 @@ export default function TemplateCard({
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
                 sx={{
-                    p: 1.5,
+                    p: 1,
                     borderRadius: 2.5,
                     border: '1px solid',
                     borderColor: isHovered ? 'primary.main' : 'rgba(0, 0, 0, 0.08)',
@@ -79,7 +79,7 @@ export default function TemplateCard({
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'flex-start',
-                        mb: 1.5,
+                        mb: 1,
                     }}
                 >
                     <Box
@@ -119,14 +119,14 @@ export default function TemplateCard({
                 </Box>
 
                 {/* Title and Description */}
-                <Box sx={{ flex: 1, mb: 1.5 }}>
+                <Box sx={{ flex: 1, mb:0.5}}>
                     <Tooltip title={title} arrow placement="top">
                         <Typography
                             variant="h6"
                             fontWeight={600}
                             sx={{
                                 color: 'text.primary',
-                                mb: 0.75,
+                                mb: 0.5,
                                 fontSize: '0.95rem',
                                 lineHeight: 1.3,
                             }}
@@ -158,7 +158,7 @@ export default function TemplateCard({
                         right: 0,
                         display: 'flex',
                         gap: 1,
-                        p: 1,
+                        p: '4px 8px',
                         background: '#fff',
                         borderRadius: '0 0 12px 12px',
                         opacity: { xs: 1, md: 0 },

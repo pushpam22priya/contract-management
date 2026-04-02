@@ -68,12 +68,16 @@ export default function WrongPartyWarningDialog({
             <Alert
                 severity="warning"
                 sx={{
-                    py: 2,
-                    px: 2.5,
+                    py: 1,
+                    px: 2,
                     boxShadow: 8,
                     borderRadius: 2,
                     border: '2px solid',
                     borderColor: 'warning.main',
+
+                    '& .MuiAlert-icon': {
+                        padding: '12px 0'
+                    }
                 }}
             >
                 <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
@@ -90,7 +94,7 @@ export default function WrongPartyWarningDialog({
                     variant="contained"
                     color="warning"
                     onClick={handleDismiss}
-                    sx={{ textTransform: 'none', fontWeight: 600 }}
+                    sx={{ textTransform: 'none', fontWeight: 600, py: 0.8 }}
                 >
                     I Understand — Go to My Fields
                 </Button>

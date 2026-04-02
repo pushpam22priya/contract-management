@@ -603,7 +603,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     const fieldsArrayForExport = Array.isArray(allFieldsForExport) ? allFieldsForExport : Array.from(allFieldsForExport);
                     fieldsArrayForExport.forEach((field: any) => {
                         const value = field.getValue ? field.getValue() : (field.value || 'N/A');
-                        const type = field.type || field.getFieldType?.() || 'unknown';
+                        let type = field.type || 'unknown';
+                        try { type = field.getFieldType?.() || type; } catch { /* some field types throw internally */ }
                         console.log(`  📋 ${field.name} (${type}): "${value}"`);
                     });
 

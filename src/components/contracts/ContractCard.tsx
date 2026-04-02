@@ -1,6 +1,6 @@
 import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
 import dayjs from 'dayjs';
-import { Visibility, Share, Download } from '@mui/icons-material';
+import { Visibility, Share, Download, FolderOutlined } from '@mui/icons-material';
 import { Contract, ContractStatus } from '@/types/contract';
 
 /**
@@ -19,6 +19,8 @@ interface ContractCardProps {
      * - 'contract': Shows share button only for APPROVED/WAITING_FOR_SIGNATURE (for signature requests)
      */
     variant?: 'draft' | 'contract';
+    /** Team name to display on draft cards (shown instead of Expires when variant="draft") */
+    teamName?: string;
 }
 
 const ContractCard = ({
@@ -26,7 +28,8 @@ const ContractCard = ({
     onView,
     onShare,
     onDownload,
-    variant = 'contract'
+    variant = 'contract',
+    teamName,
 }: ContractCardProps) => {
     /**
      * For multi-party sequential signing, returns the position of the current
@@ -224,6 +227,40 @@ const ContractCard = ({
                 },
             }}
         >
+             {/* Team badge — shown only on draft variant when contract belongs to a team */}
+            {variant === 'draft' && teamName && (
+                <Box sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    width: '100%',
+                    gap: 0.5,
+                    mb: 1,
+                    bgcolor: '#eef2ff',
+                    border: '1px solid #c7d2fe',
+                    px: 0.75,
+                    py: 0.3,
+                    borderRadius: 1,
+                    maxWidth: '100%',
+                }}>
+                    <FolderOutlined sx={{ fontSize: '0.8rem', color: '#4338ca', flexShrink: 0 }} />
+                    <Tooltip title={teamName} arrow placement="top">
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                color: '#4338ca',
+                                fontWeight: 600,
+                                fontSize: '0.72rem',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            {teamName}
+                        </Typography>
+                    </Tooltip>
+                </Box>
+            )}
+            
             {/* Header with Title and Status */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
                 <Tooltip title={contract.title} arrow placement="top">
@@ -266,7 +303,7 @@ const ContractCard = ({
                     variant="body2"
                     sx={{
                         color: 'text.secondary',
-                        mb: 1.5,
+                        mb: 1,
                         fontSize: '0.8rem',
                         display: '-webkit-box',
                         WebkitLineClamp: 2,

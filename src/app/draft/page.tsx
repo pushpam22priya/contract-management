@@ -1,10 +1,9 @@
 'use client';
-
-import { Box, Typography, Tooltip, IconButton } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
-import AddIcon from '@mui/icons-material/Add';
+import FolderIcon from '@mui/icons-material/Folder';
 import ContractCard from '@/components/contracts/ContractCard';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
 import { Contract, ContractStatus } from '@/types/contract';
@@ -13,14 +12,25 @@ import RequestReviewDialog from '@/components/contracts/RequestReviewDialog';
 import { authService } from '@/services/authService';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { AlertColor } from '@mui/material';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
-import ReusableFilter from '@/components/common/ReusableFilter';
+import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
 import { apiService } from '@/services/apiService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
+import { Team } from '@/types/team';
 
 export default function DraftPage() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
+    const statusFromUrl = searchParams.get('status');
+    // isFlatView: came here from dashboard with a specific status (for back button)
+    const isFlatView = statusFromUrl !== null;
+
+    // Teams — loaded only for team name lookup on contract cards
+    const [teams, setTeams] = useState<Team[]>([]);
+
     const [draftContracts, setDraftContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -38,16 +48,10 @@ export default function DraftPage() {
         severity: 'success' as AlertColor,
     });
 
-    const [categoryOptions, setCategoryOptions] = useState<{ label: string; value: string }[]>([
+    const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([
         { label: 'All Categories', value: 'all' }
     ]);
-    const [categoryFilter, setCategoryFilter] = useState({ label: 'All Categories', value: 'all' });
-
-    // Load draft contracts
-    useEffect(() => {
-        loadDrafts();
-        loadCategories();
-    }, []);
+    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
 
     const loadCategories = () => {
         const categories = categoryService.getAllCategories();
@@ -58,14 +62,25 @@ export default function DraftPage() {
         setCategoryOptions(options);
     };
 
-    /**
-     * Show snackbar notification
-     */
+    const loadTeams = useCallback(async () => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) return;
+        try {
+            const res = await fetch(`/api/teams?createdBy=${encodeURIComponent(currentUser.email)}`);
+            if (res.ok) setTeams(await res.json());
+        } catch { /* silently fail */ }
+    }, []);
+
+    useEffect(() => {
+        loadDrafts();
+        loadTeams();
+        loadCategories();
+    }, []);
+
     const showNotification = (message: string, severity: AlertColor = 'success') => {
         setSnackbar({ open: true, message, severity });
     };
 
-    // State for viewer data (preloaded)
     const [viewerData, setViewerData] = useState<{
         fileUrl: string;
         initialXfdf?: string;
@@ -78,43 +93,30 @@ export default function DraftPage() {
 
         setSelectedContract(contract);
 
-        // Preload data logic
         let fileUrl = "";
         let initialXfdf: string | undefined = undefined;
         let formFields: any[] | undefined = undefined;
 
-        // ✅ PRIORITY 1: Use fileUrl (from API) - always fetches the latest saved PDF
-        // This ensures we get the most recent version after each save
         if (contract.fileUrl) {
             console.log('📄 [DraftPage] Using contract.fileUrl (fetching latest from API)');
             console.log('📄 [DraftPage] File URL:', contract.fileUrl);
             console.log('📄 [DraftPage] XFDF length:', contract.xfdfData?.length || 0);
             console.log('📄 [DraftPage] FormFields count:', contract.formFields?.length || 0);
             fileUrl = contract.fileUrl;
-            // ✅ Load the contract's XFDF and formFields (NOT template's!)
             initialXfdf = contract.xfdfData;
             formFields = contract.formFields;
-        }
-        // Priority 2: Use fileData if fileUrl not available (legacy/fallback)
-        else if (contract.fileData) {
+        } else if (contract.fileData) {
             console.log('📄 [DraftPage] Using contract.fileData (base64)');
-            console.log('📄 [DraftPage] XFDF length:', contract.xfdfData?.length || 0);
-            console.log('📄 [DraftPage] FormFields count:', contract.formFields?.length || 0);
-            console.log('📄 [DraftPage] Contract ID:', contract.id);
             fileUrl = `data:application/pdf;base64,${contract.fileData}`;
             // ✅ CRITICAL FIX: Always load XFDF/FormFields to ensure signatures/inputs are restored
             initialXfdf = contract.xfdfData;
             formFields = contract.formFields;
-        }
-        // Priority 3: Use signedPdfBase64 (fallback/legacy)
-        else if (contract.signedPdfBase64) {
+        } else if (contract.signedPdfBase64) {
             console.log('📄 [DraftPage] Using signedPdfBase64 (baked signatures)');
             fileUrl = `data:application/pdf;base64,${contract.signedPdfBase64}`;
             initialXfdf = contract.xfdfData;
             formFields = contract.formFields;
-        }
-        // Priority 4: Fallback to template PDF (last resort)
-        else if (contract.templateId) {
+        } else if (contract.templateId) {
             console.log('📄 [DraftPage] Fallback: Fetching template PDF...');
             try {
                 const template = await templateService.getTemplateById(contract.templateId);
@@ -129,11 +131,7 @@ export default function DraftPage() {
             }
         }
 
-        setViewerData({
-            fileUrl,
-            initialXfdf,
-            formFields
-        });
+        setViewerData({ fileUrl, initialXfdf, formFields });
         setViewerOpen(true);
     };
 
@@ -147,16 +145,14 @@ export default function DraftPage() {
             return;
         }
 
-        // Get contracts created by user
         const userContracts = await contractService.getContractsCreatedByUser(currentUser.email);
 
-        // Show Drafts, In Review, In Approval, and Rejected contracts
         const drafts = userContracts.filter(c =>
             c.status === ContractStatus.DRAFT ||
             c.status === ContractStatus.IN_REVIEW ||
             c.status === ContractStatus.IN_APPROVAL ||
-            c.status === ContractStatus.REVIEW_APPROVAL || // backward compat
-            c.status === ContractStatus.REVIEWED ||        // backward compat
+            c.status === ContractStatus.REVIEW_APPROVAL ||
+            c.status === ContractStatus.REVIEWED ||
             c.status === ContractStatus.REJECTED_BY_REVIEWER ||
             c.status === ContractStatus.REJECTED_BY_APPROVER
         );
@@ -171,22 +167,24 @@ export default function DraftPage() {
         const result = await contractService.approveContract(id, currentUser.email);
         if (result.success) {
             showNotification('Contract approved! Moved to Contracts page', 'success');
-            loadDrafts(); // Reload drafts
+            loadDrafts();
         } else {
             showNotification('Failed to approve contract: ' + result.message, 'error');
         }
     };
+
     const handleReject = async (id: string) => {
         const confirmed = confirm('Are you sure you want to reject this contract?');
         if (!confirmed) return;
         const result = await contractService.deleteContract(id);
         if (result.success) {
             showNotification('Contract rejected and deleted', 'success');
-            loadDrafts(); // Reload drafts
+            loadDrafts();
         } else {
             showNotification('Failed to reject contract: ' + result.message, 'error');
         }
     };
+
     const handleShare = (id: string) => {
         const contract = draftContracts.find(c => c.id === id);
         if (!contract) return;
@@ -195,10 +193,6 @@ export default function DraftPage() {
         setReviewDialogOpen(true);
     };
 
-    /**
-     * Submit contract for review and approval
-     * Note: The service handles preserving existing reviewers and approver
-     */
     const handleSubmitForReview = async (
         newReviewers: string[],
         approver: string,
@@ -209,39 +203,24 @@ export default function DraftPage() {
 
         const currentUser = authService.getCurrentUser();
 
-        // Pass only NEW reviewers - service will preserve existing ones
         const result = await contractService.submitForReview(
             contractForReview.id,
             newReviewers,
             approver,
             reviewerMessage,
             approverMessage,
-            currentUser?.email // Pass sender email
+            currentUser?.email
         );
 
         if (result.success) {
             showNotification(result.message, 'success');
-            loadDrafts(); // Reload drafts
+            loadDrafts();
         } else {
             showNotification('Failed to submit: ' + result.message, 'error');
             throw new Error(result.message);
         }
     };
 
-    /**
-     * Save contract changes from PDF viewer
-     * Now accepts pdfBlob, xfdfString, fieldValues, formFields, and isAutoSave flag
-     *
-     * ✅ IMPORTANT: All pending changes are ALREADY COMMITTED before this function is called
-     * The commit process happens in PDFViewerContainer.exportAnnotations() which includes:
-     * - Deselecting active annotations
-     * - Switching tools to finalize edits
-     * - Calling field.commit() on all form fields
-     * - Refreshing the document viewer
-     * - Redrawing all annotations
-     *
-     * @param isAutoSave - If true, don't close the dialog (background save)
-     */
     const handleSaveChanges = async (pdfBlob: Blob, xfdfString: string, fieldValues?: Record<string, string>, formFields?: any[], isAutoSave?: boolean) => {
         if (!selectedContract) return;
 
@@ -257,12 +236,10 @@ export default function DraftPage() {
         console.log(`📋 Previous XFDF length: ${selectedContract.xfdfData?.length || 0} chars`);
 
         try {
-            // Convert Blob to base64
             console.log('📄 [DraftPage] Converting PDF Blob to base64...');
             const arrayBuffer = await pdfBlob.arrayBuffer();
             const bytes = new Uint8Array(arrayBuffer);
 
-            // Verify PDF header
             const header = String.fromCharCode(...bytes.slice(0, 5));
             if (!header.startsWith('%PDF-')) {
                 console.error('❌ Invalid PDF: does not start with %PDF-');
@@ -270,23 +247,18 @@ export default function DraftPage() {
                 return;
             }
 
-            // Convert to base64
             let binary = '';
             for (let i = 0; i < bytes.byteLength; i++) {
                 binary += String.fromCharCode(bytes[i]);
             }
             const pdfBase64 = btoa(binary);
 
-            // ✅ CRITICAL: Pass both pdfBase64 AND xfdfString to contract service
             const result = await contractService.updateContractSignedPdf(selectedContract.id, pdfBase64, xfdfString);
 
             if (result.success) {
-                // ✅ CRITICAL FIX: Also persist fieldValues and formFields like contract creation does
-                // This ensures field tracking works identically to CreateContractDialog
                 const metadataUpdates: Record<string, any> = {};
 
                 if (fieldValues && Object.keys(fieldValues).length > 0) {
-                    // Merge with existing fieldValues so we don't lose values from contract creation
                     metadataUpdates.fieldValues = {
                         ...(selectedContract.fieldValues || {}),
                         ...fieldValues
@@ -301,12 +273,10 @@ export default function DraftPage() {
                 }
 
                 if (Object.keys(metadataUpdates).length > 0) {
-                    // const { apiService } = await import('@/services/apiService');
                     await apiService.updateContractMetadata(selectedContract.id, metadataUpdates);
                     console.log('✅ [DraftPage] Field metadata updated successfully');
                 }
 
-                // ✅ Show notification on save (don't close - DocumentViewerDialog handles closing)
                 showNotification('Changes saved successfully!', 'success');
                 console.log('💾 [DraftPage] Save completed - dialog stays open for continued editing');
             } else {
@@ -320,53 +290,84 @@ export default function DraftPage() {
     };
 
     // Filter states
-    const statusOptions = [
+    const statusOptions: FilterOption[] = [
         { label: 'All Status', value: 'all' },
         { label: 'Draft', value: ContractStatus.DRAFT },
         { label: 'Under Review', value: ContractStatus.IN_REVIEW },
         { label: 'Under Approval', value: ContractStatus.IN_APPROVAL },
         { label: 'Review and Approve', value: ContractStatus.REVIEW_APPROVAL },
+        { label: 'Reviewed', value: ContractStatus.REVIEWED },
         { label: 'Rejected by Reviewer', value: ContractStatus.REJECTED_BY_REVIEWER },
         { label: 'Rejected by Approver', value: ContractStatus.REJECTED_BY_APPROVER },
     ];
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState(statusOptions[0]);
-    // categoryFilter removed (declared above)
+    const [statusFilter, setStatusFilter] = useState<FilterOption[]>([{ label: 'All Status', value: 'all' }]);
+    const [teamFilter, setTeamFilter] = useState<FilterOption[]>([{ label: 'All Teams', value: 'all' }]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-    const totalDrafts = draftContracts.length;
-
-    // URL params for deep linking (e.g. from Dashboard)
-    const searchParams = useSearchParams();
-
-    // Sync URL param → status filter dropdown on initial navigation
+    // URL params for deep linking (e.g. from Dashboard Recent Contracts)
+    // Supports comma-separated status values, e.g. ?status=draft,in_review
     useEffect(() => {
         const statusParam = searchParams.get('status');
-        if (!statusParam) return;
-        const matched = statusOptions.find(opt => opt.value === statusParam);
-        if (matched) setStatusFilter(matched);
+        const searchParam = searchParams.get('search');
+        if (statusParam) {
+            const statusValues = statusParam.split(',');
+            const matched = statusOptions.filter(opt => statusValues.includes(opt.value));
+            setStatusFilter(matched.length > 0 ? matched : [statusOptions[0]]);
+        } else {
+            setStatusFilter([statusOptions[0]]);
+        }
+        if (searchParam) setSearchQuery(searchParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [searchParams]);
 
-    // Filter logic
+    // ─── Derived data ─────────────────────────────────────────────────────────
+
+    // Team name lookup map (for contract card display)
+    const teamNameById: Record<string, string> = Object.fromEntries(
+        teams.map(t => [t._id, t.name])
+    );
+
+    // Flat view title from URL param (for breadcrumb when coming from dashboard)
+    const draftStatusLabelMap: Record<string, string> = {
+        [ContractStatus.DRAFT]: 'Draft Contracts',
+        [ContractStatus.IN_REVIEW]: 'Under Review',
+        [ContractStatus.IN_APPROVAL]: 'Under Approval',
+        [ContractStatus.REVIEWED]: 'Reviewed',
+        [ContractStatus.REJECTED_BY_REVIEWER]: 'Rejected by Reviewer',
+        [ContractStatus.REJECTED_BY_APPROVER]: 'Rejected by Approver',
+    };
+    const titleParam = searchParams.get('title');
+    const pageTitle = titleParam || (statusFromUrl && statusFromUrl !== 'all'
+        ? (draftStatusLabelMap[statusFromUrl] ?? 'Draft Contracts')
+        : 'Draft Contracts');
+
+    // All teams created by the user (for team filter dropdown)
+    const teamFilterOptions: FilterOption[] = [
+        { label: 'All Teams', value: 'all' },
+        ...teams.map(t => ({ label: t.name, value: t._id })),
+    ];
+
     const filteredDrafts = draftContracts.filter(contract => {
-        // Local Status Filter (pre-populated from URL param on mount)
-        const matchesStatus = statusFilter.value === 'all' ||
-            contract.status === statusFilter.value;
+        const matchesStatus = statusFilter.length === 0 ||
+            statusFilter.some(f => f.value === 'all') ||
+            statusFilter.some(f => contract.status === f.value);
 
-        // Search Filter
         const matchesSearch = searchQuery === '' ||
             contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             contract.client?.toLowerCase().includes(searchQuery.toLowerCase());
 
-        // Category Filter
-        const matchesCategory = categoryFilter.value === 'all' ||
-            contract.category === categoryFilter.value;
+        const matchesCategory = categoryFilter.length === 0 ||
+            categoryFilter.some(f => f.value === 'all') ||
+            categoryFilter.some(f => contract.category === f.value);
 
-        // Date Filter
+        const matchesTeam = teamFilter.length === 0 ||
+            teamFilter.some(f => f.value === 'all') ||
+            teamFilter.some(f => contract.teamId === f.value);
+
         let matchesDate = true;
         if (startDate || endDate) {
             const contractDate = dayjs(contract.createdAt);
@@ -374,10 +375,8 @@ export default function DraftPage() {
             if (endDate && contractDate.isAfter(endDate, 'day')) matchesDate = false;
         }
 
-        return matchesStatus && matchesSearch && matchesCategory && matchesDate;
+        return matchesStatus && matchesSearch && matchesCategory && matchesTeam && matchesDate;
     });
-
-    const filteredCount = filteredDrafts.length;
 
     return (
         <AppLayout>
@@ -393,79 +392,49 @@ export default function DraftPage() {
                         mb: 1,
                     }}
                 >
-                    {/* Title and Subtitle */}
-                    <Box>
-                        <Typography
-                            // variant="h3"
-                            fontWeight={600}
-                            sx={{
-                                color: 'primary.main',
-                                fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' },
-                            }}
-                        >
-                            {/* Dynamic Title based on filter? Or just keep generic */}
-                            {statusFilter.value === ContractStatus.IN_REVIEW ? 'Under Review Contracts'
-                                : statusFilter.value === ContractStatus.IN_APPROVAL ? 'Under Approval Contracts'
-                                : 'Draft Contracts'}
-                        </Typography>
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: 'text.secondary',
-                                // fontSize: { xs: '0.95rem', sm: '1rem' },
-                            }}
-                        >
-                            Review and manage your draft contracts
-                        </Typography>
-                    </Box>
-
-                    {/* Create Draft Button */}
-                    {/* <Box
-                        sx={{
-                            display: 'flex',
-                            justifyContent: { xs: 'flex-end', sm: 'flex-start' },
-                        }}
-                    >
-                        <Tooltip title="Create New Draft" arrow>
-                            <IconButton
-                                sx={{
-                                    bgcolor: 'primary.main',
-                                    color: 'white',
-                                    width: 44,
-                                    height: 44,
-                                    boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
-                                    transition: 'all 0.3s',
-                                    '&:hover': {
-                                        bgcolor: 'primary.dark',
-                                        transform: 'translateY(-2px)',
-                                        boxShadow: '0 6px 16px rgba(15, 118, 110, 0.35)',
-                                    },
-                                }}
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                        <Box>
+                            <Typography
+                                fontWeight={600}
+                                sx={{ color: 'primary.main', fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' } }}
                             >
-                                <AddIcon />
-                            </IconButton>
-                        </Tooltip>
-                    </Box> */}
+                                {pageTitle}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                Review and manage your draft contracts
+                            </Typography>
+                        </Box>
+                    </Box>
                 </Box>
 
                 {/* Filter Section */}
                 <ReusableFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search drafts or clients..."
+                    searchPlaceholder="Search drafts or clients"
                     filters={[
                         {
                             label: 'Status',
                             value: statusFilter,
-                            onChange: (newValue) => setStatusFilter(newValue || statusOptions[0]),
+                            onChange: (newValue) => setStatusFilter(newValue || []),
                             options: statusOptions,
+                            multiple: true,
+                            disabled: isFlatView && !!statusFromUrl && statusFromUrl !== 'all' && !statusFromUrl.includes(','),
                         },
                         {
                             label: 'Category',
                             value: categoryFilter,
-                            onChange: (newValue) => setCategoryFilter(newValue || { label: 'All Categories', value: 'all' }),
+                            onChange: (newValue) => setCategoryFilter(newValue || [{ label: 'All Categories', value: 'all' }]),
                             options: categoryOptions,
-                        }
+                            multiple: true,
+                        },
+                        {
+                            label: 'Team',
+                            value: teamFilter,
+                            onChange: (newValue) => setTeamFilter(newValue || [{ label: 'All Teams', value: 'all' }]),
+                            options: teamFilterOptions,
+                            multiple: true,
+                        },
                     ]}
                     enableDateFilter={true}
                     startDate={startDate}
@@ -475,12 +444,34 @@ export default function DraftPage() {
                     showAdvancedFilters={showAdvancedFilters}
                     onAdvancedFiltersToggle={() => setShowAdvancedFilters(!showAdvancedFilters)}
                     dateFilterTitle="Filter by Draft Date Range"
-                    filteredCount={filteredCount}
-                    totalCount={totalDrafts}
+                    filteredCount={filteredDrafts.length}
+                    totalCount={draftContracts.length}
                     countLabel="drafts"
+                    hasActiveFilters={
+                        searchQuery !== '' ||
+                        (!(isFlatView && statusFromUrl && !statusFromUrl.includes(',')) && statusFilter.every(f => f.value !== 'all')) ||
+                        categoryFilter.every(f => f.value !== 'all') ||
+                        teamFilter.every(f => f.value !== 'all') ||
+                        startDate !== null ||
+                        endDate !== null
+                    }
+                    onClearFilters={() => {
+                        setSearchQuery('');
+                        if (isFlatView && statusFromUrl) {
+                            const statusValues = statusFromUrl.split(',');
+                            setStatusFilter(statusOptions.filter(opt => statusValues.includes(opt.value)));
+                        } else {
+                            setStatusFilter([{ label: 'All Status', value: 'all' }]);
+                        }
+                        setCategoryFilter([{ label: 'All Categories', value: 'all' }]);
+                        setTeamFilter([{ label: 'All Teams', value: 'all' }]);
+                        setStartDate(null);
+                        setEndDate(null);
+                        setShowAdvancedFilters(false);
+                    }}
                 />
 
-                {/* Drafts Grid */}
+                {/* Grid */}
                 <Box
                     sx={{
                         display: 'grid',
@@ -493,20 +484,28 @@ export default function DraftPage() {
                     }}
                 >
                     {loading ? (
-                        <ShimmerCardGrid count={12} variant="contract" />
+                        <ShimmerCardGrid count={8} variant="contract" />
+                    ) : filteredDrafts.length === 0 ? (
+                        <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                            <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                            <Typography color="text.secondary">No draft contracts found.</Typography>
+                        </Box>
                     ) : (
                         filteredDrafts.map((contract) => (
-                            <ContractCard variant="draft"
+                            <ContractCard
+                                variant="draft"
                                 key={contract.id}
                                 contract={contract}
                                 onView={handleView}
                                 onShare={handleShare}
+                                teamName={contract.teamId ? teamNameById[contract.teamId] : undefined}
                             />
                         ))
                     )}
                 </Box>
             </Box>
-            {/* ← ADD VIEWER DIALOG */}
+
+            {/* ← VIEWER DIALOG */}
             {selectedContract && viewerData && (
                 <DocumentViewerDialog
                     open={viewerOpen}
@@ -514,7 +513,6 @@ export default function DraftPage() {
                         setViewerOpen(false);
                         setSelectedContract(null);
                         setViewerData(null);
-                        // ✅ Reload drafts when dialog closes to reflect any saved changes
                         loadDrafts();
                     }}
                     fileUrl={viewerData.fileUrl}
@@ -529,16 +527,11 @@ export default function DraftPage() {
                     currentUserRole="contractor"
                     initialXfdf={viewerData.initialXfdf}
                     formFields={viewerData.formFields}
-                    // ✅ NEW: Contractors can edit field values but NOT add new form fields in draft mode
                     canAddFormFields={false}
                     editableFieldMode="all"
-                    // ✅ Enable annotation navigation for draft editing
                     showAnnotationNavigation={true}
-                    // ✅ Pass parties for party validation (must complete all fields of a party)
                     parties={selectedContract.parties}
-                    // ✅ Pass external signers to protect client party fields from contractor editing
                     externalSigners={selectedContract.externalSigners}
-                    // ✅ Pass internal signers to protect internal client party fields from contractor editing
                     internalSigners={selectedContract.internalSigners}
                 />
             )}

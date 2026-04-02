@@ -232,20 +232,97 @@ export function ContractDetailShimmer() {
                 sx={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 1.5,
+                    justifyContent: 'space-between',
                     pb: 1.5,
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                 }}
             >
-                <ShimmerBlock width={36} height={36} borderRadius={18} />
-                <Box sx={{ flex: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                        <ShimmerBlock width="30%" height={20} borderRadius={4} />
-                        <ShimmerBlock width="70px" height={24} borderRadius={12} />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
+                    <ShimmerBlock width={36} height={36} borderRadius={18} />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ShimmerBlock width={200} height={22} borderRadius={4} />
+                        <ShimmerBlock width={64} height={24} borderRadius={6} />
                     </Box>
-                    <ShimmerBlock width="45%" height={14} borderRadius={4} />
                 </Box>
+            </Box>
+
+            {/* Signature Progress Banner — multi-party timeline */}
+            <Box
+                sx={{
+                    mt: 1.5,
+                    borderRadius: 3,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    p: 2,
+                    bgcolor: 'background.paper',
+                }}
+            >
+                {/* Banner title */}
+                <ShimmerBlock width={160} height={16} borderRadius={4} mb={2} />
+
+                {/* Timeline: 3 circles connected by shimmer lines */}
+                <Box sx={{ display: 'flex', alignItems: 'center', px: 4, mb: 0.5 }}>
+                    <ShimmerBlock width={28} height={28} borderRadius={14} />
+                    <Box sx={{ flex: 1, height: 4, background: 'linear-gradient(90deg, #e6f5f3 25%, #ccebe7 50%, #e6f5f3 75%)', backgroundSize: '800px 100%', animation: `${shimmer} 1.5s ease-in-out infinite` }} />
+                    <ShimmerBlock width={28} height={28} borderRadius={14} />
+                    <Box sx={{ flex: 1, height: 4, background: 'linear-gradient(90deg, #e6f5f3 25%, #ccebe7 50%, #e6f5f3 75%)', backgroundSize: '800px 100%', animation: `${shimmer} 1.5s ease-in-out infinite` }} />
+                    <ShimmerBlock width={28} height={28} borderRadius={14} />
+                </Box>
+
+                {/* "Done" label under each step */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 3.5, mb: 1 }}>
+                    {[0, 1, 2].map((i) => (
+                        <ShimmerBlock key={i} width={36} height={11} borderRadius={3} />
+                    ))}
+                </Box>
+
+                {/* 3 signer row cards side by side */}
+                <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
+                    {[0, 1, 2].map((i) => (
+                        <Box
+                            key={i}
+                            sx={{
+                                flex: 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                px: 1.25,
+                                py: 0.875,
+                                borderRadius: 1.5,
+                                border: '1px solid',
+                                borderColor: 'divider',
+                            }}
+                        >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                <ShimmerBlock width={14} height={14} borderRadius={7} />
+                                <ShimmerBlock width={100} height={12} borderRadius={3} />
+                            </Box>
+                            <ShimmerBlock width={52} height={11} borderRadius={3} />
+                        </Box>
+                    ))}
+                </Box>
+
+                {/* Success / info banner row */}
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        px: 1.5,
+                        py: 1,
+                        borderRadius: 1.5,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        mb: 1.5,
+                    }}
+                >
+                    <ShimmerBlock width={22} height={22} borderRadius={11} />
+                    <ShimmerBlock width="55%" height={13} borderRadius={4} />
+                </Box>
+
+                {/* Finalize Contract button */}
+                <ShimmerBlock width={160} height={38} borderRadius={6} />
             </Box>
 
             {/* Two-panel content grid */}
@@ -268,39 +345,40 @@ export function ContractDetailShimmer() {
                     }}
                 >
                     {/* Section title */}
-                    <ShimmerBlock width="50%" height={18} borderRadius={4} mb={2} />
+                    <ShimmerBlock width={180} height={18} borderRadius={4} mb={2} />
 
                     {/* Info fields grid (2 columns × 3 rows) */}
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 2 }}>
                         {[0, 1, 2, 3, 4, 5].map((i) => (
                             <Box key={i}>
                                 <ShimmerBlock width="40%" height={10} borderRadius={3} mb={0.5} />
-                                <ShimmerBlock width="70%" height={14} borderRadius={3} />
+                                <ShimmerBlock width="70%" height={15} borderRadius={3} />
                             </Box>
                         ))}
                     </Box>
 
-                    {/* Divider line */}
+                    {/* Divider */}
                     <Box sx={{ borderTop: '1px solid', borderColor: 'divider', my: 2 }} />
 
                     {/* Description */}
                     <ShimmerBlock width="30%" height={10} borderRadius={3} mb={0.75} />
-                    <ShimmerBlock width="90%" height={14} borderRadius={4} mb={0.5} />
-                    <ShimmerBlock width="60%" height={14} borderRadius={4} mb={2} />
+                    <ShimmerBlock width="95%" height={13} borderRadius={4} mb={0.5} />
+                    <ShimmerBlock width="75%" height={13} borderRadius={4} mb={0.5} />
+                    <ShimmerBlock width="50%" height={13} borderRadius={4} mb={2} />
 
-                    {/* Divider line */}
+                    {/* Divider */}
                     <Box sx={{ borderTop: '1px solid', borderColor: 'divider', my: 2 }} />
 
-                    {/* Progress bar */}
+                    {/* Progress */}
                     <ShimmerBlock width="35%" height={10} borderRadius={3} mb={1} />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
-                        <ShimmerBlock width="40%" height={12} borderRadius={3} />
-                        <ShimmerBlock width="80px" height={12} borderRadius={3} />
+                        <ShimmerBlock width="45%" height={12} borderRadius={3} />
+                        <ShimmerBlock width={80} height={12} borderRadius={3} />
                     </Box>
                     <ShimmerBlock width="100%" height={8} borderRadius={4} />
                 </Box>
 
-                {/* Right Panel: Details (Tabs + Activity) */}
+                {/* Right Panel: Documents / Activity tabs */}
                 <Box
                     sx={{
                         bgcolor: 'background.paper',
@@ -312,17 +390,41 @@ export function ContractDetailShimmer() {
                 >
                     {/* Tab buttons */}
                     <Box sx={{ display: 'flex', gap: 1, mb: 2.5 }}>
-                        <ShimmerBlock width="100px" height={32} borderRadius={6} />
-                        <ShimmerBlock width="80px" height={32} borderRadius={6} />
+                        <ShimmerBlock width={110} height={34} borderRadius={6} />
+                        <ShimmerBlock width={90} height={34} borderRadius={6} />
                     </Box>
 
-                    {/* Activity list items */}
-                    {[0, 1, 2, 3].map((i) => (
-                        <Box key={i} sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
+                    {/* Document card */}
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1.5,
+                            p: 1.5,
+                            borderRadius: 2,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            mb: 1.5,
+                        }}
+                    >
+                        <ShimmerBlock width={40} height={40} borderRadius={8} />
+                        <Box sx={{ flex: 1 }}>
+                            <ShimmerBlock width="65%" height={14} borderRadius={4} mb={0.5} />
+                            <ShimmerBlock width="45%" height={11} borderRadius={3} />
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 0.75 }}>
+                            <ShimmerBlock width={28} height={28} borderRadius={6} />
+                            <ShimmerBlock width={28} height={28} borderRadius={6} />
+                        </Box>
+                    </Box>
+
+                    {/* Activity items */}
+                    {[0, 1, 2].map((i) => (
+                        <Box key={i} sx={{ display: 'flex', gap: 1.5, mb: 1.75 }}>
                             <ShimmerBlock width={10} height={10} borderRadius={5} />
                             <Box sx={{ flex: 1 }}>
-                                <ShimmerBlock width="60%" height={14} borderRadius={4} mb={0.5} />
-                                <ShimmerBlock width="80%" height={11} borderRadius={3} />
+                                <ShimmerBlock width="65%" height={13} borderRadius={4} mb={0.5} />
+                                <ShimmerBlock width="85%" height={11} borderRadius={3} />
                             </Box>
                         </Box>
                     ))}

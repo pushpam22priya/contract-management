@@ -91,8 +91,8 @@ function calculateDynamicStatus(contract: any): { status: ContractStatus; expire
         else if (endDate && today > endDate) {
             status = ContractStatus.EXPIRED;
         }
-        // Check if contract is expiring (30 days or less)
-        else if (endDate && expiresInDays <= 30 && expiresInDays >= 0) {
+        // Check if contract is expiring (60 days or less)
+        else if (endDate && expiresInDays <= 60 && expiresInDays >= 0) {
             status = ContractStatus.EXPIRING;
         }
         // Contract is active (started and more than 30 days until end)
@@ -113,9 +113,14 @@ export async function GET(request: Request) {
         const client = await clientPromise;
         const db = client.db();
 
-        // Use URL params to filter if needed, or just return all for demo
+        // Optional teamId filter
+        const { searchParams } = new URL(request.url);
+        const teamId = searchParams.get('teamId');
+        const query: Record<string, any> = {};
+        if (teamId) query.teamId = teamId;
+
         const contracts = await db.collection('contracts')
-            .find({})
+            .find(query)
             .project({ pdf: 0, fileData: 0, signedPdfBase64: 0 })
             .sort({ createdAt: -1 })
             .toArray();
