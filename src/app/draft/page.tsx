@@ -157,6 +157,8 @@ export default function DraftPage() {
             c.status === ContractStatus.REJECTED_BY_APPROVER
         );
         setDraftContracts(drafts);
+
+
         setLoading(false);
     };
 
@@ -516,8 +518,8 @@ export default function DraftPage() {
                         loadDrafts();
                     }}
                     fileUrl={viewerData.fileUrl}
-                    fileName={`${selectedContract.title}.pdf`}
-                    title={selectedContract.title}
+                    fileName={`${selectedContract.title.replace(/\s*\(Renewal\d*\)$/i, '')}.pdf`}
+                    title={selectedContract.title.replace(/\s*\(Renewal\d*\)$/i, '')}
                     content={selectedContract.content}
                     templateDocxBase64={selectedContract.templateDocxBase64}
                     fieldValues={selectedContract.fieldValues}

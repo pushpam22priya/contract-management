@@ -1,6 +1,6 @@
 import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
 import dayjs from 'dayjs';
-import { Visibility, Share, Download, FolderOutlined } from '@mui/icons-material';
+import { Visibility, Share, Download, FolderOutlined, AutorenewOutlined, Loop } from '@mui/icons-material';
 import { Contract, ContractStatus } from '@/types/contract';
 
 /**
@@ -13,13 +13,14 @@ interface ContractCardProps {
     onView?: (id: string) => void;
     onShare?: (id: string) => void;
     onDownload?: (id: string) => void;
+    onRenew?: (id: string) => void;
     /**
      * Variant determines the card behavior:
      * - 'draft': Shows share button always (for review submission), handles "changes_requested" status
      * - 'contract': Shows share button only for APPROVED/WAITING_FOR_SIGNATURE (for signature requests)
      */
     variant?: 'draft' | 'contract';
-    /** Team name to display on draft cards (shown instead of Expires when variant="draft") */
+    /** Team name to display on draft cards */
     teamName?: string;
 }
 
@@ -28,6 +29,7 @@ const ContractCard = ({
     onView,
     onShare,
     onDownload,
+    onRenew,
     variant = 'contract',
     teamName,
 }: ContractCardProps) => {
@@ -261,25 +263,55 @@ const ContractCard = ({
                 </Box>
             )}
             
-            {/* Header with Title and Status */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
-                <Tooltip title={contract.title} arrow placement="top">
-                    <Typography
-                        variant="h6"
-                        sx={{
-                            fontWeight: 500,
-                            fontSize: { xs: '1rem', sm: '1rem' },
-                            color: 'text.primary',
-                            flex: 1,
-                        }}
-                    >
-                        {truncateText(contract.title, 20)}
-                    </Typography>
+            {/* Renewal corner badge — absolutely positioned, zero layout impact */}
+            {contract.renewedFromId && ![ContractStatus.ACTIVE, ContractStatus.EXPIRING, ContractStatus.EXPIRED].includes(contract.status) && (
+                <Tooltip title="Renewal contract" arrow placement="right">
+                    <Box sx={{
+                        position: 'absolute',
+                        bottom: 8,
+                        right: 8,
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 1px 5px rgba(217,119,6,0.45)',
+                        zIndex: 1,
+                    }}>
+                        <Loop sx={{ fontSize: '0.7rem', color: '#fff' }} />
+                    </Box>
                 </Tooltip>
+            )}
 
+            {/* Header with Title and Status */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                {/* Title */}
+                {(() => {
+                    const displayTitle = contract.title.replace(/\s*\(Renewal\d*\)$/i, '');
+                    return (
+                        <Tooltip title={displayTitle} arrow placement="top">
+                            <Typography
+                                variant="h6"
+                                sx={{
+                                    fontWeight: 500,
+                                    fontSize: { xs: '1rem', sm: '1rem' },
+                                    color: 'text.primary',
+                                    flex: 1,
+                                    minWidth: 0,
+                                }}
+                            >
+                                {truncateText(displayTitle, 16)}
+                            </Typography>
+                        </Tooltip>
+                    );
+                })()}
+
+                {/* Status chip */}
                 <Tooltip title={getStatusLabel(contract.status)} arrow placement="top">
                     <Chip
-                        label={truncateText(getStatusLabel(contract.status), 18)}
+                        label={truncateText(getStatusLabel(contract.status), 14)}
                         size="small"
                         sx={{
                             bgcolor: statusColors.bg,
@@ -289,6 +321,7 @@ const ContractCard = ({
                             fontSize: '0.7rem',
                             height: '24px',
                             minWidth: '70px',
+                            flexShrink: 0,
                             '& .MuiChip-label': {
                                 px: 1.5,
                             },
@@ -454,6 +487,17 @@ const ContractCard = ({
                         color: 'primary.main',
                         shadow: 'rgba(15, 118, 110, 0.2)',
                         show: shouldShowShareButton()
+                    },
+                    {
+                        title: 'Renew Contract',
+                        icon: <AutorenewOutlined sx={{ fontSize: '1.1rem' }} />,
+                        onClick: () => onRenew?.(contract.id),
+                        color: 'success.main',
+                        shadow: 'rgba(22, 163, 74, 0.2)',
+                        show: variant === 'contract' &&
+                            !!onRenew &&
+                            (contract.status === ContractStatus.EXPIRING || contract.status === ContractStatus.EXPIRED) &&
+                            !contract.renewalStatus
                     }
                 ].map((action, idx) => (
                     action.show && (
@@ -482,6 +526,36 @@ const ContractCard = ({
                         </Tooltip>
                     )
                 ))}
+
+                {/* Renewal in Progress badge */}
+                {variant === 'contract' &&
+                    (contract.status === ContractStatus.EXPIRING || contract.status === ContractStatus.EXPIRED) &&
+                    contract.renewalStatus === 'in_progress' && (
+                        <Tooltip
+                            title={contract.renewalStartDate
+                                ? `Renewal starting on ${new Date(contract.renewalStartDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                                : 'A renewal contract is being prepared'}
+                            arrow
+                        >
+                            <Chip
+                                icon={<AutorenewOutlined sx={{ fontSize: '0.85rem !important' }} />}
+                                label="Renewal in Progress"
+                                size="small"
+                                sx={{
+                                    bgcolor: '#fef3c7',
+                                    color: '#92400e',
+                                    border: '1px solid #fcd34d',
+                                    fontWeight: 600,
+                                    fontSize: '0.72rem',
+                                    height: 26,
+                                    alignSelf: 'center',
+                                    cursor: 'default',
+                                    '& .MuiChip-icon': { color: '#92400e' },
+                                }}
+                            />
+                        </Tooltip>
+                    )}
+
             </Box>
         </Box>
     );

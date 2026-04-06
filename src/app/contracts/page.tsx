@@ -13,6 +13,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs, { Dayjs } from 'dayjs';
 import ContractCard from '@/components/contracts/ContractCard';
 import CreateContractDialog from '@/components/contracts/CreateContractDialog';
+import RenewContractDialog from '@/components/contracts/RenewContractDialog';
 import { contractService } from '@/services/contractService';
 import { Contract, ContractStatus, SignerAssignment } from '@/types/contract';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
@@ -100,6 +101,10 @@ export default function ContractsPage() {
         severity: 'success' as AlertColor,
     });
 
+    // Renew dialog state
+    const [renewDialogOpen, setRenewDialogOpen] = useState(false);
+    const [contractForRenewal, setContractForRenewal] = useState<Contract | null>(null);
+
     const showNotification = (message: string, severity: AlertColor = 'success') => {
         setSnackbar({ open: true, message, severity });
     };
@@ -137,11 +142,23 @@ export default function ContractsPage() {
             const allContracts = await contractService.getAllContracts();
             if (!Array.isArray(allContracts)) { setContracts([]); setLoading(false); return; }
 
+            // Build a quick status lookup by contract ID for the superseded check below
+            const statusById = new Map(allContracts.map(c => [c.id, c.status]));
+
             const relevantContracts = allContracts.filter(c => {
                 const isCreator = c.createdBy === currentUser.email;
                 const isSigner = c.signer?.email === currentUser.email;
                 const isValidSignerStatus = ['signed', 'active', 'expiring', 'expired'].includes(c.status);
                 const isSignerAndVisible = isSigner && isValidSignerStatus;
+
+                // Hide expired contracts whose renewal is now active or expiring
+                // (the renewal card takes over as the visible one)
+                if (c.status === ContractStatus.EXPIRED && c.renewedContractId) {
+                    const renewalStatus = statusById.get(c.renewedContractId);
+                    if (renewalStatus === ContractStatus.ACTIVE || renewalStatus === ContractStatus.EXPIRING) {
+                        return false;
+                    }
+                }
 
                 if (isCreator) return CONTRACT_PAGE_STATUSES.includes(c.status);
                 return isSignerAndVisible;
@@ -257,8 +274,19 @@ export default function ContractsPage() {
         const contract = contracts.find(c => c.id === id);
         if (!contract) return;
         setContractForSignature(contract);
-        const partiesWithFields = (contract.parties || []).filter((party: any) =>
-            (contract.formFields || []).some((field: any) => field.assignedParty === party.id)
+        const formFields = contract.formFields || [];
+        const effectiveParties = (contract.parties && contract.parties.length > 0)
+            ? contract.parties
+            : Array.from(
+                formFields.reduce((seen: Map<string, any>, f: any) => {
+                    if (f.assignedParty && !seen.has(f.assignedParty)) {
+                        seen.set(f.assignedParty, { id: f.assignedParty, label: f.partyLabel || f.assignedParty, color: f.partyColor || '#888' });
+                    }
+                    return seen;
+                }, new Map()).values()
+              );
+        const partiesWithFields = effectiveParties.filter((party: any) =>
+            formFields.some((field: any) => field.assignedParty === party.id)
         );
         if (partiesWithFields.length > 1) setMultiPartyDialogOpen(true);
         else setSignatureDialogOpen(true);
@@ -300,6 +328,18 @@ export default function ContractsPage() {
             showNotification(error.message || 'An unexpected error occurred', 'error');
             return { success: false, error: error.message };
         }
+    };
+
+    const handleRenewContract = (id: string) => {
+        const contract = contracts.find(c => c.id === id);
+        if (!contract) return;
+        setContractForRenewal(contract);
+        setRenewDialogOpen(true);
+    };
+
+    const handleRenewalSuccess = (renewalId: string) => {
+        showNotification('Contract renewed! New draft has been created.', 'success');
+        loadContracts();
     };
 
     const handleTeamClick = (teamId: string) => router.push(`/contracts?team=${teamId}`);
@@ -524,6 +564,7 @@ export default function ContractsPage() {
                                         contract={contract}
                                         onView={handleViewContract}
                                         onShare={handleShareContract}
+                                        onRenew={handleRenewContract}
                                     />
                                 ))
                             )
@@ -545,6 +586,7 @@ export default function ContractsPage() {
                                         contract={contract}
                                         onView={handleViewContract}
                                         onShare={handleShareContract}
+                                        onRenew={handleRenewContract}
                                     />
                                 ))
                             )
@@ -651,12 +693,36 @@ export default function ContractsPage() {
                     onClose={() => setMultiPartyDialogOpen(false)}
                     onSubmit={handleMixedSignatureSubmit}
                     contractTitle={contractForSignature?.title}
-                    parties={contractForSignature?.parties || []}
+                    parties={(() => {
+                        if (!contractForSignature) return [];
+                        const ff = contractForSignature.formFields || [];
+                        return (contractForSignature.parties && contractForSignature.parties.length > 0)
+                            ? contractForSignature.parties
+                            : Array.from(
+                                ff.reduce((seen: Map<string, any>, f: any) => {
+                                    if (f.assignedParty && !seen.has(f.assignedParty)) {
+                                        seen.set(f.assignedParty, { id: f.assignedParty, label: f.partyLabel || f.assignedParty, color: f.partyColor || '#888' });
+                                    }
+                                    return seen;
+                                }, new Map()).values()
+                              );
+                    })()}
                     formFields={contractForSignature?.formFields}
                     existingExternalSigners={contractForSignature?.externalSigners}
                     existingInternalSigners={contractForSignature?.internalSigners}
                     fieldValues={contractForSignature?.fieldValues}
                 />
+
+                {contractForRenewal && (
+                    <RenewContractDialog
+                        open={renewDialogOpen}
+                        onClose={() => { setRenewDialogOpen(false); setContractForRenewal(null); }}
+                        contractId={contractForRenewal.id}
+                        contractTitle={contractForRenewal.title}
+                        contractEndDate={contractForRenewal.endDate || ''}
+                        onSuccess={handleRenewalSuccess}
+                    />
+                )}
 
                 <NotificationSnackbar
                     open={snackbar.open}

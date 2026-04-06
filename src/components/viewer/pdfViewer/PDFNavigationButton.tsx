@@ -143,19 +143,35 @@ const PDFNavigationButton: React.FC<PDFNavigationButtonProps> = ({
         // Initialize
         initNavigation();
 
+        // If loading just completed but initial check found 0 annotations, retry after
+        // PDFTron's async widget rebuild has had time to complete (~800ms).
+        let retryTimer: ReturnType<typeof setTimeout> | null = null;
+        if (!loading && showAnnotationNavigation && !effectiveReadOnly) {
+            retryTimer = setTimeout(() => {
+                initNavigation();
+            }, 800);
+        }
+
         // Re-initialize when document is loaded or dependencies change
         if (viewerInstance.current && viewerInstance.current.Core) {
             const { Core } = viewerInstance.current;
             const handleDocumentLoaded = () => {
                 console.log('🔍 [PDFNavigationButton] Document loaded, re-initializing...');
                 initNavigation();
+                // Retry after widget rebuild settles
+                setTimeout(initNavigation, 800);
             };
 
             Core.documentViewer.addEventListener('documentLoaded', handleDocumentLoaded);
             return () => {
+                if (retryTimer) clearTimeout(retryTimer);
                 Core.documentViewer.removeEventListener('documentLoaded', handleDocumentLoaded);
             };
         }
+
+        return () => {
+            if (retryTimer) clearTimeout(retryTimer);
+        };
     }, [viewerInstance, showAnnotationNavigation, effectiveReadOnly, loading, editableParties, currentUserRole]);
 
     if (!showNavButton || !showAnnotationNavigation || annotations.length === 0) {

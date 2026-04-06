@@ -17,6 +17,7 @@ import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import { Chip } from '@mui/material';
 
 export interface Document {
     id: string;
@@ -24,6 +25,8 @@ export interface Document {
     size: string;
     uploadDate: string;
     url?: string;
+    /** Renewal chain label shown as a chip on the document row */
+    chainLabel?: 'Original' | 'Predecessor' | 'This contract' | 'Renewal' | 'Draft (Renewal)';
 }
 
 interface Activity {
@@ -151,20 +154,39 @@ const ContractDetailsPanel = ({
                                         <DescriptionOutlinedIcon />
                                     </Avatar>
                                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                                        <Typography
-                                            variant="body1"
-                                            fontWeight={600}
-                                            sx={{
-                                                color: 'text.primary',
-                                                mb: 0.5,
-                                                fontSize: { xs: '0.95rem', sm: '1rem' },
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                            }}
-                                        >
-                                            {doc.name}
-                                        </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                                            <Typography
+                                                variant="body1"
+                                                fontWeight={600}
+                                                sx={{
+                                                    color: 'text.primary',
+                                                    fontSize: { xs: '0.95rem', sm: '1rem' },
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    whiteSpace: 'nowrap',
+                                                    maxWidth: 200,
+                                                }}
+                                            >
+                                                {doc.name}
+                                            </Typography>
+                                            {doc.chainLabel && (
+                                                <Chip
+                                                    label={doc.chainLabel}
+                                                    size="small"
+                                                    sx={{
+                                                        height: 18,
+                                                        fontSize: '0.65rem',
+                                                        fontWeight: 600,
+                                                        flexShrink: 0,
+                                                        ...(doc.chainLabel === 'This contract' && { bgcolor: '#dbeafe', color: '#1e40af' }),
+                                                        ...(doc.chainLabel === 'Original' && { bgcolor: '#dcfce7', color: '#166534' }),
+                                                        ...(doc.chainLabel === 'Predecessor' && { bgcolor: '#f3f4f6', color: '#374151' }),
+                                                        ...(doc.chainLabel === 'Renewal' && { bgcolor: '#ede9fe', color: '#5b21b6' }),
+                                                        ...(doc.chainLabel === 'Draft (Renewal)' && { bgcolor: '#fef3c7', color: '#92400e' }),
+                                                    }}
+                                                />
+                                            )}
+                                        </Box>
                                         <Typography
                                             variant="body2"
                                             sx={{

@@ -78,6 +78,27 @@ export default function PublicSigningPage() {
     // ✅ Track if validation has been triggered (by clicking submit)
     const [validationTriggered, setValidationTriggered] = useState(false);
 
+    // Derive parties from formFields when signatureRequest.parties is empty (renewal contracts)
+    const effectiveParties = useMemo((): PartyConfiguration[] => {
+        if (!signatureRequest) return [];
+        if (signatureRequest.parties && signatureRequest.parties.length > 0) {
+            return signatureRequest.parties as PartyConfiguration[];
+        }
+        // Fallback: derive from formFields assignedParty metadata
+        const seen = new Map<string, PartyConfiguration>();
+        for (const f of (signatureRequest.formFields || [])) {
+            if (f.assignedParty && !seen.has(f.assignedParty)) {
+                seen.set(f.assignedParty, {
+                    id: f.assignedParty,
+                    label: f.partyLabel || f.assignedParty,
+                    color: f.partyColor || '#888',
+                    order: seen.size + 1,
+                });
+            }
+        }
+        return Array.from(seen.values());
+    }, [signatureRequest]);
+
     // The current user's assigned party IDs (normalised to an array)
     const userPartyIds = useMemo(() => {
         if (!signatureRequest?.assignedParty) return [];
@@ -88,15 +109,15 @@ export default function PublicSigningPage() {
 
     // Get the user's assigned party label(s) for display
     const userPartyLabels = useMemo(() => {
-        if (!signatureRequest?.assignedParty || !signatureRequest?.parties) return '';
+        if (!signatureRequest?.assignedParty) return '';
         const partyIds = Array.isArray(signatureRequest.assignedParty)
             ? signatureRequest.assignedParty
             : [signatureRequest.assignedParty];
         const labels = partyIds
-            .map(id => signatureRequest.parties?.find((p: PartyConfiguration) => p.id === id)?.label)
+            .map(id => effectiveParties.find(p => p.id === id)?.label)
             .filter(Boolean);
         return labels.join(', ');
-    }, [signatureRequest]);
+    }, [signatureRequest, effectiveParties]);
 
     const handleFieldChange = (fieldName: string, value: any) => {
         const newValue = value?.toString() || '';
@@ -183,10 +204,9 @@ export default function PublicSigningPage() {
     // Note: Fields already filled by contractor are in signatureRequest.fieldValues and are read-only
     // MULTI-PARTY: If signer has an assignedParty, only validate that party
     const partyValidationWarning = useMemo(() => {
-        if (!signatureRequest?.formFields || !signatureRequest?.parties) return null;
+        if (!signatureRequest?.formFields || effectiveParties.length === 0) return null;
 
         const formFields = signatureRequest.formFields;
-        const allParties = signatureRequest.parties as PartyConfiguration[];
         const prefilledValues = signatureRequest.fieldValues || {};
 
         // MULTI-PARTY: If signer has assigned party/parties, only validate those
@@ -195,9 +215,9 @@ export default function PublicSigningPage() {
                 const ids = Array.isArray(signatureRequest.assignedParty)
                     ? signatureRequest.assignedParty
                     : [signatureRequest.assignedParty];
-                return allParties.filter(p => ids.includes(p.id));
+                return effectiveParties.filter(p => ids.includes(p.id));
             })()
-            : allParties;
+            : effectiveParties;
 
         const partialParties: { party: PartyConfiguration; filled: number; total: number; missing: string[] }[] = [];
 
@@ -434,12 +454,12 @@ export default function PublicSigningPage() {
      * These are all parties EXCEPT the client's assigned party
      */
     const protectedPartyIds = useMemo(() => {
-        if (!signatureRequest?.parties || !signatureRequest?.assignedParty) {
+        if (!signatureRequest?.assignedParty || effectiveParties.length === 0) {
             // Legacy mode - protect nothing (undefined means no restrictions)
             return undefined;
         }
 
-        const allPartyIds = (signatureRequest.parties as PartyConfiguration[]).map(p => p.id);
+        const allPartyIds = effectiveParties.map(p => p.id);
         const userPartyIds = Array.isArray(signatureRequest.assignedParty)
             ? signatureRequest.assignedParty
             : [signatureRequest.assignedParty];
@@ -448,13 +468,13 @@ export default function PublicSigningPage() {
         const protectedIds = allPartyIds.filter(id => !userPartyIds.includes(id));
         console.log(`🛡️ [PublicSigningPage] Protected party IDs (cannot modify signatures): ${protectedIds.join(', ')}`);
         return protectedIds;
-    }, [signatureRequest]);
+    }, [signatureRequest, effectiveParties]);
 
     /**
      * Get the assigned party configuration(s) for display
      */
     const assignedPartyConfigs = useMemo(() => {
-        if (!signatureRequest?.assignedParty || !signatureRequest?.parties) return [];
+        if (!signatureRequest?.assignedParty) return [];
 
         // Normalize to array
         const partyIds = Array.isArray(signatureRequest.assignedParty)
@@ -462,9 +482,9 @@ export default function PublicSigningPage() {
             : [signatureRequest.assignedParty];
 
         return partyIds
-            .map(pid => signatureRequest.parties?.find((p: PartyConfiguration) => p.id === pid))
+            .map(pid => effectiveParties.find(p => p.id === pid))
             .filter(Boolean) as PartyConfiguration[];
-    }, [signatureRequest]);
+    }, [signatureRequest, effectiveParties]);
 
     /**
      * Handle signature submission

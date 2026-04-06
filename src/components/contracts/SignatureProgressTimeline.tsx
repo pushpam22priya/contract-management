@@ -48,6 +48,22 @@ export default function SignatureProgressTimeline({
     finalizeSuccess,
     onFinalize,
 }: SignatureProgressTimelineProps) {
+    // Derive parties from formFields when contract.parties is empty (e.g. renewal contracts)
+    const effectiveParties: { id: string; color: string; label: string }[] = React.useMemo(() => {
+        if (contract.parties && contract.parties.length > 0) return contract.parties;
+        const seen = new Map<string, { id: string; color: string; label: string }>();
+        for (const f of (contract.formFields || [])) {
+            if (f.assignedParty && !seen.has(f.assignedParty)) {
+                seen.set(f.assignedParty, {
+                    id: f.assignedParty,
+                    label: f.partyLabel || f.assignedParty,
+                    color: f.partyColor || '#666',
+                });
+            }
+        }
+        return Array.from(seen.values());
+    }, [contract.parties, contract.formFields]);
+
     return (
         <Paper
             elevation={0}
@@ -196,7 +212,7 @@ export default function SignatureProgressTimeline({
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, width: '100%' }}>
                                 {allAtOrder.map((signer: any, index: number) => {
                                     const isInternal = internalAtOrder.includes(signer);
-                                    const partyColor = contract.parties?.find((p: any) => p.id === signer.partyId)?.color || '#666';
+                                    const partyColor = effectiveParties.find((p: any) => p.id === signer.partyId)?.color || '#666';
                                     const isCompleted = signer.status === 'completed';
                                     const isUnlocked = signer.status === 'unlocked';
 

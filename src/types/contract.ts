@@ -255,6 +255,12 @@ export interface Contract {
 
     // Team (folder) this contract belongs to
     teamId?: string | null;
+
+    // Renewal tracking (linked-list pattern)
+    renewedFromId?: string;        // ID of the contract this was renewed from (set on renewal)
+    renewalStatus?: 'in_progress'; // Set on original when renewal draft is created; cleared when renewal goes active
+    renewedContractId?: string;    // ID of the in-progress renewal draft (set on original)
+    renewalStartDate?: string;     // ISO date — start date of the pending renewal (for card tooltip)
 }
 
 /**

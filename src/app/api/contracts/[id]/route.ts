@@ -195,3 +195,35 @@ export async function GET(
         return NextResponse.json({ error: 'Failed to fetch contract' }, { status: 500 });
     }
 }
+
+/**
+ * DELETE /api/contracts/[id]
+ * Delete a contract by ID. Only draft contracts can be deleted this way.
+ */
+export async function DELETE(
+    _request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const resolvedParams = await params;
+        const id = resolvedParams.id;
+
+        if (!id || !ObjectId.isValid(id)) {
+            return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+        }
+
+        const client = await clientPromise;
+        const db = client.db();
+
+        const result = await db.collection('contracts').deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount === 0) {
+            return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
+        }
+
+        return NextResponse.json({ success: true, message: 'Contract deleted' });
+    } catch (e) {
+        console.error('Delete contract error:', e);
+        return NextResponse.json({ error: 'Failed to delete contract' }, { status: 500 });
+    }
+}

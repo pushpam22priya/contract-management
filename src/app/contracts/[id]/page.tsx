@@ -20,6 +20,8 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import SendIcon from '@mui/icons-material/Send';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
@@ -38,6 +40,12 @@ import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { Document } from '@/components/contracts/ContractDetailsPanel';
 import { useContractPolling } from '@/hooks/useContractPolling';
 import { ContractDetailShimmer } from '@/components/common/ShimmerCard';
+import RenewContractDialog from '@/components/contracts/RenewContractDialog';
+import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
+import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog';
+import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
+import { ContractStatus } from '@/types/contract';
+import HistoryIcon from '@mui/icons-material/History';
 
 export default function ContractViewPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -52,10 +60,21 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const [viewerOpen, setViewerOpen] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
 
+    // Renew dialog state
+    const [renewDialogOpen, setRenewDialogOpen] = useState(false);
+
+    // History panel + dialog state
+    const [historyAnchorEl, setHistoryAnchorEl] = useState<HTMLElement | null>(null);
+    const historyPanelOpen = Boolean(historyAnchorEl);
+    const [historyDialogEntry, setHistoryDialogEntry] = useState<HistoryEntry | null>(null);
+
     // Multi-party finalization state
     const [finalizing, setFinalizing] = useState(false);
     const [finalizeError, setFinalizeError] = useState<string | null>(null);
     const [finalizeSuccess, setFinalizeSuccess] = useState(false);
+
+    // Strip all stacked "(Renewal)" suffixes for display — raw title kept in DB
+    const displayTitle = contract?.title?.replace(/\s*\(Renewal\d*\)$/i, '') ?? '';
 
     // --- ROBUST DATA FETCHING LOGIC ---
     useEffect(() => {
@@ -337,14 +356,18 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         return dateA - dateB;
                     });
 
+                    // ── Build document list (current contract only) ────────────
+                    const contractId = found.id;
+                    const documents = [{
+                        id: contractId,
+                        name: `${found.title.replace(/\s*\(Renewal\d*\)$/i, '')}.pdf`,
+                        size: 'PDF',
+                        uploadDate: new Date(found.createdAt).toLocaleDateString(),
+                        url: `/api/file/${contractId}?type=contract`,
+                    }];
+
                     setDetails({
-                        documents: [{
-                            id: 'main-contract',
-                            name: `${found.title}.pdf`,
-                            size: 'PDF',
-                            uploadDate: new Date(found.createdAt).toLocaleDateString(),
-                            url: found.fileUrl
-                        }],
+                        documents,
                         activities,
                         ...found
                     });
@@ -389,7 +412,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
             ...freshContract,
             documents: [{
                 id: 'main-contract',
-                name: `${freshContract.title}.pdf`,
+                name: `${freshContract.title.replace(/\s*\(Renewal\d*\)$/i, '')}.pdf`,
                 size: 'PDF',
                 uploadDate: new Date(freshContract.createdAt).toLocaleDateString(),
                 url: freshContract.fileUrl
@@ -413,7 +436,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
         if (contract) {
             handleDownloadDocument({
                 id: 'main-contract',
-                name: `${contract.title}.pdf`,
+                name: `${displayTitle}.pdf`,
                 size: 'PDF',
                 uploadDate: new Date(contract.createdAt).toLocaleDateString(),
                 url: contract.fileUrl
@@ -708,7 +731,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                             fontSize: { xs: '1rem', sm: '20px' },
                                         }}
                                     >
-                                        {contract.title}
+                                        {displayTitle}
                                     </Typography>
                                     <Chip
                                         label={getStatusLabel(contract.status)}
@@ -734,31 +757,122 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 alignSelf: { xs: 'flex-end', md: 'center' },
                             }}
                         >
-                            {/* <Tooltip title="Download Contract" arrow>
-                                <IconButton
-                                    onClick={handleDownload}
-                                    sx={{
-                                        bgcolor: 'transparent',
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        color: 'text.secondary',
-                                        width: 36,
-                                        height: 36,
-                                        transition: 'all 0.2s',
-                                        '&:hover': {
-                                            bgcolor: 'primary.main',
-                                            borderColor: 'primary.main',
-                                            color: 'white',
-                                            transform: 'translateY(-2px)',
-                                            boxShadow: '0 4px 8px rgba(15, 118, 110, 0.2)',
-                                        },
-                                    }}
-                                >
-                                    <FileDownloadOutlinedIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip> */}
+                            {/* History button — shown for active/expiring/expired contracts that have a chain link */}
+                            {[ContractStatus.ACTIVE, ContractStatus.EXPIRING, ContractStatus.EXPIRED].includes(contract?.status) &&
+                                (contract?.renewedFromId || contract?.renewedContractId) && (
+                                <Tooltip title="Contract History" arrow>
+                                    <IconButton
+                                        onClick={(e) => setHistoryAnchorEl(e.currentTarget)}
+                                        sx={{
+                                            bgcolor: 'transparent',
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            color: 'text.secondary',
+                                            width: 36,
+                                            height: 36,
+                                            transition: 'all 0.2s',
+                                            '&:hover': {
+                                                bgcolor: 'primary.main',
+                                                borderColor: 'primary.main',
+                                                color: 'white',
+                                                transform: 'translateY(-2px)',
+                                                boxShadow: '0 4px 8px rgba(15, 118, 110, 0.2)',
+                                            },
+                                        }}
+                                    >
+                                        <HistoryIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
                         </Box>
                     </Box>
+
+                    {/* Renewal Banner */}
+                    {(contract.status === ContractStatus.EXPIRING || contract.status === ContractStatus.EXPIRED) && (
+                        contract.renewalStatus === 'in_progress' ? (
+                            /* ── Renewal draft exists but not yet finalized ── */
+                            <Box
+                                sx={{
+                                    mt: 1.5,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: 2,
+                                    px: 2,
+                                    py: 1,
+                                    bgcolor: '#fef3c7',
+                                    border: '1px solid #fcd34d',
+                                    borderRadius: 2,
+                                    flexWrap: 'wrap',
+                                }}
+                            >
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <AutorenewIcon sx={{ color: '#92400e', fontSize: '1.1rem' }} />
+                                    <Typography variant="body2" sx={{ color: '#92400e', fontWeight: 500 }}>
+                                        A renewal contract is in progress.
+                                    </Typography>
+                                </Box>
+                                {contract.renewedContractId && (
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={() => router.push(`/draft`)}
+                                        sx={{
+                                            color: '#92400e',
+                                            borderColor: '#fcd34d',
+                                            fontSize: '0.8rem',
+                                            py: 0.25,
+                                            '&:hover': { bgcolor: '#fde68a', borderColor: '#f59e0b' },
+                                        }}
+                                    >
+                                        View Draft →
+                                    </Button>
+                                )}
+                            </Box>
+                        ) : (
+                            /* ── No renewal yet ── */
+                            <Box
+                                sx={{
+                                    mt: 1.5,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: 2,
+                                    px: 2,
+                                    py: 1,
+                                    bgcolor: '#fef3c7',
+                                    border: '1px solid #fcd34d',
+                                    borderRadius: 2,
+                                    flexWrap: 'wrap',
+                                }}
+                            >
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <WarningAmberOutlinedIcon sx={{ color: '#92400e', fontSize: '1.1rem' }} />
+                                    <Typography variant="body2" sx={{ color: '#92400e', fontWeight: 500 }}>
+                                        {contract.status === ContractStatus.EXPIRED
+                                            ? 'This contract has expired.'
+                                            : `This contract is expiring on ${contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'soon'}.`}
+                                        {' '}Renew it to continue the relationship.
+                                    </Typography>
+                                </Box>
+                                <Button
+                                    size="small"
+                                    variant="contained"
+                                    onClick={() => setRenewDialogOpen(true)}
+                                    startIcon={<AutorenewIcon sx={{ fontSize: '0.9rem !important' }} />}
+                                    sx={{
+                                        bgcolor: '#d97706',
+                                        color: 'white',
+                                        fontSize: '0.8rem',
+                                        py: 0.25,
+                                        '&:hover': { bgcolor: '#b45309' },
+                                    }}
+                                >
+                                    Renew →
+                                </Button>
+                            </Box>
+                        )
+                    )}
 
                     {/* ═══════════════════════════════════════════════════════════════════════════ */}
                     {/* MULTI-PARTY SIGNATURE STATUS */}
@@ -852,7 +966,13 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 open={viewerOpen}
                 onClose={() => setViewerOpen(false)}
                 fileUrl={(() => {
-                    // 1. Signed PDF Base64 (highest priority if available locally)
+                    // For chain docs (predecessor / renewal), always use their own URL directly
+                    const isChainDoc = selectedDoc && selectedDoc.id !== 'main-contract' && selectedDoc.id !== contract.id;
+                    if (isChainDoc && selectedDoc?.url) {
+                        return selectedDoc.url;
+                    }
+
+                    // 1. Signed PDF Base64 (highest priority for current contract)
                     if (contract.signedPdfBase64) {
                         console.log('📄 [ContractViewPage] Using signedPdfBase64');
                         return `data:application/pdf;base64,${contract.signedPdfBase64}`;
@@ -878,23 +998,62 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
                     return '';
                 })()}
-                fileName={selectedDoc?.name || contract.title}
-                title={selectedDoc?.name || contract.title}
-                contractId={contract.id}
-                // Always pass XFDF - the saved PDF may not embed form fields
-                initialXfdf={contract.xfdfData}
-                formFields={contract.formFields}
+                fileName={selectedDoc?.name || `${displayTitle}.pdf`}
+                title={selectedDoc?.name || displayTitle}
+                contractId={(() => {
+                    // For chain docs, use the chain doc's id; for main contract use contract.id
+                    if (selectedDoc && selectedDoc.id !== 'main-contract' && selectedDoc.id !== contract.id) {
+                        return selectedDoc.id;
+                    }
+                    return contract.id;
+                })()}
+                // Only pass XFDF/formFields for the main (current) contract — chain docs are read-only
+                initialXfdf={(!selectedDoc || selectedDoc.id === contract.id) ? contract.xfdfData : undefined}
+                formFields={(!selectedDoc || selectedDoc.id === contract.id) ? contract.formFields : undefined}
                 currentUserRole="contractor"
-                // ✅ Only allow saving if contract is NOT finalized
-                onSave={isFinalized ? undefined : handleSaveChanges}
-                readOnly={isFinalized}
-                editableFieldMode={isFinalized ? 'none' : 'empty-only'}
+                // Chain docs are always read-only; main contract is editable unless finalized
+                onSave={(!selectedDoc || selectedDoc.id === contract.id) && !isFinalized ? handleSaveChanges : undefined}
+                readOnly={isFinalized || !!(selectedDoc && selectedDoc.id !== contract.id)}
+                editableFieldMode={(!selectedDoc || selectedDoc.id === contract.id) && !isFinalized ? 'empty-only' : 'none'}
                 showAnnotationNavigation={true}
                 parties={contract.parties}
                 // ✅ Pass external signers info so contractor can't edit client party fields
                 externalSigners={contract.externalSigners}
                 // ✅ Pass internal signers info so contractor can't edit internal client party fields
                 internalSigners={contract.internalSigners}
+            />
+
+            {contract && (
+                <RenewContractDialog
+                    open={renewDialogOpen}
+                    onClose={() => setRenewDialogOpen(false)}
+                    contractId={contract.id}
+                    contractTitle={displayTitle}
+                    contractEndDate={contract.endDate || ''}
+                    onSuccess={(_renewalId) => {
+                        setRenewDialogOpen(false);
+                    }}
+                />
+            )}
+
+            {/* Contract History Panel (popover on desktop, drawer on mobile) */}
+            {contract && (
+                <ContractHistoryPanel
+                    open={historyPanelOpen}
+                    anchorEl={historyAnchorEl}
+                    onClose={() => setHistoryAnchorEl(null)}
+                    contractId={contract.id}
+                    currentContractId={contract.id}
+                    onSelectEntry={(entry) => setHistoryDialogEntry(entry)}
+                />
+            )}
+
+            {/* Contract History Detail Dialog */}
+            <ContractHistoryDialog
+                open={!!historyDialogEntry}
+                onClose={() => setHistoryDialogEntry(null)}
+                entry={historyDialogEntry}
+                currentContractId={contract?.id || ''}
             />
         </AppLayout>
     );

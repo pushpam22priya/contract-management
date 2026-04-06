@@ -384,11 +384,31 @@ export default function DocumentViewerDialog({
 
     // ✅ Party validation: detect partially filled parties (same pattern as CreateContractDialog)
     const partyValidationWarning = useMemo(() => {
-        if (!formFields || !parties) return null;
+        if (!formFields) return null;
+
+        // If parties prop is missing or empty, derive them from formFields' party metadata.
+        // This handles old renewal drafts that were created before parties were copied to the renewal.
+        const effectiveParties: PartyConfiguration[] = (parties && parties.length > 0)
+            ? parties
+            : (() => {
+                const seen = new Map<string, PartyConfiguration>();
+                for (const f of formFields) {
+                    if (f.assignedParty && !seen.has(f.assignedParty)) {
+                        seen.set(f.assignedParty, {
+                            id: f.assignedParty,
+                            label: f.partyLabel || f.assignedParty,
+                            color: f.partyColor || '#888',
+                        } as PartyConfiguration);
+                    }
+                }
+                return Array.from(seen.values());
+            })();
+
+        if (effectiveParties.length === 0) return null;
 
         const partialParties: { party: PartyConfiguration; filled: number; total: number; missing: string[] }[] = [];
 
-        for (const party of parties) {
+        for (const party of effectiveParties) {
             const result = validatePartyFields(party.id, formFields, filledFieldValues);
             if (result.filledCount > 0 && result.filledCount < result.totalCount) {
                 const partyFields = formFields.filter((f: any) => f.assignedParty === party.id);
