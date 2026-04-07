@@ -64,6 +64,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
     in_review:             { label: 'In Review',         color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
     in_approval:           { label: 'In Approval',       color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
     draft:                 { label: 'Draft',             color: '#374151', bg: '#f3f4f6', border: '#d1d5db' },
+    terminated:            { label: 'Terminated',        color: '#334155', bg: '#f1f5f9', border: '#94a3b8' },
 };
 
 function getStatusConfig(status: string) {

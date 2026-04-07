@@ -10,23 +10,11 @@ import {
     Chip,
     Fade,
     Button,
-    Paper,
-    Alert,
-    CircularProgress,
-    Divider,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
-import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
-import SendIcon from '@mui/icons-material/Send';
-import DoneAllIcon from '@mui/icons-material/DoneAll';
-import PersonIcon from '@mui/icons-material/Person';
-import EmailIcon from '@mui/icons-material/Email';
+import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import SignatureProgressTimeline from '@/components/contracts/SignatureProgressTimeline';
 import AppLayout from '@/components/layout/AppLayout';
 import ContractInformation from '@/components/contracts/ContractInformation';
@@ -41,6 +29,7 @@ import { Document } from '@/components/contracts/ContractDetailsPanel';
 import { useContractPolling } from '@/hooks/useContractPolling';
 import { ContractDetailShimmer } from '@/components/common/ShimmerCard';
 import RenewContractDialog from '@/components/contracts/RenewContractDialog';
+import TerminateContractDialog from '@/components/contracts/TerminateContractDialog';
 import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
 import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog';
 import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
@@ -62,6 +51,9 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
     // Renew dialog state
     const [renewDialogOpen, setRenewDialogOpen] = useState(false);
+
+    // Terminate dialog state
+    const [terminateDialogOpen, setTerminateDialogOpen] = useState(false);
 
     // History panel + dialog state
     const [historyAnchorEl, setHistoryAnchorEl] = useState<HTMLElement | null>(null);
@@ -396,17 +388,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
         console.log('🔄 [ContractViewPage] Auto-refresh triggered — updating UI');
         setContract(freshContract);
 
-        // Rebuild the details/activities from fresh data
-        // (same logic as in loadData, but simplified for the update path)
-        const formatDate = (dateStr: string | undefined): string => {
-            if (!dateStr) return 'Date not available';
-            try {
-                const date = new Date(dateStr);
-                if (isNaN(date.getTime())) return 'Date not available';
-                return date.toLocaleDateString();
-            } catch { return 'Date not available'; }
-        };
-
         setDetails((prev: any) => ({
             ...prev,
             ...freshContract,
@@ -431,18 +412,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
     // Handlers
     const handleBack = () => router.back();
-    const handleEdit = () => console.log('Edit contract:', contract?.id);
-    const handleDownload = () => {
-        if (contract) {
-            handleDownloadDocument({
-                id: 'main-contract',
-                name: `${displayTitle}.pdf`,
-                size: 'PDF',
-                uploadDate: new Date(contract.createdAt).toLocaleDateString(),
-                url: contract.fileUrl
-            });
-        }
-    };
 
     /**
      * Helper to download a document (PDF)
@@ -475,8 +444,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
             console.error('❌ [ContractViewPage] Download failed:', error);
         }
     };
-    const handleDelete = () => console.log('Delete contract:', contract?.id);
-
     /**
      * Handle finalizing the contract after all parties have completed
      */
@@ -619,6 +586,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
             case 'active': return 'Active';
             case 'expiring': return 'Expiring';
             case 'expired': return 'Expired';
+            case 'terminated': return 'Terminated';
             case 'draft': return 'Draft';
             case 'in_review': return 'In Review';
             case 'in_approval': return 'In Approval';
@@ -639,6 +607,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
             case 'active':
             case 'signed': return { bgcolor: '#d1fae5', color: '#065f46' };
             case 'expiring': return { bgcolor: '#fef3c7', color: '#92400e' };
+            case 'terminated': return { bgcolor: '#f1f5f9', color: '#334155' };
             case 'expired':
             case 'rejected':
             case 'rejected_by_reviewer':
@@ -757,9 +726,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 alignSelf: { xs: 'flex-end', md: 'center' },
                             }}
                         >
-                            {/* History button — shown for active/expiring/expired contracts that have a chain link */}
-                            {[ContractStatus.ACTIVE, ContractStatus.EXPIRING, ContractStatus.EXPIRED].includes(contract?.status) &&
-                                (contract?.renewedFromId || contract?.renewedContractId) && (
+                            {/* History button — shown whenever this contract is part of a renewal chain */}
+                            {(contract?.renewedFromId || contract?.renewedContractId) && (
                                 <Tooltip title="Contract History" arrow>
                                     <IconButton
                                         onClick={(e) => setHistoryAnchorEl(e.currentTarget)}
@@ -787,7 +755,39 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         </Box>
                     </Box>
 
-                    {/* Renewal Banner */}
+                    {/* Terminated Banner */}
+                    {contract.status === ContractStatus.TERMINATED && (
+                        <Box
+                            sx={{
+                                mt: 1.5,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1.5,
+                                px: 2,
+                                py: 1.25,
+                                bgcolor: '#fef2f2',
+                                border: '1px solid #fecaca',
+                                borderRadius: 2,
+                                flexWrap: 'wrap',
+                            }}
+                        >
+                            <BlockOutlinedIcon sx={{ color: '#dc2626', fontSize: '1.1rem', flexShrink: 0 }} />
+                            <Typography variant="body2" sx={{ color: '#7f1d1d', fontWeight: 500, flex: 1 }}>
+                                This contract was terminated on{' '}
+                                <strong>
+                                    {contract.terminatedAt
+                                        ? new Date(contract.terminatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        : '—'}
+                                </strong>
+                                {contract.terminatedBy && (
+                                    <> by <strong>{contract.terminatedBy}</strong></>
+                                )}
+                                . No further actions are available.
+                            </Typography>
+                        </Box>
+                    )}
+
+                    {/* Renewal / Expire Banner — shown for expiring and expired (not terminated) */}
                     {(contract.status === ContractStatus.EXPIRING || contract.status === ContractStatus.EXPIRED) && (
                         contract.renewalStatus === 'in_progress' ? (
                             /* ── Renewal draft exists but not yet finalized ── */
@@ -846,30 +846,52 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                     flexWrap: 'wrap',
                                 }}
                             >
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <WarningAmberOutlinedIcon sx={{ color: '#92400e', fontSize: '1.1rem' }} />
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
+                                    <WarningAmberOutlinedIcon sx={{ color: '#92400e', fontSize: '1.1rem', flexShrink: 0 }} />
                                     <Typography variant="body2" sx={{ color: '#92400e', fontWeight: 500 }}>
                                         {contract.status === ContractStatus.EXPIRED
                                             ? 'This contract has expired.'
                                             : `This contract is expiring on ${contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'soon'}.`}
-                                        {' '}Renew it to continue the relationship.
+                                        {contract.status === ContractStatus.EXPIRED
+                                            ? ' Renew to continue or terminate to close permanently.'
+                                            : ' Renew it to continue the relationship.'}
                                     </Typography>
                                 </Box>
-                                <Button
-                                    size="small"
-                                    variant="contained"
-                                    onClick={() => setRenewDialogOpen(true)}
-                                    startIcon={<AutorenewIcon sx={{ fontSize: '0.9rem !important' }} />}
-                                    sx={{
-                                        bgcolor: '#d97706',
-                                        color: 'white',
-                                        fontSize: '0.8rem',
-                                        py: 0.25,
-                                        '&:hover': { bgcolor: '#b45309' },
-                                    }}
-                                >
-                                    Renew →
-                                </Button>
+                                <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
+                                    <Button
+                                        size="small"
+                                        variant="contained"
+                                        onClick={() => setRenewDialogOpen(true)}
+                                        startIcon={<AutorenewIcon sx={{ fontSize: '0.9rem !important' }} />}
+                                        sx={{
+                                            bgcolor: '#d97706',
+                                            color: 'white',
+                                            fontSize: '0.8rem',
+                                            py: 0.25,
+                                            '&:hover': { bgcolor: '#b45309' },
+                                        }}
+                                    >
+                                        Renew →
+                                    </Button>
+                                    {/* Terminate — only for expired (not expiring), mutually exclusive with renewal */}
+                                    {contract.status === ContractStatus.EXPIRED && (
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            onClick={() => setTerminateDialogOpen(true)}
+                                            startIcon={<BlockOutlinedIcon sx={{ fontSize: '0.9rem !important' }} />}
+                                            sx={{
+                                                color: '#991b1b',
+                                                borderColor: '#fca5a5',
+                                                fontSize: '0.8rem',
+                                                py: 0.25,
+                                                '&:hover': { bgcolor: '#fef2f2', borderColor: '#ef4444' },
+                                            }}
+                                        >
+                                            Terminate
+                                        </Button>
+                                    )}
+                                </Box>
                             </Box>
                         )
                     )}
@@ -1032,6 +1054,23 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                     contractEndDate={contract.endDate || ''}
                     onSuccess={(_renewalId) => {
                         setRenewDialogOpen(false);
+                    }}
+                />
+            )}
+
+            {contract && (
+                <TerminateContractDialog
+                    open={terminateDialogOpen}
+                    onClose={() => setTerminateDialogOpen(false)}
+                    contractId={contract.id}
+                    contractTitle={displayTitle}
+                    onSuccess={() => {
+                        setTerminateDialogOpen(false);
+                        // router.refresh() invalidates Next.js router cache so the
+                        // contracts page re-fetches fresh data when navigated back to,
+                        // ensuring the terminated card no longer appears there.
+                        router.refresh();
+                        router.push('/terminated');
                     }}
                 />
             )}

@@ -14,6 +14,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import ContractCard from '@/components/contracts/ContractCard';
 import CreateContractDialog from '@/components/contracts/CreateContractDialog';
 import RenewContractDialog from '@/components/contracts/RenewContractDialog';
+import TerminateContractDialog from '@/components/contracts/TerminateContractDialog';
 import { contractService } from '@/services/contractService';
 import { Contract, ContractStatus, SignerAssignment } from '@/types/contract';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
@@ -105,6 +106,10 @@ export default function ContractsPage() {
     const [renewDialogOpen, setRenewDialogOpen] = useState(false);
     const [contractForRenewal, setContractForRenewal] = useState<Contract | null>(null);
 
+    // Terminate dialog state
+    const [terminateDialogOpen, setTerminateDialogOpen] = useState(false);
+    const [contractForTermination, setContractForTermination] = useState<Contract | null>(null);
+
     const showNotification = (message: string, severity: AlertColor = 'success') => {
         setSnackbar({ open: true, message, severity });
     };
@@ -146,16 +151,24 @@ export default function ContractsPage() {
             const statusById = new Map(allContracts.map(c => [c.id, c.status]));
 
             const relevantContracts = allContracts.filter(c => {
+                // Terminated contracts never appear on the contracts page — they belong on /terminated only
+                if (c.status === ContractStatus.TERMINATED) return false;
+
                 const isCreator = c.createdBy === currentUser.email;
                 const isSigner = c.signer?.email === currentUser.email;
                 const isValidSignerStatus = ['signed', 'active', 'expiring', 'expired'].includes(c.status);
                 const isSignerAndVisible = isSigner && isValidSignerStatus;
 
-                // Hide expired contracts whose renewal is now active or expiring
-                // (the renewal card takes over as the visible one)
+                // Hide expired contracts whose renewal has moved past the draft stage,
+                // OR whose renewal was terminated. In both cases the original should
+                // not reappear on the contracts page — the whole chain is superseded.
                 if (c.status === ContractStatus.EXPIRED && c.renewedContractId) {
                     const renewalStatus = statusById.get(c.renewedContractId);
-                    if (renewalStatus === ContractStatus.ACTIVE || renewalStatus === ContractStatus.EXPIRING) {
+                    if (
+                        renewalStatus &&
+                        (CONTRACT_PAGE_STATUSES.includes(renewalStatus as ContractStatus) ||
+                            renewalStatus === ContractStatus.TERMINATED)
+                    ) {
                         return false;
                     }
                 }
@@ -340,6 +353,13 @@ export default function ContractsPage() {
     const handleRenewalSuccess = (renewalId: string) => {
         showNotification('Contract renewed! New draft has been created.', 'success');
         loadContracts();
+    };
+
+    const handleTerminateContract = (id: string) => {
+        const contract = contracts.find(c => c.id === id);
+        if (!contract) return;
+        setContractForTermination(contract);
+        setTerminateDialogOpen(true);
     };
 
     const handleTeamClick = (teamId: string) => router.push(`/contracts?team=${teamId}`);
@@ -565,6 +585,7 @@ export default function ContractsPage() {
                                         onView={handleViewContract}
                                         onShare={handleShareContract}
                                         onRenew={handleRenewContract}
+                                        onTerminate={handleTerminateContract}
                                     />
                                 ))
                             )
@@ -587,6 +608,7 @@ export default function ContractsPage() {
                                         onView={handleViewContract}
                                         onShare={handleShareContract}
                                         onRenew={handleRenewContract}
+                                        onTerminate={handleTerminateContract}
                                     />
                                 ))
                             )
@@ -721,6 +743,21 @@ export default function ContractsPage() {
                         contractTitle={contractForRenewal.title}
                         contractEndDate={contractForRenewal.endDate || ''}
                         onSuccess={handleRenewalSuccess}
+                    />
+                )}
+
+                {contractForTermination && (
+                    <TerminateContractDialog
+                        open={terminateDialogOpen}
+                        onClose={() => { setTerminateDialogOpen(false); setContractForTermination(null); }}
+                        contractId={contractForTermination.id}
+                        contractTitle={contractForTermination.title.replace(/\s*\(Renewal\d*\)$/i, '')}
+                        onSuccess={() => {
+                            setTerminateDialogOpen(false);
+                            setContractForTermination(null);
+                            showNotification('Contract has been terminated.', 'success');
+                            loadContracts();
+                        }}
                     />
                 )}
 

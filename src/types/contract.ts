@@ -147,6 +147,7 @@ export enum ContractStatus {
     ACTIVE = 'active',           // Signed + Started
     EXPIRING = 'expiring',       // Active + fading
     EXPIRED = 'expired',
+    TERMINATED = 'terminated',
     REJECTED = 'rejected',
     REJECTED_BY_REVIEWER = 'rejected_by_reviewer',
     REJECTED_BY_APPROVER = 'rejected_by_approver'
@@ -261,6 +262,10 @@ export interface Contract {
     renewalStatus?: 'in_progress'; // Set on original when renewal draft is created; cleared when renewal goes active
     renewedContractId?: string;    // ID of the in-progress renewal draft (set on original)
     renewalStartDate?: string;     // ISO date — start date of the pending renewal (for card tooltip)
+
+    // Termination tracking (one-way, irreversible)
+    terminatedAt?: string;         // ISO datetime — when the contract was terminated
+    terminatedBy?: string;         // email of the user who performed the termination
 }
 
 /**
