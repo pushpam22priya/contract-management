@@ -2,7 +2,7 @@
 
 import { Box, Typography, AlertColor, Paper } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
-import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense, useCallback } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
 import { Contract, ContractStatus } from '@/types/contract';
@@ -18,11 +18,15 @@ import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter
 import { categoryService } from '@/services/categoryService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import { useSearchParams } from 'next/navigation';
+import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
+import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog';
+import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
 
 const signingStatusOptions = [
     { label: 'All Status', value: 'all' },
     { label: 'Pending My Signature', value: 'pending' },
     { label: 'Signed', value: 'completed' },
+    { label: 'Terminated', value: 'terminated' },
 ];
 
 function SearchParamsReader({ onStatus }: { onStatus: (status: string) => void }) {
@@ -83,6 +87,11 @@ export default function SignaturesPage() {
         );
         return party || null;
     }, [currentUserInternalSigner, selectedContract]);
+
+    // History panel state
+    const [historyAnchorEl, setHistoryAnchorEl] = useState<HTMLElement | null>(null);
+    const [historyContractId, setHistoryContractId] = useState<string | null>(null);
+    const [historyDialogEntry, setHistoryDialogEntry] = useState<HistoryEntry | null>(null);
 
     // Signature Pad state
     const [signaturePadOpen, setSignaturePadOpen] = useState(false);
@@ -167,7 +176,17 @@ export default function SignaturesPage() {
             return false;
         });
 
-        setContracts(assignedContracts);
+        // Chain-head filtering: hide older versions when a newer version is also assigned.
+        // Terminated contracts are now included in the list so the natural check handles
+        // chains ending in termination too — the terminated entry IS in assignedIds.
+        const assignedIds = new Set(assignedContracts.map(c => c.id));
+        const headContracts = assignedContracts.filter(c => {
+            // If this contract's renewal is also assigned, this is an older version — hide it.
+            if (c.renewedContractId && assignedIds.has(c.renewedContractId)) return false;
+            return true;
+        });
+
+        setContracts(headContracts);
         setLoading(false);
     };
 
@@ -187,7 +206,9 @@ export default function SignaturesPage() {
             );
             const wantsPending = signingStatusFilter.some(f => f.value === 'pending');
             const wantsCompleted = signingStatusFilter.some(f => f.value === 'completed');
+            const wantsTerminated = signingStatusFilter.some(f => f.value === 'terminated');
             let passes = false;
+            if (wantsTerminated && contract.status === ContractStatus.TERMINATED) passes = true;
             if (wantsPending) {
                 const isPending =
                     (internalSigner?.status === 'unlocked') ||
@@ -544,6 +565,10 @@ export default function SignaturesPage() {
                                     contract={contract}
                                     onView={handleView}
                                     onDownload={handleDownload}
+                                    onHistory={(id, event) => {
+                                        setHistoryContractId(id);
+                                        setHistoryAnchorEl(event.currentTarget);
+                                    }}
                                 />
                             ))
                         )}
@@ -609,6 +634,24 @@ export default function SignaturesPage() {
                     />
                 )}
 
+
+                {/* Contract History Panel */}
+                <ContractHistoryPanel
+                    open={Boolean(historyAnchorEl)}
+                    anchorEl={historyAnchorEl}
+                    onClose={() => setHistoryAnchorEl(null)}
+                    contractId={historyContractId || ''}
+                    currentContractId={historyContractId || ''}
+                    onSelectEntry={(entry) => setHistoryDialogEntry(entry)}
+                />
+
+                {/* History detail dialog */}
+                <ContractHistoryDialog
+                    open={!!historyDialogEntry}
+                    onClose={() => setHistoryDialogEntry(null)}
+                    entry={historyDialogEntry}
+                    currentContractId={historyContractId || ''}
+                />
 
                 {/* Signature Pad Dialog */}
                 <SignaturePadDialog

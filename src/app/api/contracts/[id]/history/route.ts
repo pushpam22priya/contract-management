@@ -80,13 +80,38 @@ export async function GET(
             current = next;
         }
 
+        // ── Compute effective status (same logic as main contracts API) ──────────
+        const SIGNED_STATUSES = new Set(['signed', 'active', 'expiring', 'expired']);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        function effectiveStatus(c: any): string {
+            const raw: string = c.status || 'draft';
+            // Never override terminal/workflow statuses
+            if (!SIGNED_STATUSES.has(raw)) return raw;
+
+            const startDate = c.startDate ? new Date(c.startDate) : null;
+            const endDate   = c.endDate   ? new Date(c.endDate)   : null;
+            if (startDate) startDate.setHours(0, 0, 0, 0);
+            if (endDate)   endDate.setHours(0, 0, 0, 0);
+
+            if (endDate && today > endDate)  return 'expired';
+            if (endDate) {
+                const daysLeft = Math.ceil((endDate.getTime() - today.getTime()) / 86_400_000);
+                if (daysLeft <= 60) return 'expiring';
+            }
+            if (startDate && today >= startDate) return 'active';
+            if (startDate && today < startDate)  return 'signed';
+            return raw;
+        }
+
         // ── Normalise and sort by startDate ascending ─────────────────────────
         const normalised = chain.map(c => ({
             id:                 c._id.toString(),
             title:              c.title || '',
             startDate:          c.startDate || null,
             endDate:            c.endDate || null,
-            status:             c.status || 'draft',
+            status:             effectiveStatus(c),
             createdAt:          c.createdAt || null,
             finalizedAt:        c.finalizedAt || null,
             renewedFromId:      c.renewedFromId || null,

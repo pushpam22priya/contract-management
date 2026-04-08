@@ -71,8 +71,19 @@ function getStatusConfig(status: string) {
     return STATUS_CONFIG[status] || { label: status, color: '#374151', bg: '#f3f4f6', border: '#d1d5db' };
 }
 
-function classifyEntry(entry: HistoryEntry, currentContractId: string): 'past' | 'current' | 'upcoming' {
+function classifyEntry(
+    entry: HistoryEntry,
+    currentContractId: string,
+    chain: HistoryEntry[],
+): 'past' | 'current' | 'upcoming' {
     if (entry.id === currentContractId) return 'current';
+
+    // If this entry is the head of the chain (no successor) and is terminated,
+    // mark it as current — it represents the definitive final state.
+    const isChainHead = !entry.renewedContractId ||
+        !chain.some(e => e.id === entry.renewedContractId);
+    if (isChainHead && entry.status === 'terminated') return 'current';
+
     const upcomingStatuses = ['draft', 'in_review', 'in_approval', 'approved',
         'ready_for_signature', 'waiting_for_signature', 'signed', 'signed_by_everyone'];
     if (upcomingStatuses.includes(entry.status)) return 'upcoming';
@@ -182,7 +193,7 @@ function HistoryContent({
                 {!loading && !error && chain.length > 0 && (
                     <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                         {chain.map((entry, idx) => {
-                            const kind = classifyEntry(entry, currentContractId);
+                            const kind = classifyEntry(entry, currentContractId, chain);
                             const sc = getStatusConfig(entry.status);
                             const isCurrent = kind === 'current';
                             const isLast = idx === chain.length - 1;

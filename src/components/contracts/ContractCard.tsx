@@ -508,8 +508,8 @@ const ContractCard = ({
                     ) : null
                 )}
 
-                {/* ── Terminated variant: History button only ── */}
-                {variant === 'terminated' && !!onHistory && (
+                {/* ── History button: terminated variant OR any chain contract with onHistory ── */}
+                {!!onHistory && (variant === 'terminated' || !!(contract.renewedFromId || contract.renewedContractId)) && (
                     <Tooltip title="View contract history" arrow>
                         <IconButton
                             size="small"

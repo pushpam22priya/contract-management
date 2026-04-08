@@ -180,7 +180,7 @@ export default function DashboardPage() {
             path: '/contracts?status=expiring'
         },
         {
-            title: 'Expired/Terminated',
+            title: 'Expired',
             value: stats.expiredCount,
             description: 'No longer active',
             icon: 'cancel' as const,

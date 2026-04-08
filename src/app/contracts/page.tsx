@@ -351,7 +351,7 @@ export default function ContractsPage() {
     };
 
     const handleRenewalSuccess = (renewalId: string) => {
-        showNotification('Contract renewed! New draft has been created.', 'success');
+        showNotification('Contract renewed!', 'success');
         loadContracts();
     };
 
