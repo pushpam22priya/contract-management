@@ -357,6 +357,7 @@ const ReusableFilter = ({
                                     label="Start Date"
                                     value={startDate}
                                     onChange={onStartDateChange}
+                                    format="DD/MM/YYYY"
                                     slotProps={{
                                         ...datePickerSlotProps,
                                         textField: {
@@ -372,6 +373,7 @@ const ReusableFilter = ({
                                     value={endDate}
                                     onChange={onEndDateChange}
                                     minDate={startDate || undefined}
+                                    format="DD/MM/YYYY"
                                     slotProps={{
                                         ...datePickerSlotProps,
                                         textField: {

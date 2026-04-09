@@ -485,7 +485,7 @@ export default function RequestReviewDialog({
                                                 sx={{ height: 20, fontSize: '0.65rem' }}
                                             />
                                             <Typography variant="caption" color="text.secondary">
-                                                {new Date(request.requestedAt).toLocaleDateString()}
+                                                {new Date(request.requestedAt).toLocaleDateString('en-GB')}
                                             </Typography>
                                         </Box>
                                         <Typography variant="body2" fontWeight={500} sx={{ mb: 0.5 }}>

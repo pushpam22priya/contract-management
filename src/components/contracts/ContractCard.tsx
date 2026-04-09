@@ -161,12 +161,12 @@ const ContractCard = ({
     const getExpiryDisplay = () => {
         // Terminated variant: show termination date
         if (variant === 'terminated' && contract.terminatedAt) {
-            return dayjs(contract.terminatedAt).format('DD MMM YYYY');
+            return dayjs(contract.terminatedAt).format('DD/MM/YYYY');
         }
         if (contract.endDate) {
-            return dayjs(contract.endDate).format('DD MMM YYYY');
+            return dayjs(contract.endDate).format('DD/MM/YYYY');
         }
-        return dayjs().add(contract.expiresInDays, 'day').format('DD MMM YYYY');
+        return dayjs().add(contract.expiresInDays, 'day').format('DD/MM/YYYY');
     };
 
     const getExpiryLabel = () => {
@@ -394,7 +394,7 @@ const ContractCard = ({
                     <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 0.5 }}>
                         {getExpiryLabel()}
                     </Typography>
-                    <Tooltip title={variant === 'terminated' && contract.terminatedAt ? `Terminated on ${dayjs(contract.terminatedAt).format('DD MMM YYYY')}` : ''} arrow placement="top">
+                    <Tooltip title={variant === 'terminated' && contract.terminatedAt ? `Terminated on ${dayjs(contract.terminatedAt).format('DD/MM/YYYY')}` : ''} arrow placement="top">
                         <Typography
                             variant="body2"
                             sx={{

@@ -57,7 +57,7 @@ export default function CriticalAlerts() {
                 const timeDiff = endDate.getTime() - today.getTime();
                 const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
 
-                const expiryDate = endDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                const expiryDate = endDate.toLocaleDateString('en-GB');
 
                 return {
                     id: c.id,

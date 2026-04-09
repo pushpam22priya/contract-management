@@ -231,7 +231,7 @@ export default function RenewContractDialog({
     // ── Validation helpers ────────────────────────────────────────────────────
     const validateStartDate = (d: Dayjs | null): string => {
         if (!d || !d.isValid()) return 'Start date is required';
-        if (!d.isAfter(origEnd)) return `Start date must be after the contract's expiry date (${origEnd.format('DD MMM YYYY')})`;
+        if (!d.isAfter(origEnd)) return `Start date must be after the contract's expiry date (${origEnd.format('DD/MM/YYYY')})`;
         return '';
     };
 
@@ -624,6 +624,7 @@ export default function RenewContractDialog({
                                     value={startDate}
                                     onChange={handleStartDateChange}
                                     minDate={origEnd.add(1, 'day')}
+                                    format="DD/MM/YYYY"
                                     slotProps={{ textField: { size: 'small', error: !!startError, helperText: startError, sx: datePickerSx } }}
                                 />
                             </Box>
@@ -635,6 +636,7 @@ export default function RenewContractDialog({
                                     value={endDate}
                                     onChange={handleEndDateChange}
                                     minDate={startDate ? startDate.add(1, 'day') : origEnd.add(2, 'day')}
+                                    format="DD/MM/YYYY"
                                     slotProps={{ textField: { size: 'small', error: !!endError, helperText: endError, sx: datePickerSx } }}
                                 />
                             </Box>

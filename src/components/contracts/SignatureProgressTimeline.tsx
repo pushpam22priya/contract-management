@@ -98,7 +98,7 @@ export default function SignatureProgressTimeline({
                 </Box>
                 {isFinalized && contract.finalizedAt && (
                     <Typography variant="caption" color="text.secondary">
-                        {new Date(contract.finalizedAt).toLocaleDateString()}
+                        {new Date(contract.finalizedAt).toLocaleDateString('en-GB')}
                     </Typography>
                 )}
             </Box>
@@ -279,7 +279,7 @@ export default function SignatureProgressTimeline({
                                             {/* Completion date — top-right corner */}
                                             {isCompleted && signer.completedAt && (
                                                 <Typography variant="caption" sx={{ fontSize: '0.55rem', color: '#66bb6a', lineHeight: 1, flexShrink: 0, mt: 0.25 }}>
-                                                    {new Date(signer.completedAt).toLocaleDateString()}
+                                                    {new Date(signer.completedAt).toLocaleDateString('en-GB')}
                                                 </Typography>
                                             )}
                                         </Box>

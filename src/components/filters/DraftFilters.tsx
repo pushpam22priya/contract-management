@@ -205,6 +205,7 @@ const DraftFilters = ({
                                 label="Start Date"
                                 value={startDate}
                                 onChange={onStartDateChange}
+                                format="DD/MM/YYYY"
                                 slotProps={{
                                     textField: {
                                         fullWidth: true,
@@ -250,6 +251,7 @@ const DraftFilters = ({
                                 value={endDate}
                                 onChange={onEndDateChange}
                                 minDate={startDate || undefined}
+                                format="DD/MM/YYYY"
                                 slotProps={{
                                     textField: {
                                         fullWidth: true,

@@ -59,7 +59,7 @@ function getStatusConfig(status: string) {
 
 function formatDate(d: string | null) {
     if (!d) return '—';
-    return dayjs(d).format('DD MMM YYYY');
+    return dayjs(d).format('DD/MM/YYYY');
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {

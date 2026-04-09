@@ -110,7 +110,7 @@ export default function TeamCard({ team, contractCount, onClick, onRename }: Tea
 
             {/* Created date */}
             <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>
-                Created {dayjs(team.createdAt).format('DD MMM YYYY')}
+                Created {dayjs(team.createdAt).format('DD/MM/YYYY')}
             </Typography>
 
             {/* Hover action buttons */}

@@ -124,7 +124,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         try {
                             const date = new Date(dateStr);
                             if (isNaN(date.getTime())) return 'Date not available';
-                            return date.toLocaleDateString();
+                            return date.toLocaleDateString('en-GB');
                         } catch {
                             return 'Date not available';
                         }
@@ -354,7 +354,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         id: contractId,
                         name: `${found.title.replace(/\s*\(Renewal\d*\)$/i, '')}.pdf`,
                         size: 'PDF',
-                        uploadDate: new Date(found.createdAt).toLocaleDateString(),
+                        uploadDate: new Date(found.createdAt).toLocaleDateString('en-GB'),
                         url: `/api/file/${contractId}?type=contract`,
                     }];
 
@@ -395,7 +395,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 id: 'main-contract',
                 name: `${freshContract.title.replace(/\s*\(Renewal\d*\)$/i, '')}.pdf`,
                 size: 'PDF',
-                uploadDate: new Date(freshContract.createdAt).toLocaleDateString(),
+                uploadDate: new Date(freshContract.createdAt).toLocaleDateString('en-GB'),
                 url: freshContract.fileUrl
             }],
         }));
@@ -776,7 +776,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 This contract was terminated on{' '}
                                 <strong>
                                     {contract.terminatedAt
-                                        ? new Date(contract.terminatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        ? new Date(contract.terminatedAt).toLocaleDateString('en-GB')
                                         : '—'}
                                 </strong>
                                 {contract.terminatedBy && (
@@ -851,7 +851,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                     <Typography variant="body2" sx={{ color: '#92400e', fontWeight: 500 }}>
                                         {contract.status === ContractStatus.EXPIRED
                                             ? 'This contract has expired.'
-                                            : `This contract is expiring on ${contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'soon'}.`}
+                                            : `This contract is expiring on ${contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-GB') : 'soon'}.`}
                                         {contract.status === ContractStatus.EXPIRED
                                             ? ' Renew to continue or terminate to close permanently.'
                                             : ' Renew it to continue the relationship.'}
@@ -929,8 +929,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 contractValue={contract.value || 'N/A'}
                                 category={contract.category || 'N/A'}
                                 template={contract.templateName || 'Custom Template'}
-                                startDate={contract.startDate || 'N/A'}
-                                endDate={contract.endDate || 'N/A'}
+                                startDate={contract.startDate ? new Date(contract.startDate).toLocaleDateString('en-GB') : 'N/A'}
+                                endDate={contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-GB') : 'N/A'}
                                 daysRemaining={contract.expiresInDays || 0}
                                 progressPercentage={(() => {
                                     // Calculate REMAINING progress based on dates
