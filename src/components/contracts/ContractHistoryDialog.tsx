@@ -40,17 +40,17 @@ interface ContractHistoryDialogProps {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    active:                { label: 'Active',             color: '#065f46', bg: '#d1fae5', border: '#6ee7b7' },
-    expiring:              { label: 'Expiring',           color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-    expired:               { label: 'Expired',            color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
-    signed:                { label: 'Signed',             color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
-    signed_by_everyone:    { label: 'Signed by Parties',  color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
+    active: { label: 'Active', color: '#065f46', bg: '#d1fae5', border: '#6ee7b7' },
+    expiring: { label: 'Expiring', color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
+    expired: { label: 'Expired', color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
+    signed: { label: 'Signed', color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
+    signed_by_everyone: { label: 'Signed by Parties', color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
     waiting_for_signature: { label: 'Awaiting Signature', color: '#6d28d9', bg: '#ede9fe', border: '#c4b5fd' },
-    ready_for_signature:   { label: 'Ready to Sign',      color: '#0369a1', bg: '#e0f2fe', border: '#7dd3fc' },
-    approved:              { label: 'Approved',           color: '#065f46', bg: '#d1fae5', border: '#6ee7b7' },
-    in_review:             { label: 'In Review',          color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-    in_approval:           { label: 'In Approval',        color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-    draft:                 { label: 'Draft',              color: '#374151', bg: '#f3f4f6', border: '#d1d5db' },
+    ready_for_signature: { label: 'Ready to Sign', color: '#0369a1', bg: '#e0f2fe', border: '#7dd3fc' },
+    approved: { label: 'Approved', color: '#065f46', bg: '#d1fae5', border: '#6ee7b7' },
+    in_review: { label: 'In Review', color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
+    in_approval: { label: 'In Approval', color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
+    draft: { label: 'Draft', color: '#374151', bg: '#f3f4f6', border: '#d1d5db' },
 };
 
 function getStatusConfig(status: string) {
@@ -62,19 +62,16 @@ function formatDate(d: string | null) {
     return dayjs(d).format('DD MMM YYYY');
 }
 
-function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function InfoRow({ label, value }: { label: string; value: string }) {
     if (!value || value === '—') return null;
     return (
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, py: 0.75 }}>
-            <Box sx={{ color: '#6b7280', mt: '2px', flexShrink: 0 }}>{icon}</Box>
-            <Box>
-                <Typography fontSize="0.68rem" color="text.disabled" fontWeight={600} letterSpacing="0.04em" textTransform="uppercase">
-                    {label}
-                </Typography>
-                <Typography fontSize="0.82rem" color="text.primary" fontWeight={500}>
-                    {value}
-                </Typography>
-            </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', flexDirection: 'column', justifyContent: 'center'}}>
+            <Typography fontSize="0.68rem" color="text.disabled" fontWeight={600} letterSpacing="0.04em" textTransform="uppercase">
+                {label}
+            </Typography>
+            <Typography fontSize="0.82rem" textAlign="center" color="text.primary" fontWeight={500}>
+                {value}
+            </Typography>
         </Box>
     );
 }
@@ -121,28 +118,11 @@ export default function ContractHistoryDialog({
                         color: '#fff',
                     }}
                 >
-                    <Box sx={{ px: 2.5, py: 2, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                    <Box sx={{ p: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <Box>
-                            <Typography fontSize="0.68rem" fontWeight={700} sx={{ color: alpha('#fff', 0.7), letterSpacing: '0.06em', textTransform: 'uppercase', mb: 0.25 }}>
-                                {kindLabel}
-                            </Typography>
-                            <Typography fontWeight={700} fontSize="1.05rem" color="#fff" lineHeight={1.3}>
+                            <Typography fontWeight={700} fontSize="1.05rem" color="#fff">
                                 {displayTitle}
                             </Typography>
-                            <Box sx={{ mt: 1 }}>
-                                <Chip
-                                    label={sc.label}
-                                    size="small"
-                                    sx={{
-                                        bgcolor: alpha('#fff', 0.2),
-                                        color: '#fff',
-                                        fontWeight: 700,
-                                        fontSize: '0.68rem',
-                                        height: 22,
-                                        border: '1px solid rgba(255,255,255,0.3)',
-                                    }}
-                                />
-                            </Box>
                         </Box>
                         <IconButton
                             size="small"
@@ -157,7 +137,7 @@ export default function ContractHistoryDialog({
                 <DialogContent sx={{ p: 0 }}>
                     {/* Period banner */}
                     <Box sx={{
-                        px: 2.5, py: 1.5,
+                        p: 1,
                         bgcolor: '#f8fafc',
                         borderBottom: '1px solid #e5e7eb',
                         display: 'flex',
@@ -172,32 +152,30 @@ export default function ContractHistoryDialog({
                         </Typography>
                     </Box>
 
-                    <Box sx={{ px: 2.5, py: 1.5, display: 'flex', flexDirection: 'column', gap: 0 }}>
-                        {/* Contract details */}
-                        {entry.client && (
-                            <InfoRow
-                                icon={<BusinessOutlinedIcon sx={{ fontSize: 16 }} />}
-                                label="Client"
-                                value={entry.client}
-                            />
-                        )}
-                        {entry.category && (
-                            <InfoRow
-                                icon={<CategoryOutlinedIcon sx={{ fontSize: 16 }} />}
-                                label="Category"
-                                value={entry.category}
-                            />
-                        )}
-                        {entry.finalizedAt && (
-                            <InfoRow
-                                icon={<CheckCircleIcon sx={{ fontSize: 16, color: '#10b981' }} />}
-                                label="Finalized"
-                                value={formatDate(entry.finalizedAt)}
-                            />
-                        )}
+                    <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 1, px: 2, borderRadius: '10px', bgcolor: '#eff7ffff' }}>
+                            {/* Contract details */}
+                            {entry.client && (
+                                <InfoRow
+                                    label="Client"
+                                    value={entry.client}
+                                />
+                            )}
+                            {entry.category && (
+                                <InfoRow
+                                    label="Category"
+                                    value={entry.category}
+                                />
+                            )}
+                            {entry.finalizedAt && (
+                                <InfoRow
+                                    label="Finalized"
+                                    value={formatDate(entry.finalizedAt)}
+                                />
+                            )}
+                        </Box>
                         {entry.renewalNotes && (
                             <InfoRow
-                                icon={<PersonOutlineIcon sx={{ fontSize: 16 }} />}
                                 label="Renewal Notes"
                                 value={entry.renewalNotes}
                             />

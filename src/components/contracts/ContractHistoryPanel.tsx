@@ -53,18 +53,18 @@ interface ContractHistoryPanelProps {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    active:                { label: 'Active',            color: '#065f46', bg: '#d1fae5', border: '#6ee7b7' },
-    expiring:              { label: 'Expiring',          color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-    expired:               { label: 'Expired',           color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
-    signed:                { label: 'Signed',            color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
-    signed_by_everyone:    { label: 'Signed by Parties', color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
-    waiting_for_signature: { label: 'Awaiting Signature',color: '#6d28d9', bg: '#ede9fe', border: '#c4b5fd' },
-    ready_for_signature:   { label: 'Ready to Sign',     color: '#0369a1', bg: '#e0f2fe', border: '#7dd3fc' },
-    approved:              { label: 'Approved',          color: '#065f46', bg: '#d1fae5', border: '#6ee7b7' },
-    in_review:             { label: 'In Review',         color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-    in_approval:           { label: 'In Approval',       color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-    draft:                 { label: 'Draft',             color: '#374151', bg: '#f3f4f6', border: '#d1d5db' },
-    terminated:            { label: 'Terminated',        color: '#334155', bg: '#f1f5f9', border: '#94a3b8' },
+    active: { label: 'Active', color: '#065f46', bg: '#d1fae5', border: '#6ee7b7' },
+    expiring: { label: 'Expiring', color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
+    expired: { label: 'Expired', color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
+    signed: { label: 'Signed', color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
+    signed_by_everyone: { label: 'Signed by Parties', color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
+    waiting_for_signature: { label: 'Awaiting Signature', color: '#6d28d9', bg: '#ede9fe', border: '#c4b5fd' },
+    ready_for_signature: { label: 'Ready to Sign', color: '#0369a1', bg: '#e0f2fe', border: '#7dd3fc' },
+    approved: { label: 'Approved', color: '#065f46', bg: '#d1fae5', border: '#6ee7b7' },
+    in_review: { label: 'In Review', color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
+    in_approval: { label: 'In Approval', color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
+    draft: { label: 'Draft', color: '#374151', bg: '#f3f4f6', border: '#d1d5db' },
+    terminated: { label: 'Terminated', color: '#334155', bg: '#f1f5f9', border: '#94a3b8' },
 };
 
 function getStatusConfig(status: string) {
@@ -122,7 +122,7 @@ function HistoryContent({
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             {/* Header */}
             <Box sx={{
-                px: 2, py: 1.5,
+                p: '6px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -141,7 +141,7 @@ function HistoryContent({
                         <HistoryIcon sx={{ color: '#0f766e', fontSize: 17 }} />
                     </Box>
                     <Box>
-                        <Typography fontWeight={700} fontSize="0.88rem" color="text.primary" lineHeight={1.2}>
+                        <Typography fontWeight={700} fontSize="0.88rem" color="text.primary">
                             Contract History
                         </Typography>
                         {chain.length > 0 && (
@@ -157,7 +157,7 @@ function HistoryContent({
             </Box>
 
             {/* Body */}
-            <Box sx={{ flex: 1, overflowY: 'auto', py: 1.5, px: 1.5 }}>
+            <Box sx={{ flex: 1, overflowY: 'auto', p: '6px' }}>
                 {/* Skeleton */}
                 {loading && (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -191,7 +191,7 @@ function HistoryContent({
 
                 {/* Chain entries */}
                 {!loading && !error && chain.length > 0 && (
-                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', maxHeight: '200px', overflowY: 'auto' }}>
                         {chain.map((entry, idx) => {
                             const kind = classifyEntry(entry, currentContractId, chain);
                             const sc = getStatusConfig(entry.status);
@@ -202,7 +202,7 @@ function HistoryContent({
                             return (
                                 <Box key={entry.id} sx={{ display: 'flex', gap: 0 }}>
                                     {/* Timeline column */}
-                                    <Box sx={{
+                                    {/* <Box sx={{
                                         display: 'flex', flexDirection: 'column',
                                         alignItems: 'center', width: 28, flexShrink: 0, pt: 1.75,
                                     }}>
@@ -214,15 +214,14 @@ function HistoryContent({
                                                 borderRadius: 1,
                                             }} />
                                         )}
-                                    </Box>
+                                    </Box> */}
 
                                     {/* Entry row */}
                                     <Box
                                         sx={{
                                             flex: 1,
-                                            mb: isLast ? 0.5 : 1.25,
-                                            ml: 1,
-                                            p: 1.25,
+                                            mb: isLast ? 0.5 : 1,
+                                            p: 1,
                                             borderRadius: 2,
                                             border: '1px solid',
                                             borderColor: isCurrent ? '#a7f3d0' : '#f0f0f0',
@@ -239,12 +238,10 @@ function HistoryContent({
                                         onClick={() => { onSelectEntry(entry); onClose(); }}
                                     >
                                         {/* Top row: kind badge + status chip */}
-                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.6 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <Typography sx={{
                                                 fontWeight: 700,
                                                 fontSize: '0.6rem',
-                                                letterSpacing: '0.07em',
-                                                textTransform: 'uppercase',
                                                 color: isCurrent ? '#0f766e' : kind === 'upcoming' ? '#d97706' : '#9ca3af',
                                             }}>
                                                 {kind === 'current' ? '● Current' : kind === 'upcoming' ? '◷ Upcoming' : '○ Past'}
@@ -262,29 +259,20 @@ function HistoryContent({
                                         </Box>
 
                                         {/* Title */}
-                                        <Typography fontWeight={600} fontSize="0.82rem" color="text.primary" sx={{ lineHeight: 1.3, mb: 0.4 }}>
+                                        <Typography fontWeight={600} fontSize="0.82rem" color="text.primary">
                                             {displayTitle}
                                         </Typography>
 
                                         {/* Date range */}
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                            <CalendarTodayOutlinedIcon sx={{ fontSize: 11, color: '#9ca3af' }} />
-                                            <Typography fontSize="0.7rem" color="text.secondary">
-                                                {(entry.startDate || entry.endDate)
-                                                    ? `${formatDate(entry.startDate)} → ${formatDate(entry.endDate)}`
-                                                    : 'Dates not set'}
-                                            </Typography>
-                                        </Box>
-
-                                        {/* Renewal note */}
-                                        {kind === 'upcoming' && entry.renewalNotes && (
-                                            <Typography fontSize="0.67rem" color="text.disabled" sx={{ mt: 0.5, fontStyle: 'italic' }} noWrap>
-                                                {entry.renewalNotes}
-                                            </Typography>
-                                        )}
-
-                                        {/* Info link */}
-                                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.75 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                <CalendarTodayOutlinedIcon sx={{ fontSize: 11, color: '#9ca3af' }} />
+                                                <Typography fontSize="0.7rem" color="text.secondary">
+                                                    {(entry.startDate || entry.endDate)
+                                                        ? `${formatDate(entry.startDate)} → ${formatDate(entry.endDate)}`
+                                                        : 'Dates not set'}
+                                                </Typography>
+                                            </Box>
                                             <Box
                                                 component="span"
                                                 onClick={e => { e.stopPropagation(); onSelectEntry(entry); onClose(); }}
@@ -298,6 +286,18 @@ function HistoryContent({
                                                 <InfoOutlinedIcon sx={{ fontSize: 13 }} />
                                                 View details
                                             </Box>
+                                        </Box>
+
+                                        {/* Renewal note */}
+                                        {kind === 'upcoming' && entry.renewalNotes && (
+                                            <Typography fontSize="0.67rem" color="text.disabled" sx={{ mt: 0.5, fontStyle: 'italic' }} noWrap>
+                                                {entry.renewalNotes}
+                                            </Typography>
+                                        )}
+
+                                        {/* Info link */}
+                                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+
                                         </Box>
                                     </Box>
                                 </Box>

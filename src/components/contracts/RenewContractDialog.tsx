@@ -610,15 +610,7 @@ export default function RenewContractDialog({
             >
                 {/* ── STEP 1: Renewal Details Form ── */}
                 {step === 1 && (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-                        {/* Info banner */}
-                        <Box sx={{ bgcolor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 2, px: 1.5, py: 1 }}>
-                            <Typography variant="body2" sx={{ color: '#1e40af', fontSize: '0.82rem' }}>
-                                Original contract <strong>{contractTitle}</strong> expires on{' '}
-                                <strong>{origEnd.format('DD MMM YYYY')}</strong>. The renewal will start as
-                                a fresh draft and go through the full workflow again.
-                            </Typography>
-                        </Box>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
 
                         {step1Error && <Alert severity="error" sx={{ py: 0.5 }}>{step1Error}</Alert>}
 
@@ -660,14 +652,25 @@ export default function RenewContractDialog({
                                     setSelectedTemplate(null);
                                     setTemplateError('');
                                 }}
+                                sx={{
+                                    display: 'flex',
+                                    flexDirection: 'row',
+                                    gap: 2,
+                                }}
                             >
                                 <FormControlLabel
                                     value="same"
+                                    sx={{
+                                        margin: 0,
+                                    }}
                                     control={<Radio size="small" />}
-                                    label={<Typography variant="body2">Keep existing document (fields cleared)</Typography>}
+                                    label={<Typography variant="body2">Keep existing document</Typography>}
                                 />
                                 <FormControlLabel
                                     value="template"
+                                    sx={{
+                                        margin: 0,
+                                    }}
                                     control={<Radio size="small" />}
                                     label={<Typography variant="body2">Use a different template</Typography>}
                                 />
@@ -707,18 +710,17 @@ export default function RenewContractDialog({
                         <Box>
                             <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', mb: 0.5 }}>
                                 Renewal Notes{' '}
-                                <Typography component="span" variant="caption" sx={{ color: 'text.disabled' }}>(optional)</Typography>
                             </Typography>
                             <TextField
                                 fullWidth
                                 multiline
                                 rows={3}
                                 size="small"
-                                placeholder="Add any notes about this renewal (e.g. revised terms, new pricing…)"
+                                placeholder="Add any notes about this renewal"
                                 value={notes}
-                                onChange={(e) => { if (e.target.value.length <= 500) setNotes(e.target.value); }}
-                                inputProps={{ maxLength: 500 }}
-                                helperText={`${notes.length}/500`}
+                                onChange={(e) => { if (e.target.value.length <= 300) setNotes(e.target.value); }}
+                                inputProps={{ maxLength: 300 }}
+                                helperText={`${notes.length}/300`}
                                 sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#f8fafc', borderRadius: 2 } }}
                             />
                         </Box>

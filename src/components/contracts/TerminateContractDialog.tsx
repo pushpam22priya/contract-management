@@ -94,17 +94,11 @@ export default function TerminateContractDialog({
                         variant="contained"
                         onClick={handleTerminate}
                         disabled={loading}
-                        startIcon={
-                            loading
-                                ? <CircularProgress size={16} sx={{ color: 'white' }} />
-                                : <BlockOutlinedIcon sx={{ fontSize: '1rem !important' }} />
-                        }
                         sx={{
                             bgcolor: '#dc2626',
                             color: 'white',
                             '&:hover': { bgcolor: '#b91c1c' },
                             '&:disabled': { bgcolor: '#fca5a5', color: 'white' },
-                            minWidth: 130,
                         }}
                     >
                         {loading ? 'Terminating…' : 'Terminate'}
@@ -113,23 +107,8 @@ export default function TerminateContractDialog({
             }
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {/* Icon + intro */}
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                    <Box
-                        sx={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 2,
-                            bgcolor: alpha('#dc2626', 0.1),
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0,
-                        }}
-                    >
-                        <BlockOutlinedIcon sx={{ fontSize: 22, color: '#dc2626' }} />
-                    </Box>
-                    <Box>
+                {/* intro */}
+                <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
                         <Typography fontSize="0.9rem" color="text.secondary" sx={{ lineHeight: 1.5 }}>
                             You are about to permanently terminate:
                         </Typography>
@@ -148,7 +127,6 @@ export default function TerminateContractDialog({
                         >
                             "{contractTitle}"
                         </Typography>
-                    </Box>
                 </Box>
 
                 {/* Warning box */}
@@ -169,7 +147,7 @@ export default function TerminateContractDialog({
                             This action cannot be undone.
                         </Typography>
                         <Typography fontSize="0.8rem" color="#7f1d1d" sx={{ lineHeight: 1.5 }}>
-                            The contract will be permanently archived as terminated and cannot be renewed, edited, or sent for signature.
+                            The contract will be permanently archived as terminated.
                         </Typography>
                     </Box>
                 </Box>

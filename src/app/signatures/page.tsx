@@ -119,6 +119,8 @@ export default function SignaturesPage() {
         if (viewerOpen) return;
 
         pollIntervalRef.current = setInterval(() => {
+            // Close the history panel before refreshing so it doesn't shift during re-render
+            setHistoryAnchorEl(null);
             loadContracts();
         }, 12000); // Every 12 seconds
 
