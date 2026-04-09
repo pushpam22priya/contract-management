@@ -116,9 +116,12 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 // 4. Load extra details (from service or mock local)
                 // Build activities timeline from contract data
                 if (isMounted) {
-                    const activities: { id: string; title: string; user: string; date: string }[] = [];
+                    // Each entry carries a raw ISO timestamp for sorting + a formatted date for display
+                    const activities: { id: string; title: string; user: string; date: string; _ts: number }[] = [];
 
-                    // Helper function to safely format dates
+                    const toTs = (dateStr: string | undefined): number =>
+                        dateStr ? new Date(dateStr).getTime() : 0;
+
                     const formatDate = (dateStr: string | undefined): string => {
                         if (!dateStr) return 'Date not available';
                         try {
@@ -130,223 +133,182 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         }
                     };
 
-                    // 1. Contract Created
+                    const push = (id: string, title: string, user: string, dateStr: string | undefined) => {
+                        activities.push({ id, title, user, date: formatDate(dateStr), _ts: toTs(dateStr) });
+                    };
+
+                    // ── 1. Contract Created ──────────────────────────────────────────
                     if (found.createdAt) {
-                        activities.push({
-                            id: 'created',
-                            title: 'Contract Created',
-                            user: found.createdBy || 'System',
-                            date: formatDate(found.createdAt)
-                        });
+                        push('created', 'Contract Created', found.createdBy || 'System', found.createdAt);
                     }
 
-                    // 2. Submitted for Review (if reviewers exist)
+                    // ── 2. Submitted for Review ──────────────────────────────────────
+                    // One entry per reviewer showing who the request was sent to
                     if (found.reviewers && found.reviewers.length > 0) {
-                        activities.push({
-                            id: 'submitted-review',
-                            title: 'Submitted for Review',
-                            user: found.createdBy || 'System',
-                            date: formatDate(found.updatedAt || found.createdAt)
+                        found.reviewers.forEach((reviewer: any, idx: number) => {
+                            const sentAt = reviewer.sentAt;
+                            const sentBy = reviewer.sentBy || found.createdBy || 'System';
+                            push(
+                                `submitted-review-${idx}`,
+                                `Submitted for Review to ${reviewer.email}`,
+                                sentBy,
+                                sentAt || found.createdAt
+                            );
                         });
 
-                        // 3. Each Reviewer's Action
+                        // ── 3. Each Reviewer's Action ────────────────────────────────
                         found.reviewers.forEach((reviewer: any, idx: number) => {
                             if (reviewer.status === 'reviewed' && reviewer.reviewedAt) {
-                                activities.push({
-                                    id: `reviewed-${idx}`,
-                                    title: 'Reviewed',
-                                    user: reviewer.email || 'Reviewer',
-                                    date: formatDate(reviewer.reviewedAt)
-                                });
+                                push(`reviewed-${idx}`, 'Reviewed', reviewer.email, reviewer.reviewedAt);
                             } else if (reviewer.status === 'requested_changes') {
-                                activities.push({
-                                    id: `changes-requested-${idx}`,
-                                    title: 'Changes Requested',
-                                    user: reviewer.email || 'Reviewer',
-                                    date: formatDate(reviewer.reviewedAt || found.updatedAt)
-                                });
+                                push(`changes-requested-${idx}`, 'Changes Requested', reviewer.email, reviewer.reviewedAt);
+                            } else if (reviewer.status === 'rejected') {
+                                push(`review-rejected-${idx}`, 'Review Rejected', reviewer.email, reviewer.rejectedAt || reviewer.reviewedAt);
                             }
                         });
                     }
 
-                    // 4. Approver Action
+                    // ── 4. Submitted for Approval ────────────────────────────────────
                     if (found.approver) {
+                        const sentAt = found.approver.sentAt;
+                        const sentBy = found.approver.sentBy || found.createdBy || 'System';
+                        push(
+                            'submitted-approval',
+                            `Submitted for Approval to ${found.approver.email}`,
+                            sentBy,
+                            sentAt || found.createdAt
+                        );
+
+                        // ── 5. Approver Action ───────────────────────────────────────
                         if (found.approver.status === 'approved' && found.approver.approvedAt) {
-                            activities.push({
-                                id: 'approved',
-                                title: 'Approved',
-                                user: found.approver.email || 'Approver',
-                                date: formatDate(found.approver.approvedAt)
-                            });
+                            push('approved', 'Approved', found.approver.email, found.approver.approvedAt);
                         } else if (found.approver.status === 'rejected') {
-                            activities.push({
-                                id: 'rejected',
-                                title: 'Rejected',
-                                user: found.approver.email || 'Approver',
-                                date: formatDate(found.updatedAt || found.createdAt)
-                            });
+                            push('approval-rejected', 'Approval Rejected', found.approver.email, found.approver.approvedAt || found.updatedAt);
                         }
                     }
 
-                    // 5. Contractor filled party fields (multi-party)
-                    if (found.partyCompletions && found.partyCompletions.length > 0) {
-                        found.partyCompletions.forEach((completion: any, idx: number) => {
-                            if (completion.isContractor && completion.status === 'completed' && completion.completedAt) {
-                                activities.push({
-                                    id: `contractor-filled-${idx}`,
-                                    title: `Contractor filled ${completion.partyLabel || completion.partyId} fields`,
-                                    user: completion.completedByName || completion.completedBy || found.createdBy || 'Contractor',
-                                    date: formatDate(completion.completedAt)
-                                });
-                            }
-                        });
-                    }
-
-                    // 6. Signature Request Sent (legacy single-signer flow)
-                    if (found.signingRequest && !found.externalSigners?.length) {
-                        activities.push({
-                            id: 'signature-requested',
-                            title: 'Signature Request Sent',
-                            user: found.createdBy || 'System',
-                            date: formatDate(found.externalSigningSentAt || found.signingRequest?.createdAt)
-                        });
-                    }
-
-                    // 7. Multi-party: Internal signers assignments and completions
+                    // ── 6. Sent for Signature — all signers listed individually ───────
+                    // Internal signers
                     if (found.internalSigners && found.internalSigners.length > 0) {
                         found.internalSigners.forEach((signer: any, idx: number) => {
                             const partyLabel = signer.partyLabel || 'Party';
-
-                            // Internal signer assigned
-                            if (signer.assignedAt) {
-                                activities.push({
-                                    id: `internal-assigned-${idx}`,
-                                    title: `Internal signer assigned for ${partyLabel} (Order ${signer.order})`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.assignedAt)
-                                });
+                            const assignedAt = signer.assignedAt || signer.sentAt;
+                            if (assignedAt) {
+                                push(
+                                    `sent-internal-${idx}`,
+                                    `Sent for Signature — ${partyLabel} (Order ${signer.order})`,
+                                    signer.email,
+                                    assignedAt
+                                );
                             }
 
-                            // Internal signer unlocked
-                            if (signer.unlockedAt && signer.unlockedAt !== signer.assignedAt) {
-                                activities.push({
-                                    id: `internal-unlocked-${idx}`,
-                                    title: `Order ${signer.order} unlocked for ${partyLabel}`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.unlockedAt)
-                                });
+                            // Signer unlocked for signing (sequential flow)
+                            if (signer.unlockedAt && signer.unlockedAt !== assignedAt) {
+                                push(
+                                    `internal-unlocked-${idx}`,
+                                    `Signature unlocked — ${partyLabel} (Order ${signer.order})`,
+                                    signer.email,
+                                    signer.unlockedAt
+                                );
                             }
 
-                            // Internal signer completed
+                            // Signer submitted their signature
                             if (signer.status === 'completed' && signer.completedAt) {
-                                activities.push({
-                                    id: `internal-completed-${idx}`,
-                                    title: `Completed ${partyLabel} fields`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.completedAt)
-                                });
+                                push(
+                                    `internal-signed-${idx}`,
+                                    `Signed — ${partyLabel}`,
+                                    signer.email,
+                                    signer.completedAt
+                                );
                             }
                         });
                     }
 
-                    // 8. Multi-party: External signers requests sent
+                    // External signers
                     if (found.externalSigners && found.externalSigners.length > 0) {
                         found.externalSigners.forEach((signer: any, idx: number) => {
-                            // Get party label for display
                             const partyLabel = signer.partyLabel || 'Party';
-
-                            // External signer assigned
-                            if (signer.sentAt) {
-                                activities.push({
-                                    id: `external-assigned-${idx}`,
-                                    title: `External signer assigned for ${partyLabel} (Order ${signer.order})`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.sentAt)
-                                });
+                            const sentAt = signer.sentAt;
+                            if (sentAt) {
+                                push(
+                                    `sent-external-${idx}`,
+                                    `Sent for Signature — ${partyLabel} (Order ${signer.order})`,
+                                    signer.email,
+                                    sentAt
+                                );
                             }
 
-                            // External signer unlocked (email sent)
-                            if (signer.unlockedAt && signer.unlockedAt !== signer.sentAt) {
-                                activities.push({
-                                    id: `external-unlocked-${idx}`,
-                                    title: `Order ${signer.order} unlocked - email sent for ${partyLabel}`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.unlockedAt)
-                                });
+                            // External signer unlocked via auto-advance
+                            if (signer.unlockedAt && signer.unlockedAt !== sentAt) {
+                                push(
+                                    `external-unlocked-${idx}`,
+                                    `Signature unlocked — ${partyLabel} (Order ${signer.order})`,
+                                    signer.email,
+                                    signer.unlockedAt
+                                );
                             }
 
-                            // Signer viewed the contract
-                            if (signer.viewedAt) {
-                                activities.push({
-                                    id: `external-viewed-${idx}`,
-                                    title: `Viewed contract`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.viewedAt)
-                                });
-                            }
-
-                            // Signer completed their party fields
+                            // External signer submitted their signature
                             if (signer.status === 'completed' && signer.completedAt) {
-                                activities.push({
-                                    id: `external-completed-${idx}`,
-                                    title: `Completed ${partyLabel} fields`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.completedAt)
-                                });
+                                push(
+                                    `external-signed-${idx}`,
+                                    `Signed — ${partyLabel}`,
+                                    signer.email,
+                                    signer.completedAt
+                                );
                             }
                         });
                     }
 
-                    // 8. Client party completions (from partyCompletions, non-contractor)
-                    if (found.partyCompletions && found.partyCompletions.length > 0) {
-                        found.partyCompletions.forEach((completion: any, idx: number) => {
-                            if (!completion.isContractor && completion.status === 'completed' && completion.completedAt) {
-                                activities.push({
-                                    id: `client-completed-${idx}`,
-                                    title: `Completed ${completion.partyLabel || completion.partyId} fields`,
-                                    user: completion.completedByName || completion.completedBy || 'Client',
-                                    date: formatDate(completion.completedAt)
-                                });
-                            }
-                        });
+                    // Legacy single-signer flow
+                    if (found.signingRequest && !found.externalSigners?.length && !found.internalSigners?.length) {
+                        push(
+                            'signature-requested',
+                            `Sent for Signature to ${found.signingRequest.signerEmail || found.signer?.email || 'Signer'}`,
+                            found.createdBy || 'System',
+                            found.externalSigningSentAt || found.signingRequest?.createdAt
+                        );
+                        if (found.signer?.status === 'signed' && found.signer?.signedAt) {
+                            push('signed', 'Signed', found.signer.email || 'Client', found.signer.signedAt);
+                        } else if (found.signingRequest?.status === 'signed' && found.signingRequest?.signedAt) {
+                            push('signed', 'Signed', found.signingRequest.signerEmail || 'Client', found.signingRequest.signedAt);
+                        }
                     }
 
-                    // 9. Signed (legacy single-signer flow)
-                    if (found.signer?.status === 'signed' && found.signer?.signedAt) {
-                        activities.push({
-                            id: 'signed',
-                            title: 'Contract Signed',
-                            user: found.signer.email || found.signer.name || 'Client',
-                            date: formatDate(found.signer.signedAt)
-                        });
-                    } else if (found.signingRequest?.status === 'signed' && found.signingRequest?.signedAt && !found.externalSigners?.length) {
-                        activities.push({
-                            id: 'signed',
-                            title: 'Contract Signed',
-                            user: found.signingRequest.signerEmail || 'Client',
-                            date: formatDate(found.signingRequest.signedAt)
-                        });
-                    }
-
-                    // 10. Contract Finalized (multi-party flow)
+                    // ── 7. Contract Finalized ────────────────────────────────────────
                     if (found.finalizedAt) {
-                        activities.push({
-                            id: 'finalized',
-                            title: 'Contract Finalized',
-                            user: found.finalizedBy || found.createdBy || 'System',
-                            date: formatDate(found.finalizedAt)
-                        });
+                        push('finalized', 'Contract Finalized', found.finalizedBy || found.createdBy || 'System', found.finalizedAt);
                     }
 
-                    // Sort activities by date (oldest first for chronological order)
-                    activities.sort((a, b) => {
-                        const dateA = new Date(a.date).getTime();
-                        const dateB = new Date(b.date).getTime();
-                        // Handle invalid dates
-                        if (isNaN(dateA)) return 1;
-                        if (isNaN(dateB)) return -1;
-                        return dateA - dateB;
-                    });
+                    // ── 8. Renewed ───────────────────────────────────────────────────
+                    // Show on the original contract when a renewal was created
+                    if (found.renewedContractId && found.renewalStatus) {
+                        push(
+                            'renewed',
+                            'Contract Renewed',
+                            found.createdBy || 'System',
+                            found.updatedAt || found.createdAt
+                        );
+                    }
+
+                    // Show on the renewal contract — link back to original
+                    if (found.renewedFromId) {
+                        push(
+                            'renewal-of',
+                            'Renewal Contract Created',
+                            found.createdBy || 'System',
+                            found.createdAt
+                        );
+                    }
+
+                    // ── 9. Terminated ────────────────────────────────────────────────
+                    if (found.terminatedAt) {
+                        push('terminated', 'Contract Terminated', found.terminatedBy || found.createdBy || 'System', found.terminatedAt);
+                    }
+
+                    // Sort by raw timestamp ascending (chronological), then strip _ts
+                    activities.sort((a, b) => a._ts - b._ts);
+                    const sortedActivities = activities.map(({ _ts: _ignored, ...rest }) => rest);
 
                     // ── Build document list (current contract only) ────────────
                     const contractId = found.id;
@@ -360,7 +322,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
                     setDetails({
                         documents,
-                        activities,
+                        activities: sortedActivities,
                         ...found
                     });
                 }

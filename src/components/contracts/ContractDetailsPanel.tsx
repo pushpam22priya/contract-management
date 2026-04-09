@@ -55,10 +55,6 @@ const ContractDetailsPanel = ({
         setActiveTab(newValue);
     };
 
-    const handleDownload = (docId: string) => {
-        console.log('Download document:', docId);
-    };
-
     return (
         <Paper
             elevation={0}
@@ -116,7 +112,6 @@ const ContractDetailsPanel = ({
 
             {/* Tab Content */}
             <Box sx={{ p: { xs: 1, sm: 2 }, maxHeight: 350, overflowY: 'auto' }}>
-                {/* Documents Tab */}
                 {/* Documents Tab */}
                 {activeTab === 0 && (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
