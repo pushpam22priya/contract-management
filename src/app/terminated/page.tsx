@@ -9,6 +9,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import ContractCard from '@/components/contracts/ContractCard';
 import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
 import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog';
+import DeleteContractDialog from '@/components/contracts/DeleteContractDialog';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import ReusableFilter from '@/components/common/ReusableFilter';
 import { contractService } from '@/services/contractService';
@@ -34,6 +35,10 @@ export default function TerminatedContractsPage() {
     const [historyAnchorEl, setHistoryAnchorEl] = useState<HTMLElement | null>(null);
     const [historyContractId, setHistoryContractId] = useState<string | null>(null);
     const [historyDialogEntry, setHistoryDialogEntry] = useState<HistoryEntry | null>(null);
+
+    // Delete dialog state
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [contractForDeletion, setContractForDeletion] = useState<Contract | null>(null);
 
     const loadContracts = useCallback(async () => {
         setLoading(true);
@@ -216,6 +221,11 @@ export default function TerminatedContractsPage() {
                                     setHistoryContractId(id);
                                     setHistoryAnchorEl(event.currentTarget);
                                 }}
+                                onDelete={(id) => {
+                                    const c = contracts.find(x => x.id === id) || null;
+                                    setContractForDeletion(c);
+                                    setDeleteDialogOpen(true);
+                                }}
                             />
                         ))
                     )}
@@ -238,6 +248,15 @@ export default function TerminatedContractsPage() {
                 onClose={() => setHistoryDialogEntry(null)}
                 entry={historyDialogEntry}
                 currentContractId={historyContractId || ''}
+            />
+
+            {/* Delete confirmation dialog */}
+            <DeleteContractDialog
+                open={deleteDialogOpen}
+                onClose={() => { setDeleteDialogOpen(false); setContractForDeletion(null); }}
+                contractId={contractForDeletion?.id || ''}
+                contractTitle={contractForDeletion?.title?.replace(/\s*\(Renewal\d*\)$/i, '') || ''}
+                onSuccess={loadContracts}
             />
         </AppLayout>
     );

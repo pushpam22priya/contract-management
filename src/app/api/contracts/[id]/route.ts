@@ -198,7 +198,7 @@ export async function GET(
 
 /**
  * DELETE /api/contracts/[id]
- * Delete a contract by ID. Only draft contracts can be deleted this way.
+ * Permanently delete a contract. Only terminated contracts may be deleted.
  */
 export async function DELETE(
     _request: NextRequest,
@@ -215,13 +215,26 @@ export async function DELETE(
         const client = await clientPromise;
         const db = client.db();
 
-        const result = await db.collection('contracts').deleteOne({ _id: new ObjectId(id) });
+        // Only terminated contracts can be permanently deleted
+        const contract = await db.collection('contracts').findOne(
+            { _id: new ObjectId(id) },
+            { projection: { status: 1 } }
+        );
 
-        if (result.deletedCount === 0) {
+        if (!contract) {
             return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
         }
 
-        return NextResponse.json({ success: true, message: 'Contract deleted' });
+        if (contract.status !== 'terminated') {
+            return NextResponse.json(
+                { error: 'Only terminated contracts can be permanently deleted.' },
+                { status: 403 }
+            );
+        }
+
+        await db.collection('contracts').deleteOne({ _id: new ObjectId(id) });
+
+        return NextResponse.json({ success: true, message: 'Contract permanently deleted' });
     } catch (e) {
         console.error('Delete contract error:', e);
         return NextResponse.json({ error: 'Failed to delete contract' }, { status: 500 });

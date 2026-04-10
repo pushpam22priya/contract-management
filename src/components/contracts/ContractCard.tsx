@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import { Visibility, Share, Download, FolderOutlined, AutorenewOutlined, Loop } from '@mui/icons-material';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import HistoryIcon from '@mui/icons-material/History';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { Contract, ContractStatus } from '@/types/contract';
 
 /**
@@ -21,6 +22,7 @@ interface ContractCardProps {
     onRenew?: (id: string) => void;
     onTerminate?: (id: string) => void;
     onHistory?: (id: string, event: React.MouseEvent<HTMLButtonElement>) => void;
+    onDelete?: (id: string) => void;
     /**
      * Variant determines the card behavior:
      * - 'draft': Shows share button always (for review submission), handles "changes_requested" status
@@ -40,6 +42,7 @@ const ContractCard = ({
     onRenew,
     onTerminate,
     onHistory,
+    onDelete,
     variant = 'contract',
     teamName,
 }: ContractCardProps) => {
@@ -531,6 +534,33 @@ const ContractCard = ({
                             }}
                         >
                             <HistoryIcon sx={{ fontSize: '1.1rem' }} />
+                        </IconButton>
+                    </Tooltip>
+                )}
+
+                {/* ── Delete button: terminated variant only ── */}
+                {variant === 'terminated' && !!onDelete && (
+                    <Tooltip title="Delete permanently" arrow>
+                        <IconButton
+                            size="small"
+                            onClick={() => onDelete(contract.id)}
+                            sx={{
+                                bgcolor: 'transparent',
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: 1.5,
+                                color: 'text.primary',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                    bgcolor: '#dc2626',
+                                    borderColor: '#dc2626',
+                                    color: 'white',
+                                    transform: 'translateY(-2px)',
+                                    boxShadow: '0 4px 8px rgba(220, 38, 38, 0.2)',
+                                },
+                            }}
+                        >
+                            <DeleteOutlineIcon sx={{ fontSize: '1.1rem' }} />
                         </IconButton>
                     </Tooltip>
                 )}
