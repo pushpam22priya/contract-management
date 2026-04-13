@@ -52,6 +52,11 @@ export default function DashboardPage() {
                 let waitingForSig = 0;
 
                 if (Array.isArray(allContracts)) {
+                    // Build a status lookup so we can apply the same superseded-chain
+                    // exclusion that the contracts page uses (hide old expired versions
+                    // whose renewal has already progressed or been terminated).
+                    const statusById = new Map(allContracts.map(c => [c.id, c.status]));
+
                     allContracts.forEach(c => {
                         const isCreator = c.createdBy === currentUser.email;
                         // Unlocked internal signer = it's their turn to sign
@@ -77,7 +82,33 @@ export default function DashboardPage() {
                             ) underApproval++;
                             if (c.status === ContractStatus.ACTIVE) active++;
                             if (c.status === ContractStatus.EXPIRING) expiring++;
-                            if (c.status === ContractStatus.EXPIRED) expired++;
+
+                            // Only count expired contracts that are actually visible on the
+                            // contracts page. Mirror the exact same exclusion logic:
+                            // hide if the contract has a renewal whose status is anything
+                            // beyond draft-stage (same set as CONTRACT_PAGE_STATUSES) or terminated.
+                            if (c.status === ContractStatus.EXPIRED) {
+                                let superseded = false;
+                                if (c.renewedContractId) {
+                                    const renewalStatus = statusById.get(c.renewedContractId);
+                                    const hiddenWhenRenewalIs = new Set([
+                                        ContractStatus.APPROVED,
+                                        ContractStatus.READY_FOR_SIGNATURE,
+                                        ContractStatus.WAITING_FOR_SIGNATURE,
+                                        ContractStatus.SIGNED_BY_EVERYONE,
+                                        ContractStatus.SIGNED,
+                                        ContractStatus.ACTIVE,
+                                        ContractStatus.EXPIRING,
+                                        ContractStatus.EXPIRED,
+                                        ContractStatus.TERMINATED,
+                                    ]);
+                                    if (renewalStatus && hiddenWhenRenewalIs.has(renewalStatus as ContractStatus)) {
+                                        superseded = true;
+                                    }
+                                }
+                                if (!superseded) expired++;
+                            }
+
                             // Shared but not all signed yet
                             if (c.status === ContractStatus.WAITING_FOR_SIGNATURE) requested++;
                             // All assigned parties have signed
