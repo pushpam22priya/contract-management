@@ -620,8 +620,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
     return (
         <AppLayout>
-            <Fade in timeout={400}>
-                <Box>
+            {/* Main content box */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
                     {/* Header Section */}
                     <Box
                         sx={{
@@ -630,7 +630,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                             justifyContent: 'space-between',
                             flexDirection: { xs: 'column', md: 'row' },
                             gap: 2,
-                            // pb: 1,
+                            pb: 1.5,
                             borderBottom: '1px solid',
                             borderColor: 'divider',
                         }}
@@ -716,6 +716,9 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                             )}
                         </Box>
                     </Box>
+
+                    <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pt: 1.5, pb: 2 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
                     {/* Terminated Banner */}
                     {contract.status === ContractStatus.TERMINATED && (
@@ -931,7 +934,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         </Box>
                     </Box>
                 </Box>
-            </Fade>
+            </Box>
+        </Box>
 
             {/* Debug: Log what's being passed to viewer */}
             {viewerOpen && (() => {
@@ -951,13 +955,13 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 onClose={() => setViewerOpen(false)}
                 fileUrl={(() => {
                     // For chain docs (predecessor / renewal), always use their own URL directly
-                    const isChainDoc = selectedDoc && selectedDoc.id !== 'main-contract' && selectedDoc.id !== contract.id;
+                    const isChainDoc = !!selectedDoc && selectedDoc.id !== 'main-contract' && selectedDoc?.id !== contract?.id;
                     if (isChainDoc && selectedDoc?.url) {
                         return selectedDoc.url;
                     }
 
                     // 1. Signed PDF Base64 (highest priority for current contract)
-                    if (contract.signedPdfBase64) {
+                    if (contract?.signedPdfBase64) {
                         console.log('📄 [ContractViewPage] Using signedPdfBase64');
                         return `data:application/pdf;base64,${contract.signedPdfBase64}`;
                     }
@@ -969,13 +973,13 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                     }
 
                     // 3. Contract's main file URL (points to saved PDF)
-                    if (contract.fileUrl) {
+                    if (contract?.fileUrl) {
                         console.log('📄 [ContractViewPage] Using contract.fileUrl');
                         return contract.fileUrl;
                     }
 
                     // 4. Fallback to Template (only if no contract file exists)
-                    if (contract.templateId && contractTemplate) {
+                    if (contract?.templateId && contractTemplate) {
                         console.log('📄 [ContractViewPage] Fallback: Using template URL');
                         return contractTemplate.fileData || contractTemplate.fileUrl || "";
                     }
@@ -986,25 +990,25 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 title={selectedDoc?.name || displayTitle}
                 contractId={(() => {
                     // For chain docs, use the chain doc's id; for main contract use contract.id
-                    if (selectedDoc && selectedDoc.id !== 'main-contract' && selectedDoc.id !== contract.id) {
+                    if (selectedDoc && selectedDoc.id !== 'main-contract' && selectedDoc.id !== contract?.id) {
                         return selectedDoc.id;
                     }
-                    return contract.id;
+                    return contract?.id || '';
                 })()}
                 // Only pass XFDF/formFields for the main (current) contract — chain docs are read-only
-                initialXfdf={(!selectedDoc || selectedDoc.id === contract.id) ? contract.xfdfData : undefined}
-                formFields={(!selectedDoc || selectedDoc.id === contract.id) ? contract.formFields : undefined}
+                initialXfdf={(!selectedDoc || selectedDoc.id === contract?.id) ? contract?.xfdfData : undefined}
+                formFields={(!selectedDoc || selectedDoc.id === contract?.id) ? contract?.formFields : undefined}
                 currentUserRole="contractor"
                 // Chain docs are always read-only; main contract is editable unless finalized
-                onSave={(!selectedDoc || selectedDoc.id === contract.id) && !isFinalized ? handleSaveChanges : undefined}
-                readOnly={isFinalized || !!(selectedDoc && selectedDoc.id !== contract.id)}
-                editableFieldMode={(!selectedDoc || selectedDoc.id === contract.id) && !isFinalized ? 'empty-only' : 'none'}
+                onSave={(!selectedDoc || selectedDoc.id === contract?.id) && !isFinalized ? handleSaveChanges : undefined}
+                readOnly={isFinalized || !!(selectedDoc && selectedDoc.id !== contract?.id)}
+                editableFieldMode={(!selectedDoc || selectedDoc.id === contract?.id) && !isFinalized ? 'empty-only' : 'none'}
                 showAnnotationNavigation={true}
-                parties={contract.parties}
+                parties={contract?.parties}
                 // ✅ Pass external signers info so contractor can't edit client party fields
-                externalSigners={contract.externalSigners}
+                externalSigners={contract?.externalSigners}
                 // ✅ Pass internal signers info so contractor can't edit internal client party fields
-                internalSigners={contract.internalSigners}
+                internalSigners={contract?.internalSigners}
             />
 
             {contract && (
@@ -1043,8 +1047,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                     open={historyPanelOpen}
                     anchorEl={historyAnchorEl}
                     onClose={() => setHistoryAnchorEl(null)}
-                    contractId={contract.id}
-                    currentContractId={contract.id}
+                    contractId={contract?.id}
+                    currentContractId={contract?.id}
                     onSelectEntry={(entry) => setHistoryDialogEntry(entry)}
                 />
             )}

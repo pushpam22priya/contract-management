@@ -426,7 +426,7 @@ export default function ReviewApprovalPage() {
 
     return (
         <AppLayout>
-            <Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
                 {/* Header Section */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                     <Box>
@@ -523,6 +523,7 @@ export default function ReviewApprovalPage() {
 
 
                         {/* Contracts Grid */}
+                        <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 2 }}>
                         {loading ? (
                             <Box
                                 sx={{
@@ -573,6 +574,7 @@ export default function ReviewApprovalPage() {
                                 ))}
                             </Box>
                         )}
+                        </Box>
                     </>
                 )}
 

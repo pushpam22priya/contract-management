@@ -166,7 +166,7 @@ export default function DashboardPage() {
             path: '/draft?title=In+Progress&status=draft,in_review,in_approval,review_approval,reviewed'
         },
         {
-            title: 'Requested for Signature',
+            title: 'Send for Signature',
             value: stats.requestedCount,
             description: 'Shared, awaiting signatures',
             icon: 'send' as const,
@@ -242,13 +242,15 @@ export default function DashboardPage() {
 
     return (
         <AppLayout>
-            <Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
                 <Typography fontSize={20} fontWeight={600} color="primary">
                     Dashboard
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     Welcome back, <strong>{displayName}</strong> ! Here's your contract overview
                 </Typography>
+
+                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 2 }}>
 
                 {/* Critical Alerts Section */}
                 {/* <CriticalAlerts /> */}
@@ -307,6 +309,7 @@ export default function DashboardPage() {
                 >
                     <RecentContracts />
                     <QuickActions onActionClick={handleQuickAction} />
+                </Box>
                 </Box>
             </Box>
 

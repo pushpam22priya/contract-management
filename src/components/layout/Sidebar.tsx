@@ -21,16 +21,18 @@ import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import RateReviewIcon from '@mui/icons-material/RateReview';
 import DrawIcon from '@mui/icons-material/Draw';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
+import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 
 const menuItems = [
     { text: 'Dashboard',              icon: <DashboardOutlinedIcon sx={{ fontSize: 20 }} />,  path: '/dashboard' },
-    { text: 'Template',               icon: <DescriptionOutlinedIcon sx={{ fontSize: 20 }} />, path: '/template' },
+    { text: 'All Contracts',          icon: <LayersOutlinedIcon sx={{ fontSize: 20 }} />,      path: '/all-contracts' },
     { text: 'Contracts',              icon: <ArticleOutlinedIcon sx={{ fontSize: 20 }} />,     path: '/contracts' },
     { text: 'Draft',                  icon: <RateReviewIcon sx={{ fontSize: 20 }} />,          path: '/draft' },
-    { text: 'Review & Approval',      icon: <DraftsIcon sx={{ fontSize: 20 }} />,              path: '/review-approval' },
     { text: 'Contract for Signature', icon: <DrawIcon sx={{ fontSize: 20 }} />,                path: '/signatures' },
+    { text: 'Review & Approval',      icon: <DraftsIcon sx={{ fontSize: 20 }} />,              path: '/review-approval' },
+    { text: 'Template',               icon: <DescriptionOutlinedIcon sx={{ fontSize: 20 }} />, path: '/template' },
     { text: 'Terminated',             icon: <BlockOutlinedIcon sx={{ fontSize: 20 }} />,       path: '/terminated' },
 ];
 

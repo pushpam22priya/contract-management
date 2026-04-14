@@ -36,7 +36,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     const drawerWidth = sidebarOpen ? 240 : 64;
 
     return (
-        <Box sx={{ display: 'flex', bgcolor: 'background.default' }}>
+        <Box sx={{ display: 'flex', bgcolor: 'background.default', position: 'absolute', inset: 0, overflow: 'hidden' }}>
             {/* Header */}
             <Header />
 
@@ -52,10 +52,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <Box
                 component="main"
                 sx={{
-                    // flexGrow: 1,
-                    p: 1.5,
-                    width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
-                    mt: '40px',
+                    flex: 1,
+                    minWidth: 0,
+                    p: 1,
+                    mt: '50px',
                     transition: theme.transitions.create('width', {
                         easing: theme.transitions.easing.sharp,
                         duration: theme.transitions.duration.enteringScreen,

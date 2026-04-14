@@ -163,7 +163,7 @@ export default function TemplatePage() {
 
     return (
         <AppLayout>
-            <Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
                 {/* Header Section */}
                 <Box
                     sx={{
@@ -254,6 +254,7 @@ export default function TemplatePage() {
                 />
 
                 {/* Template Cards Grid */}
+                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 2 }}>
                 <Box
                     sx={{
                         display: 'grid',
@@ -295,6 +296,7 @@ export default function TemplatePage() {
                             </Typography>
                         </Box>
                     )}
+                </Box>
                 </Box>
 
                 {/* Upload Template Dialog */}

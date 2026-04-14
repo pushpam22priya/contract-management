@@ -1210,7 +1210,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                         const [r, g, b] = hexToRgb(partyColor);
                         widgetAnnotation.StrokeColor = new Core.Annotations.Color(r, g, b, 1);
-                        widgetAnnotation.StrokeThickness = 2;
+                        widgetAnnotation.StrokeThickness = 3;
                         annotationManager.redrawAnnotation(widgetAnnotation);
                         console.log(`🏷️ [PARTY ASSIGN] Updated visual indicator for "${fieldName}" with color ${partyColor}`);
                     } catch (colorError) {
@@ -1337,15 +1337,15 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         if (partyId === null) {
                             // Clear highlighting - restore original appearance
                             annot.Opacity = 1;
-                            annot.StrokeThickness = 1;
+                            annot.StrokeThickness = 3;
                         } else if (assignedParty === partyId) {
                             // Highlight this field
                             annot.Opacity = 1;
-                            annot.StrokeThickness = 3;
+                            annot.StrokeThickness = 4;
                         } else {
                             // Dim other fields
                             annot.Opacity = 0.4;
-                            annot.StrokeThickness = 1;
+                            annot.StrokeThickness = 2;
                         }
 
                         annotationManager.redrawAnnotation(annot);
@@ -2485,7 +2485,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                 };
                                                 const [r, g, b] = hexToRgb(partyColor);
                                                 (annot as any).StrokeColor = new Core.Annotations.Color(r, g, b, 1);
-                                                (annot as any).StrokeThickness = 1;
+                                                (annot as any).StrokeThickness = 3;
                                             } catch (e) {
                                                 // Ignore color errors
                                             }

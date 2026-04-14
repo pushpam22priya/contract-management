@@ -117,7 +117,7 @@ export default function TerminatedContractsPage() {
 
     return (
         <AppLayout>
-            <Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
                 {/* Page Header */}
                 <Box sx={{ mb: 1.5 }}>
                     <Typography
@@ -163,6 +163,7 @@ export default function TerminatedContractsPage() {
                 />
 
                 {/* Card Grid */}
+                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 2 }}>
                 <Box
                     sx={{
                         display: 'grid',
@@ -229,6 +230,7 @@ export default function TerminatedContractsPage() {
                             />
                         ))
                     )}
+                </Box>
                 </Box>
             </Box>
 

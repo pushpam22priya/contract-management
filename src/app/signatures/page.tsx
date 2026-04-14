@@ -461,7 +461,7 @@ export default function SignaturesPage() {
                     if (matched) setSigningStatusFilter([matched]);
                 }} />
             </Suspense>
-            <Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
                 {/* Header Section */}
                 <Box sx={{ mb: 1 }}>
                     <Typography
@@ -527,6 +527,7 @@ export default function SignaturesPage() {
                 />
 
                 {/* Contracts Grid */}
+                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 2 }}>
                 {filteredContracts.length === 0 && !loading ? (
                     <Paper
                         sx={{
@@ -576,6 +577,7 @@ export default function SignaturesPage() {
                         )}
                     </Box>
                 )}
+                </Box>
 
                 {/* Viewer Dialog */}
                 {selectedContract && (

@@ -383,7 +383,7 @@ export default function ContractsPage() {
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs}>
             <AppLayout>
-                <Box>
+                <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
                     {/* Header */}
                     <Box
                         sx={{
@@ -559,6 +559,7 @@ export default function ContractsPage() {
                     />
 
                     {/* Grid */}
+                    <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 1 }}>
                     <Box
                         sx={{
                             display: 'grid',
@@ -648,6 +649,7 @@ export default function ContractsPage() {
                                 ))
                             )
                         )}
+                    </Box>
                     </Box>
                 </Box>
 

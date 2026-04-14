@@ -78,6 +78,7 @@ export default function BaseDialog({
             fullWidth={fullWidth}
             fullScreen={fullScreenProp ?? isMobile}
             disableEnforceFocus={disableEnforceFocus} // Allow embedded editors to manage their own focus
+            disableScrollLock={true} // Prevent MUI from messing with body scroll overlay
             PaperProps={{
                 sx: {
                     borderRadius: isFullScreen ? 0 : 3,
