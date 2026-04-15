@@ -13,7 +13,8 @@ import DrawIcon from '@mui/icons-material/Draw';
 import SignaturePadDialog from '@/components/contracts/SignaturePadDialog';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
 import { sendSignatureRequestEmail } from '@/services/emailService';
-import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+// import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { categoryService } from '@/services/categoryService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
@@ -195,7 +196,18 @@ export default function SignaturesTab({ headerLeft }: { headerLeft?: React.React
         <>
             <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Header */}
-                <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: 'row' }, gap: { xs: 2, md: 2 } }}>
+                <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                    bgcolor: 'background.paper',
+                    px: 2,
+                    py: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                }}>
                     {headerLeft || (
                         <Box>
                             <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: { xs: '1rem', sm: '1.5rem', md: '20px' } }}>
@@ -209,7 +221,8 @@ export default function SignaturesTab({ headerLeft }: { headerLeft?: React.React
                 </Box>
 
                 {/* Filter */}
-                <ReusableFilter
+                {/* <ReusableFilter */}
+                <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
                     searchPlaceholder="Search contracts or clients"

@@ -35,24 +35,32 @@ export default function Header() {
             elevation={0}
             sx={{
                 bgcolor: 'background.paper',
-                borderBottom: '1px solid',
-                borderColor: 'divider',
+                borderBottom: '1px solid #88888854',
+                boxShadow: '0 4px 12px rgba(15, 118, 110, 0.15)',
                 zIndex: (theme) => theme.zIndex.drawer + 1,
             }}
         >
-            <Toolbar sx={{ justifyContent: 'space-between', minHeight: '50px !important' }}>
+            <Toolbar sx={{
+                justifyContent: 'space-between',
+                minHeight: '0 !important',
+                '@media (min-width: 0px)': { minHeight: '0 !important' },
+                '@media (min-width: 600px)': { minHeight: '0 !important' },
+                p: '4px 8px',
+            }}>
+
                 {/* Left: Logo + Name */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1}}>
                     <Box
                         sx={{
-                            width: 40,
-                            height: 40,
+                            // width: 40,
+                            // height: 40,
                             bgcolor: 'primary.main',
-                            borderRadius: 2,
+                            borderRadius: 1,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             color: 'white',
+                            p: 0.2
                         }}
                     >
                         <ContractIcon sx={{ fontSize: 24 }} />
@@ -60,7 +68,7 @@ export default function Header() {
                     <Typography
                         variant="h6"
                         sx={{
-                            fontWeight: 700,
+                            fontWeight: 600,
                             color: 'primary.main',
                             display: { xs: 'none', sm: 'block' },
                         }}
@@ -72,20 +80,33 @@ export default function Header() {
                 {/* Right: Notifications + Avatar */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <IconButton
-                        size="large"
+                        size="small"
                         color="inherit"
                         onClick={() => router.push('/notifications')}
                         sx={{ p: 0.5 }}
                     >
-                        <Badge badgeContent={3} color="error">
-                            <NotificationsOutlinedIcon sx={{ color: 'text.secondary' }} />
+                        <Badge
+                            badgeContent={3}
+                            color="error"
+                            sx={{
+                                '& .MuiBadge-badge': {
+                                    fontSize: '0.6rem',
+                                    height: 16,
+                                    minWidth: 16,
+                                    padding: '0 4px',
+                                    top: 4,
+                                    right: 4,
+                                },
+                            }}
+                        >
+                            <NotificationsOutlinedIcon sx={{ color: 'text.secondary', fontSize: '24px' }} />
                         </Badge>
                     </IconButton>
                     <Tooltip title={userEmail || 'User'} arrow>
                         <Avatar
                             sx={{
-                                width: 36,
-                                height: 36,
+                                width: 24,
+                                height: 24,
                                 bgcolor: 'primary.main',
                                 fontSize: '0.875rem',
                                 fontWeight: 600,
@@ -106,10 +127,10 @@ export default function Header() {
                                     color: 'error.main',
                                     bgcolor: 'rgba(211, 47, 47, 0.08)',
                                 },
-                                p: 0.5
+                                p: 0
                             }}
                         >
-                            <LogoutOutlinedIcon sx={{ color: 'text.secondary' }} />
+                            <LogoutOutlinedIcon sx={{ color: 'text.secondary', fontSize: '24px' }} />
                         </IconButton>
                     </Tooltip>
                 </Box>

@@ -15,7 +15,8 @@ import FurtherReviewDialog from '@/components/contracts/FurtherReviewDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { useRouter } from 'next/navigation';
 import { ReviewApprovalShimmerGrid } from '@/components/common/ShimmerCard';
-import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+// import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 
@@ -426,21 +427,24 @@ export default function ReviewApprovalPage() {
 
     return (
         <AppLayout>
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Header Section */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                    <Box>
-                        <Typography
-                            fontWeight={600}
-                            sx={{
-                                color: 'primary.main',
-                                fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' },
-                                mb: 0.5,
-                            }}
-                        >
+                <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    bgcolor: 'background.paper',
+                    px: 2,
+                    py: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: '0.95rem' }}>
                             Review & Approval
                         </Typography>
-                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
+                        <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
                             Manage contracts assigned to you for review or approval
                         </Typography>
                     </Box>
@@ -455,9 +459,9 @@ export default function ReviewApprovalPage() {
                                 '& .MuiToggleButton-root': {
                                     textTransform: 'none',
                                     fontWeight: 600,
-                                    fontSize: '0.875rem',
-                                    px: 2,
-                                    py: 0.6,
+                                    fontSize: '0.8rem',
+                                    px: 1.5,
+                                    py: 0.5,
                                     borderColor: 'divider',
                                     color: 'text.secondary',
                                     '&.Mui-selected': {
@@ -485,7 +489,8 @@ export default function ReviewApprovalPage() {
                     <>
 
                           {/* Filters */}
-                        <ReusableFilter
+                        {/* <ReusableFilter */}
+                        <CompactFilter
                             searchQuery={searchQuery}
                             onSearchChange={setSearchQuery}
                             searchPlaceholder="Search by contract or client name"

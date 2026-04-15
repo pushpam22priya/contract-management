@@ -152,10 +152,10 @@ const ReusableFilter = ({
             <Box
                 sx={{
                     bgcolor: 'background.paper',
-                    borderRadius: 3,
-                    p: 1,
-                    mb: 1.5,
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                    px: 2,
+                    py: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
                 }}
             >
                 {/* Top Row: Search + Filters + DateToggle + Extra */}

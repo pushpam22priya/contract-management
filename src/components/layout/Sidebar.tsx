@@ -65,9 +65,6 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
 
     const drawer = (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'primary.main' }}>
-            {/* Spacer for AppBar */}
-            <Box sx={{ height: 64, borderBottom: '1px solid', borderColor: 'divider' }} />
-
             {/* Toggle Button */}
             {!isMobile && (
                 <Box sx={{ px: 1, pt: 1.5, pb: 0.5 }}>
@@ -193,6 +190,8 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                             bgcolor: 'sidebar.background',
                             borderRight: '1px solid',
                             borderColor: 'divider',
+                            top: '40px',
+                            height: 'calc(100% - 40px)',
                             transition: theme.transitions.create('width', {
                                 easing: theme.transitions.easing.sharp,
                                 duration: theme.transitions.duration.enteringScreen,

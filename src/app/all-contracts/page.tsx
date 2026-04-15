@@ -32,9 +32,9 @@ export default function AllContractsPage() {
         <Box sx={{ 
             display: 'inline-flex', 
             bgcolor: 'rgba(15, 118, 110, 0.04)', 
-            p: 0.5, 
-            borderRadius: 1,
-            gap: 1,
+            // p: 0.5, 
+            borderRadius: 0,
+            // gap: 1,
             border: '1px solid rgba(15, 118, 110, 0.1)',
             overflowX: 'auto', // For mobile responsiveness
             maxWidth: '100%',
@@ -56,12 +56,12 @@ export default function AllContractsPage() {
                             gap: 1,
                             px: { xs: 1, sm: 1 },
                             py: 0.5,
-                            borderRadius: 1,
+                            // borderRadius: 1,
                             cursor: 'pointer',
                             userSelect: 'none',
                             whiteSpace: 'nowrap',
-                            bgcolor: isActive ? 'background.paper' : 'transparent',
-                            color: isActive ? 'primary.main' : 'text.secondary',
+                            bgcolor: isActive ? 'primary.main' : 'transparent',
+                            color: isActive ? '#fff' : 'text.secondary',
                             fontWeight: isActive ? 600 : 500,
                             fontSize: '0.875rem',
                             boxShadow: isActive ? '0 4px 12px rgba(15, 118, 110, 0.12)' : 'none',
@@ -85,37 +85,10 @@ export default function AllContractsPage() {
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs}>
             <AppLayout>
-                <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
-                    {/* ── Content box ──────────────────────────────────────── */}
-                    <Box
-                        sx={{
-                            // border: '1px solid',
-                            // borderColor: 'divider',
-                            // borderRadius: '16px',
-                            // p: { xs: 2, sm: 3 },
-                            // bgcolor: 'background.paper',
-                            boxShadow: '0 4px 24px rgba(0,0,0,0.02)',
-                            position: 'relative',
-                            zIndex: 1,
-                            flex: 1,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            minHeight: 0,
-                        }}
-                    >
-                        <Box
-                            sx={{
-                                flex: 1,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                minHeight: 0,
-                            }}
-                        >
-                            {activeTab === 0 && <ContractsTab headerLeft={tabBar} />}
-                            {activeTab === 1 && <DraftTab headerLeft={tabBar} />}
-                            {activeTab === 2 && <SignaturesTab headerLeft={tabBar} />}
-                        </Box>
-                    </Box>
+                <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    {activeTab === 0 && <ContractsTab headerLeft={tabBar} />}
+                    {activeTab === 1 && <DraftTab headerLeft={tabBar} />}
+                    {activeTab === 2 && <SignaturesTab headerLeft={tabBar} />}
                 </Box>
             </AppLayout>
         </LocalizationProvider>

@@ -14,7 +14,8 @@ import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { AlertColor } from '@mui/material';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
-import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+// import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { apiService } from '@/services/apiService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import { Team } from '@/types/team';
@@ -175,7 +176,18 @@ export default function DraftTab({ headerLeft }: { headerLeft?: React.ReactNode 
         <>
             <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Header */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: 'row' }, gap: { xs: 3, md: 2 }, mb: 1 }}>
+                <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                    bgcolor: 'background.paper',
+                    px: 2,
+                    py: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                }}>
                     {headerLeft || (
                         <Box>
                             <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' } }}>
@@ -189,7 +201,8 @@ export default function DraftTab({ headerLeft }: { headerLeft?: React.ReactNode 
                 </Box>
 
                 {/* Filter */}
-                <ReusableFilter
+                {/* <ReusableFilter */}
+                <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
                     searchPlaceholder="Search drafts or clients"

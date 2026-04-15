@@ -15,7 +15,8 @@ import { AlertColor } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
-import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+// import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { apiService } from '@/services/apiService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import { Team } from '@/types/team';
@@ -382,35 +383,32 @@ export default function DraftPage() {
 
     return (
         <AppLayout>
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Header Section */}
-                <Box
-                    sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: { xs: 'flex-start', md: 'center' },
-                        flexDirection: { xs: 'column', md: 'row' },
-                        gap: { xs: 3, md: 2 },
-                        mb: 1,
-                    }}
-                >
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                        <Box>
-                            <Typography
-                                fontWeight={600}
-                                sx={{ color: 'primary.main', fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' } }}
-                            >
-                                {pageTitle}
-                            </Typography>
-                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                Review and manage your draft contracts
-                            </Typography>
-                        </Box>
+                <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    bgcolor: 'background.paper',
+                    px: 2,
+                    py: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: '0.95rem' }}>
+                            {pageTitle}
+                        </Typography>
+                        <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
+                        <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
+                            Review and manage your draft contracts
+                        </Typography>
                     </Box>
                 </Box>
 
                 {/* Filter Section */}
-                <ReusableFilter
+                {/* <ReusableFilter */}
+                <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
                     searchPlaceholder="Search drafts or clients"

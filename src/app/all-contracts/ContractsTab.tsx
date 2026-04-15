@@ -4,7 +4,7 @@ import { Box, Typography, Tooltip, IconButton, Button } from '@mui/material';
 import { useState, useEffect, useCallback } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import FolderIcon from '@mui/icons-material/Folder';
-import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined';
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
 import { useRouter } from 'next/navigation';
 import dayjs, { Dayjs } from 'dayjs';
 import ContractCard from '@/components/contracts/ContractCard';
@@ -21,7 +21,8 @@ import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { submitForMixedSignature } from '@/services/externalSignatureService';
 import { AlertColor } from '@mui/material';
 import { categoryService } from '@/services/categoryService';
-import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+// import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { useSignaturePolling } from '@/hooks/useSignaturePolling';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import TeamCard from '@/components/teams/TeamCard';
@@ -247,7 +248,19 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
         <>
             <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Header */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: 'row' }, gap: { xs: 2, md: 2 }, mb: 1 }}>
+                <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                    bgcolor: 'background.paper',
+                    px: 2,
+                    py: 1,
+                    borderBottom: '1px solid',
+                    boxShadow: '0 4px 12px rgba(15, 118, 110, 0.15)',
+                    borderColor: 'divider',
+                }}>
                     {headerLeft || (
                         <Box>
                             <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' } }}>
@@ -258,20 +271,29 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
                             </Typography>
                         </Box>
                     )}
-                    <Box sx={{ display: 'flex', justifyContent: { xs: 'flex-end', sm: 'flex-start' } }}>
-                        <Tooltip title="Create Team" arrow>
-                            <IconButton
-                                onClick={() => setCreateTeamOpen(true)}
-                                sx={{ bgcolor: 'primary.main',  color: 'white', boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)', transition: 'all 0.3s', '&:hover': { bgcolor: 'primary.dark', transform: 'translateY(-2px)', boxShadow: '0 6px 16px rgba(15, 118, 110, 0.35)' } }}
-                            >
-                                <CreateNewFolderOutlinedIcon sx={{fontSize: '20px',}} />
-                            </IconButton>
-                        </Tooltip>
-                    </Box>
+                    <Tooltip title="Create Team" arrow>
+                        <IconButton
+                            onClick={() => setCreateTeamOpen(true)}
+                            sx={{
+                                p: 0.5,
+                                borderRadius: 1,
+                                bgcolor: 'primary.main',
+                                color: 'white',
+                                transition: 'all 0.2s',
+                                '&:hover': {
+                                    bgcolor: 'rgba(0, 96, 90, 1)',
+                                    boxShadow: '0 4px 12px rgba(15, 118, 110, 0.3)',
+                                },
+                            }}
+                        >
+                            <CreateNewFolderIcon sx={{ fontSize: '20px' }} />
+                        </IconButton>
+                    </Tooltip>
                 </Box>
 
                 {/* Filter */}
-                <ReusableFilter
+                {/* <ReusableFilter */}
+                <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
                     searchPlaceholder="Search teams"

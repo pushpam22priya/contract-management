@@ -2,10 +2,10 @@
 
 import { Box, Typography, Tooltip, IconButton, Button, Chip } from '@mui/material';
 import { useState, useEffect, useCallback } from 'react';
-import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FolderIcon from '@mui/icons-material/Folder';
-import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined';
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
+import NoteAddIcon from '@mui/icons-material/NoteAddOutlined';
 import AppLayout from '@/components/layout/AppLayout';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -26,7 +26,8 @@ import { submitForMixedSignature } from '@/services/externalSignatureService';
 import { AlertColor } from '@mui/material';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
-import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+// import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { useSignaturePolling } from '@/hooks/useSignaturePolling';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import TeamCard from '@/components/teams/TeamCard';
@@ -297,7 +298,7 @@ export default function ContractsPage() {
                     }
                     return seen;
                 }, new Map()).values()
-              );
+            );
         const partiesWithFields = effectiveParties.filter((party: any) =>
             formFields.some((field: any) => field.assignedParty === party.id)
         );
@@ -383,121 +384,118 @@ export default function ContractsPage() {
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs}>
             <AppLayout>
-                <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                     {/* Header */}
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: { xs: 'flex-start', md: 'center' },
-                            flexDirection: { xs: 'column', md: 'row' },
-                            gap: { xs: 2, md: 2 },
-                            mb: 1,
-                        }}
-                    >
-                        {/* Title / breadcrumb */}
-                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                    <Box sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        bgcolor: 'background.paper',
+                        px: 2,
+                        py: 1,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                    }}>
+                        {/* Title / breadcrumb — single row */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                             {(activeTeamId || isFlatView) && (
                                 <Tooltip title={isFlatView ? 'Back to Contracts' : 'Back to Teams'} arrow>
                                     <IconButton
                                         size="small"
                                         onClick={() => router.push('/contracts')}
                                         sx={{
-                                            mt: '2px',
                                             color: 'text.secondary',
+                                            p: 0.25,
                                             '&:hover': { color: 'primary.main', bgcolor: 'rgba(15,118,110,0.06)' },
                                         }}
                                     >
-                                        <ArrowBackIcon fontSize="small" />
+                                        <ArrowBackIcon sx={{ fontSize: 16 }} />
                                     </IconButton>
                                 </Tooltip>
                             )}
-                            <Box>
-                                {/* Title — just the page/team name */}
-                                <Typography
-                                    fontWeight={600}
-                                    sx={{ color: 'primary.main', fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' } }}
-                                >
-                                    {activeTeam ? activeTeam.name : isFlatView ? flatViewTitle : 'Contracts'}
-                                </Typography>
 
-                                {/* Subtitle — breadcrumb when inside team or flat view, generic text at root */}
-                                {activeTeamId ? (
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
-                                        <Typography
-                                            variant="body2"
-                                            sx={{ color: 'text.secondary', cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
-                                            onClick={() => router.push('/contracts')}
-                                        >
-                                            Contracts
-                                        </Typography>
-                                        <Typography variant="body2" sx={{ color: 'text.disabled' }}>/</Typography>
-                                        <FolderIcon sx={{ fontSize: 14, color: 'primary.main' }} />
-                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                            {activeTeam?.name}
-                                        </Typography>
-                                        <Chip
-                                            label={`${filteredContracts.length} contract${filteredContracts.length !== 1 ? 's' : ''}`}
-                                            size="small"
-                                            sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'rgba(15,118,110,0.08)', color: 'primary.main' }}
-                                        />
-                                    </Box>
-                                ) : isFlatView ? (
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
-                                        <Typography
-                                            variant="body2"
-                                            sx={{ color: 'text.secondary', cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
-                                            onClick={() => router.push('/contracts')}
-                                        >
-                                            Contracts
-                                        </Typography>
-                                        <Typography variant="body2" sx={{ color: 'text.disabled' }}>/</Typography>
-                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                            {flatViewTitle}
-                                        </Typography>
-                                        <Chip
-                                            label={`${filteredContracts.length} contract${filteredContracts.length !== 1 ? 's' : ''}`}
-                                            size="small"
-                                            sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'rgba(15,118,110,0.08)', color: 'primary.main' }}
-                                        />
-                                    </Box>
-                                ) : (
-                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            {/* Title */}
+                            <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: '0.95rem' }}>
+                                {activeTeam ? activeTeam.name : isFlatView ? flatViewTitle : 'Contracts'}
+                            </Typography>
+
+                            {/* Separator + subtitle inline */}
+                            {activeTeamId ? (
+                                <>
+                                    <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
+                                    <Typography
+                                        sx={{ color: 'text.secondary', fontSize: '0.78rem', cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
+                                        onClick={() => router.push('/contracts')}
+                                    >
+                                        Contracts
+                                    </Typography>
+                                    <Typography sx={{ color: 'text.disabled', fontSize: '0.78rem' }}>/</Typography>
+                                    <FolderIcon sx={{ fontSize: 12, color: 'primary.main' }} />
+                                    <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
+                                        {activeTeam?.name}
+                                    </Typography>
+                                    <Chip
+                                        label={`${filteredContracts.length} contract${filteredContracts.length !== 1 ? 's' : ''}`}
+                                        size="small"
+                                        sx={{ height: 16, fontSize: '0.6rem', bgcolor: 'rgba(15,118,110,0.08)', color: 'primary.main' }}
+                                    />
+                                </>
+                            ) : isFlatView ? (
+                                <>
+                                    <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
+                                    <Typography
+                                        sx={{ color: 'text.secondary', fontSize: '0.78rem', cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
+                                        onClick={() => router.push('/contracts')}
+                                    >
+                                        Contracts
+                                    </Typography>
+                                    <Typography sx={{ color: 'text.disabled', fontSize: '0.78rem' }}>/</Typography>
+                                    <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
+                                        {flatViewTitle}
+                                    </Typography>
+                                    <Chip
+                                        label={`${filteredContracts.length} contract${filteredContracts.length !== 1 ? 's' : ''}`}
+                                        size="small"
+                                        sx={{ height: 16, fontSize: '0.6rem', bgcolor: 'rgba(15,118,110,0.08)', color: 'primary.main' }}
+                                    />
+                                </>
+                            ) : (
+                                <>
+                                    <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
+                                    <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
                                         Manage your teams and contracts
                                     </Typography>
-                                )}
-                            </Box>
+                                </>
+                            )}
                         </Box>
 
                         {/* Action button — hidden in flat cross-team view (no team context for creation) */}
                         {!isFlatView && (
-                            <Box sx={{ display: 'flex', justifyContent: { xs: 'flex-end', sm: 'flex-start' } }}>
-                                <Tooltip title={activeTeamId ? 'Create Contract' : 'Create Team'} arrow>
-                                    <IconButton
-                                        onClick={() => activeTeamId ? setWizardOpen(true) : setCreateTeamOpen(true)}
-                                        sx={{
-                                            bgcolor: 'primary.main',
-                                            color: 'white',
-                                            width: 44,
-                                            height: 44,
-                                            boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
-                                            transition: 'all 0.3s',
-                                            '&:hover': {
-                                                bgcolor: 'primary.dark',
-                                                transform: 'translateY(-2px)',
-                                                boxShadow: '0 6px 16px rgba(15, 118, 110, 0.35)',
-                                            },
-                                        }}
-                                    >
-                                        {activeTeamId ? <AddIcon /> : <CreateNewFolderOutlinedIcon />}
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
+                            <Tooltip title={activeTeamId ? 'Create Contract' : 'Create Team'} arrow>
+                                <IconButton
+                                    onClick={() => activeTeamId ? setWizardOpen(true) : setCreateTeamOpen(true)}
+                                    size="small"
+                                    sx={{
+                                        p: 0.5,
+                                        borderRadius: 1,
+                                        bgcolor: 'primary.main',
+                                        color: 'white',
+                                        transition: 'all 0.2s',
+                                        '&:hover': {
+                                            bgcolor: 'rgba(0, 96, 90, 1)',
+                                            boxShadow: '0 4px 12px rgba(15, 118, 110, 0.3)',
+                                        },
+                                    }}
+                                >
+                                    {activeTeamId ? <NoteAddIcon sx={{ fontSize: '20px' }} /> : <CreateNewFolderIcon sx={{ fontSize: '20px' }} />}
+                                </IconButton>
+                            </Tooltip>
                         )}
                     </Box>
 
                     {/* Filter */}
-                    <ReusableFilter
+                    {/* <ReusableFilter */}
+                    <CompactFilter
                         searchQuery={searchQuery}
                         onSearchChange={setSearchQuery}
                         searchPlaceholder={activeTeamId || isFlatView ? 'Search contracts or clients' : 'Search teams'}
@@ -560,96 +558,96 @@ export default function ContractsPage() {
 
                     {/* Grid */}
                     <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 1 }}>
-                    <Box
-                        sx={{
-                            display: 'grid',
-                            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
-                            gap: 0.75,
-                        }}
-                    >
-                        {isFlatView ? (
-                            /* ── Flat cross-team view: all contracts filtered by URL status ── */
-                            loading ? (
-                                <ShimmerCardGrid count={8} variant="contract" />
-                            ) : filteredContracts.length === 0 ? (
-                                <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
-                                    <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                                    <Typography color="text.secondary">
-                                        No contracts found with the selected filters.
-                                    </Typography>
-                                </Box>
+                        <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+                                gap: 0.75,
+                            }}
+                        >
+                            {isFlatView ? (
+                                /* ── Flat cross-team view: all contracts filtered by URL status ── */
+                                loading ? (
+                                    <ShimmerCardGrid count={8} variant="contract" />
+                                ) : filteredContracts.length === 0 ? (
+                                    <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                                        <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                                        <Typography color="text.secondary">
+                                            No contracts found with the selected filters.
+                                        </Typography>
+                                    </Box>
+                                ) : (
+                                    filteredContracts.map(contract => (
+                                        <ContractCard
+                                            key={contract.id}
+                                            contract={contract}
+                                            onView={handleViewContract}
+                                            onShare={handleShareContract}
+                                            onRenew={handleRenewContract}
+                                            onTerminate={handleTerminateContract}
+                                        />
+                                    ))
+                                )
+                            ) : activeTeamId ? (
+                                /* ── Inside a team: show contract cards ── */
+                                loading ? (
+                                    <ShimmerCardGrid count={8} variant="contract" />
+                                ) : filteredContracts.length === 0 ? (
+                                    <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                                        <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                                        <Typography color="text.secondary">
+                                            No contracts in this team yet. Click <strong>+</strong> to create one.
+                                        </Typography>
+                                    </Box>
+                                ) : (
+                                    filteredContracts.map(contract => (
+                                        <ContractCard
+                                            key={contract.id}
+                                            contract={contract}
+                                            onView={handleViewContract}
+                                            onShare={handleShareContract}
+                                            onRenew={handleRenewContract}
+                                            onTerminate={handleTerminateContract}
+                                        />
+                                    ))
+                                )
                             ) : (
-                                filteredContracts.map(contract => (
-                                    <ContractCard
-                                        key={contract.id}
-                                        contract={contract}
-                                        onView={handleViewContract}
-                                        onShare={handleShareContract}
-                                        onRenew={handleRenewContract}
-                                        onTerminate={handleTerminateContract}
-                                    />
-                                ))
-                            )
-                        ) : activeTeamId ? (
-                            /* ── Inside a team: show contract cards ── */
-                            loading ? (
-                                <ShimmerCardGrid count={8} variant="contract" />
-                            ) : filteredContracts.length === 0 ? (
-                                <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
-                                    <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                                    <Typography color="text.secondary">
-                                        No contracts in this team yet. Click <strong>+</strong> to create one.
-                                    </Typography>
-                                </Box>
-                            ) : (
-                                filteredContracts.map(contract => (
-                                    <ContractCard
-                                        key={contract.id}
-                                        contract={contract}
-                                        onView={handleViewContract}
-                                        onShare={handleShareContract}
-                                        onRenew={handleRenewContract}
-                                        onTerminate={handleTerminateContract}
-                                    />
-                                ))
-                            )
-                        ) : (
-                            /* ── Root: show team cards ── */
-                            teamsLoading ? (
-                                <ShimmerCardGrid count={6} variant="contract" />
-                            ) : teams.length === 0 ? (
-                                <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
-                                    <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                                    <Typography color="text.secondary" gutterBottom>
-                                        No teams yet.
-                                    </Typography>
-                                    <Button
-                                        variant="outlined"
-                                        startIcon={<AddIcon />}
-                                        onClick={() => setCreateTeamOpen(true)}
-                                        size="small"
-                                    >
-                                        Create your first team
-                                    </Button>
-                                </Box>
-                            ) : filteredTeams.length === 0 ? (
-                                <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
-                                    <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                                    <Typography color="text.secondary">No teams match your search.</Typography>
-                                </Box>
-                            ) : (
-                                filteredTeams.map(team => (
-                                    <TeamCard
-                                        key={team._id}
-                                        team={team}
-                                        contractCount={contractCountByTeam(team._id)}
-                                        onClick={handleTeamClick}
-                                        onRename={handleRenameTeam}
-                                    />
-                                ))
-                            )
-                        )}
-                    </Box>
+                                /* ── Root: show team cards ── */
+                                teamsLoading ? (
+                                    <ShimmerCardGrid count={6} variant="contract" />
+                                ) : teams.length === 0 ? (
+                                    <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                                        <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                                        <Typography color="text.secondary" gutterBottom>
+                                            No teams yet.
+                                        </Typography>
+                                        <Button
+                                            variant="outlined"
+                                            startIcon={<CreateNewFolderIcon />}
+                                            onClick={() => setCreateTeamOpen(true)}
+                                            size="small"
+                                        >
+                                            Create your first team
+                                        </Button>
+                                    </Box>
+                                ) : filteredTeams.length === 0 ? (
+                                    <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
+                                        <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                                        <Typography color="text.secondary">No teams match your search.</Typography>
+                                    </Box>
+                                ) : (
+                                    filteredTeams.map(team => (
+                                        <TeamCard
+                                            key={team._id}
+                                            team={team}
+                                            contractCount={contractCountByTeam(team._id)}
+                                            onClick={handleTeamClick}
+                                            onRename={handleRenameTeam}
+                                        />
+                                    ))
+                                )
+                            )}
+                        </Box>
                     </Box>
                 </Box>
 
@@ -729,7 +727,7 @@ export default function ContractsPage() {
                                     }
                                     return seen;
                                 }, new Map()).values()
-                              );
+                            );
                     })()}
                     formFields={contractForSignature?.formFields}
                     existingExternalSigners={contractForSignature?.externalSigners}

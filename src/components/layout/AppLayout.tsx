@@ -54,8 +54,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 sx={{
                     flex: 1,
                     minWidth: 0,
-                    p: 1,
-                    mt: '50px',
+                    p: 0,
+                    mt: '40px',
                     transition: theme.transitions.create('width', {
                         easing: theme.transitions.easing.sharp,
                         duration: theme.transitions.duration.enteringScreen,

@@ -14,7 +14,8 @@ import DrawIcon from '@mui/icons-material/Draw';
 import SignaturePadDialog from '@/components/contracts/SignaturePadDialog';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
 import { sendSignatureRequestEmail } from '@/services/emailService';
-import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+// import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { categoryService } from '@/services/categoryService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import { useSearchParams } from 'next/navigation';
@@ -461,25 +462,32 @@ export default function SignaturesPage() {
                     if (matched) setSigningStatusFilter([matched]);
                 }} />
             </Suspense>
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Header Section */}
-                <Box sx={{ mb: 1 }}>
-                    <Typography
-                        fontWeight={600}
-                        sx={{
-                            color: 'primary.main',
-                            fontSize: { xs: '1rem', sm: '1.5rem', md: '20px' },
-                        }}
-                    >
-                        Contracts for Signature
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        Review and sign contracts assigned to you
-                    </Typography>
+                <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    bgcolor: 'background.paper',
+                    px: 2,
+                    py: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: '0.95rem' }}>
+                            Contracts for Signature
+                        </Typography>
+                        <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
+                        <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
+                            Review and sign contracts assigned to you
+                        </Typography>
+                    </Box>
                 </Box>
 
                 {/* Filter Section */}
-                <ReusableFilter
+                {/* <ReusableFilter */}
+                <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
                     searchPlaceholder="Search contracts or clients"

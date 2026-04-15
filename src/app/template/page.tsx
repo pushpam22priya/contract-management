@@ -15,7 +15,8 @@ import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import { authService } from '@/services/authService';
 import { Template } from '@/types/template';
-import ReusableFilter from '@/components/common/ReusableFilter';
+// import ReusableFilter from '@/components/common/ReusableFilter';
+import CompactFilter from '@/components/common/CompactFilter';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 
 export default function TemplatePage() {
@@ -163,79 +164,56 @@ export default function TemplatePage() {
 
     return (
         <AppLayout>
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Header Section */}
-                <Box
-                    sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: { xs: 'flex-start', md: 'center' },
-                        flexDirection: { xs: 'column', md: 'row' },
-                        gap: { xs: 3, md: 2 },
-                        mb: 1,
-                    }}
-                >
-                    {/* Title and Subtitle */}
-                    <Box>
-                        <Typography
-                            // variant="h3"
-                            fontWeight={600}
-                            sx={{
-                                color: 'primary.main',
-                                fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' },
-                            }}
-                        >
+                <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    bgcolor: 'background.paper',
+                    px: 2,
+                    py: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: '0.95rem' }}>
                             Contract Templates
                         </Typography>
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: 'text.secondary',
-                                // fontSize: { xs: '0.95rem', sm: '1rem' },
-                            }}
-                        >
+                        <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
+                        <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
                             Manage and create reusable contract templates
                         </Typography>
                     </Box>
 
                     {/* Action Buttons - Only show for admin */}
                     {isAdmin && (
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                gap: 1.5,
-                                width: { xs: '100%', sm: 'auto' },
-                                justifyContent: { xs: 'flex-end', sm: 'flex-start' },
-                            }}
-                        >
-                            <Tooltip title="Upload Template" arrow>
-                                <IconButton
-                                    onClick={() => setUploadDialogOpen(true)}
-                                    sx={{
-                                        bgcolor: 'white',
-                                        border: '1px solid',
-                                        borderColor: 'rgba(0, 0, 0, 0.23)',
-                                        color: 'text.primary',
-                                        width: 44,
-                                        height: 44,
-                                        transition: 'all 0.3s',
-                                        '&:hover': {
-                                            bgcolor: 'rgba(15, 118, 110, 0.04)',
-                                            borderColor: 'primary.main',
-                                            transform: 'translateY(-2px)',
-                                            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
-                                        },
-                                    }}
-                                >
-                                    <UploadIcon />
-                                </IconButton>
-                            </Tooltip>
-                        </Box>
+                        <Tooltip title="Upload Template" arrow>
+                            <IconButton
+                                onClick={() => setUploadDialogOpen(true)}
+                                size="small"
+                                sx={{
+                                    bgcolor: 'transparent',
+                                    border: '1.5px solid',
+                                    borderColor: 'primary.main',
+                                    color: 'primary.main',
+                                    borderRadius: 1,
+                                    width: 32,
+                                    height: 32,
+                                    p: 0,
+                                    '& svg': { fontSize: '1.1rem' },
+                                    '&:hover': { bgcolor: 'primary.main', color: 'white' },
+                                }}
+                            >
+                                <UploadIcon />
+                            </IconButton>
+                        </Tooltip>
                     )}
                 </Box>
 
                 {/* Search and Filters Section */}
-                <ReusableFilter
+                {/* <ReusableFilter */}
+                <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
                     searchPlaceholder="Search templates"
