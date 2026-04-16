@@ -472,7 +472,7 @@ export default function DraftPage() {
                 />
 
                 {/* Grid */}
-                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 2 }}>
+                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 1 }}>
                 <Box
                     sx={{
                         display: 'grid',

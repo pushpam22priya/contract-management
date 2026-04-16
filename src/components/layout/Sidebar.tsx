@@ -63,8 +63,23 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
     const drawerWidth = open ? 220 : 56;
     const showExpanded = isMobile ? true : open;
 
+    // Light theme on dashboard, dark teal on every other page
+    const isDashboard = pathname === '/dashboard';
+
+    const sidebarBg        = isDashboard ? '#f0f9f8'              : '#0f766e';
+    const toggleColor      = isDashboard ? 'text.secondary'        : 'rgba(255,255,255,0.7)';
+    const toggleHoverBg    = isDashboard ? 'rgba(15,118,110,0.1)'  : 'rgba(255,255,255,0.12)';
+    const selectedBg       = isDashboard ? 'rgba(15,118,110,0.13)' : 'white';
+    const selectedHoverBg  = isDashboard ? 'rgba(15,118,110,0.17)' : 'rgba(255,255,255,0.95)';
+    const hoverBg          = isDashboard ? 'rgba(15,118,110,0.07)' : 'rgba(255,255,255,0.1)';
+    const selectedIconColor = isDashboard ? 'primary.main'         : '#0f766e';
+    const inactiveIconColor = isDashboard ? '#64748b'              : 'rgba(255,255,255,0.8)';
+    const selectedTextColor = isDashboard ? 'primary.main'         : '#0f766e';
+    const inactiveTextColor = isDashboard ? '#475569'              : 'rgba(255,255,255,0.85)';
+    const accentBarColor    = isDashboard ? 'primary.main'         : 'white';
+
     const drawer = (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'primary.main' }}>
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: sidebarBg }}>
             {/* Toggle Button */}
             {!isMobile && (
                 <Box sx={{ px: 1, pt: 1.5, pb: 0.5 }}>
@@ -73,14 +88,14 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                             onClick={onToggle}
                             sx={{
                                 borderRadius: 2,
-                                color: 'white',
+                                color: toggleColor,
                                 width: 20,
                                 height: 20,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 mx: open ? 0 : 'auto',
-                                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.1)' },
+                                '&:hover': { bgcolor: toggleHoverBg, color: isDashboard ? 'primary.main' : 'white' },
                             }}
                         >
                             {open ? <MenuOpenIcon sx={{ fontSize: 18 }} /> : <MenuIcon sx={{ fontSize: 18 }} />}
@@ -107,13 +122,22 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                                     mb: 0.5,
                                     borderRadius: 2,
                                     minHeight: 40,
-                                    // When collapsed: center everything; when expanded: left-align
                                     justifyContent: showExpanded ? 'flex-start' : 'center',
                                     px: showExpanded ? 1.5 : 0,
-                                    bgcolor: isSelected ? 'white' : 'transparent',
-                                    color: isSelected ? '#0f766e' : '#f8fff8ff',
+                                    bgcolor: isSelected ? selectedBg : 'transparent',
+                                    position: 'relative',
+                                    '&::before': isSelected && showExpanded ? {
+                                        content: '""',
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: '18%',
+                                        bottom: '18%',
+                                        width: 3,
+                                        borderRadius: '0 3px 3px 0',
+                                        bgcolor: accentBarColor,
+                                    } : {},
                                     '&:hover': {
-                                        bgcolor: isSelected ? 'white' : 'rgba(255, 255, 255, 0.1)',
+                                        bgcolor: isSelected ? selectedHoverBg : hoverBg,
                                     },
                                     transition: 'all 0.2s',
                                 }}
@@ -121,10 +145,9 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                                 <ListItemIcon
                                     sx={{
                                         minWidth: 0,
-                                        // Only add right margin when text is visible
                                         mr: showExpanded ? 1.25 : 0,
                                         justifyContent: 'center',
-                                        color: isSelected ? '#0f766e' : 'white',
+                                        color: isSelected ? selectedIconColor : inactiveIconColor,
                                     }}
                                 >
                                     {item.icon}
@@ -132,17 +155,13 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
 
                                 <ListItemText
                                     primary={item.text}
-                                    sx={{
-                                        opacity: showExpanded ? 1 : 0,
-                                        display: showExpanded ? 'block' : 'none',
-                                        my: 0,
-                                    }}
+                                    sx={{ display: showExpanded ? 'block' : 'none', my: 0 }}
                                     slotProps={{
                                         primary: {
                                             sx: {
                                                 fontSize: '0.82rem',
                                                 fontWeight: isSelected ? 600 : 400,
-                                                color: isSelected ? '#0f766e' : 'white',
+                                                color: isSelected ? selectedTextColor : inactiveTextColor,
                                             },
                                         },
                                     }}
@@ -169,7 +188,7 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                         '& .MuiDrawer-paper': {
                             width: 220,
                             boxSizing: 'border-box',
-                            bgcolor: 'sidebar.background',
+                            bgcolor: sidebarBg,
                             borderRight: '1px solid',
                             borderColor: 'divider',
                         },
@@ -187,7 +206,7 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                         '& .MuiDrawer-paper': {
                             width: drawerWidth,
                             boxSizing: 'border-box',
-                            bgcolor: 'sidebar.background',
+                            bgcolor: sidebarBg,
                             borderRight: '1px solid',
                             borderColor: 'divider',
                             top: '40px',

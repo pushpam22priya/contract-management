@@ -1,12 +1,9 @@
 'use client';
 
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, Button } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
-import CriticalAlerts from '@/components/dashboard/CriticalAlerts';
-import StatsCard from '@/components/dashboard/StatsCard';
+import StatsCard from '@/components/dashboard/ColorfulStatsCard';
 import RecentContracts from '@/components/dashboard/RecentContracts';
-import QuickActions from '@/components/dashboard/QuickActions';
-import ContractsPieChart from '@/components/dashboard/ContractsPieChart';
 import { useState, useEffect } from 'react';
 import { contractService } from '@/services/contractService';
 import { authService } from '@/services/authService';
@@ -223,52 +220,128 @@ export default function DashboardPage() {
 
     const [createWizardOpen, setCreateWizardOpen] = useState(false);
 
-    const handleQuickAction = (actionKey: string) => {
-        switch (actionKey) {
-            case 'create':
-                setCreateWizardOpen(true);
-                break;
-            case 'templates':
-                router.push('/template');
-                break;
-            case 'expiring':
-                router.push(`/contracts?status=${ContractStatus.EXPIRING}`);
-                break;
-            case 'approvals':
-                router.push('/review-approval?tab=approver');
-                break;
-        }
-    };
-
     return (
         <AppLayout>
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
-                <Typography fontSize={20} fontWeight={600} color="primary">
-                    Dashboard
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Welcome back, <strong>{displayName}</strong> ! Here's your contract overview
-                </Typography>
+            {/* Full-page scrollable container */}
+            <Box sx={{ height: '100%', overflowY: 'auto' }}>
 
-                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 2 }}>
-
-                {/* Critical Alerts Section */}
-                {/* <CriticalAlerts /> */}
-
-                {/* Stats Cards Grid with Pie Chart */}
+                {/* ── Hero Banner ──────────────────────────────────────── */}
                 <Box
                     sx={{
-                        display: 'grid',
-                        gridTemplateColumns: {
-                            xs: '1fr',
-                            sm: 'repeat(2, 1fr)',
-                            md: 'repeat(3, 1fr)',
-                            lg: 'repeat(4, 1fr)',
-                        },
-                        gap: 1,
+                        position: 'relative',
+                        background: 'linear-gradient(135deg, #073d38 0%, #0f766e 45%, #0d9488 80%, #14b8a6 100%)',
+                        pt: { xs: 2, md: 3 },
+                        pb: { xs: 11, md: 13 },
+                        px: { xs: 2, md: 3 },
+                        overflow: 'hidden',
                     }}
                 >
-                    {statsData.map((stat, index) => (
+                    {/* Decorative blurred circles */}
+                    <Box sx={{ position: 'absolute', top: -40, right: -40, width: 220, height: 220, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.06)', pointerEvents: 'none' }} />
+                    <Box sx={{ position: 'absolute', top: 30, right: 120, width: 120, height: 120, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
+                    <Box sx={{ position: 'absolute', bottom: 20, left: -30, width: 160, height: 160, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.04)', pointerEvents: 'none' }} />
+
+                    {/* Hero content — 3-column row: label | buttons | greeting */}
+                    <Box sx={{
+                        position: 'relative',
+                        zIndex: 1,
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: '1fr auto 1fr' },
+                        alignItems: 'center',
+                        gap: 2,
+                    }}>
+                        {/* Left: Dashboard label */}
+                        <Box>
+                            <Typography sx={{ color: 'rgba(255,255,255,0.75)', fontSize: '1rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                                Dashboard
+                            </Typography>
+                        </Box>
+
+                        {/* Center: Action buttons */}
+                        <Box sx={{ display: 'flex', gap: 3, justifyContent: 'center' }}>
+                            <Button
+                                variant="text"
+                                onClick={() => router.push('/template')}
+                                sx={{
+                                    color: 'rgba(255,255,255,0.85)',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    textTransform: 'none',
+                                    px: 1,
+                                    py: 0.5,
+                                    minWidth: 0,
+                                    borderBottom: '1px solid transparent',
+                                    borderRadius: 0,
+                                    '&:hover': {
+                                        color: 'white',
+                                        bgcolor: 'transparent',
+                                        borderBottomColor: 'rgba(255,255,255,0.6)',
+                                    },
+                                }}
+                            >
+                                Browse Templates
+                            </Button>
+                            <Button
+                                variant="text"
+                                onClick={() => setCreateWizardOpen(true)}
+                                sx={{
+                                    color: 'rgba(255,255,255,0.85)',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 500,
+                                    textTransform: 'none',
+                                    px: 1,
+                                    py: 0.5,
+                                    minWidth: 0,
+                                    borderBottom: '1px solid transparent',
+                                    borderRadius: 0,
+                                    '&:hover': {
+                                        color: 'white',
+                                        bgcolor: 'transparent',
+                                        borderBottomColor: 'rgba(255,255,255,0.6)',
+                                    },
+                                }}
+                            >
+                                Create Contract
+                            </Button>
+                        </Box>
+
+                        {/* Right: Hi, Name + avatar */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5 }}>
+                            <Typography sx={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', fontWeight: 500 }}>
+                                Hi, <strong style={{ color: 'white' }}>{displayName}</strong>
+                            </Typography>
+                            <Box sx={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: '25%',
+                                bgcolor: 'rgba(255,255,255,0.2)',
+                                border: '2px solid rgba(255,255,255,0.4)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                            }}>
+                                <Typography sx={{ color: 'white', fontSize: '0.8rem', fontWeight: 700, lineHeight: 1 }}>
+                                    {displayName.charAt(0).toUpperCase()}
+                                </Typography>
+                            </Box>
+                        </Box>
+                    </Box>
+                </Box>
+
+                {/* ── First 4 cards — overlap the hero ─────────────────── */}
+                <Box
+                    sx={{
+                        mt: { xs: -6, md: -7 },
+                        mx: { xs: 1, md: 2 },
+                        position: 'relative',
+                        zIndex: 2,
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+                        gap: 1.5,
+                    }}
+                >
+                    {statsData.slice(0, 4).map((stat, index) => (
                         <StatsCard
                             key={stat.title}
                             title={stat.title}
@@ -281,36 +354,38 @@ export default function DashboardPage() {
                             onClick={() => router.push(stat.path)}
                         />
                     ))}
-
-                    {/* Pie Chart in the 8th position */}
-                    {/* <ContractsPieChart
-                        stats={{
-                            draftCount: stats.draftCount,
-                            underReviewCount: stats.underReviewCount,
-                            underApprovalCount: stats.underApprovalCount,
-                            activeCount: stats.activeCount,
-                            expiringCount: stats.expiringCount,
-                            expiredCount: stats.expiredCount,
-                        }}
-                    /> */}
                 </Box>
 
-                {/* Recent Contracts and Quick Actions Section */}
+                {/* ── Last 4 cards ──────────────────────────────────────── */}
                 <Box
                     sx={{
                         mt: 1.5,
+                        mx: { xs: 1, md: 2 },
                         display: 'grid',
-                        gridTemplateColumns: {
-                            xs: '1fr',
-                            lg: '2fr 1fr',
-                        },
+                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
                         gap: 1.5,
                     }}
                 >
+                    {statsData.slice(4).map((stat, index) => (
+                        <StatsCard
+                            key={stat.title}
+                            title={stat.title}
+                            value={stat.value}
+                            description={stat.description}
+                            icon={stat.icon}
+                            iconColor={stat.iconColor}
+                            iconBgColor={stat.iconBgColor}
+                            index={index + 4}
+                            onClick={() => router.push(stat.path)}
+                        />
+                    ))}
+                </Box>
+
+                {/* ── Recent Contracts ─────────────────────────────────── */}
+                <Box sx={{ mt: 2, mx: { xs: 1, md: 2 }, mb: 3 }}>
                     <RecentContracts />
-                    <QuickActions onActionClick={handleQuickAction} />
                 </Box>
-                </Box>
+
             </Box>
 
             {/* Create Contract Wizard */}

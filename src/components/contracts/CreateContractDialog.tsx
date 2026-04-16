@@ -31,6 +31,7 @@ import { contractService } from '@/services/contractService';
 import { apiService } from '@/services/apiService';
 import { authService } from '@/services/authService';
 import { Template, PartyConfiguration } from '@/types/template';
+import { Team } from '@/types/team';
 import { validatePartyFields } from '@/utils/partyValidation';
 import dayjs from 'dayjs';
 import { ContractStatus } from '@/types/contract';
@@ -55,6 +56,10 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     const [templates, setTemplates] = useState<Template[]>([]);
     const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
+
+    // Team selection (only used when teamId prop is not provided)
+    const [teams, setTeams] = useState<Team[]>([]);
+    const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
     const [documentLoaded, setDocumentLoaded] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(''); // Add success state
@@ -117,12 +122,24 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     useEffect(() => { filledFieldValuesRef.current = filledFieldValues; }, [filledFieldValues]);
 
 
-    // Load templates when dialog opens
+    // Load templates (and teams when no teamId prop) when dialog opens
     useEffect(() => {
         if (open) {
             loadTemplates();
+            if (!teamId) loadTeams();
         }
     }, [open]);
+
+    const loadTeams = async () => {
+        try {
+            const currentUser = authService.getCurrentUser();
+            if (!currentUser) return;
+            const res = await fetch(`/api/teams?createdBy=${encodeURIComponent(currentUser.email)}`);
+            if (res.ok) setTeams(await res.json());
+        } catch {
+            // non-critical — team selector stays empty
+        }
+    };
 
     const loadTemplates = async () => {
         setLoadingTemplates(true);
@@ -350,7 +367,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                 formFields: exportedFormFields, // Save field definitions
                 hasFormFields: (exportedFormFields?.length ?? 0) > 0 || selectedTemplate.hasFormFields || false, // ✅ Use template flag or check fields
                 parties: selectedTemplate.parties,  // ✅ Include parties for external signer validation
-                teamId: teamId || null,              // Which team this contract belongs to
+                teamId: teamId || selectedTeam?._id || null, // Which team this contract belongs to
             };
 
             let activeContractId = contractId;
@@ -414,6 +431,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         // Reset all state
         setCurrentStep(1); // Reset to Step 1
         setSelectedTemplate(null);
+        setSelectedTeam(null);
         setContractTitle('');
         setClientName('');
         setDescription('');
@@ -749,12 +767,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                                         label="Select Template"
                                         placeholder="Choose a template..."
                                         required
-                                        sx={{
-                                            '& .MuiOutlinedInput-root': {
-                                                padding: '4px',
-                                            },
-
-                                        }}
+                                        sx={{ '& .MuiOutlinedInput-root': { padding: '4px' } }}
                                     />
                                 )}
                                 renderOption={(props, option) => {
@@ -763,46 +776,92 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                                         <li key={key} {...otherProps}>
                                             <Box>
                                                 <Typography variant="body2" fontWeight={600}>{option.name}</Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {option.category}
-                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">{option.category}</Typography>
                                             </Box>
                                         </li>
                                     );
                                 }}
                             />
 
-                            {/* Selected Template Info */}
-                            {selectedTemplate && (
-                                <Box
-                                    sx={{
-                                        p: 0.5,
-                                        px: 1,
-                                        bgcolor: alpha('#0f766e', 0.05),
-                                        borderRadius: 2,
-                                        border: '1px solid',
-                                        borderColor: alpha('#0f766e', 0.2),
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                    }}
-                                >
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                                        <Typography variant="body1" fontWeight={600} color="primary">
-                                            {selectedTemplate.name}
-                                        </Typography>
-                                        <Chip
-                                            label={selectedTemplate.category}
-                                            size="small"
-                                            sx={{
-                                                bgcolor: 'primary.main',
-                                                color: 'white',
-                                            }}
+                            {/* Second column: Team selector (when outside a team) OR Template info (when inside a team) */}
+                            {!teamId ? (
+                                <Autocomplete
+                                    value={selectedTeam}
+                                    onChange={(_event, newValue) => setSelectedTeam(newValue)}
+                                    options={teams}
+                                    getOptionLabel={(option) => option.name}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Assign to Team"
+                                            placeholder="Select a team (optional)"
+                                            sx={{ '& .MuiOutlinedInput-root': { padding: '4px' } }}
                                         />
+                                    )}
+                                    renderOption={(props, option) => {
+                                        const { key, ...otherProps } = props as any;
+                                        return (
+                                            <li key={key} {...otherProps}>
+                                                <Typography variant="body2">{option.name}</Typography>
+                                            </li>
+                                        );
+                                    }}
+                                />
+                            ) : (
+                                selectedTemplate && (
+                                    <Box
+                                        sx={{
+                                            p: 0.5,
+                                            px: 1,
+                                            bgcolor: alpha('#0f766e', 0.05),
+                                            borderRadius: 2,
+                                            border: '1px solid',
+                                            borderColor: alpha('#0f766e', 0.2),
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Typography variant="body1" fontWeight={600} color="primary">
+                                                {selectedTemplate.name}
+                                            </Typography>
+                                            <Chip
+                                                label={selectedTemplate.category}
+                                                size="small"
+                                                sx={{ bgcolor: 'primary.main', color: 'white' }}
+                                            />
+                                        </Box>
                                     </Box>
-                                </Box>
+                                )
                             )}
                         </Box>
+
+                        {/* Template info row shown below when team selector is in second column */}
+                        {!teamId && selectedTemplate && (
+                            <Box
+                                sx={{
+                                    mt: 1,
+                                    px: 1.5,
+                                    py: 0.75,
+                                    bgcolor: alpha('#0f766e', 0.05),
+                                    borderRadius: 2,
+                                    border: '1px solid',
+                                    borderColor: alpha('#0f766e', 0.2),
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                }}
+                            >
+                                <Typography variant="body2" fontWeight={600} color="primary">
+                                    {selectedTemplate.name}
+                                </Typography>
+                                <Chip
+                                    label={selectedTemplate.category}
+                                    size="small"
+                                    sx={{ bgcolor: 'primary.main', color: 'white' }}
+                                />
+                            </Box>
+                        )}
 
                         <Divider sx={{ my: 1 }} />
 

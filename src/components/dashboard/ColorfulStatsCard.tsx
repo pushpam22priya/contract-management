@@ -14,7 +14,7 @@ import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import BoltOutlinedIcon from '@mui/icons-material/BoltOutlined';
 import { useState, useEffect } from 'react';
 
-interface StatsCardProps {
+interface ColorfulStatsCardProps {
     title: string;
     value: number;
     description: string;
@@ -39,18 +39,17 @@ const iconMap = {
     bolt: BoltOutlinedIcon,
 };
 
-export default function StatsCard({
+export default function ColorfulStatsCard({
     title,
     value,
-    description,
+    description: _description,
     icon,
     iconColor,
-    iconBgColor,
+    iconBgColor: _iconBgColor,
     index = 0,
     onClick,
-}: StatsCardProps) {
+}: ColorfulStatsCardProps) {
     const [displayValue, setDisplayValue] = useState(0);
-    const [isHovered, setIsHovered] = useState(false);
     const IconComponent = iconMap[icon];
 
     useEffect(() => {
@@ -77,61 +76,96 @@ export default function StatsCard({
         <Grow in timeout={250 + index * 60}>
             <Paper
                 elevation={0}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
                 onClick={onClick}
                 sx={{
-                    p: 1,
+                    p: 1.5,
                     borderRadius: 2.5,
-                    border: '1px solid',
-                    borderColor: isHovered ? `${iconColor}70` : 'rgba(0, 0, 0, 0.08)',
                     cursor: onClick ? 'pointer' : 'default',
-                    transition: 'all 0.22s ease',
-                    transform: isHovered ? 'translateY(-5px)' : 'translateY(0)',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                     position: 'relative',
                     overflow: 'hidden',
-                    // Left accent bar
+                    // Fully opaque card: white overlay gradient on solid color base
+                    background: `linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 60%), ${iconColor}`,
+                    border: 'none',
+                    transition: 'transform 0.28s ease, box-shadow 0.28s ease',
+                    boxShadow: `0 6px 20px ${iconColor}60, 0 2px 6px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.15)`,
+                    '&:hover': {
+                        transform: 'translateY(-5px) scale(1.01)',
+                        boxShadow: `0 12px 32px ${iconColor}75, 0 4px 12px rgba(0,0,0,0.22)`,
+                    },
+                    // Shine sweep on hover
+                    '&::after': {
+                        content: '""',
+                        position: 'absolute',
+                        top: '-60%',
+                        left: '-80%',
+                        width: '55%',
+                        height: '220%',
+                        background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.28) 50%, rgba(255,255,255,0) 100%)',
+                        transform: 'skewX(-18deg)',
+                        transition: 'left 0.55s ease',
+                        pointerEvents: 'none',
+                    },
+                    '&:hover::after': {
+                        left: '160%',
+                    },
+                    // Large decorative circle — top right
                     '&::before': {
                         content: '""',
                         position: 'absolute',
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        width: '3px',
-                        bgcolor: iconColor,
-                        opacity: isHovered ? 1 : 0.35,
-                        transition: 'opacity 0.22s ease',
-                        borderRadius: '4px 0 0 4px',
+                        right: -18,
+                        top: -18,
+                        width: 72,
+                        height: 72,
+                        borderRadius: '50%',
+                        background: 'rgba(255,255,255,0.12)',
+                        pointerEvents: 'none',
                     },
                 }}
             >
+                {/* Small decorative circle — bottom left */}
+                <Box sx={{
+                    position: 'absolute',
+                    bottom: -14,
+                    left: -14,
+                    width: 52,
+                    height: 52,
+                    borderRadius: '50%',
+                    bgcolor: 'rgba(255,255,255,0.09)',
+                    pointerEvents: 'none',
+                }} />
+
                 {/* Top row: icon badge + value */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, position: 'relative', zIndex: 1 }}>
                     <Box
                         sx={{
                             width: 36,
                             height: 36,
                             borderRadius: 1.5,
-                            bgcolor: iconBgColor,
+                            bgcolor: 'rgba(255,255,255,0.22)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             flexShrink: 0,
-                            transition: 'transform 0.22s ease',
-                            transform: isHovered ? 'scale(1.08)' : 'scale(1)',
+                            backdropFilter: 'blur(4px)',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                            transition: 'transform 0.25s ease, background-color 0.25s ease',
+                            '.MuiPaper-root:hover &': {
+                                transform: 'scale(1.1) rotate(-4deg)',
+                                bgcolor: 'rgba(255,255,255,0.32)',
+                            },
                         }}
                     >
-                        <IconComponent sx={{ fontSize: 18, color: iconColor }} />
+                        <IconComponent sx={{ fontSize: 18, color: 'white' }} />
                     </Box>
 
                     <Typography
                         sx={{
-                            fontSize: '1.9rem',
-                            fontWeight: 700,
-                            color: isHovered ? iconColor : 'text.primary',
+                            fontSize: '2rem',
+                            fontWeight: 800,
+                            color: 'white',
                             lineHeight: 1,
-                            transition: 'color 0.22s ease',
+                            letterSpacing: '-0.03em',
+                            textShadow: '0 2px 8px rgba(0,0,0,0.15)',
                         }}
                     >
                         {displayValue}
@@ -143,30 +177,17 @@ export default function StatsCard({
                     sx={{
                         fontSize: '0.78rem',
                         fontWeight: 600,
-                        color: 'text.primary',
+                        color: 'rgba(255,255,255,0.95)',
                         lineHeight: 1.3,
-                        mb: 0.25,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
+                        position: 'relative',
+                        zIndex: 1,
                     }}
                 >
                     {title}
                 </Typography>
-
-                {/* Description */}
-                {/* <Typography
-                    sx={{
-                        fontSize: '0.68rem',
-                        color: 'text.secondary',
-                        lineHeight: 1.3,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                    }}
-                >
-                    {description}
-                </Typography> */}
             </Paper>
         </Grow>
     );
