@@ -9,6 +9,7 @@
  */
 
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import {
     Box,
     Typography,
@@ -48,6 +49,7 @@ export default function SignatureProgressTimeline({
     finalizeSuccess,
     onFinalize,
 }: SignatureProgressTimelineProps) {
+    const t = useTranslations('contractDetail');
     // Derive parties from formFields when contract.parties is empty (e.g. renewal contracts)
     const effectiveParties: { id: string; color: string; label: string }[] = React.useMemo(() => {
         if (contract.parties && contract.parties.length > 0) return contract.parties;
@@ -80,11 +82,11 @@ export default function SignatureProgressTimeline({
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Typography variant="subtitle2" fontWeight={700} sx={{ fontSize: '1rem' }}>
-                        {isFinalized ? 'Contract Finalized' : 'Signature Progress'}
+                        {isFinalized ? t('contractFinalized') : t('signatureProgress')}
                     </Typography>
                     {currentOrder && !isFinalized && (
                         <Chip
-                            label={`Order ${currentOrder} active`}
+                            label={t('orderActive', { order: currentOrder })}
                             size="small"
                             sx={{
                                 bgcolor: '#0f766e',
@@ -193,17 +195,17 @@ export default function SignatureProgressTimeline({
                                         color: '#0f766e',
                                         fontWeight: 700,
                                     }}>
-                                        In Progress
+                                        {t('inProgress')}
                                     </Typography>
                                 )}
                                 {!isCurrentOrder && !allComplete && (
                                     <Typography variant="caption" sx={{ fontSize: '0.55rem', color: 'text.disabled' }}>
-                                        Pending
+                                        {t('pending')}
                                     </Typography>
                                 )}
                                 {allComplete && (
                                     <Typography variant="caption" sx={{ fontSize: '0.55rem', color: '#2e7d32', fontWeight: 700 }}>
-                                        Done
+                                        {t('done')}
                                     </Typography>
                                 )}
                             </Box>
@@ -298,7 +300,7 @@ export default function SignatureProgressTimeline({
                     {canFinalize ? (
                         <Box>
                             <Alert severity="success" sx={{ mb: 1.5, py: 0.25, '& .MuiAlert-message': { fontSize: '0.8rem' } }}>
-                                <strong>All parties completed!</strong> Finalize to activate and notify signers.
+                                {t('allPartiesCompleted')}
                             </Alert>
                             {finalizeError && (
                                 <Alert severity="error" sx={{ mb: 1, py: 0.25, '& .MuiAlert-message': { fontSize: '0.8rem' } }}>
@@ -307,7 +309,7 @@ export default function SignatureProgressTimeline({
                             )}
                             {finalizeSuccess && (
                                 <Alert severity="success" sx={{ mb: 1, py: 0.25, '& .MuiAlert-message': { fontSize: '0.8rem' } }}>
-                                    Contract finalized! Emails sent to all signers.
+                                    {t('finalizeSuccess')}
                                 </Alert>
                             )}
                             <Button
@@ -324,12 +326,12 @@ export default function SignatureProgressTimeline({
                                     px: 2,
                                 }}
                             >
-                                {finalizing ? 'Finalizing...' : 'Finalize Contract'}
+                                {finalizing ? t('finalizing') : t('finalizeContract')}
                             </Button>
                         </Box>
                     ) : (
                         <Alert severity="info" sx={{ py: 0.25, '& .MuiAlert-message': { fontSize: '0.8rem' } }}>
-                           Waiting for all parties to complete before finalization.
+                           {t('waitingForParties')}
                         </Alert>
                     )}
                 </Box>
@@ -338,7 +340,7 @@ export default function SignatureProgressTimeline({
             {isFinalized && (
                 <Box sx={{ mt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                     <Alert severity="success" icon={<DoneAllIcon />} sx={{ py: 0.25, '& .MuiAlert-message': { fontSize: '0.8rem' } }}>
-                        Contract finalized — all signers have received a copy.
+                        {t('finalizedCopy')}
                     </Alert>
                 </Box>
             )}

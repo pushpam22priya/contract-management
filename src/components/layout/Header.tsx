@@ -1,31 +1,20 @@
 'use client';
 
-import { AppBar, Toolbar, Box, IconButton, Badge, Avatar, Typography, Tooltip } from '@mui/material';
+import { AppBar, Toolbar, Box, IconButton, Badge, Typography, Tooltip } from '@mui/material';
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import ContractIcon from '@/components/ContractIcon';
 import { useRouter } from 'next/navigation';
 import { authService } from '@/services/authService';
-import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
+import LanguageToggle from './LanguageToggle';
 
 export default function Header() {
     const router = useRouter();
-    const [userInitial, setUserInitial] = useState('U');
-    const [userEmail, setUserEmail] = useState('');
-
-    useEffect(() => {
-        const currentUser = authService.getCurrentUser();
-        if (currentUser && currentUser.email) {
-            // Get first letter of email and capitalize it
-            const initial = currentUser.email.charAt(0).toUpperCase();
-            setUserInitial(initial);
-            setUserEmail(currentUser.email);
-        }
-    }, []);
+    const t = useTranslations('header');
 
     const handleLogout = () => {
         authService.logout();
-        console.log('Logging out...');
         router.push('/login');
     };
 
@@ -49,18 +38,16 @@ export default function Header() {
             }}>
 
                 {/* Left: Logo + Name */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1}}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Box
                         sx={{
-                            // width: 40,
-                            // height: 40,
                             bgcolor: 'primary.main',
                             borderRadius: 1,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             color: 'white',
-                            p: 0.2
+                            p: 0.2,
                         }}
                     >
                         <ContractIcon sx={{ fontSize: 24 }} />
@@ -77,60 +64,49 @@ export default function Header() {
                     </Typography>
                 </Box>
 
-                {/* Right: Notifications + Avatar */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={() => router.push('/notifications')}
-                        sx={{ p: 0.5 }}
-                    >
-                        <Badge
-                            badgeContent={3}
-                            color="error"
-                            sx={{
-                                '& .MuiBadge-badge': {
-                                    fontSize: '0.6rem',
-                                    height: 16,
-                                    minWidth: 16,
-                                    padding: '0 4px',
-                                    top: 4,
-                                    right: 4,
-                                },
-                            }}
+                {/* Right: Language Toggle + Notifications + Logout */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <LanguageToggle />
+
+                    <Tooltip title={t('notifications')} arrow placement="bottom">
+                        <IconButton
+                            size="small"
+                            onClick={() => router.push('/notifications')}
+                            sx={{ p: 0.5 }}
                         >
-                            <NotificationsOutlinedIcon sx={{ color: 'text.secondary', fontSize: '24px' }} />
-                        </Badge>
-                    </IconButton>
-                    <Tooltip title={userEmail || 'User'} arrow>
-                        <Avatar
-                            sx={{
-                                width: 24,
-                                height: 24,
-                                bgcolor: 'primary.main',
-                                fontSize: '0.875rem',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                            }}
-                        >
-                            {userInitial}
-                        </Avatar>
+                            <Badge
+                                badgeContent={3}
+                                color="error"
+                                sx={{
+                                    '& .MuiBadge-badge': {
+                                        fontSize: '0.6rem',
+                                        height: 16,
+                                        minWidth: 16,
+                                        padding: '0 4px',
+                                        top: 4,
+                                        right: 4,
+                                    },
+                                }}
+                            >
+                                <NotificationsOutlinedIcon sx={{ color: 'text.secondary', fontSize: '22px' }} />
+                            </Badge>
+                        </IconButton>
                     </Tooltip>
 
-                    <Tooltip title="Logout" arrow>
+                    <Tooltip title={t('logout')} arrow placement="bottom">
                         <IconButton
                             onClick={handleLogout}
-                            size="medium"
+                            size="small"
                             sx={{
+                                p: 0.5,
                                 color: 'text.secondary',
                                 '&:hover': {
                                     color: 'error.main',
                                     bgcolor: 'rgba(211, 47, 47, 0.08)',
                                 },
-                                p: 0
                             }}
                         >
-                            <LogoutOutlinedIcon sx={{ color: 'text.secondary', fontSize: '24px' }} />
+                            <LogoutOutlinedIcon sx={{ fontSize: '22px' }} />
                         </IconButton>
                     </Tooltip>
                 </Box>

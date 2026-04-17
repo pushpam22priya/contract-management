@@ -15,6 +15,7 @@ import FurtherReviewDialog from '@/components/contracts/FurtherReviewDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { useRouter } from 'next/navigation';
 import { ReviewApprovalShimmerGrid } from '@/components/common/ShimmerCard';
+import { useTranslations } from 'next-intl';
 // import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
 import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { Dayjs } from 'dayjs';
@@ -25,6 +26,7 @@ import dayjs from 'dayjs';
  * Shows contracts assigned to the current user for review or approval
  */
 export default function ReviewApprovalPage() {
+    const t = useTranslations('reviewApproval');
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
     const [tabValue, setTabValue] = useState(0); // 0 = My Tasks, 1 = History
@@ -441,11 +443,11 @@ export default function ReviewApprovalPage() {
                 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: '0.95rem' }}>
-                            Review & Approval
+                            {t('title')}
                         </Typography>
                         <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
                         <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
-                            Manage contracts assigned to you for review or approval
+                            {t('description')}
                         </Typography>
                     </Box>
 

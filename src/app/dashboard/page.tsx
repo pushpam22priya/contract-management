@@ -10,9 +10,11 @@ import { authService } from '@/services/authService';
 import { useRouter } from 'next/navigation';
 import CreateContractDialog from '@/components/contracts/CreateContractDialog';
 import { ContractStatus } from '@/types/contract';
+import { useTranslations } from 'next-intl';
 
 export default function DashboardPage() {
     const router = useRouter();
+    const t = useTranslations('dashboard');
     const currentUser = authService.getCurrentUser();
     const displayName = currentUser?.email
         ? currentUser.email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -145,7 +147,7 @@ export default function DashboardPage() {
 
     const statsData = [
         {
-            title: 'Draft',
+            title: t('draft'),
             value: stats.draftCount,
             description: 'In draft status',
             icon: 'document' as const,
@@ -154,7 +156,7 @@ export default function DashboardPage() {
             path: '/draft?status=draft'
         },
         {
-            title: 'In Progress',
+            title: t('inProgress'),
             value: stats.underReviewCount + stats.underApprovalCount,
             description: 'Under review or approval',
             icon: 'clock' as const,
@@ -163,7 +165,7 @@ export default function DashboardPage() {
             path: '/draft?title=In+Progress&status=draft,in_review,in_approval,review_approval,reviewed'
         },
         {
-            title: 'Send for Signature',
+            title: t('sendForSignature'),
             value: stats.requestedCount,
             description: 'Shared, awaiting signatures',
             icon: 'send' as const,
@@ -172,7 +174,7 @@ export default function DashboardPage() {
             path: '/contracts?status=waiting_for_signature'
         },
         {
-            title: 'Waiting for My Signature',
+            title: t('waitingForMySignature'),
             value: stats.waitingForSigCount,
             description: 'Pending your signature',
             icon: 'pending' as const,
@@ -181,7 +183,7 @@ export default function DashboardPage() {
             path: '/signatures?status=pending'
         },
         {
-            title: 'Signed Contracts',
+            title: t('signedContracts'),
             value: stats.receivedSignedCount,
             description: 'All parties signed',
             icon: 'taskalt' as const,
@@ -190,7 +192,7 @@ export default function DashboardPage() {
             path: '/contracts?status=signed_by_everyone'
         },
         {
-            title: 'Active Contracts',
+            title: t('activeContracts'),
             value: stats.activeCount,
             description: 'Currently active',
             icon: 'bolt' as const,
@@ -199,7 +201,7 @@ export default function DashboardPage() {
             path: '/contracts?status=active'
         },
         {
-            title: 'Expiring Soon',
+            title: t('expiringSoon'),
             value: stats.expiringCount,
             description: 'Action required',
             icon: 'warning' as const,
@@ -208,7 +210,7 @@ export default function DashboardPage() {
             path: '/contracts?status=expiring'
         },
         {
-            title: 'Expired',
+            title: t('expired'),
             value: stats.expiredCount,
             description: 'No longer active',
             icon: 'cancel' as const,
@@ -253,7 +255,7 @@ export default function DashboardPage() {
                         {/* Left: Dashboard label */}
                         <Box>
                             <Typography sx={{ color: 'rgba(255,255,255,0.75)', fontSize: '1rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                                Dashboard
+                                {t('title')}
                             </Typography>
                         </Box>
 
@@ -279,7 +281,7 @@ export default function DashboardPage() {
                                     },
                                 }}
                             >
-                                Browse Templates
+                                {t('browseTemplates')}
                             </Button>
                             <Button
                                 variant="text"
@@ -301,14 +303,14 @@ export default function DashboardPage() {
                                     },
                                 }}
                             >
-                                Create Contract
+                                {t('createContract')}
                             </Button>
                         </Box>
 
                         {/* Right: Hi, Name + avatar */}
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5 }}>
                             <Typography sx={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', fontWeight: 500 }}>
-                                Hi, <strong style={{ color: 'white' }}>{displayName}</strong>
+                                {t('hi')}, <strong style={{ color: 'white' }}>{displayName}</strong>
                             </Typography>
                             <Box sx={{
                                 width: 34,

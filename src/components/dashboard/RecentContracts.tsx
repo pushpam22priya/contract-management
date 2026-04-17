@@ -8,6 +8,7 @@ import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { contractService } from '@/services/contractService';
 import { authService } from '@/services/authService';
 import { Contract, ContractStatus } from '@/types/contract';
@@ -29,6 +30,8 @@ type ActiveTab = 'recent' | 'expiring';
 
 export default function RecentContracts() {
     const router = useRouter();
+    const t = useTranslations('recentContracts');
+    const tStatus = useTranslations('contractStatus');
     const [hoveredId, setHoveredId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<ActiveTab>('recent');
     const [recentContracts, setRecentContracts] = useState<RecentContractDisplay[]>([]);
@@ -165,16 +168,16 @@ export default function RecentContracts() {
                 </Box>
                 <Box sx={{ textAlign: 'center' }}>
                     <Typography fontWeight={600} sx={{ fontSize: '0.9rem', color: 'text.primary', mb: 0.4 }}>
-                        {isExpiring ? 'No expiring contracts' : 'No contracts yet'}
+                        {isExpiring ? t('noExpiringTitle') : t('noContractsTitle')}
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.78rem', maxWidth: 220, mx: 'auto' }}>
-                        {isExpiring ? 'All your contracts are in good standing.' : 'Create your first contract to get started.'}
+                        {isExpiring ? t('noExpiringDesc') : t('noContractsDesc')}
                     </Typography>
                 </Box>
                 {!isExpiring && (
                     <Button variant="contained" size="small" onClick={() => router.push('/contracts?status=active')}
                         sx={{ textTransform: 'none', fontSize: '0.8rem', borderRadius: 2, px: 2.5, py: 0.6, bgcolor: '#0f766e', '&:hover': { bgcolor: '#036949' }, boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }}>
-                        Go to Contracts
+                        {t('goToContracts')}
                     </Button>
                 )}
             </Box>
@@ -220,7 +223,7 @@ export default function RecentContracts() {
                         <Box>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                                 <Typography fontWeight={700} sx={{ fontSize: '0.95rem', color: accentColor, lineHeight: 1.2 }}>
-                                    {activeTab === 'recent' ? 'Recent Contracts' : 'Expiring Soon'}
+                                    {activeTab === 'recent' ? t('title') : t('expiringSoon')}
                                 </Typography>
                                 {count > 0 && (
                                     <Box sx={{
@@ -235,7 +238,7 @@ export default function RecentContracts() {
                                 )}
                             </Box>
                             <Typography sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                                {activeTab === 'recent' ? 'Latest contract activity' : 'Contracts expiring by urgency'}
+                                {activeTab === 'recent' ? t('latestActivity') : t('expiringByUrgency')}
                             </Typography>
                         </Box>
                     </Box>
@@ -252,7 +255,7 @@ export default function RecentContracts() {
                             '&:hover': { bgcolor: `${accentColor}0e`, borderColor: accentColor },
                         }}
                     >
-                        View All
+                        {t('viewAll')}
                     </Button>
                 </Box>
 
@@ -262,8 +265,8 @@ export default function RecentContracts() {
                 {/* ── Tab switcher (unchanged) ────────────────────────── */}
                 <Box sx={{ display: 'flex', gap: 0.5, mb: 1.25, p: 0.4, bgcolor: 'rgba(0,0,0,0.04)', borderRadius: 2, width: 'fit-content' }}>
                     {([
-                        { key: 'recent', label: 'Recent' },
-                        { key: 'expiring', label: `Expiring Soon${expiringContracts.length > 0 ? ` (${expiringContracts.length})` : ''}` },
+                        { key: 'recent', label: t('tabRecent') },
+                        { key: 'expiring', label: `${t('tabExpiring')}${expiringContracts.length > 0 ? ` (${expiringContracts.length})` : ''}` },
                     ] as { key: ActiveTab; label: string }[]).map(tab => (
                         <Button key={tab.key} size="small" onClick={() => setActiveTab(tab.key)}
                             sx={{
@@ -338,7 +341,7 @@ export default function RecentContracts() {
                                             </Typography>
 
                                             <Chip
-                                                label={contract.status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                                label={tStatus(contract.status as Parameters<typeof tStatus>[0])}
                                                 size="small"
                                                 sx={{
                                                     bgcolor: sc.bg, color: sc.text, border: `1px solid ${sc.border}`,
@@ -389,7 +392,7 @@ export default function RecentContracts() {
                                                     color: sc.accent, flexShrink: 0,
                                                     '&:hover': { bgcolor: `${sc.accent}15` },
                                                 }}>
-                                                View →
+                                                {t('view')}
                                             </Button>
                                         </Box>
                                     </Box>

@@ -11,16 +11,16 @@ import DrawIcon from '@mui/icons-material/Draw';
 import ContractsTab from './ContractsTab';
 import DraftTab from './DraftTab';
 import SignaturesTab from './SignaturesTab';
-
-const TABS = [
-    { label: 'Contracts',              Icon: ArticleOutlinedIcon },
-    { label: 'Draft',                  Icon: RateReviewIcon },
-    { label: 'Contract for Signature', Icon: DrawIcon },
-];
-
-
+import { useTranslations } from 'next-intl';
 
 export default function AllContractsPage() {
+    const t = useTranslations('nav');
+    const TABS = [
+        { label: t('contracts'),  Icon: ArticleOutlinedIcon },
+        { label: t('draft'),      Icon: RateReviewIcon },
+        { label: t('signatures'), Icon: DrawIcon },
+    ];
+
     const [activeTab, setActiveTab] = useState(0);
 
     const handleTabChange = (index: number) => {

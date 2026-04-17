@@ -19,8 +19,10 @@ import { categoryService } from '@/services/categoryService';
 import { Contract, ContractStatus } from '@/types/contract';
 import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
 import type { FilterOption } from '@/components/common/ReusableFilter';
+import { useTranslations } from 'next-intl';
 
 export default function TerminatedContractsPage() {
+    const t = useTranslations('terminated');
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -132,11 +134,11 @@ export default function TerminatedContractsPage() {
                 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: '0.95rem' }}>
-                            Terminated Contracts
+                            {t('title')}
                         </Typography>
                         <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
                         <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
-                            {loading ? 'Loading…' : 'Your terminated contracts'}
+                            {loading ? t('loading') : t('description')}
                         </Typography>
                     </Box>
                 </Box>
@@ -208,7 +210,7 @@ export default function TerminatedContractsPage() {
                                 <BlockOutlinedIcon sx={{ fontSize: 36, color: '#94a3b8' }} />
                             </Box>
                             <Typography fontWeight={600} fontSize="1rem" color="text.secondary">
-                                {hasActiveFilters ? 'No contracts match your filters' : 'No terminated contracts'}
+                                {hasActiveFilters ? t('noContractsFiltered') : t('noContracts')}
                             </Typography>
                             <Typography
                                 fontSize="0.85rem"
@@ -216,9 +218,7 @@ export default function TerminatedContractsPage() {
                                 textAlign="center"
                                 maxWidth={320}
                             >
-                                {hasActiveFilters
-                                    ? 'Try adjusting the search or filters.'
-                                    : 'Contracts you terminate will appear here.'}
+                                {hasActiveFilters ? t('tryAdjusting') : t('appearHere')}
                             </Typography>
                         </Box>
                     ) : (

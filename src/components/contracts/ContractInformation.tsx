@@ -2,6 +2,7 @@
 
 import { Box, Typography, Paper, LinearProgress } from '@mui/material';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
+import { useTranslations } from 'next-intl';
 
 interface ContractInformationProps {
     client: string;
@@ -28,6 +29,7 @@ const ContractInformation = ({
     status,
     description,
 }: ContractInformationProps) => {
+    const t = useTranslations('contractDetail');
     // Get progress bar color based on status
     const getProgressBarColor = () => {
         switch (status) {
@@ -63,15 +65,15 @@ const ContractInformation = ({
     // Get status-specific text for days remaining
     const getDaysText = () => {
         if (status === 'signed' && daysRemaining > 0) {
-            return `Starts in ${daysRemaining} days`;
+            return t('startsIn', { days: daysRemaining });
         }
         if (status === 'expired' || daysRemaining < 0) {
-            return `Expired ${Math.abs(daysRemaining)} days ago`;
+            return t('expiredDaysAgo', { days: Math.abs(daysRemaining) });
         }
         if (daysRemaining === 0) {
-            return 'Ends today';
+            return t('endsToday');
         }
-        return `${daysRemaining} days remaining`;
+        return t('daysRemaining', { days: daysRemaining });
     };
     return (
         <Paper
@@ -97,7 +99,7 @@ const ContractInformation = ({
                     fontSize: { xs: '1.1rem', sm: '1.25rem' },
                 }}
             >
-                Contract Information
+                {t('contractInformation')}
             </Typography>
 
             {/* Info Grid - First Section */}
@@ -120,7 +122,7 @@ const ContractInformation = ({
                             fontSize: '0.875rem',
                         }}
                     >
-                        Client
+                        {t('client')}
                     </Typography>
                     <Typography
                         variant="body2"
@@ -145,7 +147,7 @@ const ContractInformation = ({
                             fontSize: '0.875rem',
                         }}
                     >
-                        Contract Value
+                        {t('contractValue')}
                     </Typography>
                     <Typography
                         variant="body2"
@@ -170,7 +172,7 @@ const ContractInformation = ({
                             fontSize: '0.875rem',
                         }}
                     >
-                        Category
+                        {t('category')}
                     </Typography>
                     <Typography
                         variant="body2"
@@ -195,7 +197,7 @@ const ContractInformation = ({
                             fontSize: '0.875rem',
                         }}
                     >
-                        Template
+                        {t('template')}
                     </Typography>
                     <Typography
                         variant="body2"
@@ -239,7 +241,7 @@ const ContractInformation = ({
                             fontSize: '0.875rem',
                         }}
                     >
-                        Start Date
+                        {t('startDate')}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <CalendarTodayOutlinedIcon
@@ -272,7 +274,7 @@ const ContractInformation = ({
                             fontSize: '0.875rem',
                         }}
                     >
-                        End Date
+                        {t('endDate')}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <CalendarTodayOutlinedIcon
@@ -316,7 +318,7 @@ const ContractInformation = ({
                             fontSize: '0.875rem',
                         }}
                     >
-                        Description
+                        {t('description')}
                     </Typography>
                     <Typography
                         variant="body2"
@@ -350,7 +352,7 @@ const ContractInformation = ({
                         fontSize: '0.875rem',
                     }}
                 >
-                    Contract Progress
+                    {t('contractProgress')}
                 </Typography>
 
                 {/* Progress Info */}
@@ -378,7 +380,7 @@ const ContractInformation = ({
                             fontWeight: 600,
                         }}
                     >
-                        {progressPercentage}% remaining
+                        {t('percentRemaining', { pct: progressPercentage })}
                     </Typography>
                 </Box>
 

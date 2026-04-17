@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
     Box,
     Typography,
@@ -50,6 +51,7 @@ const ContractDetailsPanel = ({
     onDownloadDocument,
 }: ContractDetailsPanelProps) => {
     const [activeTab, setActiveTab] = useState(0);
+    const t = useTranslations('contractDetail');
 
     const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
         setActiveTab(newValue);
@@ -105,8 +107,8 @@ const ContractDetailsPanel = ({
                     }}
                 >
                     {/* <Tab label="Overview" /> */}
-                    <Tab label="Documents" />
-                    <Tab label="Activity" />
+                    <Tab label={t('documents')} />
+                    <Tab label={t('activity')} />
                 </Tabs>
             </Box>
 
@@ -189,14 +191,14 @@ const ContractDetailsPanel = ({
                                                 fontSize: { xs: '0.8rem', sm: '0.875rem' },
                                             }}
                                         >
-                                            {doc.size} • Uploaded {doc.uploadDate}
+                                            {doc.size} • {t('uploaded', { date: doc.uploadDate })}
                                         </Typography>
                                     </Box>
                                 </Box>
 
                                 {/* Action Buttons */}
                                 <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                    <Tooltip title="View Document" arrow>
+                                    <Tooltip title={t('viewDocument')} arrow>
                                         <IconButton
                                             size="small"
                                             onClick={(e) => {
@@ -221,7 +223,7 @@ const ContractDetailsPanel = ({
                                         </IconButton>
                                     </Tooltip>
 
-                                    <Tooltip title="Download Document" arrow>
+                                    <Tooltip title={t('downloadDocument')} arrow>
                                         <IconButton
                                             size="small"
                                             onClick={(e) => {
@@ -262,7 +264,7 @@ const ContractDetailsPanel = ({
                                         variant="body2"
                                         sx={{ color: 'text.secondary' }}
                                     >
-                                        No activity recorded yet
+                                        {t('noActivity')}
                                     </Typography>
                                 </Box>
                             ) : (

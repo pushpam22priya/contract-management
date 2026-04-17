@@ -22,6 +22,7 @@ import { useSearchParams } from 'next/navigation';
 import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
 import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog';
 import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
+import { useTranslations } from 'next-intl';
 
 const signingStatusOptions = [
     { label: 'All Status', value: 'all' },
@@ -45,6 +46,7 @@ function SearchParamsReader({ onStatus }: { onStatus: (status: string) => void }
  * Shows contracts assigned to the current user for signature
  */
 export default function SignaturesPage() {
+    const t = useTranslations('signatures');
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -476,11 +478,11 @@ export default function SignaturesPage() {
                 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: '0.95rem' }}>
-                            Contracts for Signature
+                            {t('title')}
                         </Typography>
                         <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
                         <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
-                            Review and sign contracts assigned to you
+                            {t('description')}
                         </Typography>
                     </Box>
                 </Box>

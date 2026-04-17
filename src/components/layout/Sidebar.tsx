@@ -24,17 +24,7 @@ import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
-
-const menuItems = [
-    { text: 'Dashboard',              icon: <DashboardOutlinedIcon sx={{ fontSize: 20 }} />,  path: '/dashboard' },
-    { text: 'All Contracts',          icon: <LayersOutlinedIcon sx={{ fontSize: 20 }} />,      path: '/all-contracts' },
-    { text: 'Contracts',              icon: <ArticleOutlinedIcon sx={{ fontSize: 20 }} />,     path: '/contracts' },
-    { text: 'Draft',                  icon: <RateReviewIcon sx={{ fontSize: 20 }} />,          path: '/draft' },
-    { text: 'Contract for Signature', icon: <DrawIcon sx={{ fontSize: 20 }} />,                path: '/signatures' },
-    { text: 'Review & Approval',      icon: <DraftsIcon sx={{ fontSize: 20 }} />,              path: '/review-approval' },
-    { text: 'Template',               icon: <DescriptionOutlinedIcon sx={{ fontSize: 20 }} />, path: '/template' },
-    { text: 'Terminated',             icon: <BlockOutlinedIcon sx={{ fontSize: 20 }} />,       path: '/terminated' },
-];
+import { useTranslations } from 'next-intl';
 
 interface SidebarProps {
     open: boolean;
@@ -48,6 +38,18 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const pathname = usePathname();
     const router = useRouter();
+    const t = useTranslations('nav');
+
+    const menuItems = [
+        { text: t('dashboard'),      icon: <DashboardOutlinedIcon sx={{ fontSize: 20 }} />,  path: '/dashboard' },
+        { text: t('allContracts'),   icon: <LayersOutlinedIcon sx={{ fontSize: 20 }} />,      path: '/all-contracts' },
+        { text: t('contracts'),      icon: <ArticleOutlinedIcon sx={{ fontSize: 20 }} />,     path: '/contracts' },
+        { text: t('draft'),          icon: <RateReviewIcon sx={{ fontSize: 20 }} />,          path: '/draft' },
+        { text: t('signatures'),     icon: <DrawIcon sx={{ fontSize: 20 }} />,                path: '/signatures' },
+        { text: t('reviewApproval'), icon: <DraftsIcon sx={{ fontSize: 20 }} />,              path: '/review-approval' },
+        { text: t('template'),       icon: <DescriptionOutlinedIcon sx={{ fontSize: 20 }} />, path: '/template' },
+        { text: t('terminated'),     icon: <BlockOutlinedIcon sx={{ fontSize: 20 }} />,       path: '/terminated' },
+    ];
 
     useEffect(() => {
         if (typeof window !== 'undefined') {

@@ -35,6 +35,7 @@ import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog'
 import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
 import { ContractStatus } from '@/types/contract';
 import HistoryIcon from '@mui/icons-material/History';
+import { useTranslations } from 'next-intl';
 
 export default function ContractViewPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -64,6 +65,9 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const [finalizing, setFinalizing] = useState(false);
     const [finalizeError, setFinalizeError] = useState<string | null>(null);
     const [finalizeSuccess, setFinalizeSuccess] = useState(false);
+
+    const t = useTranslations('contractDetail');
+    const tStatus = useTranslations('contractStatus');
 
     // Strip all stacked "(Renewal)" suffixes for display — raw title kept in DB
     const displayTitle = contract?.title?.replace(/\s*\(Renewal\d*\)$/i, '') ?? '';
@@ -543,27 +547,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     };
 
     // Helper: Status Color
-    const getStatusLabel = (status: string): string => {
-        switch (status) {
-            case 'active': return 'Active';
-            case 'expiring': return 'Expiring';
-            case 'expired': return 'Expired';
-            case 'terminated': return 'Terminated';
-            case 'draft': return 'Draft';
-            case 'in_review': return 'In Review';
-            case 'in_approval': return 'In Approval';
-            case 'reviewed': return 'Reviewed';
-            case 'approved': return 'Approved';
-            case 'waiting_for_signature': return 'Waiting for Signature';
-            case 'signed_by_everyone': return 'Signed by Assigned Parties';
-            case 'signed': return 'Signed';
-            case 'rejected': return 'Rejected';
-            case 'rejected_by_reviewer': return 'Rejected by Reviewer';
-            case 'rejected_by_approver': return 'Rejected by Approver';
-            default: return status;
-        }
-    };
-
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'active':
@@ -599,7 +582,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
         return (
             <AppLayout>
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 10, gap: 2 }}>
-                    <Typography variant="h6">Contract Not Found</Typography>
+                    <Typography variant="h6">{t('notFound')}</Typography>
                     <Typography color="text.secondary">ID: {id}</Typography>
                     <IconButton onClick={handleBack}><ArrowBackIcon /> Go Back</IconButton>
                 </Box>
@@ -637,7 +620,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                     >
                         {/* Left: Back Button + Title */}
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1 }}>
-                            <Tooltip title="Go back" arrow>
+                            <Tooltip title={t('goBack')} arrow>
                                 <IconButton
                                     onClick={handleBack}
                                     sx={{
@@ -665,7 +648,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                         {displayTitle}
                                     </Typography>
                                     <Chip
-                                        label={getStatusLabel(contract.status)}
+                                        label={tStatus(contract.status as Parameters<typeof tStatus>[0])}
                                         size="small"
                                         sx={{
                                             bgcolor: statusColors.bgcolor,
@@ -690,7 +673,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         >
                             {/* History button — shown whenever this contract is part of a renewal chain */}
                             {(contract?.renewedFromId || contract?.renewedContractId) && (
-                                <Tooltip title="Contract History" arrow>
+                                <Tooltip title={t('contractHistory')} arrow>
                                     <IconButton
                                         onClick={(e) => setHistoryAnchorEl(e.currentTarget)}
                                         sx={{
@@ -738,16 +721,16 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         >
                             <BlockOutlinedIcon sx={{ color: '#dc2626', fontSize: '1.1rem', flexShrink: 0 }} />
                             <Typography variant="body2" sx={{ color: '#7f1d1d', fontWeight: 500, flex: 1 }}>
-                                This contract was terminated on{' '}
+                                {t('terminatedOn')}{' '}
                                 <strong>
                                     {contract.terminatedAt
                                         ? new Date(contract.terminatedAt).toLocaleDateString('en-GB')
                                         : '—'}
                                 </strong>
                                 {contract.terminatedBy && (
-                                    <> by <strong>{contract.terminatedBy}</strong></>
+                                    <> {t('terminatedBy')} <strong>{contract.terminatedBy}</strong></>
                                 )}
-                                . No further actions are available.
+                                . {t('noFurtherActions')}
                             </Typography>
                         </Box>
                     )}
@@ -774,7 +757,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <AutorenewIcon sx={{ color: '#92400e', fontSize: '1.1rem' }} />
                                     <Typography variant="body2" sx={{ color: '#92400e', fontWeight: 500 }}>
-                                        A renewal contract is in progress.
+                                        {t('renewalInProgress')}
                                     </Typography>
                                 </Box>
                                 {contract.renewedContractId && (
@@ -790,7 +773,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                             '&:hover': { bgcolor: '#fde68a', borderColor: '#f59e0b' },
                                         }}
                                     >
-                                        View Draft →
+                                        {t('viewDraft')}
                                     </Button>
                                 )}
                             </Box>
@@ -815,11 +798,12 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                     <WarningAmberOutlinedIcon sx={{ color: '#92400e', fontSize: '1.1rem', flexShrink: 0 }} />
                                     <Typography variant="body2" sx={{ color: '#92400e', fontWeight: 500 }}>
                                         {contract.status === ContractStatus.EXPIRED
-                                            ? 'This contract has expired.'
-                                            : `This contract is expiring on ${contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-GB') : 'soon'}.`}
+                                            ? t('contractExpired')
+                                            : t('expiringOn', { date: contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-GB') : 'soon' })}
+                                        {' '}
                                         {contract.status === ContractStatus.EXPIRED
-                                            ? ' Renew to continue or terminate to close permanently.'
-                                            : ' Renew it to continue the relationship.'}
+                                            ? t('renewOrTerminate')
+                                            : t('renewRelationship')}
                                     </Typography>
                                 </Box>
                                 <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
@@ -836,7 +820,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                             '&:hover': { bgcolor: '#b45309' },
                                         }}
                                     >
-                                        Renew →
+                                        {t('renew')}
                                     </Button>
                                     {/* Terminate — only for expired (not expiring), mutually exclusive with renewal */}
                                     {contract.status === ContractStatus.EXPIRED && (
@@ -853,7 +837,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                                 '&:hover': { bgcolor: '#fef2f2', borderColor: '#ef4444' },
                                             }}
                                         >
-                                            Terminate
+                                            {t('terminate')}
                                         </Button>
                                     )}
                                 </Box>

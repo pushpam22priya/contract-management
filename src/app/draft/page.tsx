@@ -20,8 +20,10 @@ import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { apiService } from '@/services/apiService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import { Team } from '@/types/team';
+import { useTranslations } from 'next-intl';
 
 export default function DraftPage() {
+    const t = useTranslations('draft');
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -401,7 +403,7 @@ export default function DraftPage() {
                         </Typography>
                         <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
                         <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
-                            Review and manage your draft contracts
+                            {t('description')}
                         </Typography>
                     </Box>
                 </Box>

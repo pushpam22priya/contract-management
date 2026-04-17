@@ -18,8 +18,10 @@ import { Template } from '@/types/template';
 // import ReusableFilter from '@/components/common/ReusableFilter';
 import CompactFilter from '@/components/common/CompactFilter';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
+import { useTranslations } from 'next-intl';
 
 export default function TemplatePage() {
+    const t = useTranslations('template');
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -178,17 +180,17 @@ export default function TemplatePage() {
                 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: '0.95rem' }}>
-                            Contract Templates
+                            {t('title')}
                         </Typography>
                         <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
                         <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
-                            Manage and create reusable contract templates
+                            {t('description')}
                         </Typography>
                     </Box>
 
                     {/* Action Buttons - Only show for admin */}
                     {isAdmin && (
-                        <Tooltip title="Upload Template" arrow>
+                        <Tooltip title={t('uploadTemplate')} arrow>
                             <IconButton
                                 onClick={() => setUploadDialogOpen(true)}
                                 size="small"
@@ -267,10 +269,10 @@ export default function TemplatePage() {
                     ) : (
                         <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
                             <Typography variant="h6" color="text.secondary">
-                                No templates found
+                                {t('noTemplates')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                {searchQuery ? 'Try adjusting your search or filters' : 'Upload a template to get started'}
+                                {searchQuery ? t('tryAdjusting') : t('uploadToStart')}
                             </Typography>
                         </Box>
                     )}
@@ -320,7 +322,7 @@ export default function TemplatePage() {
                 <BaseDialog
                     open={deleteDialogOpen}
                     onClose={() => !deleting && setDeleteDialogOpen(false)}
-                    title="Delete Template"
+                    title={t('deleteTemplate')}
                     maxWidth="xs"
                     actions={
                         <>
@@ -328,7 +330,7 @@ export default function TemplatePage() {
                                 onClick={() => setDeleteDialogOpen(false)}
                                 disabled={deleting}
                             >
-                                Cancel
+                                {t('cancel')}
                             </Button>
                             <Button
                                 onClick={confirmDelete}
@@ -337,14 +339,14 @@ export default function TemplatePage() {
                                 disabled={deleting}
                                 sx={{ minWidth: 100 }}
                             >
-                                {deleting ? 'Deleting...' : 'Delete'}
+                                {deleting ? t('deleting') : t('delete')}
                             </Button>
                         </>
                     }
                 >
                     <Typography variant="body1" color="text.secondary">
-                        Are you sure you want to delete the template <strong>&quot;{templateToDelete?.name}&quot;</strong>?
-                        This action cannot be undone.
+                        {t('deleteConfirm')} <strong>&quot;{templateToDelete?.name}&quot;</strong>?
+                        {t('cannotUndo')}
                     </Typography>
                 </BaseDialog>
 
