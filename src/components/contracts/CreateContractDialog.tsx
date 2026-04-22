@@ -14,6 +14,7 @@ import {
     Divider,
     AlertColor,
     Tooltip,
+    useTheme,
 } from '@mui/material';
 import { Save, ArrowBack, ArrowForward } from '@mui/icons-material';
 import BaseDialog from '@/components/common/BaseDialog';
@@ -47,6 +48,8 @@ interface CreateContractDialogProps {
 
 const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, teamId }: CreateContractDialogProps) => {
     const router = useRouter();
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
 
     // Wizard State
@@ -620,10 +623,10 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                     fontWeight: 600,
                     borderRadius: 2,
                     bgcolor: 'primary.main',
-                    boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
+                    boxShadow: (theme) => `0 2px 8px ${theme.palette.primary.main}40`,
                     '&:hover': {
                         bgcolor: 'primary.dark',
-                        boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
+                        boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}59`,
                     },
                 }}
             >
@@ -660,10 +663,10 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                             borderRadius: 2,
                             minWidth: 150,
                             bgcolor: 'primary.main',
-                            boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
+                            boxShadow: (theme) => `0 2px 8px ${theme.palette.primary.main}40`,
                             '&:hover': {
                                 bgcolor: 'primary.dark',
-                                boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
+                                boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}59`,
                             },
                         }}
                     >
@@ -813,10 +816,10 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                                         sx={{
                                             p: 0.5,
                                             px: 1,
-                                            bgcolor: alpha('#0f766e', 0.05),
+                                            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
                                             borderRadius: 2,
                                             border: '1px solid',
-                                            borderColor: alpha('#0f766e', 0.2),
+                                            borderColor: (theme) => alpha(theme.palette.primary.main, 0.2),
                                             display: 'flex',
                                             alignItems: 'center',
                                         }}
@@ -843,10 +846,10 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                                     mt: 1,
                                     px: 1.5,
                                     py: 0.75,
-                                    bgcolor: alpha('#0f766e', 0.05),
+                                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
                                     borderRadius: 2,
                                     border: '1px solid',
-                                    borderColor: alpha('#0f766e', 0.2),
+                                    borderColor: (theme) => alpha(theme.palette.primary.main, 0.2),
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: 1,
@@ -929,9 +932,11 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                                 }}
                                 InputLabelProps={{ shrink: true }}
                                 sx={{
-                                    '& .MuiInputBase-input': {
-                                        padding: '10px 12px',
-                                    }
+                                    '& .MuiInputBase-input': { padding: '10px 12px' },
+                                    '& input::-webkit-calendar-picker-indicator': {
+                                        filter: isDark ? 'invert(1)' : 'none',
+                                        cursor: 'pointer',
+                                    },
                                 }}
                             />
                             <TextField
@@ -941,9 +946,11 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                                 onChange={(e) => setEndDate(e.target.value)}
                                 InputLabelProps={{ shrink: true }}
                                 sx={{
-                                    '& .MuiInputBase-input': {
-                                        padding: '10px 12px',
-                                    }
+                                    '& .MuiInputBase-input': { padding: '10px 12px' },
+                                    '& input::-webkit-calendar-picker-indicator': {
+                                        filter: isDark ? 'invert(1)' : 'none',
+                                        cursor: 'pointer',
+                                    },
                                 }}
                             />
                         </Box>

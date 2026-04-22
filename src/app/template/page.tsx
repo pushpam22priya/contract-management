@@ -2,7 +2,7 @@
 
 
 import { useState, useEffect } from 'react';
-import { Box, Typography, Button, Tooltip, IconButton } from '@mui/material';
+import { Box, Typography, Button, Tooltip, IconButton, useTheme } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import UploadIcon from '@mui/icons-material/Upload';
 import TemplateCard from '@/components/template/TemplateCard';
@@ -21,6 +21,8 @@ import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import { useTranslations } from 'next-intl';
 
 export default function TemplatePage() {
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
     const t = useTranslations('template');
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -195,16 +197,16 @@ export default function TemplatePage() {
                                 onClick={() => setUploadDialogOpen(true)}
                                 size="small"
                                 sx={{
-                                    bgcolor: 'transparent',
-                                    border: '1.5px solid',
-                                    borderColor: 'primary.main',
-                                    color: 'primary.main',
+                                    p: 0.5,
                                     borderRadius: 1,
-                                    width: 32,
-                                    height: 32,
-                                    p: 0,
+                                    bgcolor: 'primary.main',
+                                    color: 'white',
+                                    transition: 'all 0.2s',
                                     '& svg': { fontSize: '1.1rem' },
-                                    '&:hover': { bgcolor: 'primary.main', color: 'white' },
+                                    '&:hover': {
+                                        bgcolor: 'primary.dark',
+                                        boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}4d`,
+                                    },
                                 }}
                             >
                                 <UploadIcon />
@@ -337,7 +339,13 @@ export default function TemplatePage() {
                                 variant="contained"
                                 color="error"
                                 disabled={deleting}
-                                sx={{ minWidth: 100 }}
+                                sx={{
+                                    minWidth: 100,
+                                    ...(isDark && {
+                                        bgcolor: '#7f1d1d',
+                                        '&:hover': { bgcolor: '#991b1b' },
+                                    }),
+                                }}
                             >
                                 {deleting ? t('deleting') : t('delete')}
                             </Button>

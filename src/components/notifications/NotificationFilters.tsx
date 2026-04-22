@@ -24,30 +24,33 @@ export default function NotificationFilters({
     ];
 
     return (
-        <Box sx={{ mb: 3, display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-            {filters.map((filter) => (
-                <Chip
-                    key={filter.key}
-                    label={`${filter.label} (${filter.count})`}
-                    onClick={() => onFilterChange(filter.key)}
-                    sx={{
-                        px: 1,
-                        height: 36,
-                        fontSize: '0.875rem',
-                        fontWeight: 500,
-                        bgcolor: selectedFilter === filter.key ? 'text.primary' : 'background.paper',
-                        color: selectedFilter === filter.key ? 'white' : 'text.secondary',
-                        border: '1px solid',
-                        borderColor: selectedFilter === filter.key ? 'text.primary' : 'divider',
-                        transition: 'all 0.2s',
-                        cursor: 'pointer',
-                        '&:hover': {
-                            bgcolor: selectedFilter === filter.key ? 'text.primary' : 'action.hover',
-                            borderColor: selectedFilter === filter.key ? 'text.primary' : 'text.secondary',
-                        },
-                    }}
-                />
-            ))}
+        <Box sx={{ mb: 2.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {filters.map((filter) => {
+                const active = selectedFilter === filter.key;
+                return (
+                    <Chip
+                        key={filter.key}
+                        label={`${filter.label} (${filter.count})`}
+                        onClick={() => onFilterChange(filter.key)}
+                        sx={{
+                            px: 1,
+                            height: 34,
+                            fontSize: '0.85rem',
+                            fontWeight: active ? 600 : 500,
+                            bgcolor: active ? 'primary.main' : 'background.paper',
+                            color: active ? 'white' : 'text.secondary',
+                            border: '1px solid',
+                            borderColor: active ? 'primary.main' : 'divider',
+                            transition: 'all 0.2s',
+                            cursor: 'pointer',
+                            '&:hover': {
+                                bgcolor: active ? 'primary.dark' : 'action.hover',
+                                borderColor: active ? 'primary.dark' : 'text.secondary',
+                            },
+                        }}
+                    />
+                );
+            })}
         </Box>
     );
 }

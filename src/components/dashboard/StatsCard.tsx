@@ -13,6 +13,7 @@ import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined';
 import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import BoltOutlinedIcon from '@mui/icons-material/BoltOutlined';
 import { useState, useEffect } from 'react';
+import { useTheme, alpha } from '@mui/material/styles';
 
 interface StatsCardProps {
     title: string;
@@ -42,7 +43,6 @@ const iconMap = {
 export default function StatsCard({
     title,
     value,
-    description,
     icon,
     iconColor,
     iconBgColor,
@@ -52,6 +52,8 @@ export default function StatsCard({
     const [displayValue, setDisplayValue] = useState(0);
     const [isHovered, setIsHovered] = useState(false);
     const IconComponent = iconMap[icon];
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
 
     useEffect(() => {
         const duration = 800;
@@ -84,11 +86,17 @@ export default function StatsCard({
                     p: 1,
                     borderRadius: 2.5,
                     border: '1px solid',
-                    borderColor: isHovered ? `${iconColor}70` : 'rgba(0, 0, 0, 0.08)',
+                    borderColor: isHovered ? `${iconColor}70` : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
                     cursor: onClick ? 'pointer' : 'default',
                     transition: 'all 0.22s ease',
                     transform: isHovered ? 'translateY(-5px)' : 'translateY(0)',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                    boxShadow: isDark
+                        ? isHovered
+                            ? '0 8px 24px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.4)'
+                            : '0 4px 14px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3)'
+                        : isHovered
+                            ? '0 6px 16px rgba(0,0,0,0.12)'
+                            : '0 2px 8px rgba(0,0,0,0.07)',
                     position: 'relative',
                     overflow: 'hidden',
                     // Left accent bar
@@ -110,10 +118,10 @@ export default function StatsCard({
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                     <Box
                         sx={{
-                            width: 36,
-                            height: 36,
+                            width: 30,
+                            height: 30,
                             borderRadius: 1.5,
-                            bgcolor: iconBgColor,
+                            bgcolor: isDark ? alpha(iconColor, 0.14) : iconBgColor,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -122,14 +130,14 @@ export default function StatsCard({
                             transform: isHovered ? 'scale(1.08)' : 'scale(1)',
                         }}
                     >
-                        <IconComponent sx={{ fontSize: 18, color: iconColor }} />
+                        <IconComponent sx={{ fontSize: 15, color: isDark ? alpha(iconColor, 0.75) : iconColor }} />
                     </Box>
 
                     <Typography
                         sx={{
                             fontSize: '1.9rem',
                             fontWeight: 700,
-                            color: isHovered ? iconColor : 'text.primary',
+                            color: isHovered ? (isDark ? alpha(iconColor, 0.85) : iconColor) : 'text.primary',
                             lineHeight: 1,
                             transition: 'color 0.22s ease',
                         }}

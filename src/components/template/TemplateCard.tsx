@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Typography, Paper, Button, IconButton, Chip, Grow, Tooltip } from '@mui/material';
+import { Box, Typography, Paper, IconButton, Chip, Grow, Tooltip, useTheme } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -42,6 +43,13 @@ export default function TemplateCard({
     onDelete,
 }: TemplateCardProps) {
     const [isHovered, setIsHovered] = useState(false);
+    const theme = useTheme();
+    const primaryColor = theme.palette.primary.main;
+    const isDark = theme.palette.mode === 'dark';
+
+    // Visible border for icon buttons and chips — scales across all themes
+    const iconBtnBorderColor = alpha(theme.palette.text.secondary, 0.35);
+    const chipBorderColor = alpha(theme.palette.text.secondary, 0.22);
 
     return (
         <Grow in timeout={600 + index * 100}>
@@ -53,8 +61,8 @@ export default function TemplateCard({
                     p: 1,
                     borderRadius: 2.5,
                     border: '1px solid',
-                    borderColor: isHovered ? 'primary.main' : 'rgba(0, 0, 0, 0.08)',
-                    bgcolor: 'white',
+                    borderColor: isHovered ? 'primary.main' : 'divider',
+                    bgcolor: 'background.paper',
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
@@ -64,7 +72,7 @@ export default function TemplateCard({
                     cursor: 'pointer',
                     transform: isHovered ? 'translateY(-4px)' : 'translateY(0)',
                     boxShadow: isHovered
-                        ? '0 12px 24px rgba(15, 118, 110, 0.15)'
+                        ? `0 12px 24px ${alpha(primaryColor, 0.15)}`
                         : '0 2px 8px rgba(0, 0, 0, 0.04)',
                     '&:hover': {
                         '& .action-buttons': {
@@ -84,10 +92,10 @@ export default function TemplateCard({
                 >
                     <Box
                         sx={{
-                            width: 40,
-                            height: 40,
+                            width: 32,
+                            height: 32,
                             borderRadius: 1.5,
-                            bgcolor: '#9cece64a',
+                            bgcolor: alpha(primaryColor, isDark ? 0.15 : 0.12),
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -97,8 +105,8 @@ export default function TemplateCard({
                     >
                         <DescriptionOutlinedIcon
                             sx={{
-                                fontSize: 20,
-                                color: '#0f766e',
+                                fontSize: 16,
+                                color: primaryColor,
                             }}
                         />
                     </Box>
@@ -108,8 +116,9 @@ export default function TemplateCard({
                             label={truncateText(category, 15)}
                             size="small"
                             sx={{
-                                bgcolor: 'rgba(0, 0, 0, 0.04)',
+                                bgcolor: 'action.hover',
                                 color: 'text.secondary',
+                                border: `1px solid ${chipBorderColor}`,
                                 fontWeight: 500,
                                 fontSize: '0.75rem',
                                 height: 24,
@@ -119,7 +128,7 @@ export default function TemplateCard({
                 </Box>
 
                 {/* Title and Description */}
-                <Box sx={{ flex: 1, mb:0.5}}>
+                <Box sx={{ flex: 1, mb: 0.5 }}>
                     <Tooltip title={title} arrow placement="top">
                         <Typography
                             variant="h6"
@@ -159,49 +168,41 @@ export default function TemplateCard({
                         display: 'flex',
                         gap: 1,
                         p: '4px 8px',
-                        background: '#fff',
+                        background: theme.card.actionOverlay,
                         borderRadius: '0 0 12px 12px',
                         opacity: { xs: 1, md: 0 },
                         transition: 'opacity 0.2s ease-in-out',
                     }}
                 >
                     {[
-                        // {
-                        //     title: 'Create Contract',
-                        //     icon: <DescriptionOutlinedIcon sx={{ fontSize: '1.1rem' }} />,
-                        //     onClick: () => onUse?.(),
-                        //     color: 'success.main',
-                        //     shadow: 'rgba(46, 125, 50, 0.2)',
-                        //     show: true
-                        // },
                         {
                             title: 'View Template',
-                            icon: <VisibilityOutlinedIcon sx={{ fontSize: '1.1rem' }} />,
+                            icon: <VisibilityOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
                             onClick: () => onView?.(id),
-                            color: 'primary.main',
-                            shadow: 'rgba(15, 118, 110, 0.2)',
+                            color: primaryColor,
+                            shadow: alpha(primaryColor, 0.2),
                             show: true
                         },
                         {
                             title: 'Edit Template',
-                            icon: <EditOutlinedIcon sx={{ fontSize: '1.1rem' }} />,
+                            icon: <EditOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
                             onClick: (e: React.MouseEvent) => {
                                 e.stopPropagation();
                                 onEdit?.(id);
                             },
-                            color: 'info.main',
-                            shadow: 'rgba(2, 136, 209, 0.2)',
+                            color: primaryColor,
+                            shadow: alpha(primaryColor, 0.2),
                             show: isAdmin
                         },
                         {
                             title: 'Delete Template',
-                            icon: <DeleteOutlineIcon sx={{ fontSize: '1.1rem' }} />,
+                            icon: <DeleteOutlineIcon sx={{ fontSize: '0.8rem' }} />,
                             onClick: (e: React.MouseEvent) => {
                                 e.stopPropagation();
                                 onDelete?.(id);
                             },
-                            color: 'error.main',
-                            shadow: 'rgba(211, 47, 47, 0.2)',
+                            color: isDark ? '#a95151ff' : '#d32f2f',
+                            shadow: isDark ? 'rgba(239,68,68,0.2)' : 'rgba(211,47,47,0.2)',
                             show: isAdmin
                         }
                     ].map((action, idx) => (
@@ -213,9 +214,9 @@ export default function TemplateCard({
                                     sx={{
                                         bgcolor: 'transparent',
                                         border: '1px solid',
-                                        borderColor: 'divider',
+                                        borderColor: iconBtnBorderColor,
                                         borderRadius: 1.5,
-                                        color: 'text.primary',
+                                        color: 'text.secondary',
                                         transition: 'all 0.2s ease',
                                         '&:hover': {
                                             bgcolor: action.color,

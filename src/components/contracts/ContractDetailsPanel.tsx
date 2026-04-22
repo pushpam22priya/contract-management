@@ -12,7 +12,9 @@ import {
     Avatar,
     IconButton,
     Tooltip,
+    useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
@@ -52,6 +54,13 @@ const ContractDetailsPanel = ({
 }: ContractDetailsPanelProps) => {
     const [activeTab, setActiveTab] = useState(0);
     const t = useTranslations('contractDetail');
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+    const primaryColor = theme.palette.primary.main;
+    const tabHeaderBg = isDark ? alpha('#ffffff', 0.03) : '#f9fafb';
+    const docHoverBg = isDark ? alpha('#ffffff', 0.05) : '#f9fafb';
+    const avatarBg = isDark ? alpha(primaryColor, 0.15) : '#e0e7ff';
+    const avatarColor = isDark ? primaryColor : '#4f46e5';
 
     const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
         setActiveTab(newValue);
@@ -74,7 +83,7 @@ const ContractDetailsPanel = ({
             {/* Tabs */}
             <Box
                 sx={{
-                    bgcolor: '#f9fafb',
+                    bgcolor: tabHeaderBg,
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                     px: { xs: 1, sm: 2 },
@@ -133,7 +142,7 @@ const ContractDetailsPanel = ({
                                     transition: 'all 0.2s',
                                     cursor: onViewDocument ? 'pointer' : 'default',
                                     '&:hover': {
-                                        bgcolor: '#f9fafb',
+                                        bgcolor: docHoverBg,
                                         borderColor: 'primary.main',
                                         boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
                                     },
@@ -142,8 +151,8 @@ const ContractDetailsPanel = ({
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
                                     <Avatar
                                         sx={{
-                                            bgcolor: '#e0e7ff',
-                                            color: '#4f46e5',
+                                            bgcolor: avatarBg,
+                                            color: avatarColor,
                                             width: { xs: 40, sm: 48 },
                                             height: { xs: 40, sm: 48 },
                                         }}

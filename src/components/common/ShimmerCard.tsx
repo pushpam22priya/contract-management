@@ -1,22 +1,12 @@
 'use client';
 
-import { Box, keyframes } from '@mui/material';
+import { Box, keyframes, useTheme } from '@mui/material';
 
-/**
- * Shimmer animation keyframes
- */
 const shimmer = keyframes`
-    0% {
-        background-position: -400px 0;
-    }
-    100% {
-        background-position: 400px 0;
-    }
+    0%   { background-position: -400px 0; }
+    100% { background-position:  400px 0; }
 `;
 
-/**
- * A single shimmer rectangle placeholder
- */
 const ShimmerBlock = ({
     width = '100%',
     height = 14,
@@ -27,34 +17,28 @@ const ShimmerBlock = ({
     height?: number;
     borderRadius?: number;
     mb?: number;
-}) => (
-    <Box
-        sx={{
-            width,
-            height,
-            borderRadius: `${borderRadius}px`,
-            background: 'linear-gradient(90deg, #e6f5f3 25%, #ccebe7 50%, #e6f5f3 75%)',
-            backgroundSize: '800px 100%',
-            animation: `${shimmer} 1.5s ease-in-out infinite`,
-            mb,
-        }}
-    />
-);
+}) => {
+    const theme = useTheme();
+    const { base, highlight } = theme.shimmer;
+    return (
+        <Box
+            sx={{
+                width,
+                height,
+                borderRadius: `${borderRadius}px`,
+                background: `linear-gradient(90deg, ${base} 25%, ${highlight} 50%, ${base} 75%)`,
+                backgroundSize: '800px 100%',
+                animation: `${shimmer} 1.5s ease-in-out infinite`,
+                mb,
+            }}
+        />
+    );
+};
 
-/**
- * Variant presets that match the actual card layouts
- */
 interface ShimmerCardProps {
-    /** 'contract' matches ContractCard / DraftCard layout. 'template' matches TemplateCard layout. */
     variant?: 'contract' | 'template';
 }
 
-/**
- * Shimmer card for ContractCard / DraftCard layout:
- * - Title line + status chip (header row)
- * - Description line
- * - Three small detail blocks (client, category, expires)
- */
 const ContractShimmer = () => (
     <Box
         sx={{
@@ -66,16 +50,11 @@ const ContractShimmer = () => (
             overflow: 'hidden',
         }}
     >
-        {/* Header: title + status chip */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
             <ShimmerBlock width="55%" height={18} borderRadius={4} />
             <ShimmerBlock width="80px" height={24} borderRadius={12} />
         </Box>
-
-        {/* Description */}
         <ShimmerBlock width="85%" height={12} borderRadius={4} mb={1.5} />
-
-        {/* Details grid: client, category, expires */}
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5 }}>
             {[0, 1, 2].map((i) => (
                 <Box key={i}>
@@ -87,53 +66,31 @@ const ContractShimmer = () => (
     </Box>
 );
 
-/**
- * Shimmer card for TemplateCard layout:
- * - Icon box + category chip (header row)
- * - Title line
- * - Description lines
- */
 const TemplateShimmer = () => (
     <Box
         sx={{
-            bgcolor: 'white',
+            bgcolor: 'background.paper',
             borderRadius: 2.5,
             p: 2,
             border: '1px solid',
-            borderColor: 'rgba(0, 0, 0, 0.08)',
+            borderColor: 'divider',
             overflow: 'hidden',
         }}
     >
-        {/* Header: icon + category chip */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
             <ShimmerBlock width={40} height={40} borderRadius={8} />
             <ShimmerBlock width="70px" height={24} borderRadius={12} />
         </Box>
-
-        {/* Title */}
         <ShimmerBlock width="70%" height={16} borderRadius={4} mb={0.75} />
-
-        {/* Description */}
         <ShimmerBlock width="90%" height={12} borderRadius={4} mb={0.5} />
         <ShimmerBlock width="60%" height={12} borderRadius={4} />
     </Box>
 );
 
-/**
- * ShimmerCard — reusable loading placeholder card.
- *
- * @param variant - 'contract' for ContractCard/DraftCard, 'template' for TemplateCard
- */
 export default function ShimmerCard({ variant = 'contract' }: ShimmerCardProps) {
     return variant === 'template' ? <TemplateShimmer /> : <ContractShimmer />;
 }
 
-/**
- * Renders a grid of shimmer cards. Drop this into the same grid container.
- *
- * @param count - Number of shimmer cards to render (default 8)
- * @param variant - Card variant to mimic
- */
 export function ShimmerCardGrid({
     count = 8,
     variant = 'contract',
@@ -150,66 +107,52 @@ export function ShimmerCardGrid({
     );
 }
 
-/**
- * Shimmer card for ReviewApprovalCard layout:
- * - Colored header bar (status text + category chip)
- * - Title, client, description
- * - Action icon buttons row
- */
-const ReviewApprovalShimmerCard = () => (
-    <Box
-        sx={{
-            border: '1px solid',
-            borderColor: 'rgba(0, 0, 0, 0.08)',
-            borderRadius: 2.5,
-            bgcolor: 'white',
-            overflow: 'hidden',
-            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-        }}
-    >
-        {/* Colored header bar */}
+const ReviewApprovalShimmerCard = () => {
+    const theme = useTheme();
+    const { base, highlight } = theme.shimmer;
+    const gradient = `linear-gradient(90deg, ${base} 25%, ${highlight} 50%, ${base} 75%)`;
+    return (
         <Box
             sx={{
-                p: 1.5,
-                background: 'linear-gradient(90deg, #e6f5f3 25%, #ccebe7 50%, #e6f5f3 75%)',
-                backgroundSize: '800px 100%',
-                animation: `${shimmer} 1.5s ease-in-out infinite`,
-                borderBottom: '1px solid',
+                border: '1px solid',
                 borderColor: 'divider',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
+                borderRadius: 2.5,
+                bgcolor: 'background.paper',
+                overflow: 'hidden',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
             }}
         >
-            <ShimmerBlock width="120px" height={14} borderRadius={3} />
-            <ShimmerBlock width="60px" height={20} borderRadius={10} />
-        </Box>
-
-        {/* Content */}
-        <Box sx={{ p: 2 }}>
-            {/* Title */}
-            <ShimmerBlock width="70%" height={16} borderRadius={4} mb={1} />
-
-            {/* Client */}
-            <ShimmerBlock width="50%" height={12} borderRadius={3} mb={1} />
-
-            {/* Description */}
-            <ShimmerBlock width="90%" height={11} borderRadius={3} mb={0.5} />
-            <ShimmerBlock width="65%" height={11} borderRadius={3} mb={2} />
-
-            {/* Action buttons row */}
-            <Box sx={{ display: 'flex', gap: 1 }}>
-                {[0, 1, 2].map((i) => (
-                    <ShimmerBlock key={i} width={32} height={32} borderRadius={16} />
-                ))}
+            <Box
+                sx={{
+                    p: 1.5,
+                    background: gradient,
+                    backgroundSize: '800px 100%',
+                    animation: `${shimmer} 1.5s ease-in-out infinite`,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                }}
+            >
+                <ShimmerBlock width="120px" height={14} borderRadius={3} />
+                <ShimmerBlock width="60px" height={20} borderRadius={10} />
+            </Box>
+            <Box sx={{ p: 2 }}>
+                <ShimmerBlock width="70%" height={16} borderRadius={4} mb={1} />
+                <ShimmerBlock width="50%" height={12} borderRadius={3} mb={1} />
+                <ShimmerBlock width="90%" height={11} borderRadius={3} mb={0.5} />
+                <ShimmerBlock width="65%" height={11} borderRadius={3} mb={2} />
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    {[0, 1, 2].map((i) => (
+                        <ShimmerBlock key={i} width={32} height={32} borderRadius={16} />
+                    ))}
+                </Box>
             </Box>
         </Box>
-    </Box>
-);
+    );
+};
 
-/**
- * Renders a grid of review/approval shimmer cards.
- */
 export function ReviewApprovalShimmerGrid({ count = 6 }: { count?: number }) {
     return (
         <>
@@ -220,14 +163,25 @@ export function ReviewApprovalShimmerGrid({ count = 6 }: { count?: number }) {
     );
 }
 
-/**
- * Full-page shimmer for the Contract Detail page (/contracts/[id]).
- * Mimics: header (back + title + chip), left panel (ContractInformation), right panel (tabs + activity).
- */
+const ConnectorLine = () => {
+    const theme = useTheme();
+    const { base, highlight } = theme.shimmer;
+    return (
+        <Box
+            sx={{
+                flex: 1,
+                height: 4,
+                background: `linear-gradient(90deg, ${base} 25%, ${highlight} 50%, ${base} 75%)`,
+                backgroundSize: '800px 100%',
+                animation: `${shimmer} 1.5s ease-in-out infinite`,
+            }}
+        />
+    );
+};
+
 export function ContractDetailShimmer() {
     return (
         <Box>
-            {/* Header: back button + title + status chip */}
             <Box
                 sx={{
                     display: 'flex',
@@ -247,7 +201,6 @@ export function ContractDetailShimmer() {
                 </Box>
             </Box>
 
-            {/* Signature Progress Banner — multi-party timeline */}
             <Box
                 sx={{
                     mt: 1.5,
@@ -258,26 +211,19 @@ export function ContractDetailShimmer() {
                     bgcolor: 'background.paper',
                 }}
             >
-                {/* Banner title */}
                 <ShimmerBlock width={160} height={16} borderRadius={4} mb={2} />
-
-                {/* Timeline: 3 circles connected by shimmer lines */}
                 <Box sx={{ display: 'flex', alignItems: 'center', px: 4, mb: 0.5 }}>
                     <ShimmerBlock width={28} height={28} borderRadius={14} />
-                    <Box sx={{ flex: 1, height: 4, background: 'linear-gradient(90deg, #e6f5f3 25%, #ccebe7 50%, #e6f5f3 75%)', backgroundSize: '800px 100%', animation: `${shimmer} 1.5s ease-in-out infinite` }} />
+                    <ConnectorLine />
                     <ShimmerBlock width={28} height={28} borderRadius={14} />
-                    <Box sx={{ flex: 1, height: 4, background: 'linear-gradient(90deg, #e6f5f3 25%, #ccebe7 50%, #e6f5f3 75%)', backgroundSize: '800px 100%', animation: `${shimmer} 1.5s ease-in-out infinite` }} />
+                    <ConnectorLine />
                     <ShimmerBlock width={28} height={28} borderRadius={14} />
                 </Box>
-
-                {/* "Done" label under each step */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 3.5, mb: 1 }}>
                     {[0, 1, 2].map((i) => (
                         <ShimmerBlock key={i} width={36} height={11} borderRadius={3} />
                     ))}
                 </Box>
-
-                {/* 3 signer row cards side by side */}
                 <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
                     {[0, 1, 2].map((i) => (
                         <Box
@@ -302,8 +248,6 @@ export function ContractDetailShimmer() {
                         </Box>
                     ))}
                 </Box>
-
-                {/* Success / info banner row */}
                 <Box
                     sx={{
                         display: 'flex',
@@ -320,12 +264,9 @@ export function ContractDetailShimmer() {
                     <ShimmerBlock width={22} height={22} borderRadius={11} />
                     <ShimmerBlock width="55%" height={13} borderRadius={4} />
                 </Box>
-
-                {/* Finalize Contract button */}
                 <ShimmerBlock width={160} height={38} borderRadius={6} />
             </Box>
 
-            {/* Two-panel content grid */}
             <Box
                 sx={{
                     mt: 1.5,
@@ -334,7 +275,6 @@ export function ContractDetailShimmer() {
                     gap: 2,
                 }}
             >
-                {/* Left Panel: Contract Information */}
                 <Box
                     sx={{
                         bgcolor: 'background.paper',
@@ -344,10 +284,7 @@ export function ContractDetailShimmer() {
                         p: 2.5,
                     }}
                 >
-                    {/* Section title */}
                     <ShimmerBlock width={180} height={18} borderRadius={4} mb={2} />
-
-                    {/* Info fields grid (2 columns × 3 rows) */}
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 2 }}>
                         {[0, 1, 2, 3, 4, 5].map((i) => (
                             <Box key={i}>
@@ -356,20 +293,12 @@ export function ContractDetailShimmer() {
                             </Box>
                         ))}
                     </Box>
-
-                    {/* Divider */}
                     <Box sx={{ borderTop: '1px solid', borderColor: 'divider', my: 2 }} />
-
-                    {/* Description */}
                     <ShimmerBlock width="30%" height={10} borderRadius={3} mb={0.75} />
                     <ShimmerBlock width="95%" height={13} borderRadius={4} mb={0.5} />
                     <ShimmerBlock width="75%" height={13} borderRadius={4} mb={0.5} />
                     <ShimmerBlock width="50%" height={13} borderRadius={4} mb={2} />
-
-                    {/* Divider */}
                     <Box sx={{ borderTop: '1px solid', borderColor: 'divider', my: 2 }} />
-
-                    {/* Progress */}
                     <ShimmerBlock width="35%" height={10} borderRadius={3} mb={1} />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
                         <ShimmerBlock width="45%" height={12} borderRadius={3} />
@@ -378,7 +307,6 @@ export function ContractDetailShimmer() {
                     <ShimmerBlock width="100%" height={8} borderRadius={4} />
                 </Box>
 
-                {/* Right Panel: Documents / Activity tabs */}
                 <Box
                     sx={{
                         bgcolor: 'background.paper',
@@ -388,13 +316,10 @@ export function ContractDetailShimmer() {
                         p: 2.5,
                     }}
                 >
-                    {/* Tab buttons */}
                     <Box sx={{ display: 'flex', gap: 1, mb: 2.5 }}>
                         <ShimmerBlock width={110} height={34} borderRadius={6} />
                         <ShimmerBlock width={90} height={34} borderRadius={6} />
                     </Box>
-
-                    {/* Document card */}
                     <Box
                         sx={{
                             display: 'flex',
@@ -417,8 +342,6 @@ export function ContractDetailShimmer() {
                             <ShimmerBlock width={28} height={28} borderRadius={6} />
                         </Box>
                     </Box>
-
-                    {/* Activity items */}
                     {[0, 1, 2].map((i) => (
                         <Box key={i} sx={{ display: 'flex', gap: 1.5, mb: 1.75 }}>
                             <ShimmerBlock width={10} height={10} borderRadius={5} />

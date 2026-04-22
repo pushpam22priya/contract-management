@@ -15,7 +15,9 @@ import {
     CircularProgress,
     AlertColor,
     Tooltip,
+    useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { ArrowBack, ArrowForward, Save } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -60,6 +62,10 @@ export default function RenewContractDialog({
     onSuccess,
 }: RenewContractDialogProps) {
     const router = useRouter();
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+    const inputBg = isDark ? alpha('#ffffff', 0.05) : '#f8fafc';
+    const inputHoverBg = isDark ? alpha('#ffffff', 0.08) : '#f1f5f9';
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
 
     const origEnd = dayjs(contractEndDate);
@@ -511,9 +517,9 @@ export default function RenewContractDialog({
     const datePickerSx = {
         width: '100%',
         '& .MuiOutlinedInput-root': {
-            bgcolor: '#f8fafc',
+            bgcolor: inputBg,
             borderRadius: 2,
-            '&:hover': { bgcolor: '#f1f5f9' },
+            '&:hover': { bgcolor: inputHoverBg },
             '&.Mui-focused': { bgcolor: 'background.paper' },
         },
     };
@@ -701,7 +707,7 @@ export default function RenewContractDialog({
                                             placeholder="Search templates…"
                                             error={!!templateError}
                                             helperText={templateError}
-                                            sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#f8fafc', borderRadius: 2 } }}
+                                            sx={{ '& .MuiOutlinedInput-root': { bgcolor: inputBg, borderRadius: 2 } }}
                                         />
                                     )}
                                 />
@@ -721,9 +727,9 @@ export default function RenewContractDialog({
                                 placeholder="Add any notes about this renewal"
                                 value={notes}
                                 onChange={(e) => { if (e.target.value.length <= 300) setNotes(e.target.value); }}
-                                inputProps={{ maxLength: 300 }}
+                                slotProps={{ htmlInput: { maxLength: 300 } }}
                                 helperText={`${notes.length}/300`}
-                                sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#f8fafc', borderRadius: 2 } }}
+                                sx={{ '& .MuiOutlinedInput-root': { bgcolor: inputBg, borderRadius: 2 } }}
                             />
                         </Box>
                     </Box>

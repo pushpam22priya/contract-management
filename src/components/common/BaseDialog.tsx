@@ -63,6 +63,9 @@ export default function BaseDialog({
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const isFullScreen = fullScreenProp || isMobile;
+    const isDark = theme.palette.mode === 'dark';
+    const headerFooterBg = isDark ? 'rgba(255,255,255,0.04)' : '#fafafa';
+    const borderColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
 
     return (
         <Dialog
@@ -108,8 +111,8 @@ export default function BaseDialog({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     borderBottom: '1px solid',
-                    borderColor: 'rgba(0, 0, 0, 0.08)',
-                    bgcolor: '#fafafa',
+                    borderColor,
+                    bgcolor: headerFooterBg,
                     px: 1,
                     py: isFullScreen ? 0.3 : 0.7,
                     borderRadius: isFullScreen ? 0 : "16px 16px 0 0",
@@ -136,7 +139,7 @@ export default function BaseDialog({
                         transition: 'all 0.2s',
                         p: 0,
                         '&:hover': {
-                            bgcolor: 'rgba(0, 0, 0, 0.08)',
+                            bgcolor: 'action.hover',
                             color: 'text.primary',
                             transform: 'rotate(90deg)',
                         },
@@ -171,8 +174,8 @@ export default function BaseDialog({
                     sx={{
                         p: isFullScreen ? 0.5 : 0.8,
                         borderTop: '1px solid',
-                        borderColor: 'rgba(0, 0, 0, 0.08)',
-                        bgcolor: '#fafafa',
+                        borderColor,
+                        bgcolor: headerFooterBg,
                         gap: 1,
                         borderRadius: isFullScreen ? 0 : "0 0 16px 16px",
                         '& .MuiButton-root': { py: 0.5, px: 1.5 },

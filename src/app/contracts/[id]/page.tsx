@@ -8,8 +8,8 @@ import {
     IconButton,
     Tooltip,
     Chip,
-    Fade,
     Button,
+    useTheme,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
@@ -68,6 +68,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
     const t = useTranslations('contractDetail');
     const tStatus = useTranslations('contractStatus');
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
 
     // Strip all stacked "(Renewal)" suffixes for display — raw title kept in DB
     const displayTitle = contract?.title?.replace(/\s*\(Renewal\d*\)$/i, '') ?? '';
@@ -548,6 +550,25 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
     // Helper: Status Color
     const getStatusColor = (status: string) => {
+        if (isDark) {
+            switch (status) {
+                case 'active':
+                case 'signed': return { bgcolor: 'rgba(16,185,129,0.08)', color: '#6bac8e' };
+                case 'expiring': return { bgcolor: 'rgba(245,158,11,0.08)', color: '#b8935a' };
+                case 'terminated': return { bgcolor: 'rgba(148,163,184,0.07)', color: '#6b7e90' };
+                case 'expired':
+                case 'rejected':
+                case 'rejected_by_reviewer':
+                case 'rejected_by_approver': return { bgcolor: 'rgba(239,68,68,0.08)', color: '#b07070' };
+                case 'in_review': return { bgcolor: 'rgba(139,92,246,0.08)', color: '#9080c0' };
+                case 'in_approval': return { bgcolor: 'rgba(245,158,11,0.08)', color: '#b8935a' };
+                case 'reviewed':
+                case 'approved': return { bgcolor: 'rgba(16,185,129,0.08)', color: '#6bac8e' };
+                case 'waiting_for_signature': return { bgcolor: 'rgba(245,158,11,0.08)', color: '#b8935a' };
+                case 'signed_by_everyone': return { bgcolor: 'rgba(59,130,246,0.08)', color: '#6888ac' };
+                default: return { bgcolor: 'rgba(148,163,184,0.07)', color: '#6b7e90' };
+            }
+        }
         switch (status) {
             case 'active':
             case 'signed': return { bgcolor: '#d1fae5', color: '#065f46' };
@@ -604,322 +625,325 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     return (
         <AppLayout>
             {/* Main content box */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
-                    {/* Header Section */}
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            alignItems: { xs: 'flex-start', md: 'center' },
-                            justifyContent: 'space-between',
-                            flexDirection: { xs: 'column', md: 'row' },
-                            gap: 2,
-                            pb: 1.5,
-                            borderBottom: '1px solid',
-                            borderColor: 'divider',
-                        }}
-                    >
-                        {/* Left: Back Button + Title */}
-                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1 }}>
-                            <Tooltip title={t('goBack')} arrow>
-                                <IconButton
-                                    onClick={handleBack}
-                                    sx={{
-                                        color: 'text.secondary',
-                                        '&:hover': {
-                                            bgcolor: 'action.hover',
-                                            color: 'primary.main',
-                                        },
-                                    }}
-                                >
-                                    <ArrowBackIcon />
-                                </IconButton>
-                            </Tooltip>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 1 }}>
+                {/* Header Section */}
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexDirection: { xs: 'column', md: 'row' },
+                        gap: 1,
+                        py: 0.25,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                    }}
+                >
+                    {/* Left: Back Button + Title */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flex: 1 }}>
+                        <Tooltip title={t('goBack')} arrow>
+                            <IconButton
+                                size="small"
+                                onClick={handleBack}
+                                sx={{
+                                    color: 'text.secondary',
+                                    '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
+                                }}
+                            >
+                                <ArrowBackIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                        </Tooltip>
 
-                            <Box sx={{ flex: 1 }}>
-                                {/* Title and Badge */}
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                    <Typography
-                                        fontWeight={600}
-                                        sx={{
-                                            color: 'text.primary',
-                                            fontSize: { xs: '1rem', sm: '20px' },
-                                        }}
-                                    >
-                                        {displayTitle}
-                                    </Typography>
-                                    <Chip
-                                        label={tStatus(contract.status as Parameters<typeof tStatus>[0])}
-                                        size="small"
-                                        sx={{
-                                            bgcolor: statusColors.bgcolor,
-                                            color: statusColors.color,
-                                            fontWeight: 600,
-                                            fontSize: '0.75rem',
-                                            height: 24,
-                                            borderRadius: 1.5,
-                                        }}
-                                    />
-                                </Box>
-                            </Box>
-                        </Box>
-
-                        {/* Right: Action Buttons */}
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                gap: 1,
-                                alignSelf: { xs: 'flex-end', md: 'center' },
-                            }}
-                        >
-                            {/* History button — shown whenever this contract is part of a renewal chain */}
-                            {(contract?.renewedFromId || contract?.renewedContractId) && (
-                                <Tooltip title={t('contractHistory')} arrow>
-                                    <IconButton
-                                        onClick={(e) => setHistoryAnchorEl(e.currentTarget)}
-                                        sx={{
-                                            bgcolor: 'transparent',
-                                            border: '1px solid',
-                                            borderColor: 'divider',
-                                            color: 'text.secondary',
-                                            width: 36,
-                                            height: 36,
-                                            transition: 'all 0.2s',
-                                            '&:hover': {
-                                                bgcolor: 'primary.main',
-                                                borderColor: 'primary.main',
-                                                color: 'white',
-                                                transform: 'translateY(-2px)',
-                                                boxShadow: '0 4px 8px rgba(15, 118, 110, 0.2)',
-                                            },
-                                        }}
-                                    >
-                                        <HistoryIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            )}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            <Typography
+                                fontWeight={600}
+                                sx={{ color: 'text.primary', fontSize: '0.95rem' }}
+                            >
+                                {displayTitle}
+                            </Typography>
+                            <Chip
+                                label={tStatus(contract.status as Parameters<typeof tStatus>[0])}
+                                size="small"
+                                sx={{
+                                    bgcolor: statusColors.bgcolor,
+                                    color: statusColors.color,
+                                    fontWeight: 600,
+                                    fontSize: '0.68rem',
+                                    height: 20,
+                                    borderRadius: 1,
+                                }}
+                            />
                         </Box>
                     </Box>
 
-                    <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pt: 1.5, pb: 2 }}>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-
-                    {/* Terminated Banner */}
-                    {contract.status === ContractStatus.TERMINATED && (
-                        <Box
-                            sx={{
-                                mt: 1.5,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 1.5,
-                                px: 2,
-                                py: 1.25,
-                                bgcolor: '#fef2f2',
-                                border: '1px solid #fecaca',
-                                borderRadius: 2,
-                                flexWrap: 'wrap',
-                            }}
-                        >
-                            <BlockOutlinedIcon sx={{ color: '#dc2626', fontSize: '1.1rem', flexShrink: 0 }} />
-                            <Typography variant="body2" sx={{ color: '#7f1d1d', fontWeight: 500, flex: 1 }}>
-                                {t('terminatedOn')}{' '}
-                                <strong>
-                                    {contract.terminatedAt
-                                        ? new Date(contract.terminatedAt).toLocaleDateString('en-GB')
-                                        : '—'}
-                                </strong>
-                                {contract.terminatedBy && (
-                                    <> {t('terminatedBy')} <strong>{contract.terminatedBy}</strong></>
-                                )}
-                                . {t('noFurtherActions')}
-                            </Typography>
-                        </Box>
-                    )}
-
-                    {/* Renewal / Expire Banner — shown for expiring and expired (not terminated) */}
-                    {(contract.status === ContractStatus.EXPIRING || contract.status === ContractStatus.EXPIRED) && (
-                        contract.renewalStatus === 'in_progress' ? (
-                            /* ── Renewal draft exists but not yet finalized ── */
-                            <Box
-                                sx={{
-                                    mt: 1.5,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: 2,
-                                    px: 2,
-                                    py: 1,
-                                    bgcolor: '#fef3c7',
-                                    border: '1px solid #fcd34d',
-                                    borderRadius: 2,
-                                    flexWrap: 'wrap',
-                                }}
-                            >
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <AutorenewIcon sx={{ color: '#92400e', fontSize: '1.1rem' }} />
-                                    <Typography variant="body2" sx={{ color: '#92400e', fontWeight: 500 }}>
-                                        {t('renewalInProgress')}
-                                    </Typography>
-                                </Box>
-                                {contract.renewedContractId && (
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        onClick={() => router.push(`/draft`)}
-                                        sx={{
-                                            color: '#92400e',
-                                            borderColor: '#fcd34d',
-                                            fontSize: '0.8rem',
-                                            py: 0.25,
-                                            '&:hover': { bgcolor: '#fde68a', borderColor: '#f59e0b' },
-                                        }}
-                                    >
-                                        {t('viewDraft')}
-                                    </Button>
-                                )}
-                            </Box>
-                        ) : (
-                            /* ── No renewal yet ── */
-                            <Box
-                                sx={{
-                                    mt: 1.5,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: 2,
-                                    px: 2,
-                                    py: 1,
-                                    bgcolor: '#fef3c7',
-                                    border: '1px solid #fcd34d',
-                                    borderRadius: 2,
-                                    flexWrap: 'wrap',
-                                }}
-                            >
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
-                                    <WarningAmberOutlinedIcon sx={{ color: '#92400e', fontSize: '1.1rem', flexShrink: 0 }} />
-                                    <Typography variant="body2" sx={{ color: '#92400e', fontWeight: 500 }}>
-                                        {contract.status === ContractStatus.EXPIRED
-                                            ? t('contractExpired')
-                                            : t('expiringOn', { date: contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-GB') : 'soon' })}
-                                        {' '}
-                                        {contract.status === ContractStatus.EXPIRED
-                                            ? t('renewOrTerminate')
-                                            : t('renewRelationship')}
-                                    </Typography>
-                                </Box>
-                                <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
-                                    <Button
-                                        size="small"
-                                        variant="contained"
-                                        onClick={() => setRenewDialogOpen(true)}
-                                        startIcon={<AutorenewIcon sx={{ fontSize: '0.9rem !important' }} />}
-                                        sx={{
-                                            bgcolor: '#d97706',
+                    {/* Right: Action Buttons */}
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            gap: 1,
+                            alignSelf: { xs: 'flex-end', md: 'center' },
+                        }}
+                    >
+                        {/* History button — shown whenever this contract is part of a renewal chain */}
+                        {(contract?.renewedFromId || contract?.renewedContractId) && (
+                            <Tooltip title={t('contractHistory')} arrow>
+                                <IconButton
+                                    onClick={(e) => setHistoryAnchorEl(e.currentTarget)}
+                                    sx={{
+                                        bgcolor: 'transparent',
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        color: 'text.secondary',
+                                        width: 36,
+                                        height: 36,
+                                        transition: 'all 0.2s',
+                                        '&:hover': {
+                                            bgcolor: 'primary.main',
+                                            borderColor: 'primary.main',
                                             color: 'white',
-                                            fontSize: '0.8rem',
-                                            py: 0.25,
-                                            '&:hover': { bgcolor: '#b45309' },
-                                        }}
-                                    >
-                                        {t('renew')}
-                                    </Button>
-                                    {/* Terminate — only for expired (not expiring), mutually exclusive with renewal */}
-                                    {contract.status === ContractStatus.EXPIRED && (
+                                            transform: 'translateY(-2px)',
+                                            boxShadow: (theme) => `0 4px 8px ${theme.palette.primary.main}33`,
+                                        },
+                                    }}
+                                >
+                                    <HistoryIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                    </Box>
+                </Box>
+
+                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1, pb: 1 }}>
+
+                        {/* Terminated Banner */}
+                        {contract.status === ContractStatus.TERMINATED && (
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1.5,
+                                    px: 2,
+                                    py: 1.25,
+                                    bgcolor: isDark ? 'rgba(239,68,68,0.08)' : '#fef2f2',
+                                    border: '1px solid',
+                                    borderColor: isDark ? 'rgba(239,68,68,0.22)' : '#fecaca',
+                                    borderRadius: 2,
+                                    flexWrap: 'wrap',
+                                }}
+                            >
+                                <BlockOutlinedIcon sx={{ color: isDark ? '#b07070' : '#dc2626', fontSize: '1.1rem', flexShrink: 0 }} />
+                                <Typography variant="body2" sx={{ color: isDark ? '#b07070' : '#7f1d1d', fontWeight: 500, flex: 1 }}>
+                                    {t('terminatedOn')}{' '}
+                                    <strong>
+                                        {contract.terminatedAt
+                                            ? new Date(contract.terminatedAt).toLocaleDateString('en-GB')
+                                            : '—'}
+                                    </strong>
+                                    {contract.terminatedBy && (
+                                        <> {t('terminatedBy')} <strong>{contract.terminatedBy}</strong></>
+                                    )}
+                                    . {t('noFurtherActions')}
+                                </Typography>
+                            </Box>
+                        )}
+
+                        {/* Renewal / Expire Banner — shown for expiring and expired (not terminated) */}
+                        {(contract.status === ContractStatus.EXPIRING || contract.status === ContractStatus.EXPIRED) && (
+                            contract.renewalStatus === 'in_progress' ? (
+                                /* ── Renewal draft exists but not yet finalized ── */
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: 2,
+                                        px: 2,
+                                        py: 1,
+                                        bgcolor: isDark ? 'rgba(245,158,11,0.08)' : '#fef3c7',
+                                        border: '1px solid',
+                                        borderColor: isDark ? 'rgba(245,158,11,0.22)' : '#fcd34d',
+                                        borderRadius: 2,
+                                        flexWrap: 'wrap',
+                                    }}
+                                >
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <AutorenewIcon sx={{ color: isDark ? '#b8935a' : '#92400e', fontSize: '1.1rem' }} />
+                                        <Typography variant="body2" sx={{ color: isDark ? '#b8935a' : '#92400e', fontWeight: 500 }}>
+                                            {t('renewalInProgress')}
+                                        </Typography>
+                                    </Box>
+                                    {contract.renewedContractId && (
                                         <Button
                                             size="small"
                                             variant="outlined"
-                                            onClick={() => setTerminateDialogOpen(true)}
-                                            startIcon={<BlockOutlinedIcon sx={{ fontSize: '0.9rem !important' }} />}
+                                            onClick={() => router.push(`/draft`)}
                                             sx={{
-                                                color: '#991b1b',
-                                                borderColor: '#fca5a5',
+                                                color: isDark ? '#b8935a' : '#92400e',
+                                                borderColor: isDark ? 'rgba(245,158,11,0.30)' : '#fcd34d',
                                                 fontSize: '0.8rem',
                                                 py: 0.25,
-                                                '&:hover': { bgcolor: '#fef2f2', borderColor: '#ef4444' },
+                                                '&:hover': {
+                                                    bgcolor: isDark ? 'rgba(245,158,11,0.10)' : '#fde68a',
+                                                    borderColor: isDark ? 'rgba(245,158,11,0.50)' : '#f59e0b',
+                                                },
                                             }}
                                         >
-                                            {t('terminate')}
+                                            {t('viewDraft')}
                                         </Button>
                                     )}
                                 </Box>
+                            ) : (
+                                /* ── No renewal yet ── */
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: 2,
+                                        px: 2,
+                                        py: 1,
+                                        bgcolor: isDark ? 'rgba(245,158,11,0.08)' : '#fef3c7',
+                                        border: '1px solid',
+                                        borderColor: isDark ? 'rgba(245,158,11,0.22)' : '#fcd34d',
+                                        borderRadius: 2,
+                                        flexWrap: 'wrap',
+                                    }}
+                                >
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
+                                        <WarningAmberOutlinedIcon sx={{ color: isDark ? '#b8935a' : '#92400e', fontSize: '1.1rem', flexShrink: 0 }} />
+                                        <Typography variant="body2" sx={{ color: isDark ? '#b8935a' : '#92400e', fontWeight: 500 }}>
+                                            {contract.status === ContractStatus.EXPIRED
+                                                ? t('contractExpired')
+                                                : t('expiringOn', { date: contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-GB') : 'soon' })}
+                                            {' '}
+                                            {contract.status === ContractStatus.EXPIRED
+                                                ? t('renewOrTerminate')
+                                                : t('renewRelationship')}
+                                        </Typography>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
+                                        <Button
+                                            size="small"
+                                            variant={isDark ? 'outlined' : 'contained'}
+                                            onClick={() => setRenewDialogOpen(true)}
+                                            startIcon={<AutorenewIcon sx={{ fontSize: '0.9rem !important' }} />}
+                                            sx={isDark ? {
+                                                color: '#b8935a',
+                                                borderColor: 'rgba(245,158,11,0.35)',
+                                                fontSize: '0.8rem',
+                                                py: 0.25,
+                                                '&:hover': { bgcolor: 'rgba(245,158,11,0.10)', borderColor: 'rgba(245,158,11,0.55)' },
+                                            } : {
+                                                bgcolor: '#d97706',
+                                                color: 'white',
+                                                fontSize: '0.8rem',
+                                                py: 0.25,
+                                                '&:hover': { bgcolor: '#b45309' },
+                                            }}
+                                        >
+                                            {t('renew')}
+                                        </Button>
+                                        {/* Terminate — only for expired (not expiring), mutually exclusive with renewal */}
+                                        {contract.status === ContractStatus.EXPIRED && (
+                                            <Button
+                                                size="small"
+                                                variant="outlined"
+                                                onClick={() => setTerminateDialogOpen(true)}
+                                                startIcon={<BlockOutlinedIcon sx={{ fontSize: '0.9rem !important' }} />}
+                                                sx={{
+                                                    color: isDark ? '#b07070' : '#991b1b',
+                                                    borderColor: isDark ? 'rgba(239,68,68,0.30)' : '#fca5a5',
+                                                    fontSize: '0.8rem',
+                                                    py: 0.25,
+                                                    '&:hover': {
+                                                        bgcolor: isDark ? 'rgba(239,68,68,0.08)' : '#fef2f2',
+                                                        borderColor: isDark ? 'rgba(239,68,68,0.55)' : '#ef4444',
+                                                    },
+                                                }}
+                                            >
+                                                {t('terminate')}
+                                            </Button>
+                                        )}
+                                    </Box>
+                                </Box>
+                            )
+                        )}
+
+                        {/* ═══════════════════════════════════════════════════════════════════════════ */}
+                        {/* MULTI-PARTY SIGNATURE STATUS */}
+                        {/* ═══════════════════════════════════════════════════════════════════════════ */}
+                        {isMultiPartyContract && (
+                            <SignatureProgressTimeline
+                                contract={contract}
+                                isFinalized={isFinalized}
+                                canFinalize={canFinalize}
+                                currentOrder={currentOrder}
+                                uniqueOrders={uniqueOrders}
+                                finalizing={finalizing}
+                                finalizeError={finalizeError}
+                                finalizeSuccess={finalizeSuccess}
+                                onFinalize={handleFinalize}
+                            />
+                        )}
+
+                        {/* Content Grid: Contract Info + Details Panel */}
+                        <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: { xs: '1fr', lg: '1.5fr 1fr' },
+                                gap: 1.5,
+                            }}
+                        >
+                            {/* Contract Information Section (Left) */}
+                            <Box>
+                                <ContractInformation
+                                    client={contract.client || 'N/A'}
+                                    contractValue={contract.value || 'N/A'}
+                                    category={contract.category || 'N/A'}
+                                    template={contract.templateName || 'Custom Template'}
+                                    startDate={contract.startDate ? new Date(contract.startDate).toLocaleDateString('en-GB') : 'N/A'}
+                                    endDate={contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-GB') : 'N/A'}
+                                    daysRemaining={contract.expiresInDays || 0}
+                                    progressPercentage={(() => {
+                                        // Calculate REMAINING progress based on dates
+                                        // 100% = full duration remaining, 0% = expired
+                                        if (!contract.startDate || !contract.endDate) return 100;
+
+                                        const start = new Date(contract.startDate).getTime();
+                                        const end = new Date(contract.endDate).getTime();
+                                        const now = new Date().getTime();
+
+                                        // If contract hasn't started yet - 100% remaining
+                                        if (now < start) return 100;
+                                        // If contract has ended - 0% remaining
+                                        if (now > end) return 0;
+
+                                        // Calculate percentage REMAINING (not elapsed)
+                                        const totalDuration = end - start;
+                                        const remaining = end - now;
+                                        const percentage = Math.round((remaining / totalDuration) * 100);
+
+                                        return Math.min(100, Math.max(0, percentage));
+                                    })()}
+                                    status={contract.status}
+                                    description={displayDetails.description}
+                                />
                             </Box>
-                        )
-                    )}
 
-                    {/* ═══════════════════════════════════════════════════════════════════════════ */}
-                    {/* MULTI-PARTY SIGNATURE STATUS */}
-                    {/* ═══════════════════════════════════════════════════════════════════════════ */}
-                    {isMultiPartyContract && (
-                        <SignatureProgressTimeline
-                            contract={contract}
-                            isFinalized={isFinalized}
-                            canFinalize={canFinalize}
-                            currentOrder={currentOrder}
-                            uniqueOrders={uniqueOrders}
-                            finalizing={finalizing}
-                            finalizeError={finalizeError}
-                            finalizeSuccess={finalizeSuccess}
-                            onFinalize={handleFinalize}
-                        />
-                    )}
-
-                    {/* Content Grid: Contract Info + Details Panel */}
-                    <Box
-                        sx={{
-                            mt: 1.5,
-                            display: 'grid',
-                            gridTemplateColumns: { xs: '1fr', lg: '1.5fr 1fr' },
-                            gap: 2,
-                        }}
-                    >
-                        {/* Contract Information Section (Left) */}
-                        <Box>
-                            <ContractInformation
-                                client={contract.client || 'N/A'}
-                                contractValue={contract.value || 'N/A'}
-                                category={contract.category || 'N/A'}
-                                template={contract.templateName || 'Custom Template'}
-                                startDate={contract.startDate ? new Date(contract.startDate).toLocaleDateString('en-GB') : 'N/A'}
-                                endDate={contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-GB') : 'N/A'}
-                                daysRemaining={contract.expiresInDays || 0}
-                                progressPercentage={(() => {
-                                    // Calculate REMAINING progress based on dates
-                                    // 100% = full duration remaining, 0% = expired
-                                    if (!contract.startDate || !contract.endDate) return 100;
-
-                                    const start = new Date(contract.startDate).getTime();
-                                    const end = new Date(contract.endDate).getTime();
-                                    const now = new Date().getTime();
-
-                                    // If contract hasn't started yet - 100% remaining
-                                    if (now < start) return 100;
-                                    // If contract has ended - 0% remaining
-                                    if (now > end) return 0;
-
-                                    // Calculate percentage REMAINING (not elapsed)
-                                    const totalDuration = end - start;
-                                    const remaining = end - now;
-                                    const percentage = Math.round((remaining / totalDuration) * 100);
-
-                                    return Math.min(100, Math.max(0, percentage));
-                                })()}
-                                status={contract.status}
-                                description={displayDetails.description}
-                            />
-                        </Box>
-
-                        {/* Contract Details Panel Section (Right) */}
-                        <Box>
-                            <ContractDetailsPanel
-                                documents={displayDetails.documents}
-                                activities={displayDetails.activities}
-                                onViewDocument={handleViewDocument}
-                                onDownloadDocument={handleDownloadDocument}
-                            />
+                            {/* Contract Details Panel Section (Right) */}
+                            <Box>
+                                <ContractDetailsPanel
+                                    documents={displayDetails.documents}
+                                    activities={displayDetails.activities}
+                                    onViewDocument={handleViewDocument}
+                                    onDownloadDocument={handleDownloadDocument}
+                                />
+                            </Box>
                         </Box>
                     </Box>
                 </Box>
             </Box>
-        </Box>
 
             {/* Debug: Log what's being passed to viewer */}
             {viewerOpen && (() => {

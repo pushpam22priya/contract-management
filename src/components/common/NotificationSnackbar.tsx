@@ -1,4 +1,6 @@
-import { Snackbar, Alert, AlertColor } from '@mui/material';
+'use client';
+
+import { Snackbar, Alert, AlertColor, useTheme } from '@mui/material';
 
 interface NotificationSnackbarProps {
     open: boolean;
@@ -8,10 +10,6 @@ interface NotificationSnackbarProps {
     autoHideDuration?: number;
 }
 
-/**
- * Reusable Snackbar component for notifications
- * Replaces alert() calls with modern Material-UI notifications
- */
 export default function NotificationSnackbar({
     open,
     message,
@@ -19,6 +17,9 @@ export default function NotificationSnackbar({
     onClose,
     autoHideDuration = 4000,
 }: NotificationSnackbarProps) {
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+
     return (
         <Snackbar
             open={open}
@@ -32,7 +33,9 @@ export default function NotificationSnackbar({
                 variant="filled"
                 sx={{
                     width: '100%',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    boxShadow: isDark
+                        ? '0 4px 16px rgba(0,0,0,0.40)'
+                        : '0 4px 12px rgba(0,0,0,0.15)',
                 }}
             >
                 {message}

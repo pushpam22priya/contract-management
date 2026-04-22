@@ -1,4 +1,4 @@
-import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
+import { Box, Typography, Chip, IconButton, Tooltip, useTheme } from '@mui/material';
 import dayjs from 'dayjs';
 import { Visibility, Share, Download, FolderOutlined, AutorenewOutlined, Loop } from '@mui/icons-material';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
@@ -53,6 +53,9 @@ const ContractCard = ({
      *  - only one unique order exists (no ordering UX needed)
      *  - currentSigningOrder is absent or not in the orders list
      */
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+
     const getMultiPartySigningProgress = (): { orderIndex: number; totalOrders: number } | null => {
         const allSigners = [
             ...(contract.internalSigners || []),
@@ -118,10 +121,50 @@ const ContractCard = ({
     };
 
     const getStatusColor = (status: Contract['status']) => {
+        if (isDark) {
+            if (variant === 'draft' && status === ContractStatus.DRAFT && contract.reviewStatus === 'changes_requested')
+                return { bg: 'rgba(234,88,12,0.08)', color: '#b87a50', border: 'rgba(234,88,12,0.22)' };
+            switch (status) {
+                case ContractStatus.ACTIVE:
+                case ContractStatus.SIGNED:
+                    return { bg: 'rgba(16,185,129,0.08)', color: '#6bac8e', border: 'rgba(16,185,129,0.20)' };
+                case ContractStatus.EXPIRING:
+                    return { bg: 'rgba(245,158,11,0.08)', color: '#b8935a', border: 'rgba(245,158,11,0.20)' };
+                case ContractStatus.EXPIRED:
+                case ContractStatus.REJECTED:
+                case ContractStatus.REJECTED_BY_REVIEWER:
+                case ContractStatus.REJECTED_BY_APPROVER:
+                    return { bg: 'rgba(239,68,68,0.08)', color: '#b07070', border: 'rgba(239,68,68,0.20)' };
+                case ContractStatus.TERMINATED:
+                    return { bg: 'rgba(148,163,184,0.07)', color: '#6b7e90', border: 'rgba(148,163,184,0.18)' };
+                case ContractStatus.IN_REVIEW:
+                    return { bg: 'rgba(139,92,246,0.08)', color: '#9080c0', border: 'rgba(139,92,246,0.22)' };
+                case ContractStatus.IN_APPROVAL:
+                    return { bg: 'rgba(245,158,11,0.08)', color: '#b8935a', border: 'rgba(245,158,11,0.20)' };
+                case ContractStatus.REVIEW_APPROVAL:
+                case ContractStatus.REVIEWED:
+                    return { bg: 'rgba(59,130,246,0.08)', color: '#6888ac', border: 'rgba(59,130,246,0.20)' };
+                case ContractStatus.APPROVED:
+                    return { bg: 'rgba(16,185,129,0.08)', color: '#6bac8e', border: 'rgba(16,185,129,0.20)' };
+                case ContractStatus.READY_FOR_SIGNATURE:
+                    return { bg: 'rgba(20,184,166,0.08)', color: '#4e8e88', border: 'rgba(20,184,166,0.20)' };
+                case ContractStatus.WAITING_FOR_SIGNATURE: {
+                    const progress = getMultiPartySigningProgress();
+                    if (progress && progress.orderIndex > 0)
+                        return { bg: 'rgba(20,184,166,0.08)', color: '#4e8e88', border: 'rgba(20,184,166,0.20)' };
+                    return { bg: 'rgba(245,158,11,0.08)', color: '#b8935a', border: 'rgba(245,158,11,0.20)' };
+                }
+                case ContractStatus.SIGNED_BY_EVERYONE:
+                    return { bg: 'rgba(59,130,246,0.08)', color: '#6888ac', border: 'rgba(59,130,246,0.20)' };
+                case ContractStatus.DRAFT:
+                default:
+                    return { bg: 'rgba(148,163,184,0.07)', color: '#6b7e90', border: 'rgba(148,163,184,0.18)' };
+            }
+        }
+
         if (variant === 'draft' && status === ContractStatus.DRAFT && contract.reviewStatus === 'changes_requested') {
             return { bg: '#fff7ed', color: '#c2410c', border: '#fdba74' };
         }
-
         switch (status) {
             case ContractStatus.ACTIVE:
             case ContractStatus.SIGNED:
@@ -148,9 +191,8 @@ const ContractCard = ({
                 return { bg: '#e0f2f1', color: '#00695c', border: '#4db6ac' };
             case ContractStatus.WAITING_FOR_SIGNATURE: {
                 const progress = getMultiPartySigningProgress();
-                if (progress && progress.orderIndex > 0) {
+                if (progress && progress.orderIndex > 0)
                     return { bg: '#e0f7fa', color: '#00695c', border: '#80cbc4' };
-                }
                 return { bg: '#fff9c4', color: '#f57f17', border: '#fff176' };
             }
             case ContractStatus.SIGNED_BY_EVERYONE:
@@ -213,7 +255,7 @@ const ContractCard = ({
                 borderRadius: 3,
                 p: 1,
                 border: '1px solid',
-                borderColor: 'rgba(0, 0, 0, 0.08)',
+                borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
                 boxShadow: variant === 'terminated'
                     ? '0 1px 4px rgba(0, 0, 0, 0.06)'
                     : '0 2px 8px rgba(0, 0, 0, 0.04)',
@@ -255,19 +297,19 @@ const ContractCard = ({
                     width: '100%',
                     gap: 0.5,
                     mb: 1,
-                    bgcolor: '#eef2ff',
-                    border: '1px solid #c7d2fe',
+                    bgcolor: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
+                    border: `1px solid ${isDark ? 'rgba(99,102,241,0.30)' : '#c7d2fe'}`,
                     px: 0.75,
                     py: 0.3,
                     borderRadius: 1,
                     maxWidth: '100%',
                 }}>
-                    <FolderOutlined sx={{ fontSize: '0.8rem', color: '#4338ca', flexShrink: 0 }} />
+                    <FolderOutlined sx={{ fontSize: '0.8rem', color: isDark ? '#a5b4fc' : '#4338ca', flexShrink: 0 }} />
                     <Tooltip title={teamName} arrow placement="top">
                         <Typography
                             variant="caption"
                             sx={{
-                                color: '#4338ca',
+                                color: isDark ? '#a5b4fc' : '#4338ca',
                                 fontWeight: 600,
                                 fontSize: '0.72rem',
                                 overflow: 'hidden',
@@ -313,7 +355,9 @@ const ContractCard = ({
                         sx={{
                             fontWeight: 500,
                             fontSize: { xs: '1rem', sm: '1rem' },
-                            color: variant === 'terminated' ? 'text.secondary' : 'text.primary',
+                            color: variant === 'terminated'
+                                ? 'text.secondary'
+                                : isDark ? 'rgba(255,255,255,0.75)' : 'text.primary',
                             flex: 1,
                             minWidth: 0,
                         }}
@@ -402,8 +446,10 @@ const ContractCard = ({
                             variant="body2"
                             sx={{
                                 color: variant === 'terminated'
-                                    ? '#334155'
-                                    : contract.expiresInDays < 30 ? 'error.main' : 'text.primary',
+                                    ? 'text.secondary'
+                                    : contract.expiresInDays < 30
+                                        ? (isDark ? '#b07070' : 'error.main')
+                                        : 'text.primary',
                                 fontWeight: 500,
                                 fontSize: '0.75rem',
                             }}
@@ -425,7 +471,7 @@ const ContractCard = ({
                     display: 'flex',
                     gap: 1,
                     p: 0.5,
-                    background: '#fff',
+                    background: isDark ? 'rgb(22,32,48)' : '#fff',
                     borderRadius: '0 0 12px 12px',
                     opacity: { xs: 1, md: 0 },
                     transition: 'opacity 0.2s ease-in-out',
@@ -463,7 +509,7 @@ const ContractCard = ({
                         title: 'Renew Contract',
                         icon: <AutorenewOutlined sx={{ fontSize: '1.1rem' }} />,
                         onClick: () => onRenew?.(contract.id),
-                        color: 'success.main',
+                        color: 'primary.main',
                         shadow: 'rgba(22, 163, 74, 0.2)',
                         // Renew available for both expiring AND expired
                         show: variant === 'contract' &&

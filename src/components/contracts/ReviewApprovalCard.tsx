@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Typography, Chip, IconButton, Tooltip, Button, Popover } from '@mui/material';
+import { Box, Typography, Chip, IconButton, Tooltip, Button, Popover, useTheme } from '@mui/material';
 import { Visibility, CheckCircle, AccessTime, Person, AccountCircle, Message, Groups, Cancel, MoreVert } from '@mui/icons-material';
 import { Contract } from '@/types/contract';
 import { useState } from 'react';
@@ -52,6 +52,8 @@ export default function ReviewApprovalCard({
     const [comments, setComments] = useState('');
     const [actionsAnchor, setActionsAnchor] = useState<HTMLElement | null>(null);
 
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
     const currentUser = authService.getCurrentUser();
 
     /**
@@ -104,22 +106,28 @@ export default function ReviewApprovalCard({
      * Approver rejected: Red (rejected)
      */
     const getStatusColor = () => {
+        if (isDark) {
+            if (userRole === 'reviewer') {
+                const myStatus = getMyReviewerStatus();
+                if (myStatus === 'rejected') return { bg: 'rgba(239,68,68,0.08)', color: '#b07070', border: 'rgba(239,68,68,0.22)' };
+                if (myStatus === 'reviewed') return { bg: 'rgba(16,185,129,0.08)', color: '#6bac8e', border: 'rgba(16,185,129,0.22)' };
+                return { bg: 'rgba(245,158,11,0.08)', color: '#b8935a', border: 'rgba(245,158,11,0.22)' };
+            } else {
+                if (isRejectedByApprover()) return { bg: 'rgba(239,68,68,0.08)', color: '#b07070', border: 'rgba(239,68,68,0.22)' };
+                if (isApproved()) return { bg: 'rgba(16,185,129,0.08)', color: '#6bac8e', border: 'rgba(16,185,129,0.22)' };
+                if (allReviewersComplete()) return { bg: 'rgba(16,185,129,0.08)', color: '#6bac8e', border: 'rgba(16,185,129,0.22)' };
+                return { bg: 'rgba(59,130,246,0.08)', color: '#6888ac', border: 'rgba(59,130,246,0.22)' };
+            }
+        }
         if (userRole === 'reviewer') {
             const myStatus = getMyReviewerStatus();
-            // Red for rejected
             if (myStatus === 'rejected') return { bg: '#ffebee', color: '#c62828', border: '#ef9a9a' };
-            // Teal green for reviewed
             if (myStatus === 'reviewed') return { bg: '#e0f2f1', color: '#00695c', border: '#80cbc4' };
-            // Orange for pending
             return { bg: '#fff3e0', color: '#e65100', border: '#ffb74d' };
         } else {
-            // Red for rejected
             if (isRejectedByApprover()) return { bg: '#ffebee', color: '#c62828', border: '#ef9a9a' };
-            // Emerald green for approved
             if (isApproved()) return { bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' };
-            // Light green for ready to approve
             if (allReviewersComplete()) return { bg: '#e8f5e9', color: '#2e7d32', border: '#81c784' };
-            // Blue for awaiting reviews
             return { bg: '#e8eaf6', color: '#3949ab', border: '#9fa8da' };
         }
     };
@@ -156,32 +164,26 @@ export default function ReviewApprovalCard({
      * Colors match the header for consistency
      */
     const getSenderInfoColors = () => {
+        if (isDark) {
+            if (userRole === 'reviewer') {
+                if (myReviewerStatus === 'rejected') return { bg: 'rgba(239,68,68,0.07)', border: 'rgba(239,68,68,0.20)', icon: '#b07070' };
+                if (myReviewerStatus === 'reviewed') return { bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.20)', icon: '#6bac8e' };
+                return { bg: 'rgba(245,158,11,0.07)', border: 'rgba(245,158,11,0.20)', icon: '#b8935a' };
+            } else {
+                if (isRejectedByApprover()) return { bg: 'rgba(239,68,68,0.07)', border: 'rgba(239,68,68,0.20)', icon: '#b07070' };
+                if (isApproved()) return { bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.20)', icon: '#6bac8e' };
+                if (allReviewersComplete()) return { bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.20)', icon: '#6bac8e' };
+                return { bg: 'rgba(59,130,246,0.07)', border: 'rgba(59,130,246,0.20)', icon: '#6888ac' };
+            }
+        }
         if (userRole === 'reviewer') {
-            if (myReviewerStatus === 'rejected') {
-                // Red for rejected (matches header)
-                return { bg: '#ffebee', border: '#ef9a9a', icon: '#c62828' };
-            }
-            if (myReviewerStatus === 'reviewed') {
-                // Teal green for reviewed (matches header)
-                return { bg: '#e0f2f1', border: '#80cbc4', icon: '#00695c' };
-            }
-            // Orange for pending review (matches header)
+            if (myReviewerStatus === 'rejected') return { bg: '#ffebee', border: '#ef9a9a', icon: '#c62828' };
+            if (myReviewerStatus === 'reviewed') return { bg: '#e0f2f1', border: '#80cbc4', icon: '#00695c' };
             return { bg: '#fff3e0', border: '#ffb74d', icon: '#e65100' };
         } else {
-            // Approver
-            if (isRejectedByApprover()) {
-                // Red for rejected (matches header)
-                return { bg: '#ffebee', border: '#ef9a9a', icon: '#c62828' };
-            }
-            if (isApproved()) {
-                // Emerald green for approved (matches header)
-                return { bg: '#ecfdf5', border: '#a7f3d0', icon: '#059669' };
-            }
-            if (allReviewersComplete()) {
-                // Light green for ready to approve (matches header)
-                return { bg: '#e8f5e9', border: '#81c784', icon: '#2e7d32' };
-            }
-            // Blue for awaiting reviews (matches header)
+            if (isRejectedByApprover()) return { bg: '#ffebee', border: '#ef9a9a', icon: '#c62828' };
+            if (isApproved()) return { bg: '#ecfdf5', border: '#a7f3d0', icon: '#059669' };
+            if (allReviewersComplete()) return { bg: '#e8f5e9', border: '#81c784', icon: '#2e7d32' };
             return { bg: '#e8eaf6', border: '#9fa8da', icon: '#3949ab' };
         }
     };
@@ -206,9 +208,9 @@ export default function ReviewApprovalCard({
             onClick={() => onView(contract.id)}
             sx={{
                 border: '1px solid',
-                borderColor: 'rgba(0, 0, 0, 0.08)',
+                borderColor: 'divider',
                 borderRadius: 2.5,
-                bgcolor: 'white',
+                bgcolor: 'background.paper',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 overflow: 'hidden',
                 boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
@@ -264,7 +266,7 @@ export default function ReviewApprovalCard({
                     slotProps={{
                         paper: {
                             sx: {
-                                p: 0.8,
+                                p: 0.5,
                                 borderRadius: 2,
                                 boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                                 display: 'flex',
@@ -280,7 +282,7 @@ export default function ReviewApprovalCard({
                             onClick={() => { onView(contract.id); setActionsAnchor(null); }}
                             sx={{ border: '1px solid', borderColor: statusColors.color, color: statusColors.color, borderRadius: 1, '&:hover': { bgcolor: statusColors.bg } }}
                         >
-                            <Visibility sx={{ fontSize: 18 }} />
+                            <Visibility sx={{ fontSize: '0.8rem' }} />
                         </IconButton>
                     </Tooltip>
 
@@ -290,14 +292,14 @@ export default function ReviewApprovalCard({
                             title={
                                 <Box sx={{ p: 0.5 }}>
                                     <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1 }}>Review Progress</Typography>
-                                    <Box sx={{ maxHeight: 150, overflowY: 'auto', pr: 0.5, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-track': { bgcolor: '#f1f1f1', borderRadius: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: '#c1c1c1', borderRadius: '4px' } }}>
+                                    <Box sx={{ maxHeight: 150, overflowY: 'auto', pr: 0.5, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-track': { bgcolor: 'action.hover', borderRadius: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'divider', borderRadius: '4px' } }}>
                                         {contract.reviewers.map((reviewer, idx) => (
                                             <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5, gap: 2 }}>
                                                 <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>{reviewer.email}</Typography>
                                                 <Chip
                                                     label={reviewer.status.charAt(0).toUpperCase() + reviewer.status.slice(1).replace('_', ' ')}
                                                     size="small"
-                                                    sx={{ height: '18px', fontSize: '0.65rem', bgcolor: reviewer.status === 'reviewed' ? '#e0f2f1' : '#fff3e0', color: reviewer.status === 'reviewed' ? '#00695c' : '#e65100' }}
+                                                    sx={{ height: '18px', fontSize: '0.65rem', bgcolor: reviewer.status === 'reviewed' ? (isDark ? 'rgba(16,185,129,0.12)' : '#e0f2f1') : (isDark ? 'rgba(245,158,11,0.12)' : '#fff3e0'), color: reviewer.status === 'reviewed' ? (isDark ? '#6bac8e' : '#00695c') : (isDark ? '#b8935a' : '#e65100') }}
                                                 />
                                             </Box>
                                         ))}
@@ -305,7 +307,7 @@ export default function ReviewApprovalCard({
                                 </Box>
                             }
                             arrow placement="top"
-                            slotProps={{ tooltip: { sx: { bgcolor: 'white', color: 'text.primary', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', borderRadius: 2, p: 1.5, minWidth: 200, '& .MuiTooltip-arrow': { color: 'white' } } } }}
+                            slotProps={{ tooltip: { sx: { bgcolor: 'background.paper', color: 'text.primary', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', borderRadius: 2, p: 1.5, minWidth: 200, border: '1px solid', borderColor: 'divider', '& .MuiTooltip-arrow' : { color: 'background.paper' } } } }}
                         >
                             <IconButton size="small" sx={{ border: '1px solid', borderColor: statusColors.color, color: statusColors.color, borderRadius: 1, '&:hover': { bgcolor: statusColors.bg } }}>
                                 <Groups sx={{ fontSize: 18 }} />
@@ -318,12 +320,12 @@ export default function ReviewApprovalCard({
                         <>
                             <Tooltip title="Mark as Reviewed" arrow>
                                 <IconButton size="small" onClick={() => { onMarkAsReviewed(contract.id); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: statusColors.color, color: statusColors.color, borderRadius: 1, '&:hover': { bgcolor: statusColors.bg } }}>
-                                    <CheckCircle sx={{ fontSize: 18 }} />
+                                    <CheckCircle sx={{ fontSize: '0.8rem' }} />
                                 </IconButton>
                             </Tooltip>
                             <Tooltip title="Reject Contract" arrow>
-                                <IconButton size="small" onClick={() => { onReject(contract.id); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: '#d32f2f', color: '#d32f2f', borderRadius: 1, '&:hover': { bgcolor: 'rgba(211,47,47,0.08)' } }}>
-                                    <Cancel sx={{ fontSize: 18 }} />
+                                <IconButton size="small" onClick={() => { onReject(contract.id); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: isDark ? '#b07070' : '#d32f2f', color: isDark ? '#b07070' : '#d32f2f', borderRadius: 1, '&:hover': { bgcolor: isDark ? 'rgba(239,68,68,0.08)' : 'rgba(211,47,47,0.08)' } }}>
+                                    <Cancel sx={{ fontSize: '0.8rem' }} />
                                 </IconButton>
                             </Tooltip>
                         </>
@@ -334,12 +336,12 @@ export default function ReviewApprovalCard({
                         <>
                             <Tooltip title="Approve Contract" arrow>
                                 <IconButton size="small" onClick={() => { onApprove(contract.id); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: statusColors.color, color: statusColors.color, borderRadius: 1, '&:hover': { bgcolor: statusColors.bg } }}>
-                                    <CheckCircle sx={{ fontSize: 18 }} />
+                                    <CheckCircle sx={{ fontSize: '0.8rem' }} />
                                 </IconButton>
                             </Tooltip>
                             <Tooltip title="Reject Contract" arrow>
-                                <IconButton size="small" onClick={() => { onReject(contract.id); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: '#d32f2f', color: '#d32f2f', borderRadius: 1, '&:hover': { bgcolor: 'rgba(211,47,47,0.08)' } }}>
-                                    <Cancel sx={{ fontSize: 18 }} />
+                                <IconButton size="small" onClick={() => { onReject(contract.id); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: isDark ? '#b07070' : '#d32f2f', color: isDark ? '#b07070' : '#d32f2f', borderRadius: 1, '&:hover': { bgcolor: isDark ? 'rgba(239,68,68,0.08)' : 'rgba(211,47,47,0.08)' } }}>
+                                    <Cancel sx={{ fontSize: '0.8rem' }} />
                                 </IconButton>
                             </Tooltip>
                         </>
@@ -426,7 +428,9 @@ export default function ReviewApprovalCard({
                                 minHeight: '80px',
                                 padding: '8px',
                                 borderRadius: '4px',
-                                border: '1px solid rgba(0, 0, 0, 0.23)',
+                                border: `1px solid ${isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.23)'}`,
+                                background: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
+                                color: isDark ? '#efefef' : 'inherit',
                                 fontFamily: 'inherit',
                                 fontSize: '0.875rem',
                             }}

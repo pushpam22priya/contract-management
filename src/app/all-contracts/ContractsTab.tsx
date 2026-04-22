@@ -258,7 +258,7 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
                     px: 2,
                     py: 1,
                     borderBottom: '1px solid',
-                    boxShadow: '0 4px 12px rgba(15, 118, 110, 0.15)',
+                    boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}26`,
                     borderColor: 'divider',
                 }}>
                     {headerLeft || (
@@ -281,8 +281,8 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
                                 color: 'white',
                                 transition: 'all 0.2s',
                                 '&:hover': {
-                                    bgcolor: 'rgba(0, 96, 90, 1)',
-                                    boxShadow: '0 4px 12px rgba(15, 118, 110, 0.3)',
+                                    bgcolor: 'primary.dark',
+                                    boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}4d`,
                                 },
                             }}
                         >

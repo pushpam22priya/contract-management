@@ -2,8 +2,9 @@
 
 import {
     Box, Typography, TextField, InputAdornment,
-    Autocomplete, Tooltip, IconButton,
+    Autocomplete, Tooltip, IconButton, useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { Search, FilterListOff } from '@mui/icons-material';
 import { KeyboardArrowDown } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -65,19 +66,18 @@ function getDisplayLabel(filter: FilterConfig): string {
 // ─── Shared styles ────────────────────────────────────────────────────────────
 
 const FILTER_HEIGHT = 34;
-const PRIMARY_BG = 'rgba(15, 118, 110, 0.06)';
 
-const filterRootSx = (active: boolean) => ({
+const filterRootSx = (active: boolean, inactiveBorder: string, hoverBorder: string, primaryBg: string, focusBorder: string) => ({
     minWidth: 110,
     '& .MuiOutlinedInput-root': {
         height: FILTER_HEIGHT,
         borderRadius: '4px',
-        bgcolor: active ? PRIMARY_BG : 'transparent',
+        bgcolor: active ? primaryBg : 'transparent',
         fontSize: '0.8rem',
         cursor: 'pointer',
-        '& fieldset': { borderColor: active ? 'primary.main' : 'rgba(0,0,0,0.2)' },
-        '&:hover fieldset': { borderColor: 'primary.main' },
-        '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+        '& fieldset': { borderColor: active ? 'primary.main' : inactiveBorder },
+        '&:hover fieldset': { borderColor: hoverBorder },
+        '&.Mui-focused fieldset': { borderColor: focusBorder },
     },
     '& .MuiOutlinedInput-input': {
         py: '0 !important',
@@ -91,20 +91,21 @@ const filterRootSx = (active: boolean) => ({
     },
 });
 
-const dateSx = (active: boolean) => ({
+const dateSx = (active: boolean, inactiveBorder: string, hoverBorder: string, primaryBg: string, focusBorder: string) => ({
     minWidth: 130,
     '& .MuiOutlinedInput-root': {
         height: `${FILTER_HEIGHT}px !important`,
         borderRadius: '4px !important',
-        bgcolor: active ? PRIMARY_BG : 'transparent',
+        bgcolor: active ? primaryBg : 'transparent',
         fontSize: '0.8rem',
         paddingRight: '4px !important',
         '& fieldset': {
-            borderColor: active ? 'primary.main' : 'rgba(0,0,0,0.2)',
+            borderColor: active ? 'primary.main' : inactiveBorder,
             '& legend': { width: 0 },
         },
-        '&:hover fieldset': { borderColor: 'primary.main' },
-        '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+        '&:hover fieldset': { borderColor: `${hoverBorder} !important` },
+        '&.Mui-focused fieldset': { borderColor: `${focusBorder} !important` },
+        '&:focus-within fieldset': { borderColor: `${focusBorder} !important` },
     },
     '& .MuiOutlinedInput-input': {
         padding: '0 8px !important',
@@ -162,6 +163,14 @@ const CompactFilter = ({
     extraActions,
 }: CompactFilterProps) => {
 
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+    const primaryColor = theme.palette.primary.main;
+    const primaryBg = alpha(primaryColor, 0.06);
+    const inactiveBorder = isDark ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.23)';
+    const hoverBorder    = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.87)';
+    const focusBorder    = isDark ? 'rgba(255,255,255,0.55)' : primaryColor;
+
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs}>
             <Box sx={{
@@ -196,10 +205,11 @@ const CompactFilter = ({
                                 '& .MuiOutlinedInput-root': {
                                     height: FILTER_HEIGHT,
                                     borderRadius: '4px',
-                                    bgcolor: '#f8fafc',
+                                    bgcolor: 'transparent',
                                     fontSize: '0.85rem',
-                                    '&:hover': { bgcolor: '#f1f5f9' },
-                                    '&.Mui-focused': { bgcolor: 'background.paper' },
+                                    '& fieldset': { borderColor: inactiveBorder },
+                                    '&:hover fieldset': { borderColor: hoverBorder },
+                                    '&.Mui-focused fieldset': { borderColor: focusBorder },
                                 },
                                 '& .MuiOutlinedInput-input': { py: '0 !important', fontSize: '0.85rem' },
                             }}
@@ -235,7 +245,7 @@ const CompactFilter = ({
                                                 },
                                                 input: params.InputProps,
                                             }}
-                                            sx={filterRootSx(active)}
+                                            sx={filterRootSx(active, inactiveBorder, hoverBorder, primaryBg, focusBorder)}
                                         />
                                     )}
                                     slotProps={{ listbox: { sx: { fontSize: '0.78rem', '& .MuiAutocomplete-option': { fontSize: '0.78rem', py: 0.5, minHeight: 'unset' } } } }}
@@ -265,7 +275,7 @@ const CompactFilter = ({
                                     <TextField
                                         {...params}
                                         placeholder={filter.label}
-                                        sx={filterRootSx(active)}
+                                        sx={filterRootSx(active, inactiveBorder, hoverBorder, primaryBg, focusBorder)}
                                     />
                                 )}
                                 slotProps={{ listbox: { sx: { fontSize: '0.85rem' } } }}
@@ -285,7 +295,7 @@ const CompactFilter = ({
                                     textField: {
                                         size: 'small',
                                         placeholder: 'Start date',
-                                        sx: dateSx(!!startDate),
+                                        sx: dateSx(!!startDate, inactiveBorder, hoverBorder, primaryBg, focusBorder),
                                     },
                                     field: { clearable: true },
                                 }}
@@ -299,7 +309,7 @@ const CompactFilter = ({
                                     textField: {
                                         size: 'small',
                                         placeholder: 'End date',
-                                        sx: dateSx(!!endDate),
+                                        sx: dateSx(!!endDate, inactiveBorder, hoverBorder, primaryBg, focusBorder),
                                     },
                                     field: { clearable: true },
                                 }}
@@ -345,8 +355,8 @@ const CompactFilter = ({
                                 px: 1,
                                 py: 1,
                                 borderRadius: 1,
-                                bgcolor: 'rgba(15, 118, 110, 0.07)',
-                                border: '1px solid rgba(15, 118, 110, 0.18)',
+                                bgcolor: alpha(primaryColor, 0.07),
+                                border: `1px solid ${alpha(primaryColor, 0.18)}`,
                                 whiteSpace: 'nowrap',
                             }}
                         >

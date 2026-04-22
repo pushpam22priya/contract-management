@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Typography, Button, Chip, Paper } from '@mui/material';
+import { Box, Typography, Button, Chip, Paper, useTheme } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
@@ -21,45 +22,39 @@ interface NotificationItemProps {
 }
 
 export default function NotificationItem({ notification, onViewContract }: NotificationItemProps) {
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
     const { type, title, description, timestamp, isRead, contractId } = notification;
 
-    const typeConfig = {
-        warning: {
-            icon: <WarningAmberIcon sx={{ fontSize: 20 }} />,
-            bgColor: '#fff9e1ff',
-            iconColor: '#92400e',
-            borderColor: '#ffefaeff',
-        },
-        success: {
-            icon: <CheckCircleOutlineIcon sx={{ fontSize: 20 }} />,
-            bgColor: '#dcfce7',
-            iconColor: '#166534',
-            borderColor: '#bbf7d0',
-        },
-        info: {
-            icon: <InfoOutlinedIcon sx={{ fontSize: 20 }} />,
-            bgColor: '#dbeafe',
-            iconColor: '#1e40af',
-            borderColor: '#bfdbfe',
-        },
+    const colorMap = {
+        warning: theme.palette.warning?.main || '#f59e0b',
+        success: theme.palette.success.main,
+        info: theme.palette.primary.main,
     };
 
-    const config = typeConfig[type];
+    const iconMap = {
+        warning: <WarningAmberIcon sx={{ fontSize: 20 }} />,
+        success: <CheckCircleOutlineIcon sx={{ fontSize: 20 }} />,
+        info: <InfoOutlinedIcon sx={{ fontSize: 20 }} />,
+    };
+
+    const color = colorMap[type];
 
     return (
         <Paper
             elevation={0}
             sx={{
-                p: 1.2,
+                p: 2,
                 mb: 1,
                 borderRadius: 2,
                 border: '1px solid',
-                borderColor: config.borderColor,
-                bgcolor: config.bgColor,
+                borderColor: alpha(color, isDark ? 0.22 : 0.28),
+                bgcolor: alpha(color, isDark ? 0.08 : 0.10),
                 position: 'relative',
                 transition: 'all 0.2s',
                 '&:hover': {
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                    borderColor: alpha(color, isDark ? 0.38 : 0.45),
+                    boxShadow: `0 4px 12px ${alpha(color, isDark ? 0.10 : 0.08)}`,
                 },
             }}
         >
@@ -70,15 +65,16 @@ export default function NotificationItem({ notification, onViewContract }: Notif
                         width: 40,
                         height: 40,
                         borderRadius: '50%',
-                        bgcolor: 'white',
+                        bgcolor: alpha(color, isDark ? 0.18 : 0.14),
+                        border: `1px solid ${alpha(color, isDark ? 0.30 : 0.25)}`,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: config.iconColor,
+                        color: color,
                         flexShrink: 0,
                     }}
                 >
-                    {config.icon}
+                    {iconMap[type]}
                 </Box>
 
                 {/* Content */}
@@ -86,15 +82,10 @@ export default function NotificationItem({ notification, onViewContract }: Notif
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
                         <Typography
                             variant="subtitle1"
-                            sx={{
-                                fontWeight: 600,
-                                color: 'text.primary',
-                                fontSize: '0.95rem',
-                            }}
+                            sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.95rem' }}
                         >
                             {title}
                         </Typography>
-
                         {!isRead && (
                             <Chip
                                 label="New"
@@ -105,9 +96,7 @@ export default function NotificationItem({ notification, onViewContract }: Notif
                                     fontWeight: 600,
                                     bgcolor: 'primary.main',
                                     color: 'white',
-                                    '& .MuiChip-label': {
-                                        px: 1,
-                                    },
+                                    '& .MuiChip-label': { px: 1 },
                                 }}
                             />
                         )}
@@ -115,11 +104,7 @@ export default function NotificationItem({ notification, onViewContract }: Notif
 
                     <Typography
                         variant="body2"
-                        sx={{
-                            color: 'text.secondary',
-                            // mb: 1,
-                            fontSize: '0.875rem',
-                        }}
+                        sx={{ color: 'text.secondary', fontSize: '0.875rem' }}
                     >
                         {description}
                     </Typography>
@@ -127,10 +112,11 @@ export default function NotificationItem({ notification, onViewContract }: Notif
                     <Typography
                         variant="caption"
                         sx={{
-                            color: 'text.secondary',
+                            color: 'text.disabled',
                             fontSize: '0.75rem',
                             display: 'block',
                             mb: contractId ? 1 : 0,
+                            mt: 0.25,
                         }}
                     >
                         {timestamp}
@@ -145,15 +131,14 @@ export default function NotificationItem({ notification, onViewContract }: Notif
                                 textTransform: 'none',
                                 fontWeight: 500,
                                 fontSize: '0.8125rem',
-                                borderColor: 'text.primary',
-                                color: 'text.primary',
-                                bgcolor: 'white',
+                                borderColor: alpha(color, 0.45),
+                                color: isDark ? color : 'text.primary',
                                 px: 2,
                                 py: 0.5,
                                 '&:hover': {
-                                    borderColor: 'primary.main',
-                                    bgcolor: 'primary.main',
-                                    color: 'white',
+                                    borderColor: color,
+                                    bgcolor: alpha(color, 0.12),
+                                    color: color,
                                 },
                             }}
                         >

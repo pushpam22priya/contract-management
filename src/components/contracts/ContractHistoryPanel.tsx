@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
     Popover,
     Box,
@@ -15,9 +15,6 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import HistoryIcon from '@mui/icons-material/History';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import dayjs from 'dayjs';
@@ -52,23 +49,41 @@ interface ContractHistoryPanelProps {
     onSelectEntry: (entry: HistoryEntry) => void;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    active: { label: 'Active', color: '#065f46', bg: '#d1fae5', border: '#6ee7b7' },
-    expiring: { label: 'Expiring', color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-    expired: { label: 'Expired', color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
-    signed: { label: 'Signed', color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
-    signed_by_everyone: { label: 'Signed by Parties', color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
-    waiting_for_signature: { label: 'Awaiting Signature', color: '#6d28d9', bg: '#ede9fe', border: '#c4b5fd' },
-    ready_for_signature: { label: 'Ready to Sign', color: '#0369a1', bg: '#e0f2fe', border: '#7dd3fc' },
-    approved: { label: 'Approved', color: '#065f46', bg: '#d1fae5', border: '#6ee7b7' },
-    in_review: { label: 'In Review', color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-    in_approval: { label: 'In Approval', color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-    draft: { label: 'Draft', color: '#374151', bg: '#f3f4f6', border: '#d1d5db' },
-    terminated: { label: 'Terminated', color: '#334155', bg: '#f1f5f9', border: '#94a3b8' },
+const STATUS_CONFIG_LIGHT: Record<string, { label: string; color: string; bg: string; border: string }> = {
+    active:                 { label: 'Active',             color: '#065f46', bg: '#d1fae5', border: '#6ee7b7' },
+    expiring:               { label: 'Expiring',           color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
+    expired:                { label: 'Expired',            color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
+    signed:                 { label: 'Signed',             color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
+    signed_by_everyone:     { label: 'Signed by Parties',  color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
+    waiting_for_signature:  { label: 'Awaiting Signature', color: '#6d28d9', bg: '#ede9fe', border: '#c4b5fd' },
+    ready_for_signature:    { label: 'Ready to Sign',      color: '#0369a1', bg: '#e0f2fe', border: '#7dd3fc' },
+    approved:               { label: 'Approved',           color: '#065f46', bg: '#d1fae5', border: '#6ee7b7' },
+    in_review:              { label: 'In Review',          color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
+    in_approval:            { label: 'In Approval',        color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
+    draft:                  { label: 'Draft',              color: '#374151', bg: '#f3f4f6', border: '#d1d5db' },
+    terminated:             { label: 'Terminated',         color: '#334155', bg: '#f1f5f9', border: '#94a3b8' },
 };
 
-function getStatusConfig(status: string) {
-    return STATUS_CONFIG[status] || { label: status, color: '#374151', bg: '#f3f4f6', border: '#d1d5db' };
+const STATUS_CONFIG_DARK: Record<string, { label: string; color: string; bg: string; border: string }> = {
+    active:                 { label: 'Active',             color: '#6ee7b7', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.30)' },
+    expiring:               { label: 'Expiring',           color: '#fcd34d', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.30)' },
+    expired:                { label: 'Expired',            color: '#fca5a5', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.30)' },
+    signed:                 { label: 'Signed',             color: '#93c5fd', bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.30)' },
+    signed_by_everyone:     { label: 'Signed by Parties',  color: '#93c5fd', bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.30)' },
+    waiting_for_signature:  { label: 'Awaiting Signature', color: '#c4b5fd', bg: 'rgba(139,92,246,0.12)',  border: 'rgba(139,92,246,0.30)' },
+    ready_for_signature:    { label: 'Ready to Sign',      color: '#7dd3fc', bg: 'rgba(14,165,233,0.12)',  border: 'rgba(14,165,233,0.30)' },
+    approved:               { label: 'Approved',           color: '#6ee7b7', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.30)' },
+    in_review:              { label: 'In Review',          color: '#fcd34d', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.30)' },
+    in_approval:            { label: 'In Approval',        color: '#fcd34d', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.30)' },
+    draft:                  { label: 'Draft',              color: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.25)' },
+    terminated:             { label: 'Terminated',         color: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.25)' },
+};
+
+function getStatusConfig(status: string, isDark: boolean) {
+    const map = isDark ? STATUS_CONFIG_DARK : STATUS_CONFIG_LIGHT;
+    return map[status] || (isDark
+        ? { label: status, color: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.25)' }
+        : { label: status, color: '#374151', bg: '#f3f4f6', border: '#d1d5db' });
 }
 
 function classifyEntry(
@@ -112,11 +127,9 @@ function HistoryContent({
     onSelectEntry: (e: HistoryEntry) => void;
     onClose: () => void;
 }) {
-    const renderIcon = (kind: 'past' | 'current' | 'upcoming') => {
-        if (kind === 'current') return <CheckCircleOutlineIcon sx={{ color: '#0f766e', fontSize: 18, flexShrink: 0 }} />;
-        if (kind === 'upcoming') return <AccessTimeIcon sx={{ color: '#f59e0b', fontSize: 18, flexShrink: 0 }} />;
-        return <RadioButtonUncheckedIcon sx={{ color: '#d1d5db', fontSize: 18, flexShrink: 0 }} />;
-    };
+    const theme = useTheme();
+    const primaryColor = theme.palette.primary.main;
+    const isDark = theme.palette.mode === 'dark';
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -126,8 +139,9 @@ function HistoryContent({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                borderBottom: '1px solid #f0f0f0',
-                bgcolor: '#fff',
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
                 position: 'sticky',
                 top: 0,
                 zIndex: 1,
@@ -135,10 +149,10 @@ function HistoryContent({
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Box sx={{
                         width: 30, height: 30, borderRadius: 1.5,
-                        bgcolor: alpha('#0f766e', 0.1),
+                        bgcolor: alpha(primaryColor, 0.1),
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                        <HistoryIcon sx={{ color: '#0f766e', fontSize: 17 }} />
+                        <HistoryIcon sx={{ color: primaryColor, fontSize: 17 }} />
                     </Box>
                     <Box>
                         <Typography fontWeight={700} fontSize="0.88rem" color="text.primary">
@@ -194,7 +208,7 @@ function HistoryContent({
                     <Box sx={{ display: 'flex', flexDirection: 'column', maxHeight: '200px', overflowY: 'auto' }}>
                         {chain.map((entry, idx) => {
                             const kind = classifyEntry(entry, currentContractId, chain);
-                            const sc = getStatusConfig(entry.status);
+                            const sc = getStatusConfig(entry.status, isDark);
                             const isCurrent = kind === 'current';
                             const isLast = idx === chain.length - 1;
                             const displayTitle = entry.title.replace(/\s*\(Renewal\d*\)$/i, '');
@@ -224,14 +238,18 @@ function HistoryContent({
                                             p: 1,
                                             borderRadius: 2,
                                             border: '1px solid',
-                                            borderColor: isCurrent ? '#a7f3d0' : '#f0f0f0',
-                                            bgcolor: isCurrent ? alpha('#0f766e', 0.035) : '#fafafa',
+                                            borderColor: isCurrent
+                                                ? (isDark ? alpha(primaryColor, 0.5) : '#a7f3d0')
+                                                : 'divider',
+                                            bgcolor: isCurrent
+                                                ? alpha(primaryColor, isDark ? 0.08 : 0.035)
+                                                : (isDark ? alpha('#ffffff', 0.03) : '#fafafa'),
                                             cursor: 'pointer',
                                             transition: 'all 0.15s ease',
                                             '&:hover': {
-                                                borderColor: '#0f766e',
-                                                bgcolor: alpha('#0f766e', 0.04),
-                                                boxShadow: '0 2px 10px rgba(15,118,110,0.1)',
+                                                borderColor: primaryColor,
+                                                bgcolor: alpha(primaryColor, 0.07),
+                                                boxShadow: `0 2px 10px ${alpha(primaryColor, 0.1)}`,
                                                 transform: 'translateY(-1px)',
                                             },
                                         }}
@@ -242,7 +260,7 @@ function HistoryContent({
                                             <Typography sx={{
                                                 fontWeight: 700,
                                                 fontSize: '0.6rem',
-                                                color: isCurrent ? '#0f766e' : kind === 'upcoming' ? '#d97706' : '#9ca3af',
+                                                color: isCurrent ? primaryColor : kind === 'upcoming' ? '#d97706' : 'text.disabled',
                                             }}>
                                                 {kind === 'current' ? '● Current' : kind === 'upcoming' ? '◷ Upcoming' : '○ Past'}
                                             </Typography>
@@ -266,7 +284,7 @@ function HistoryContent({
                                         {/* Date range */}
                                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                <CalendarTodayOutlinedIcon sx={{ fontSize: 11, color: '#9ca3af' }} />
+                                                <CalendarTodayOutlinedIcon sx={{ fontSize: 11, color: 'text.disabled' }} />
                                                 <Typography fontSize="0.7rem" color="text.secondary">
                                                     {(entry.startDate || entry.endDate)
                                                         ? `${formatDate(entry.startDate)} → ${formatDate(entry.endDate)}`
@@ -278,7 +296,7 @@ function HistoryContent({
                                                 onClick={e => { e.stopPropagation(); onSelectEntry(entry); onClose(); }}
                                                 sx={{
                                                     display: 'inline-flex', alignItems: 'center', gap: 0.4,
-                                                    fontSize: '0.68rem', fontWeight: 600, color: '#0f766e',
+                                                    fontSize: '0.68rem', fontWeight: 600, color: primaryColor,
                                                     cursor: 'pointer',
                                                     '&:hover': { textDecoration: 'underline' },
                                                 }}
@@ -354,17 +372,15 @@ export default function ContractHistoryPanel({
                 anchor="bottom"
                 open={open}
                 onClose={onClose}
-                PaperProps={{
-                    sx: {
-                        borderTopLeftRadius: 20,
-                        borderTopRightRadius: 20,
-                        maxHeight: '85vh',
-                        overflow: 'hidden',
-                        boxShadow: '0 -8px 40px rgba(0,0,0,0.15)',
-                    },
-                }}
+                slotProps={{ paper: { sx: {
+                    borderTopLeftRadius: 20,
+                    borderTopRightRadius: 20,
+                    maxHeight: '85vh',
+                    overflow: 'hidden',
+                    boxShadow: '0 -8px 40px rgba(0,0,0,0.15)',
+                } } }}
             >
-                <Box sx={{ width: 40, height: 4, bgcolor: '#e5e7eb', borderRadius: 2, mx: 'auto', mt: 1.5, mb: 0.5 }} />
+                <Box sx={{ width: 40, height: 4, bgcolor: 'divider', borderRadius: 2, mx: 'auto', mt: 1.5, mb: 0.5 }} />
                 <Box sx={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                     <HistoryContent {...contentProps} />
                 </Box>
@@ -380,19 +396,18 @@ export default function ContractHistoryPanel({
             onClose={onClose}
             anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
             transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-            PaperProps={{
-                sx: {
-                    width: 360,
-                    maxHeight: 520,
-                    borderRadius: 3,
-                    overflow: 'hidden',
-                    boxShadow: '0 8px 40px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)',
-                    border: '1px solid #e5e7eb',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    mt: 0.75,
-                },
-            }}
+            slotProps={{ paper: { sx: {
+                width: 360,
+                maxHeight: 520,
+                borderRadius: 3,
+                overflow: 'hidden',
+                boxShadow: '0 8px 40px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)',
+                border: '1px solid',
+                borderColor: 'divider',
+                display: 'flex',
+                flexDirection: 'column',
+                mt: 0.75,
+            } } }}
             disableScrollLock
         >
             <HistoryContent {...contentProps} />

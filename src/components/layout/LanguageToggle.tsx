@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Tooltip } from '@mui/material';
+import { Box, Tooltip, useTheme } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 
@@ -8,6 +9,9 @@ export default function LanguageToggle() {
   const locale = useLocale();
   const router = useRouter();
   const t = useTranslations('header');
+  const theme = useTheme();
+
+  const primary = theme.palette.primary.main;
 
   const switchTo = (next: 'en' | 'hi') => {
     if (next === locale) return;
@@ -24,8 +28,8 @@ export default function LanguageToggle() {
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          bgcolor: 'rgba(15,118,110,0.07)',
-          border: '1px solid rgba(15,118,110,0.22)',
+          bgcolor: alpha(primary, 0.07),
+          border: `1px solid ${alpha(primary, 0.35)}`,
           borderRadius: '20px',
           height: 26,
           p: '2px',
@@ -33,13 +37,13 @@ export default function LanguageToggle() {
           flexShrink: 0,
           cursor: 'pointer',
           '&:hover': {
-            borderColor: 'primary.main',
-            bgcolor: 'rgba(15,118,110,0.11)',
+            borderColor: primary,
+            bgcolor: alpha(primary, 0.12),
           },
           transition: 'border-color 0.2s, background-color 0.2s',
         }}
       >
-        {/* Sliding teal pill */}
+        {/* Sliding pill */}
         <Box
           sx={{
             position: 'absolute',
@@ -50,7 +54,7 @@ export default function LanguageToggle() {
             bgcolor: 'primary.main',
             borderRadius: '14px',
             transition: 'left 0.28s cubic-bezier(0.4, 0, 0.2, 1)',
-            boxShadow: '0 2px 8px rgba(15,118,110,0.4)',
+            boxShadow: `0 2px 8px ${alpha(primary, 0.4)}`,
             zIndex: 0,
           }}
         />

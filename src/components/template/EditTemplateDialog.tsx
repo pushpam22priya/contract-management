@@ -546,10 +546,10 @@ export default function EditTemplateDialog({
                 py: 1,
                 borderRadius: 2,
                 bgcolor: 'primary.main',
-                boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
+                boxShadow: (theme) => `0 2px 8px ${theme.palette.primary.main}40`,
                 '&:hover': {
                     bgcolor: 'primary.dark',
-                    boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
+                    boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}59`,
                 },
                 '&:disabled': {
                     bgcolor: 'rgba(0, 0, 0, 0.12)',
@@ -638,9 +638,9 @@ export default function EditTemplateDialog({
                     {/* Current File Info */}
                     <Box
                         sx={{
-                            bgcolor: alpha('#0f766e', 0.04),
+                            bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
                             border: '1px solid',
-                            borderColor: 'rgba(15, 118, 110, 0.2)',
+                            borderColor: (theme: any) => alpha(theme.palette.primary.main, 0.2),
                             borderRadius: 2,
                             p: 1.5,
                         }}
@@ -694,13 +694,13 @@ export default function EditTemplateDialog({
                                     p: 1,
                                     textAlign: 'center',
                                     bgcolor: dragActive
-                                        ? alpha('#0f766e', 0.04)
+                                        ? (theme: any) => alpha(theme.palette.primary.main, 0.04)
                                         : 'rgba(0, 0, 0, 0.02)',
                                     transition: 'all 0.3s',
                                     cursor: 'pointer',
                                     '&:hover': {
                                         borderColor: 'primary.main',
-                                        bgcolor: alpha('#0f766e', 0.04),
+                                        bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
                                     },
                                 }}
                                 onClick={() => document.getElementById('file-edit-input')?.click()}
@@ -749,7 +749,7 @@ export default function EditTemplateDialog({
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
-                                    bgcolor: alpha('#0f766e', 0.04),
+                                    bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
                                 }}
                             >
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -924,7 +924,7 @@ export default function EditTemplateDialog({
                                                     label={option.name}
                                                     size="small"
                                                     sx={{
-                                                        bgcolor: 'rgba(15, 118, 110, 0.08)',
+                                                        bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.08),
                                                         color: 'primary.main',
                                                         fontWeight: 500,
                                                     }}
@@ -960,7 +960,7 @@ export default function EditTemplateDialog({
                                         color: 'text.primary',
                                         '&:hover': {
                                             borderColor: 'primary.main',
-                                            bgcolor: alpha('#0f766e', 0.04),
+                                            bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
                                         },
                                     }}
                                 >

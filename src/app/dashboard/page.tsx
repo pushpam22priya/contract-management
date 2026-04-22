@@ -2,7 +2,7 @@
 
 import { Box, Typography, Button } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
-import StatsCard from '@/components/dashboard/ColorfulStatsCard';
+import StatsCard from '@/components/dashboard/StatsCard';
 import RecentContracts from '@/components/dashboard/RecentContracts';
 import { useState, useEffect } from 'react';
 import { contractService } from '@/services/contractService';
@@ -11,10 +11,12 @@ import { useRouter } from 'next/navigation';
 import CreateContractDialog from '@/components/contracts/CreateContractDialog';
 import { ContractStatus } from '@/types/contract';
 import { useTranslations } from 'next-intl';
+import { useThemeName } from '@/context/ThemeContext';
 
 export default function DashboardPage() {
     const router = useRouter();
     const t = useTranslations('dashboard');
+    const { themeName } = useThemeName();
     const currentUser = authService.getCurrentUser();
     const displayName = currentUser?.email
         ? currentUser.email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -231,7 +233,20 @@ export default function DashboardPage() {
                 <Box
                     sx={{
                         position: 'relative',
-                        background: 'linear-gradient(135deg, #073d38 0%, #0f766e 45%, #0d9488 80%, #14b8a6 100%)',
+                        background: (theme) => {
+                            if (themeName === 'sunrise') {
+                                return 'linear-gradient(to right, rgba(168, 60, 33, 0.85), rgba(216, 90, 56, 0.3)), url("/images/rising-sun.avif") center/cover no-repeat';
+                            }
+                            if (themeName === 'forest') {
+                                return 'linear-gradient(to right, rgba(16, 42, 24, 0.9), rgba(46, 125, 50, 0.3)), url("/images/forest-theme.avif") center/cover no-repeat';
+                            }
+                            if (themeName === 'water') {
+                                return 'linear-gradient(to right, rgba(0, 54, 58, 0.9), rgba(0, 131, 143, 0.3)), url("/images/water.avif") center/cover no-repeat';
+                            }
+                            return theme.palette.mode === 'dark'
+                                ? 'linear-gradient(135deg, #0c0a1e 0%, #130f2e 40%, #1a1240 72%, #0f0b28 100%)'
+                                : `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 45%, ${theme.palette.primary.main}cc 80%, ${theme.palette.primary.light} 100%)`;
+                        },
                         pt: { xs: 2, md: 3 },
                         pb: { xs: 11, md: 13 },
                         px: { xs: 2, md: 3 },
@@ -272,13 +287,20 @@ export default function DashboardPage() {
                                     px: 1,
                                     py: 0.5,
                                     minWidth: 0,
-                                    borderBottom: '1px solid transparent',
                                     borderRadius: 0,
-                                    '&:hover': {
-                                        color: 'white',
-                                        bgcolor: 'transparent',
-                                        borderBottomColor: 'rgba(255,255,255,0.6)',
+                                    position: 'relative',
+                                    '&::after': {
+                                        content: '""',
+                                        position: 'absolute',
+                                        bottom: 0,
+                                        left: '50%',
+                                        width: 0,
+                                        height: '1px',
+                                        background: 'rgba(255,255,255,0.7)',
+                                        transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1), left 0.35s cubic-bezier(0.4,0,0.2,1)',
                                     },
+                                    '&:hover': { color: 'white', bgcolor: 'transparent' },
+                                    '&:hover::after': { width: '100%', left: 0 },
                                 }}
                             >
                                 {t('browseTemplates')}
@@ -294,13 +316,20 @@ export default function DashboardPage() {
                                     px: 1,
                                     py: 0.5,
                                     minWidth: 0,
-                                    borderBottom: '1px solid transparent',
                                     borderRadius: 0,
-                                    '&:hover': {
-                                        color: 'white',
-                                        bgcolor: 'transparent',
-                                        borderBottomColor: 'rgba(255,255,255,0.6)',
+                                    position: 'relative',
+                                    '&::after': {
+                                        content: '""',
+                                        position: 'absolute',
+                                        bottom: 0,
+                                        left: '50%',
+                                        width: 0,
+                                        height: '1px',
+                                        background: 'rgba(255,255,255,0.7)',
+                                        transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1), left 0.35s cubic-bezier(0.4,0,0.2,1)',
                                     },
+                                    '&:hover': { color: 'white', bgcolor: 'transparent' },
+                                    '&:hover::after': { width: '100%', left: 0 },
                                 }}
                             >
                                 {t('createContract')}

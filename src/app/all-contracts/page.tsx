@@ -1,7 +1,8 @@
 'use client';
 
 import { Box, useTheme } from '@mui/material';
-import { useState, useEffect, useRef } from 'react';
+import { alpha } from '@mui/material/styles';
+import { useState } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -15,6 +16,9 @@ import { useTranslations } from 'next-intl';
 
 export default function AllContractsPage() {
     const t = useTranslations('nav');
+    const theme = useTheme();
+    const primary = theme.palette.primary.main;
+
     const TABS = [
         { label: t('contracts'),  Icon: ArticleOutlinedIcon },
         { label: t('draft'),      Icon: RateReviewIcon },
@@ -23,58 +27,56 @@ export default function AllContractsPage() {
 
     const [activeTab, setActiveTab] = useState(0);
 
-    const handleTabChange = (index: number) => {
-        if (index === activeTab) return;
-        setActiveTab(index);
-    };
-
     const tabBar = (
-        <Box sx={{ 
-            display: 'inline-flex', 
-            bgcolor: 'rgba(15, 118, 110, 0.04)', 
-            // p: 0.5, 
-            borderRadius: 0,
-            // gap: 1,
-            border: '1px solid rgba(15, 118, 110, 0.1)',
-            overflowX: 'auto', // For mobile responsiveness
-            maxWidth: '100%',
-            '&::-webkit-scrollbar': { display: 'none' }, // Hide scrollbar for clean look
-            msOverflowStyle: 'none',
-            scrollbarWidth: 'none',
-        }}>
+        <Box
+            sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.5,
+                p: 0.5,
+                borderRadius: 2,
+                bgcolor: alpha(primary, 0.06),
+                border: `1px solid ${alpha(primary, 0.18)}`,
+                overflowX: 'auto',
+                maxWidth: '100%',
+                '&::-webkit-scrollbar': { display: 'none' },
+                msOverflowStyle: 'none',
+                scrollbarWidth: 'none',
+            }}
+        >
             {TABS.map((tab, index) => {
                 const isActive = activeTab === index;
                 const { Icon } = tab;
-
                 return (
                     <Box
                         key={tab.label}
-                        onClick={() => handleTabChange(index)}
+                        onClick={() => activeTab !== index && setActiveTab(index)}
                         sx={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 1,
-                            px: { xs: 1, sm: 1 },
+                            gap: 0.75,
+                            px: 1.5,
                             py: 0.5,
-                            // borderRadius: 1,
-                            cursor: 'pointer',
+                            borderRadius: 1.5,
+                            cursor: isActive ? 'default' : 'pointer',
                             userSelect: 'none',
                             whiteSpace: 'nowrap',
-                            bgcolor: isActive ? 'primary.main' : 'transparent',
-                            color: isActive ? '#fff' : 'text.secondary',
-                            fontWeight: isActive ? 600 : 500,
-                            fontSize: '0.875rem',
-                            boxShadow: isActive ? '0 4px 12px rgba(15, 118, 110, 0.12)' : 'none',
-                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                            bgcolor: isActive ? alpha(primary, 0.15) : 'transparent',
+                            color: isActive ? primary : 'text.secondary',
+                            fontWeight: isActive ? 600 : 400,
+                            fontSize: '0.82rem',
+                            letterSpacing: '0.01em',
+                            border: `1px solid ${isActive ? alpha(primary, 0.35) : 'transparent'}`,
+                            boxShadow: 'none',
+                            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
                             '&:hover': {
-                                color: 'primary.main',
-                                bgcolor: isActive 
-                                    ? 'background.paper' 
-                                    : 'rgba(15, 118, 110, 0.06)',
-                            }
+                                color: primary,
+                                bgcolor: alpha(primary, 0.09),
+                                border: `1px solid ${alpha(primary, 0.20)}`,
+                            },
                         }}
                     >
-                        <Icon sx={{ fontSize: 18, flexShrink: 0, transition: 'transform 0.2s', transform: isActive ? 'scale(1.1)' : 'scale(1)' }} />
+                        <Icon sx={{ fontSize: 15, flexShrink: 0, transition: 'transform 0.2s', transform: isActive ? 'scale(1.12)' : 'scale(1)' }} />
                         {tab.label}
                     </Box>
                 );

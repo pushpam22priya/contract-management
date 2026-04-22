@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Typography, Paper, LinearProgress } from '@mui/material';
+import { Box, Typography, Paper, LinearProgress, useTheme } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import { useTranslations } from 'next-intl';
 
@@ -30,11 +31,14 @@ const ContractInformation = ({
     description,
 }: ContractInformationProps) => {
     const t = useTranslations('contractDetail');
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+
     // Get progress bar color based on status
     const getProgressBarColor = () => {
         switch (status) {
             case 'active':
-                return '#0f766e'; // Teal - healthy/active
+                return theme.palette.primary.main;
             case 'signed':
                 return '#6366f1'; // Indigo - signed but not started
             case 'expiring':
@@ -48,17 +52,21 @@ const ContractInformation = ({
 
     // Get progress bar background color
     const getProgressBarBgColor = () => {
+        if (isDark) {
+            switch (status) {
+                case 'active':   return alpha('#10b981', 0.12);
+                case 'signed':   return alpha('#6366f1', 0.12);
+                case 'expiring': return alpha('#f59e0b', 0.12);
+                case 'expired':  return alpha('#ef4444', 0.12);
+                default:         return alpha('#6b7280', 0.12);
+            }
+        }
         switch (status) {
-            case 'active':
-                return '#d1fae5'; // Light teal
-            case 'signed':
-                return '#e0e7ff'; // Light indigo
-            case 'expiring':
-                return '#fef3c7'; // Light amber
-            case 'expired':
-                return '#fee2e2'; // Light red
-            default:
-                return '#e5e7eb'; // Light gray
+            case 'active':   return '#d1fae5';
+            case 'signed':   return '#e0e7ff';
+            case 'expiring': return '#fef3c7';
+            case 'expired':  return '#fee2e2';
+            default:         return '#e5e7eb';
         }
     };
 
@@ -79,7 +87,7 @@ const ContractInformation = ({
         <Paper
             elevation={0}
             sx={{
-                p: { xs: 1, sm: 2 },
+                p: { xs: 1, sm: 1.5 },
                 borderRadius: 3,
                 border: '1px solid',
                 borderColor: 'divider',
@@ -94,9 +102,9 @@ const ContractInformation = ({
                 variant="h6"
                 fontWeight={700}
                 sx={{
-                    mb: 1,
+                    mb: 0.75,
                     color: 'text.primary',
-                    fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                    fontSize: { xs: '1rem', sm: '1.1rem' },
                 }}
             >
                 {t('contractInformation')}
@@ -107,8 +115,8 @@ const ContractInformation = ({
                 sx={{
                     display: 'grid',
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2,
-                    mb: 1,
+                    gap: 1.25,
+                    mb: 0.75,
                 }}
             >
                 {/* Client */}
@@ -119,7 +127,7 @@ const ContractInformation = ({
                             color: 'text.secondary',
                             display: 'block',
                             // mb: 0.5,
-                            fontSize: '0.875rem',
+                            fontSize: '0.75rem',
                         }}
                     >
                         {t('client')}
@@ -129,7 +137,7 @@ const ContractInformation = ({
                         fontWeight={600}
                         sx={{
                             color: 'text.primary',
-                            fontSize: { xs: '1rem', sm: '1rem' },
+                            fontSize: '0.875rem',
                         }}
                     >
                         {client}
@@ -144,7 +152,7 @@ const ContractInformation = ({
                             color: 'text.secondary',
                             display: 'block',
                             // mb: 0.5,
-                            fontSize: '0.875rem',
+                            fontSize: '0.75rem',
                         }}
                     >
                         {t('contractValue')}
@@ -154,7 +162,7 @@ const ContractInformation = ({
                         fontWeight={600}
                         sx={{
                             color: 'text.primary',
-                            fontSize: { xs: '1rem', sm: '1rem' },
+                            fontSize: '0.875rem',
                         }}
                     >
                         {contractValue}
@@ -169,7 +177,7 @@ const ContractInformation = ({
                             color: 'text.secondary',
                             display: 'block',
                             // mb: 0.5,
-                            fontSize: '0.875rem',
+                            fontSize: '0.75rem',
                         }}
                     >
                         {t('category')}
@@ -179,7 +187,7 @@ const ContractInformation = ({
                         fontWeight={600}
                         sx={{
                             color: 'text.primary',
-                            fontSize: { xs: '1rem', sm: '1rem' },
+                            fontSize: '0.875rem',
                         }}
                     >
                         {category}
@@ -194,7 +202,7 @@ const ContractInformation = ({
                             color: 'text.secondary',
                             display: 'block',
                             // mb: 0.5,
-                            fontSize: '0.875rem',
+                            fontSize: '0.75rem',
                         }}
                     >
                         {t('template')}
@@ -204,7 +212,7 @@ const ContractInformation = ({
                         fontWeight={600}
                         sx={{
                             color: 'text.primary',
-                            fontSize: { xs: '1rem', sm: '1rem' },
+                            fontSize: '0.875rem',
                         }}
                     >
                         {template}
@@ -238,7 +246,7 @@ const ContractInformation = ({
                             color: 'text.secondary',
                             display: 'block',
                             // mb: 0.5,
-                            fontSize: '0.875rem',
+                            fontSize: '0.75rem',
                         }}
                     >
                         {t('startDate')}
@@ -246,7 +254,7 @@ const ContractInformation = ({
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <CalendarTodayOutlinedIcon
                             sx={{
-                                fontSize: '1rem',
+                                fontSize: '0.9rem',
                                 color: 'text.secondary',
                             }}
                         />
@@ -255,7 +263,7 @@ const ContractInformation = ({
                             fontWeight={600}
                             sx={{
                                 color: 'text.primary',
-                                fontSize: { xs: '1rem', sm: '1rem' },
+                                fontSize: '0.875rem',
                             }}
                         >
                             {startDate}
@@ -271,7 +279,7 @@ const ContractInformation = ({
                             color: 'text.secondary',
                             display: 'block',
                             // mb: 0.5,
-                            fontSize: '0.875rem',
+                            fontSize: '0.75rem',
                         }}
                     >
                         {t('endDate')}
@@ -279,7 +287,7 @@ const ContractInformation = ({
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <CalendarTodayOutlinedIcon
                             sx={{
-                                fontSize: '1rem',
+                                fontSize: '0.9rem',
                                 color: 'text.secondary',
                             }}
                         />
@@ -288,7 +296,7 @@ const ContractInformation = ({
                             fontWeight={600}
                             sx={{
                                 color: 'text.primary',
-                                fontSize: { xs: '1rem', sm: '1rem' },
+                                fontSize: '0.875rem',
                             }}
                         >
                             {endDate}
@@ -315,7 +323,7 @@ const ContractInformation = ({
                             color: 'text.secondary',
                             display: 'block',
                             mb: 0.5,
-                            fontSize: '0.875rem',
+                            fontSize: '0.75rem',
                         }}
                     >
                         {t('description')}
@@ -324,7 +332,7 @@ const ContractInformation = ({
                         variant="body2"
                         sx={{
                             color: 'text.primary',
-                            fontSize: { xs: '0.95rem', sm: '1rem' },
+                            fontSize: '0.875rem',
                             // lineHeight: 1.5,
                         }}
                     >
@@ -349,7 +357,7 @@ const ContractInformation = ({
                         color: 'text.secondary',
                         display: 'block',
                         mb: 0.5,
-                        fontSize: '0.875rem',
+                        fontSize: '0.75rem',
                     }}
                 >
                     {t('contractProgress')}

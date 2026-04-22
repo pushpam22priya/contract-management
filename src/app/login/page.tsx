@@ -7,12 +7,8 @@ import {
     Button,
     TextField,
     Typography,
-    Checkbox,
-    FormControlLabel,
-    Link,
     Paper,
     InputAdornment,
-    useMediaQuery,
     useTheme,
     Stack,
     Alert,
@@ -20,191 +16,25 @@ import {
 } from '@mui/material';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import GavelIcon from '@mui/icons-material/Gavel';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ContractIcon from '@/components/ContractIcon';
 import { authService } from '@/services/authService';
-
-// ─── All styles collected in one place ───────────────────────────────────────
-
-const styles = {
-    pageWrapper: {
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #129191ff 0%, #115e59 50%, #134e4a 100%)',
-        backgroundSize: '400% 400%',
-        animation: 'gradientShift 15s ease infinite',
-        p: 2,
-        position: 'relative',
-        overflow: 'hidden',
-        '@keyframes gradientShift': {
-            '0%': { backgroundPosition: '0% 50%' },
-            '50%': { backgroundPosition: '100% 50%' },
-            '100%': { backgroundPosition: '0% 50%' },
-        },
-        '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background:
-                'radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
-            pointerEvents: 'none',
-        },
-    },
-
-    floatingCircle1: {
-        position: 'absolute',
-        top: '10%',
-        left: '15%',
-        width: 300,
-        height: 300,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 70%)',
-        animation: 'float 8s ease-in-out infinite',
-        '@keyframes float': {
-            '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
-            '50%': { transform: 'translate(30px, -30px) scale(1.1)' },
-        },
-    },
-
-    floatingCircle2: {
-        position: 'absolute',
-        bottom: '15%',
-        right: '10%',
-        width: 400,
-        height: 400,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 70%)',
-        animation: 'float 10s ease-in-out infinite reverse',
-    },
-
-    floatingCircle3: {
-        position: 'absolute',
-        top: '50%',
-        right: '25%',
-        width: 200,
-        height: 200,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%)',
-        animation: 'float 12s ease-in-out infinite',
-    },
-
-    paper: {
-        maxWidth: 1000,
-        width: '100%',
-        display: 'flex',
-        overflow: 'hidden',
-        borderRadius: 8,
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-        flexDirection: { xs: 'column', md: 'row' },
-        position: 'relative',
-        zIndex: 1,
-    },
-
-    leftPanel: {
-        display: { xs: 'none', md: 'flex' },
-        width: { md: '50%' },
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        p: 6,
-        background: 'linear-gradient(135deg, #0f766e 0%, #115e59 50%, #134e4a 100%)',
-        color: 'white',
-        position: 'relative',
-        overflow: 'hidden',
-    },
-
-    decorCircle1: {
-        position: 'absolute',
-        top: -50,
-        left: -50,
-        width: 200,
-        height: 200,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.15)',
-        animation: 'pulse 4s ease-in-out infinite',
-        '@keyframes pulse': {
-            '0%, 100%': { transform: 'scale(1)', opacity: 0.15 },
-            '50%': { transform: 'scale(1.1)', opacity: 0.25 },
-        },
-    },
-
-    decorCircle2: {
-        position: 'absolute',
-        bottom: -80,
-        right: -80,
-        width: 300,
-        height: 300,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.1)',
-        animation: 'pulse 6s ease-in-out infinite reverse',
-    },
-
-    logoBox: {
-        width: 80,
-        height: 80,
-        bgcolor: 'rgba(255,255,255,0.25)',
-        borderRadius: 3,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        mb: 3,
-        mx: 'auto',
-        backdropFilter: 'blur(10px)',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-    },
-
-    subtitle: {
-        opacity: 0.95,
-        mb: 4,
-        maxWidth: 350,
-        mx: 'auto',
-        lineHeight: 1.6,
-    },
-
-    rightPanel: {
-        width: { xs: '100%', md: '50%' },
-        p: { xs: 4, md: 8 },
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        bgcolor: '#f0fff7ff',
-    },
-
-    signInButton: {
-        py: 1.5,
-        mt: 2,
-        fontSize: '1rem',
-        textTransform: 'none',
-        background: '#115e59',
-        '&:hover': {
-            background: '#0f4c47',
-            boxShadow: '0 8px 24px rgba(15, 118, 110, 0.4)',
-        },
-        '&:disabled': {
-            background: '#115e5980',
-        },
-    },
-} as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
     const theme = useTheme();
     const router = useRouter();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+
+    // ── Pull every colour from the active theme ───────────────────────────────
+    const loginTheme = theme.login;
+    const isDark = theme.palette.mode === 'dark';
 
     const handleSignIn = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -231,39 +61,191 @@ export default function LoginPage() {
     };
 
     return (
-        <Box sx={styles.pageWrapper}>
-            {/* Floating animated circles */}
-            <Box sx={styles.floatingCircle1} />
-            <Box sx={styles.floatingCircle2} />
-            <Box sx={styles.floatingCircle3} />
+        <Box
+            sx={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: loginTheme.pageBackground,
+                backgroundSize: '400% 400%',
+                animation: 'loginGradientShift 15s ease infinite',
+                p: 2,
+                position: 'relative',
+                overflow: 'hidden',
+                '@keyframes loginGradientShift': {
+                    '0%':   { backgroundPosition: '0% 50%' },
+                    '50%':  { backgroundPosition: '100% 50%' },
+                    '100%': { backgroundPosition: '0% 50%' },
+                },
+                '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    inset: 0,
+                    background:
+                        'radial-gradient(circle at 20% 80%, rgba(255,255,255,0.08) 0%, transparent 50%), ' +
+                        'radial-gradient(circle at 80% 20%, rgba(255,255,255,0.12) 0%, transparent 50%)',
+                    pointerEvents: 'none',
+                },
+            }}
+        >
+            {/* Floating ambient circles */}
+            <Box
+                sx={{
+                    position: 'absolute',
+                    top: '10%', left: '15%',
+                    width: 300, height: 300,
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 70%)',
+                    animation: 'loginFloat 8s ease-in-out infinite',
+                    '@keyframes loginFloat': {
+                        '0%, 100%': { transform: 'translate(0,0) scale(1)' },
+                        '50%':      { transform: 'translate(30px,-30px) scale(1.1)' },
+                    },
+                }}
+            />
+            <Box
+                sx={{
+                    position: 'absolute',
+                    bottom: '15%', right: '10%',
+                    width: 400, height: 400,
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 70%)',
+                    animation: 'loginFloat 10s ease-in-out infinite reverse',
+                }}
+            />
+            <Box
+                sx={{
+                    position: 'absolute',
+                    top: '50%', right: '25%',
+                    width: 200, height: 200,
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 70%)',
+                    animation: 'loginFloat 12s ease-in-out infinite',
+                }}
+            />
 
-            <Paper elevation={0} sx={styles.paper}>
-                {/* Left Side - Branding (Hidden on Mobile) */}
-                <Box sx={styles.leftPanel}>
-                    {/* Decorative Circles */}
-                    <Box sx={styles.decorCircle1} />
-                    <Box sx={styles.decorCircle2} />
+            <Paper
+                elevation={0}
+                sx={{
+                    maxWidth: 1000,
+                    width: '100%',
+                    display: 'flex',
+                    overflow: 'hidden',
+                    borderRadius: 4,
+                    boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)',
+                    flexDirection: { xs: 'column', md: 'row' },
+                    position: 'relative',
+                    zIndex: 1,
+                    // Override MUI Paper background — the two panels handle their own bg
+                    bgcolor: 'transparent',
+                    background: 'transparent',
+                    backdropFilter: 'none',
+                    border: isDark ? '1px solid rgba(255,255,255,0.08)' : 'none',
+                }}
+            >
+                {/* ── Left Side — Branding ────────────────────────────────────── */}
+                <Box
+                    sx={{
+                        display: { xs: 'none', md: 'flex' },
+                        width: { md: '50%' },
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        p: 6,
+                        background: loginTheme.leftPanelBackground,
+                        color: 'white',
+                        position: 'relative',
+                        overflow: 'hidden',
+                    }}
+                >
+                    {/* Decorative circles */}
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            top: -50, left: -50,
+                            width: 200, height: 200,
+                            borderRadius: '50%',
+                            background: isDark ? 'rgba(132,116,180,0.22)' : 'rgba(255,255,255,0.12)',
+                            animation: 'loginPulse1 4s ease-in-out infinite',
+                            '@keyframes loginPulse1': {
+                                '0%, 100%': { transform: 'scale(1)' },
+                                '50%':      { transform: 'scale(1.08)' },
+                            },
+                        }}
+                    />
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            bottom: -80, right: -80,
+                            width: 300, height: 300,
+                            borderRadius: '50%',
+                            background: isDark ? 'rgba(132,116,180,0.15)' : 'rgba(255,255,255,0.08)',
+                            animation: 'loginPulse2 6s ease-in-out infinite',
+                            '@keyframes loginPulse2': {
+                                '0%, 100%': { transform: 'scale(1)' },
+                                '50%':      { transform: 'scale(1.05)' },
+                            },
+                        }}
+                    />
 
                     <Box sx={{ zIndex: 1, textAlign: 'center' }}>
-                        <Box sx={styles.logoBox}>
+                        {/* Logo box */}
+                        <Box
+                            sx={{
+                                width: 80, height: 80,
+                                bgcolor: 'rgba(255,255,255,0.25)',
+                                borderRadius: 3,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                mb: 3, mx: 'auto',
+                                backdropFilter: 'blur(10px)',
+                                boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+                                border: '1px solid rgba(255,255,255,0.20)',
+                            }}
+                        >
                             <ContractIcon sx={{ fontSize: 45 }} />
                         </Box>
+
                         <Typography variant="h3" fontWeight="bold" gutterBottom>
                             Contract Management
                         </Typography>
-                        <Typography variant="subtitle1" sx={styles.subtitle}>
-                            Effortless contract lifecycle management. Create, track, and sign documents with confidence and security.
+                        <Typography
+                            variant="subtitle1"
+                            sx={{ opacity: 0.90, mb: 4, maxWidth: 350, mx: 'auto', lineHeight: 1.6 }}
+                        >
+                            Effortless contract lifecycle management.<br />
+                            Create, track, and sign documents with confidence and security.
                         </Typography>
                     </Box>
                 </Box>
 
-                {/* Right Side - Login Form */}
-                <Box sx={styles.rightPanel}>
+                {/* ── Right Side — Login Form ─────────────────────────────────── */}
+                <Box
+                    sx={{
+                        width: { xs: '100%', md: '50%' },
+                        p: { xs: 4, md: 8 },
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        bgcolor: loginTheme.rightPanelBackground,
+                        color: loginTheme.rightPanelText,
+                        // Force text colours for MUI Typography inside the panel
+                        '& .MuiTypography-root': {
+                            color: loginTheme.rightPanelText,
+                        },
+                        '& .MuiTypography-colorTextSecondary, & .MuiTypography-root[color="text.secondary"]': {
+                            color: loginTheme.rightPanelText,
+                            opacity: 0.65,
+                        },
+                    }}
+                >
                     <Box sx={{ mb: 4 }}>
                         <Typography variant="h4" gutterBottom fontWeight="600">
                             Welcome Back
                         </Typography>
-                        <Typography variant="body1" color="text.secondary">
+                        <Typography variant="body1" sx={{ opacity: 0.65 }}>
                             Please enter your details to sign in.
                         </Typography>
                     </Box>
@@ -292,13 +274,22 @@ export default function LoginPage() {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 disabled={loading}
-                                InputProps={{
-                                    startAdornment: (
-                                        <InputAdornment position="start">
-                                            <EmailOutlinedIcon color="action" />
-                                        </InputAdornment>
-                                    ),
+                                sx={{
+                                    '& .MuiInputLabel-root': { color: `${loginTheme.rightPanelText}99` },
+                                    '& .MuiOutlinedInput-root': {
+                                        color: loginTheme.rightPanelText,
+                                        bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                                        '& fieldset': { borderColor: `${loginTheme.rightPanelText}33` },
+                                        '&:hover fieldset': { borderColor: `${loginTheme.rightPanelText}66` },
+                                        '&.Mui-focused fieldset': { borderColor: loginTheme.buttonBackground },
+                                    },
+                                    '& .MuiSvgIcon-root': { color: `${loginTheme.rightPanelText}80` },
                                 }}
+                                slotProps={{ input: { startAdornment: (
+                                    <InputAdornment position="start">
+                                        <EmailOutlinedIcon />
+                                    </InputAdornment>
+                                ) } }}
                             />
                             <TextField
                                 required
@@ -311,13 +302,22 @@ export default function LoginPage() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 disabled={loading}
-                                InputProps={{
-                                    startAdornment: (
-                                        <InputAdornment position="start">
-                                            <LockOutlinedIcon color="action" />
-                                        </InputAdornment>
-                                    ),
+                                sx={{
+                                    '& .MuiInputLabel-root': { color: `${loginTheme.rightPanelText}99` },
+                                    '& .MuiOutlinedInput-root': {
+                                        color: loginTheme.rightPanelText,
+                                        bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                                        '& fieldset': { borderColor: `${loginTheme.rightPanelText}33` },
+                                        '&:hover fieldset': { borderColor: `${loginTheme.rightPanelText}66` },
+                                        '&.Mui-focused fieldset': { borderColor: loginTheme.buttonBackground },
+                                    },
+                                    '& .MuiSvgIcon-root': { color: `${loginTheme.rightPanelText}80` },
                                 }}
+                                slotProps={{ input: { startAdornment: (
+                                    <InputAdornment position="start">
+                                        <LockOutlinedIcon />
+                                    </InputAdornment>
+                                ) } }}
                             />
                         </Stack>
 
@@ -326,9 +326,31 @@ export default function LoginPage() {
                             fullWidth
                             variant="contained"
                             size="large"
-                            endIcon={loading ? <CircularProgress size={20} color="inherit" /> : <ArrowForwardIcon />}
+                            endIcon={
+                                loading
+                                    ? <CircularProgress size={20} color="inherit" />
+                                    : <ArrowForwardIcon />
+                            }
                             disabled={loading}
-                            sx={styles.signInButton}
+                            sx={{
+                                py: 1.5,
+                                mt: 3,
+                                fontSize: '1rem',
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                borderRadius: 2,
+                                background: loginTheme.buttonBackground,
+                                color: '#ffffff',
+                                boxShadow: 'none',
+                                '&:hover': {
+                                    background: loginTheme.buttonHover,
+                                    boxShadow: `0 8px 24px ${loginTheme.buttonBackground}55`,
+                                },
+                                '&:disabled': {
+                                    background: loginTheme.buttonDisabled,
+                                    color: 'rgba(255,255,255,0.6)',
+                                },
+                            }}
                         >
                             {loading ? 'Signing In...' : 'Sign In'}
                         </Button>

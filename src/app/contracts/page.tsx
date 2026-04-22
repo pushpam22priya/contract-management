@@ -406,7 +406,7 @@ export default function ContractsPage() {
                                         sx={{
                                             color: 'text.secondary',
                                             p: 0.25,
-                                            '&:hover': { color: 'primary.main', bgcolor: 'rgba(15,118,110,0.06)' },
+                                            '&:hover': { color: 'primary.main', bgcolor: 'action.hover' },
                                         }}
                                     >
                                         <ArrowBackIcon sx={{ fontSize: 16 }} />
@@ -437,7 +437,7 @@ export default function ContractsPage() {
                                     <Chip
                                         label={`${filteredContracts.length} contract${filteredContracts.length !== 1 ? 's' : ''}`}
                                         size="small"
-                                        sx={{ height: 16, fontSize: '0.6rem', bgcolor: 'rgba(15,118,110,0.08)', color: 'primary.main' }}
+                                        sx={{ height: 16, fontSize: '0.6rem', bgcolor: (theme) => `${theme.palette.primary.main}14`, color: 'primary.main' }}
                                     />
                                 </>
                             ) : isFlatView ? (
@@ -456,7 +456,7 @@ export default function ContractsPage() {
                                     <Chip
                                         label={`${filteredContracts.length} contract${filteredContracts.length !== 1 ? 's' : ''}`}
                                         size="small"
-                                        sx={{ height: 16, fontSize: '0.6rem', bgcolor: 'rgba(15,118,110,0.08)', color: 'primary.main' }}
+                                        sx={{ height: 16, fontSize: '0.6rem', bgcolor: (theme) => `${theme.palette.primary.main}14`, color: 'primary.main' }}
                                     />
                                 </>
                             ) : (
@@ -482,8 +482,8 @@ export default function ContractsPage() {
                                         color: 'white',
                                         transition: 'all 0.2s',
                                         '&:hover': {
-                                            bgcolor: 'rgba(0, 96, 90, 1)',
-                                            boxShadow: '0 4px 12px rgba(15, 118, 110, 0.3)',
+                                            bgcolor: 'primary.dark',
+                                            boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}4d`,
                                         },
                                     }}
                                 >

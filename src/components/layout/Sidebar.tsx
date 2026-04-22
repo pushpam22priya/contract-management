@@ -25,6 +25,7 @@ import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import { useTranslations } from 'next-intl';
+import { useThemeName } from '@/context/ThemeContext';
 
 interface SidebarProps {
     open: boolean;
@@ -39,6 +40,7 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
     const pathname = usePathname();
     const router = useRouter();
     const t = useTranslations('nav');
+    const { themeName } = useThemeName();
 
     const menuItems = [
         { text: t('dashboard'),      icon: <DashboardOutlinedIcon sx={{ fontSize: 20 }} />,  path: '/dashboard' },
@@ -65,23 +67,35 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
     const drawerWidth = open ? 220 : 56;
     const showExpanded = isMobile ? true : open;
 
-    // Light theme on dashboard, dark teal on every other page
+    // Dashboard uses a lighter sidebar variant; all other pages use the full sidebar style.
+    // In dark mode this distinction is removed — always use sidebar tokens for consistency.
     const isDashboard = pathname === '/dashboard';
 
-    const sidebarBg        = isDashboard ? '#f0f9f8'              : '#0f766e';
-    const toggleColor      = isDashboard ? 'text.secondary'        : 'rgba(255,255,255,0.7)';
-    const toggleHoverBg    = isDashboard ? 'rgba(15,118,110,0.1)'  : 'rgba(255,255,255,0.12)';
-    const selectedBg       = isDashboard ? 'rgba(15,118,110,0.13)' : 'white';
-    const selectedHoverBg  = isDashboard ? 'rgba(15,118,110,0.17)' : 'rgba(255,255,255,0.95)';
-    const hoverBg          = isDashboard ? 'rgba(15,118,110,0.07)' : 'rgba(255,255,255,0.1)';
-    const selectedIconColor = isDashboard ? 'primary.main'         : '#0f766e';
-    const inactiveIconColor = isDashboard ? '#64748b'              : 'rgba(255,255,255,0.8)';
-    const selectedTextColor = isDashboard ? 'primary.main'         : '#0f766e';
-    const inactiveTextColor = isDashboard ? '#475569'              : 'rgba(255,255,255,0.85)';
-    const accentBarColor    = isDashboard ? 'primary.main'         : 'white';
+    // ── Dashboard mode: derive from palette tokens (adapts to all themes) ──────
+    // ── Sidebar mode:   derive from theme.sidebar tokens ──────────────────────
+    const { sidebar, palette } = theme;
+    const primary = palette.primary.main;
+    const isDarkMode = palette.mode === 'dark';
+    // In dark mode use the dashboard-style (translucent violet) for all pages
+    const effectiveIsDashboard = isDashboard || isDarkMode;
+
+    const sidebarBg         = effectiveIsDashboard ? palette.background.default           : sidebar.background;
+    const toggleColor       = effectiveIsDashboard ? palette.text.secondary                : sidebar.unselected;
+    const toggleHoverBg     = effectiveIsDashboard ? `${primary}1a`                        : sidebar.hover;
+    const isDarkSidebar = !effectiveIsDashboard && isDarkMode;
+
+    const selectedBg        = effectiveIsDashboard ? `${primary}20`          : isDarkSidebar ? (sidebar.selectedGradient ?? sidebar.selectedItemBg)      : sidebar.selectedItemBg;
+    const selectedHoverBg   = effectiveIsDashboard ? `${primary}28`          : isDarkSidebar ? (sidebar.selectedGradientHover ?? sidebar.selectedItemBg) : sidebar.selectedItemBg;
+    const hoverBg           = effectiveIsDashboard ? `${primary}10`          : sidebar.hover;
+    const selectedIconColor = effectiveIsDashboard ? primary                  : sidebar.selected;
+    const inactiveIconColor = effectiveIsDashboard ? palette.text.secondary   : sidebar.unselected;
+    const selectedTextColor = effectiveIsDashboard ? primary                  : sidebar.selected;
+    const inactiveTextColor = effectiveIsDashboard ? palette.text.secondary   : sidebar.unselected;
+    const accentBarColor    = effectiveIsDashboard ? primary                  : sidebar.selected;
+    const accentBarBg       = isDarkSidebar ? (sidebar.accentGradient ?? accentBarColor) : accentBarColor;
 
     const drawer = (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: sidebarBg }}>
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', background: sidebarBg }}>
             {/* Toggle Button */}
             {!isMobile && (
                 <Box sx={{ px: 1, pt: 1.5, pb: 0.5 }}>
@@ -97,7 +111,7 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 mx: open ? 0 : 'auto',
-                                '&:hover': { bgcolor: toggleHoverBg, color: isDashboard ? 'primary.main' : 'white' },
+                                '&:hover': { bgcolor: toggleHoverBg, color: isDashboard ? primary : sidebar.selected },
                             }}
                         >
                             {open ? <MenuOpenIcon sx={{ fontSize: 18 }} /> : <MenuIcon sx={{ fontSize: 18 }} />}
@@ -128,6 +142,8 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                                     px: showExpanded ? 1.5 : 0,
                                     bgcolor: isSelected ? selectedBg : 'transparent',
                                     position: 'relative',
+                                    overflow: 'hidden',
+                                    // Accent bar on left
                                     '&::before': isSelected && showExpanded ? {
                                         content: '""',
                                         position: 'absolute',
@@ -136,7 +152,23 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                                         bottom: '18%',
                                         width: 3,
                                         borderRadius: '0 3px 3px 0',
-                                        bgcolor: accentBarColor,
+                                        background: accentBarBg,
+                                    } : {},
+                                    // Shine sweep on hover (dark sidebar only)
+                                    '&::after': isSelected && isDarkSidebar ? {
+                                        content: '""',
+                                        position: 'absolute',
+                                        top: '-50%',
+                                        left: '-75%',
+                                        width: '45%',
+                                        height: '200%',
+                                        background: 'linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0) 100%)',
+                                        transform: 'skewX(-18deg)',
+                                        transition: 'left 0.5s ease',
+                                        pointerEvents: 'none',
+                                    } : {},
+                                    '&:hover::after': isSelected && isDarkSidebar ? {
+                                        left: '130%',
                                     } : {},
                                     '&:hover': {
                                         bgcolor: isSelected ? selectedHoverBg : hoverBg,
@@ -190,7 +222,7 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                         '& .MuiDrawer-paper': {
                             width: 220,
                             boxSizing: 'border-box',
-                            bgcolor: sidebarBg,
+                            background: sidebarBg,
                             borderRight: '1px solid',
                             borderColor: 'divider',
                         },
@@ -208,7 +240,7 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                         '& .MuiDrawer-paper': {
                             width: drawerWidth,
                             boxSizing: 'border-box',
-                            bgcolor: sidebarBg,
+                            background: sidebarBg,
                             borderRight: '1px solid',
                             borderColor: 'divider',
                             top: '40px',

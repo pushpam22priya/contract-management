@@ -18,8 +18,10 @@ import {
     Alert,
     Button,
     Tooltip,
+    useTheme,
     CircularProgress,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
@@ -50,6 +52,9 @@ export default function SignatureProgressTimeline({
     onFinalize,
 }: SignatureProgressTimelineProps) {
     const t = useTranslations('contractDetail');
+    const theme = useTheme();
+    const primaryColor = theme.palette.primary.main;
+    const isDark = theme.palette.mode === 'dark';
     // Derive parties from formFields when contract.parties is empty (e.g. renewal contracts)
     const effectiveParties: { id: string; color: string; label: string }[] = React.useMemo(() => {
         if (contract.parties && contract.parties.length > 0) return contract.parties;
@@ -70,12 +75,15 @@ export default function SignatureProgressTimeline({
         <Paper
             elevation={0}
             sx={{
-                mt: 2,
                 p: 1,
                 border: '1px solid',
-                borderColor: isFinalized ? '#a5d6a7' : 'divider',
+                borderColor: isFinalized
+                    ? (isDark ? 'rgba(16,185,129,0.28)' : '#a5d6a7')
+                    : 'divider',
                 borderRadius: 2.5,
-                bgcolor: isFinalized ? '#f1f8e9' : 'background.paper',
+                bgcolor: isFinalized
+                    ? (isDark ? 'rgba(16,185,129,0.06)' : '#f1f8e9')
+                    : 'background.paper',
             }}
         >
             {/* Header row */}
@@ -89,7 +97,7 @@ export default function SignatureProgressTimeline({
                             label={t('orderActive', { order: currentOrder })}
                             size="small"
                             sx={{
-                                bgcolor: '#0f766e',
+                                bgcolor: primaryColor,
                                 color: '#fff',
                                 fontWeight: 600,
                                 fontSize: '0.65rem',
@@ -125,7 +133,9 @@ export default function SignatureProgressTimeline({
                                     <Box sx={{
                                         flex: 1,
                                         height: 2,
-                                        bgcolor: allComplete ? '#a5d6a7' : '#e0e0e0',
+                                        bgcolor: allComplete
+                                            ? (isDark ? 'rgba(16,185,129,0.40)' : '#a5d6a7')
+                                            : (isDark ? 'rgba(255,255,255,0.12)' : '#e0e0e0'),
                                     }} />
                                 ) : (
                                     <Box sx={{ flex: 1 }} />
@@ -141,9 +151,12 @@ export default function SignatureProgressTimeline({
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         flexShrink: 0,
-                                        bgcolor: allComplete ? '#2e7d32' : isCurrentOrder ? '#0f766e' : '#bdbdbd',
-                                        border: isCurrentOrder && !allComplete ? '2px solid #0f766e' : 'none',
-                                        boxShadow: isCurrentOrder ? '0 0 0 3px rgba(15,118,110,0.15)' : 'none',
+                                        bgcolor: allComplete
+                                            ? (isDark ? '#4a9a6e' : '#2e7d32')
+                                            : isCurrentOrder ? primaryColor
+                                            : (isDark ? 'rgba(255,255,255,0.18)' : '#bdbdbd'),
+                                        border: isCurrentOrder && !allComplete ? `2px solid ${primaryColor}` : 'none',
+                                        boxShadow: isCurrentOrder ? `0 0 0 3px ${alpha(primaryColor, 0.15)}` : 'none',
                                     }}
                                 >
                                     {allComplete ? (
@@ -160,8 +173,9 @@ export default function SignatureProgressTimeline({
                                     <Box sx={{
                                         flex: 1,
                                         height: 2,
-                                        // Color based on whether the NEXT order's signers are all complete
-                                        bgcolor: allComplete ? '#a5d6a7' : '#e0e0e0',
+                                        bgcolor: allComplete
+                                            ? (isDark ? 'rgba(16,185,129,0.40)' : '#a5d6a7')
+                                            : (isDark ? 'rgba(255,255,255,0.12)' : '#e0e0e0'),
                                     }} />
                                 ) : (
                                     <Box sx={{ flex: 1 }} />
@@ -177,22 +191,22 @@ export default function SignatureProgressTimeline({
                                 width: 'calc(100% - 4px)',
                                 border: '1px solid',
                                 bgcolor: allComplete
-                                    ? '#e8f5e9'
+                                    ? (isDark ? 'rgba(16,185,129,0.08)' : '#e8f5e9')
                                     : isCurrentOrder
-                                        ? 'rgba(15,118,110,0.06)'
-                                        : '#f5f5f5',
+                                        ? alpha(primaryColor, 0.06)
+                                        : (isDark ? 'rgba(255,255,255,0.03)' : '#f5f5f5'),
                                 borderColor: allComplete
-                                    ? '#c8e6c9'
+                                    ? (isDark ? 'rgba(16,185,129,0.22)' : '#c8e6c9')
                                     : isCurrentOrder
-                                        ? 'rgba(15,118,110,0.22)'
-                                        : '#e0e0e0',
+                                        ? alpha(primaryColor, 0.22)
+                                        : (isDark ? 'rgba(255,255,255,0.08)' : '#e0e0e0'),
                             }}>
                             {/* Order label */}
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25, mb: 0.5 }}>
                                 {isCurrentOrder && !allComplete && (
                                     <Typography variant="caption" sx={{
                                         fontSize: '0.55rem',
-                                        color: '#0f766e',
+                                        color: primaryColor,
                                         fontWeight: 700,
                                     }}>
                                         {t('inProgress')}
@@ -204,7 +218,7 @@ export default function SignatureProgressTimeline({
                                     </Typography>
                                 )}
                                 {allComplete && (
-                                    <Typography variant="caption" sx={{ fontSize: '0.55rem', color: '#2e7d32', fontWeight: 700 }}>
+                                    <Typography variant="caption" sx={{ fontSize: '0.55rem', color: isDark ? '#6bac8e' : '#2e7d32', fontWeight: 700 }}>
                                         {t('done')}
                                     </Typography>
                                 )}
@@ -228,9 +242,17 @@ export default function SignatureProgressTimeline({
                                                 py: 0.5,
                                                 px: 1,
                                                 borderRadius: 1.5,
-                                                bgcolor: isCompleted ? '#e8f5e9' : isUnlocked ? '#fff8e1' : '#fafafa',
+                                                bgcolor: isCompleted
+                                                    ? (isDark ? 'rgba(16,185,129,0.08)' : '#e8f5e9')
+                                                    : isUnlocked
+                                                        ? (isDark ? 'rgba(245,158,11,0.08)' : '#fff8e1')
+                                                        : (isDark ? 'rgba(255,255,255,0.03)' : '#fafafa'),
                                                 border: '1px solid',
-                                                borderColor: isCompleted ? '#c8e6c9' : isUnlocked ? '#fff0b8' : '#eee',
+                                                borderColor: isCompleted
+                                                    ? (isDark ? 'rgba(16,185,129,0.22)' : '#c8e6c9')
+                                                    : isUnlocked
+                                                        ? (isDark ? 'rgba(245,158,11,0.22)' : '#fff0b8')
+                                                        : (isDark ? 'rgba(255,255,255,0.07)' : '#eee'),
                                                 transition: 'all 0.15s',
                                             }}
                                         >
@@ -239,15 +261,15 @@ export default function SignatureProgressTimeline({
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                                     {/* Status icon — inline with name */}
                                                     {isCompleted ? (
-                                                        <CheckCircleIcon sx={{ color: '#2e7d32', fontSize: 14, flexShrink: 0 }} />
+                                                        <CheckCircleIcon sx={{ color: isDark ? '#6bac8e' : '#2e7d32', fontSize: 14, flexShrink: 0 }} />
                                                     ) : isUnlocked ? (
-                                                        <HourglassEmptyIcon sx={{ color: '#f9a825', fontSize: 14, flexShrink: 0 }} />
+                                                        <HourglassEmptyIcon sx={{ color: isDark ? '#b8935a' : '#f9a825', fontSize: 14, flexShrink: 0 }} />
                                                     ) : (
                                                         <Box sx={{
                                                             width: 14,
                                                             height: 14,
                                                             borderRadius: '50%',
-                                                            border: '2px solid #ccc',
+                                                            border: isDark ? '2px solid rgba(255,255,255,0.22)' : '2px solid #ccc',
                                                             flexShrink: 0,
                                                         }} />
                                                     )}
@@ -267,20 +289,22 @@ export default function SignatureProgressTimeline({
                                                         overflow: 'hidden',
                                                         textOverflow: 'ellipsis',
                                                         whiteSpace: 'nowrap',
-                                                        color: isCompleted ? '#1b5e20' : 'text.primary',
+                                                        color: isCompleted
+                                                            ? (isDark ? '#6bac8e' : '#1b5e20')
+                                                            : 'text.primary',
                                                     }}>
                                                         {signer.name || signer.email}
                                                     </Typography>
                                                     {isInternal ? (
-                                                        <PersonIcon sx={{ fontSize: 11, color: '#64b5f6' }} />
+                                                        <PersonIcon sx={{ fontSize: 11, color: isDark ? '#7eb3d4' : '#64b5f6' }} />
                                                     ) : (
-                                                        <EmailIcon sx={{ fontSize: 11, color: '#ffb74d' }} />
+                                                        <EmailIcon sx={{ fontSize: 11, color: isDark ? '#c4956a' : '#ffb74d' }} />
                                                     )}
                                                 </Box>
                                             </Box>
                                             {/* Completion date — top-right corner */}
                                             {isCompleted && signer.completedAt && (
-                                                <Typography variant="caption" sx={{ fontSize: '0.55rem', color: '#66bb6a', lineHeight: 1, flexShrink: 0, mt: 0.25 }}>
+                                                <Typography variant="caption" sx={{ fontSize: '0.55rem', color: isDark ? '#6bac8e' : '#66bb6a', lineHeight: 1, flexShrink: 0, mt: 0.25 }}>
                                                     {new Date(signer.completedAt).toLocaleDateString('en-GB')}
                                                 </Typography>
                                             )}

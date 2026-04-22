@@ -1,6 +1,7 @@
 'use client';
 
 import { AppBar, Toolbar, Box, IconButton, Badge, Typography, Tooltip } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import ContractIcon from '@/components/ContractIcon';
@@ -8,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { authService } from '@/services/authService';
 import { useTranslations } from 'next-intl';
 import LanguageToggle from './LanguageToggle';
+import ThemeToggle from './ThemeToggle';
 
 export default function Header() {
     const router = useRouter();
@@ -24,8 +26,9 @@ export default function Header() {
             elevation={0}
             sx={{
                 bgcolor: 'background.paper',
-                borderBottom: '1px solid #88888854',
-                boxShadow: '0 4px 12px rgba(15, 118, 110, 0.15)',
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                boxShadow: (theme) => `0 4px 12px ${theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.3)' : `rgba(0,0,0,0.08)`}`,
                 zIndex: (theme) => theme.zIndex.drawer + 1,
             }}
         >
@@ -41,12 +44,13 @@ export default function Header() {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Box
                         sx={{
-                            bgcolor: 'primary.main',
+                            bgcolor: (theme) => theme.palette.mode === 'dark' ? alpha(theme.palette.primary.main, 0.18) : 'primary.main',
+                            border: (theme) => theme.palette.mode === 'dark' ? `1px solid ${alpha(theme.palette.primary.main, 0.30)}` : 'none',
                             borderRadius: 1,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: 'white',
+                            color: (theme) => theme.palette.mode === 'dark' ? '#c0b4e0' : 'white',
                             p: 0.2,
                         }}
                     >
@@ -56,7 +60,7 @@ export default function Header() {
                         variant="h6"
                         sx={{
                             fontWeight: 600,
-                            color: 'primary.main',
+                            color: 'text.primary',
                             display: { xs: 'none', sm: 'block' },
                         }}
                     >
@@ -64,8 +68,9 @@ export default function Header() {
                     </Typography>
                 </Box>
 
-                {/* Right: Language Toggle + Notifications + Logout */}
+                {/* Right: Theme Toggle + Language Toggle + Notifications + Logout */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <ThemeToggle />
                     <LanguageToggle />
 
                     <Tooltip title={t('notifications')} arrow placement="bottom">

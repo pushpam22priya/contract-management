@@ -6,10 +6,9 @@ import {
     Typography,
     Button,
     Alert,
-    CircularProgress,
     alpha,
+    useTheme,
 } from '@mui/material';
-import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import BaseDialog from '@/components/common/BaseDialog';
 import { authService } from '@/services/authService';
@@ -29,6 +28,8 @@ export default function TerminateContractDialog({
     contractTitle,
     onSuccess,
 }: TerminateContractDialogProps) {
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -95,10 +96,10 @@ export default function TerminateContractDialog({
                         onClick={handleTerminate}
                         disabled={loading}
                         sx={{
-                            bgcolor: '#dc2626',
+                            bgcolor: isDark ? '#7f1d1d' : '#dc2626',
                             color: 'white',
-                            '&:hover': { bgcolor: '#b91c1c' },
-                            '&:disabled': { bgcolor: '#fca5a5', color: 'white' },
+                            '&:hover': { bgcolor: isDark ? '#991b1b' : '#b91c1c' },
+                            '&:disabled': { bgcolor: isDark ? 'rgba(127,29,29,0.5)' : '#fca5a5', color: 'white' },
                         }}
                     >
                         {loading ? 'Terminating…' : 'Terminate'}
@@ -136,17 +137,18 @@ export default function TerminateContractDialog({
                         alignItems: 'flex-start',
                         gap: 1,
                         p: 1.5,
-                        bgcolor: '#fef2f2',
-                        border: '1px solid #fecaca',
+                        bgcolor: isDark ? alpha('#dc2626', 0.10) : '#fef2f2',
+                        border: '1px solid',
+                        borderColor: isDark ? alpha('#dc2626', 0.22) : '#fecaca',
                         borderRadius: 2,
                     }}
                 >
-                    <WarningAmberRoundedIcon sx={{ fontSize: 18, color: '#dc2626', flexShrink: 0, mt: '1px' }} />
+                    <WarningAmberRoundedIcon sx={{ fontSize: 18, color: isDark ? '#f87171' : '#dc2626', flexShrink: 0, mt: '1px' }} />
                     <Box>
-                        <Typography fontSize="0.82rem" fontWeight={600} color="#991b1b" sx={{ mb: 0.25 }}>
+                        <Typography fontSize="0.82rem" fontWeight={600} color={isDark ? '#fca5a5' : '#991b1b'} sx={{ mb: 0.25 }}>
                             This action cannot be undone.
                         </Typography>
-                        <Typography fontSize="0.8rem" color="#7f1d1d" sx={{ lineHeight: 1.5 }}>
+                        <Typography fontSize="0.8rem" color={isDark ? '#fca5a5' : '#7f1d1d'} sx={{ lineHeight: 1.5 }}>
                             The contract will be permanently archived as terminated.
                         </Typography>
                     </Box>

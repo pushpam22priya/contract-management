@@ -76,10 +76,6 @@ export default function NotificationsPage() {
         return true; // 'all'
     });
 
-    const handleMarkAllRead = () => {
-        setNotifications(notifications.map((n) => ({ ...n, isRead: true })));
-    };
-
     const handleViewContract = (contractId: string) => {
         console.log('Viewing contract:', contractId);
         router.push(`/contracts`);
@@ -87,14 +83,7 @@ export default function NotificationsPage() {
 
     return (
         <AppLayout>
-            <Box>
-{/* 
-                <NotificationStats
-                    unreadCount={unreadCount}
-                    warningsCount={warningsCount}
-                    totalCount={totalCount}
-                /> */}
-
+            <Box sx={{ maxWidth: 860, px: { xs: 2, sm: 1 }, py: 1 }}>
                 <NotificationFilters
                     selectedFilter={selectedFilter}
                     onFilterChange={setSelectedFilter}

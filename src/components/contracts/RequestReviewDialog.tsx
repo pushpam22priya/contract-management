@@ -364,10 +364,10 @@ export default function RequestReviewDialog({
                         fontWeight: 600,
                         px: 3,
                         bgcolor: 'primary.main',
-                        boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
+                        boxShadow: (theme) => `0 2px 8px ${theme.palette.primary.main}40`,
                         '&:hover': {
                             bgcolor: 'primary.dark',
-                            boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
+                            boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}59`,
                         },
                     }}
                 >
