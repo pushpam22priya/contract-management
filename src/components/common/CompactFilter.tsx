@@ -175,8 +175,8 @@ const CompactFilter = ({
         <LocalizationProvider dateAdapter={AdapterDayjs}>
             <Box sx={{
                 bgcolor: 'background.paper',
-                px: 2,
-                py: 0.75,
+                px: 1,
+                py: 0.5,
                 borderBottom: '1px solid',
                 borderColor: 'divider',
             }}>
