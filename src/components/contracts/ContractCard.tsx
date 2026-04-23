@@ -327,39 +327,35 @@ const ContractCard = ({
             {contract.renewedFromId &&
                 ![ContractStatus.ACTIVE, ContractStatus.EXPIRING, ContractStatus.EXPIRED, ContractStatus.TERMINATED]
                     .includes(contract.status) && (
-                <Tooltip title="Renewal contract" arrow placement="right">
-                    <Box sx={{
-                        position: 'absolute',
-                        bottom: 8,
-                        right: 8,
-                        width: 20,
-                        height: 20,
-                        borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        boxShadow: '0 1px 5px rgba(217,119,6,0.45)',
-                        zIndex: 1,
-                    }}>
-                        <Loop sx={{ fontSize: '0.7rem', color: '#fff' }} />
-                    </Box>
-                </Tooltip>
-            )}
+                    <Tooltip title="Renewal contract" arrow placement="right">
+                        <Box sx={{
+                            position: 'absolute',
+                            bottom: 8,
+                            right: 8,
+                            width: 20,
+                            height: 20,
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 1px 5px rgba(217,119,6,0.45)',
+                            zIndex: 1,
+                        }}>
+                            <Loop sx={{ fontSize: '0.7rem', color: '#fff' }} />
+                        </Box>
+                    </Tooltip>
+                )}
 
             {/* Header: Title + Status chip */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
                 <Tooltip title={displayTitle} arrow placement="top">
                     <Typography
-                        variant="h6"
+                        variant="subtitle2"
                         sx={{
-                            fontWeight: 500,
-                            fontSize: { xs: '1rem', sm: '1rem' },
-                            color: variant === 'terminated'
-                                ? 'text.secondary'
-                                : isDark ? 'rgba(255,255,255,0.75)' : 'text.primary',
                             flex: 1,
                             minWidth: 0,
+                            ...(variant === 'terminated' && { color: 'text.secondary' }),
                         }}
                     >
                         {truncateText(displayTitle, 16)}
@@ -392,11 +388,6 @@ const ContractCard = ({
                     sx={{
                         color: 'text.secondary',
                         mb: 1,
-                        fontSize: '0.8rem',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
                     }}
                 >
                     {truncateText(contract.description || '', 35)}
@@ -414,11 +405,11 @@ const ContractCard = ({
             >
                 {/* Client */}
                 <Box>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 0.5 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, textTransform: 'uppercase', display: 'block', mb: 0.2 }}>
                         Client
                     </Typography>
                     <Tooltip title={contract.client} arrow placement="top">
-                        <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500, fontSize: '0.75rem' }}>
+                        <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500 }}>
                             {truncateText(contract.client, 10)}
                         </Typography>
                     </Tooltip>
@@ -426,11 +417,11 @@ const ContractCard = ({
 
                 {/* Category */}
                 <Box>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 0.5 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, textTransform: 'uppercase', display: 'block', mb: 0.2 }}>
                         Category
                     </Typography>
                     <Tooltip title={contract.category} arrow placement="top">
-                        <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500, fontSize: '0.75rem' }}>
+                        <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500}}>
                             {truncateText(contract.category, 15)}
                         </Typography>
                     </Tooltip>
@@ -438,7 +429,7 @@ const ContractCard = ({
 
                 {/* Expires / Terminated */}
                 <Box>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 0.5 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, textTransform: 'uppercase', display: 'block', mb: 0.2 }}>
                         {getExpiryLabel()}
                     </Typography>
                     <Tooltip title={variant === 'terminated' && contract.terminatedAt ? `Terminated on ${dayjs(contract.terminatedAt).format('DD/MM/YYYY')}` : ''} arrow placement="top">
@@ -451,7 +442,6 @@ const ContractCard = ({
                                         ? (isDark ? '#b07070' : 'error.main')
                                         : 'text.primary',
                                 fontWeight: 500,
-                                fontSize: '0.75rem',
                             }}
                         >
                             {getExpiryDisplay()}
@@ -470,8 +460,9 @@ const ContractCard = ({
                     right: 0,
                     display: 'flex',
                     gap: 1,
-                    p: 0.5,
-                    background: isDark ? 'rgb(22,32,48)' : '#fff',
+                    px: 1,
+                    py: 0.5,
+                    background: isDark ? 'rgb(22,32,48)' : '#f8f8f8',
                     borderRadius: '0 0 12px 12px',
                     opacity: { xs: 1, md: 0 },
                     transition: 'opacity 0.2s ease-in-out',
@@ -483,7 +474,7 @@ const ContractCard = ({
                 {variant !== 'terminated' && [
                     {
                         title: variant === 'draft' ? 'View' : 'View Contract',
-                        icon: <Visibility sx={{ fontSize: '1.1rem' }} />,
+                        icon: <Visibility sx={{ fontSize: '0.9rem' }} />,
                         onClick: () => onView?.(contract.id),
                         color: 'primary.main',
                         shadow: 'rgba(15, 118, 110, 0.2)',
@@ -491,7 +482,7 @@ const ContractCard = ({
                     },
                     {
                         title: 'Download PDF',
-                        icon: <Download sx={{ fontSize: '1.1rem' }} />,
+                        icon: <Download sx={{ fontSize: '0.9rem' }} />,
                         onClick: () => onDownload?.(contract.id),
                         color: 'primary.main',
                         shadow: 'rgba(15, 118, 110, 0.2)',
@@ -499,7 +490,7 @@ const ContractCard = ({
                     },
                     {
                         title: getShareTooltip(),
-                        icon: <Share sx={{ fontSize: '1.1rem' }} />,
+                        icon: <Share sx={{ fontSize: '0.9rem' }} />,
                         onClick: () => onShare?.(contract.id),
                         color: 'primary.main',
                         shadow: 'rgba(15, 118, 110, 0.2)',
@@ -507,7 +498,7 @@ const ContractCard = ({
                     },
                     {
                         title: 'Renew Contract',
-                        icon: <AutorenewOutlined sx={{ fontSize: '1.1rem' }} />,
+                        icon: <AutorenewOutlined sx={{ fontSize: '0.9rem' }} />,
                         onClick: () => onRenew?.(contract.id),
                         color: 'primary.main',
                         shadow: 'rgba(22, 163, 74, 0.2)',
@@ -519,7 +510,7 @@ const ContractCard = ({
                     },
                     {
                         title: 'Terminate Contract',
-                        icon: <BlockOutlinedIcon sx={{ fontSize: '1.1rem' }} />,
+                        icon: <BlockOutlinedIcon sx={{ fontSize: '0.9rem' }} />,
                         onClick: () => onTerminate?.(contract.id),
                         color: '#dc2626',
                         shadow: 'rgba(220, 38, 38, 0.2)',
@@ -579,7 +570,7 @@ const ContractCard = ({
                                 },
                             }}
                         >
-                            <HistoryIcon sx={{ fontSize: '1.1rem' }} />
+                            <HistoryIcon sx={{ fontSize: '0.9rem' }} />
                         </IconButton>
                     </Tooltip>
                 )}
@@ -606,7 +597,7 @@ const ContractCard = ({
                                 },
                             }}
                         >
-                            <DeleteOutlineIcon sx={{ fontSize: '1.1rem' }} />
+                            <DeleteOutlineIcon sx={{ fontSize: '0.9rem' }} />
                         </IconButton>
                     </Tooltip>
                 )}

@@ -183,14 +183,14 @@ export default function DraftTab({ headerLeft }: { headerLeft?: React.ReactNode 
                     flexWrap: 'wrap',
                     gap: 1,
                     bgcolor: 'background.paper',
-                    px: 2,
-                    py: 1,
+                    px: 1,
+                    py: 0.6,
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                 }}>
                     {headerLeft || (
                         <Box>
-                            <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' } }}>
+                            <Typography variant="h5">
                                 Draft Contracts
                             </Typography>
                             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -227,7 +227,7 @@ export default function DraftTab({ headerLeft }: { headerLeft?: React.ReactNode 
                 />
 
                 {/* Grid */}
-                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 2 }}>
+                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 1 }}>
                     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 0.75 }}>
                     {loading ? (
                         <ShimmerCardGrid count={8} variant="contract" />

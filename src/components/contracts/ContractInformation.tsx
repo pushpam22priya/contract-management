@@ -98,15 +98,7 @@ const ContractInformation = ({
             }}
         >
             {/* Title */}
-            <Typography
-                variant="h6"
-                fontWeight={700}
-                sx={{
-                    mb: 0.75,
-                    color: 'text.primary',
-                    fontSize: { xs: '1rem', sm: '1.1rem' },
-                }}
-            >
+            <Typography variant="h6" sx={{ mb: 0.75 }}>
                 {t('contractInformation')}
             </Typography>
 
@@ -123,22 +115,12 @@ const ContractInformation = ({
                 <Box>
                     <Typography
                         variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            display: 'block',
-                            // mb: 0.5,
-                            fontSize: '0.75rem',
-                        }}
+                        sx={{ display: 'block' }}
                     >
                         {t('client')}
                     </Typography>
                     <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        sx={{
-                            color: 'text.primary',
-                            fontSize: '0.875rem',
-                        }}
+                        variant="subtitle2"
                     >
                         {client}
                     </Typography>
@@ -148,22 +130,12 @@ const ContractInformation = ({
                 <Box>
                     <Typography
                         variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            display: 'block',
-                            // mb: 0.5,
-                            fontSize: '0.75rem',
-                        }}
+                        sx={{ display: 'block' }}
                     >
                         {t('contractValue')}
                     </Typography>
                     <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        sx={{
-                            color: 'text.primary',
-                            fontSize: '0.875rem',
-                        }}
+                        variant="subtitle2"
                     >
                         {contractValue}
                     </Typography>
@@ -173,22 +145,12 @@ const ContractInformation = ({
                 <Box>
                     <Typography
                         variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            display: 'block',
-                            // mb: 0.5,
-                            fontSize: '0.75rem',
-                        }}
+                        sx={{ display: 'block' }}
                     >
                         {t('category')}
                     </Typography>
                     <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        sx={{
-                            color: 'text.primary',
-                            fontSize: '0.875rem',
-                        }}
+                        variant="subtitle2"
                     >
                         {category}
                     </Typography>
@@ -198,22 +160,12 @@ const ContractInformation = ({
                 <Box>
                     <Typography
                         variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            display: 'block',
-                            // mb: 0.5,
-                            fontSize: '0.75rem',
-                        }}
+                        sx={{ display: 'block' }}
                     >
                         {t('template')}
                     </Typography>
                     <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        sx={{
-                            color: 'text.primary',
-                            fontSize: '0.875rem',
-                        }}
+                        variant="subtitle2"
                     >
                         {template}
                     </Typography>
@@ -242,12 +194,7 @@ const ContractInformation = ({
                 <Box>
                     <Typography
                         variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            display: 'block',
-                            // mb: 0.5,
-                            fontSize: '0.75rem',
-                        }}
+                        sx={{ display: 'block' }}
                     >
                         {t('startDate')}
                     </Typography>
@@ -258,14 +205,7 @@ const ContractInformation = ({
                                 color: 'text.secondary',
                             }}
                         />
-                        <Typography
-                            variant="body2"
-                            fontWeight={600}
-                            sx={{
-                                color: 'text.primary',
-                                fontSize: '0.875rem',
-                            }}
-                        >
+                        <Typography variant="subtitle2">
                             {startDate}
                         </Typography>
                     </Box>
@@ -275,12 +215,7 @@ const ContractInformation = ({
                 <Box>
                     <Typography
                         variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            display: 'block',
-                            // mb: 0.5,
-                            fontSize: '0.75rem',
-                        }}
+                        sx={{ display: 'block' }}
                     >
                         {t('endDate')}
                     </Typography>
@@ -291,14 +226,7 @@ const ContractInformation = ({
                                 color: 'text.secondary',
                             }}
                         />
-                        <Typography
-                            variant="body2"
-                            fontWeight={600}
-                            sx={{
-                                color: 'text.primary',
-                                fontSize: '0.875rem',
-                            }}
-                        >
+                        <Typography variant="subtitle2">
                             {endDate}
                         </Typography>
                     </Box>
@@ -328,14 +256,7 @@ const ContractInformation = ({
                     >
                         {t('description')}
                     </Typography>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: 'text.primary',
-                            fontSize: '0.875rem',
-                            // lineHeight: 1.5,
-                        }}
-                    >
+                    <Typography variant="subtitle2" sx={{ fontWeight: 400 }}>
                         {description}
                     </Typography>
                     {/* Divider inside if exists */}
@@ -354,10 +275,8 @@ const ContractInformation = ({
                 <Typography
                     variant="caption"
                     sx={{
-                        color: 'text.secondary',
                         display: 'block',
                         mb: 0.5,
-                        fontSize: '0.75rem',
                     }}
                 >
                     {t('contractProgress')}

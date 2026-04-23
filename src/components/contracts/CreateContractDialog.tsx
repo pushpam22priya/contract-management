@@ -34,7 +34,10 @@ import { authService } from '@/services/authService';
 import { Template, PartyConfiguration } from '@/types/template';
 import { Team } from '@/types/team';
 import { validatePartyFields } from '@/utils/partyValidation';
-import dayjs from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { ContractStatus } from '@/types/contract';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
 
@@ -870,6 +873,32 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
 
                         <Typography variant="h6" gutterBottom>Contract Information</Typography>
 
+                        <LocalizationProvider dateAdapter={AdapterDayjs}>
+                            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mb: 2 }}>
+                                <DatePicker
+                                    label="Start Date"
+                                    value={startDate ? dayjs(startDate) : null}
+                                    onChange={(date: Dayjs | null) => {
+                                        const val = date ? date.format('YYYY-MM-DD') : '';
+                                        setStartDate(val);
+                                        if (val) {
+                                            setEndDate(dayjs(val).add(1, 'year').format('YYYY-MM-DD'));
+                                        }
+                                    }}
+                                    format="DD/MM/YYYY"
+                                    slotProps={{ textField: { size: 'small', fullWidth: true }, desktopPaper: { sx: { maxHeight: '50vh', overflowY: 'auto' } }, popper: { modifiers: [{ name: 'preventOverflow', options: { padding: 8 } }, { name: 'flip', enabled: true }] } }}
+                                />
+                                <DatePicker
+                                    label="End Date"
+                                    value={endDate ? dayjs(endDate) : null}
+                                    onChange={(date: Dayjs | null) => setEndDate(date ? date.format('YYYY-MM-DD') : '')}
+                                    minDate={startDate ? dayjs(startDate) : undefined}
+                                    format="DD/MM/YYYY"
+                                    slotProps={{ textField: { size: 'small', fullWidth: true }, desktopPaper: { sx: { maxHeight: '50vh', overflowY: 'auto' } }, popper: { modifiers: [{ name: 'preventOverflow', options: { padding: 8 } }, { name: 'flip', enabled: true }] } }}
+                                />
+                            </Box>
+                        </LocalizationProvider>
+
                         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mb: 2 }}>
                             <TextField
                                 label="Contract Title"
@@ -914,44 +943,6 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                                     },
                                 }}
 
-                            />
-                        </Box>
-
-                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
-                            <TextField
-                                label="Start Date"
-                                type="date"
-                                value={startDate}
-                                onChange={(e) => {
-                                    const newStartDate = e.target.value;
-                                    setStartDate(newStartDate);
-                                    if (newStartDate) {
-                                        // Auto-set End Date to 1 year from Start Date
-                                        setEndDate(dayjs(newStartDate).add(1, 'year').format('YYYY-MM-DD'));
-                                    }
-                                }}
-                                InputLabelProps={{ shrink: true }}
-                                sx={{
-                                    '& .MuiInputBase-input': { padding: '10px 12px' },
-                                    '& input::-webkit-calendar-picker-indicator': {
-                                        filter: isDark ? 'invert(1)' : 'none',
-                                        cursor: 'pointer',
-                                    },
-                                }}
-                            />
-                            <TextField
-                                label="End Date"
-                                type="date"
-                                value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
-                                InputLabelProps={{ shrink: true }}
-                                sx={{
-                                    '& .MuiInputBase-input': { padding: '10px 12px' },
-                                    '& input::-webkit-calendar-picker-indicator': {
-                                        filter: isDark ? 'invert(1)' : 'none',
-                                        cursor: 'pointer',
-                                    },
-                                }}
                             />
                         </Box>
 

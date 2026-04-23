@@ -248,7 +248,7 @@ const CompactFilter = ({
                                             sx={filterRootSx(active, inactiveBorder, hoverBorder, primaryBg, focusBorder)}
                                         />
                                     )}
-                                    slotProps={{ listbox: { sx: { fontSize: '0.78rem', '& .MuiAutocomplete-option': { fontSize: '0.78rem', py: 0.5, minHeight: 'unset' } } } }}
+                                    slotProps={{ listbox: { sx: { '& .MuiAutocomplete-option': { py: 0.5, minHeight: 'unset' } } } }}
                                     sx={{
                                         minWidth: 120,
                                         width: 'auto',
@@ -278,7 +278,7 @@ const CompactFilter = ({
                                         sx={filterRootSx(active, inactiveBorder, hoverBorder, primaryBg, focusBorder)}
                                     />
                                 )}
-                                slotProps={{ listbox: { sx: { fontSize: '0.85rem' } } }}
+                                slotProps={{ listbox: { sx: {} } }}
                                 sx={{ minWidth: 120, width: 'auto' }}
                             />
                         );

@@ -263,7 +263,7 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
                 }}>
                     {headerLeft || (
                         <Box>
-                            <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' } }}>
+                            <Typography variant="h5">
                                 Contracts
                             </Typography>
                             <Typography variant="body2" sx={{ color: 'text.secondary' }}>

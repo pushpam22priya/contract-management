@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Typography, Alert, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import { Box, Typography, Alert, Tabs, Tab } from '@mui/material';
 import { AlertColor } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import { useState, useEffect } from 'react';
@@ -442,7 +442,7 @@ export default function ReviewApprovalPage() {
                     borderColor: 'divider',
                 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: '0.95rem' }}>
+                        <Typography variant="h5">
                             {t('title')}
                         </Typography>
                         <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
@@ -452,31 +452,28 @@ export default function ReviewApprovalPage() {
                     </Box>
 
                     {currentUser && (
-                        <ToggleButtonGroup
-                            value={tabValue === 0 ? 'tasks' : 'history'}
-                            exclusive
-                            onChange={(_, val) => { if (val !== null) handleTabChange(val === 'tasks' ? 0 : 1); }}
-                            size="small"
+                        <Tabs
+                            value={tabValue}
+                            onChange={(_, val) => handleTabChange(val)}
                             sx={{
-                                '& .MuiToggleButton-root': {
+                                minHeight: 0,
+                                '& .MuiTabs-indicator': { height: 2, borderRadius: 1 },
+                                '& .MuiTab-root': {
+                                    minHeight: 0,
+                                    minWidth: 0,
                                     textTransform: 'none',
-                                    fontWeight: 600,
                                     fontSize: '0.8rem',
+                                    fontWeight: 500,
                                     px: 1.5,
-                                    py: 0.5,
-                                    borderColor: 'divider',
+                                    py: 0.75,
                                     color: 'text.secondary',
-                                    '&.Mui-selected': {
-                                        bgcolor: 'primary.main',
-                                        color: 'white',
-                                        '&:hover': { bgcolor: 'primary.dark' },
-                                    },
+                                    '&.Mui-selected': { fontWeight: 600 },
                                 },
                             }}
                         >
-                            <ToggleButton value="tasks">My Tasks</ToggleButton>
-                            <ToggleButton value="history">History</ToggleButton>
-                        </ToggleButtonGroup>
+                            <Tab label="My Tasks" />
+                            <Tab label="History" />
+                        </Tabs>
                     )}
                 </Box>
 

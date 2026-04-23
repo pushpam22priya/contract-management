@@ -193,8 +193,8 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                                     slotProps={{
                                         primary: {
                                             sx: {
-                                                fontSize: '0.82rem',
-                                                fontWeight: isSelected ? 600 : 400,
+                                                fontSize: sidebar.itemFontSize,
+                                                fontWeight: isSelected ? sidebar.itemFontWeightSelected : sidebar.itemFontWeight,
                                                 color: isSelected ? selectedTextColor : inactiveTextColor,
                                             },
                                         },

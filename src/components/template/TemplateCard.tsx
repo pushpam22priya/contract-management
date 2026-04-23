@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Typography, Paper, IconButton, Chip, Grow, Tooltip, useTheme } from '@mui/material';
+import { Box, Typography, Paper, IconButton, Grow, Tooltip, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
@@ -47,9 +47,8 @@ export default function TemplateCard({
     const primaryColor = theme.palette.primary.main;
     const isDark = theme.palette.mode === 'dark';
 
-    // Visible border for icon buttons and chips — scales across all themes
     const iconBtnBorderColor = alpha(theme.palette.text.secondary, 0.35);
-    const chipBorderColor = alpha(theme.palette.text.secondary, 0.22);
+    const chipColor = isDark ? '#e5a07bff' : primaryColor;
 
     return (
         <Grow in timeout={600 + index * 100}>
@@ -81,20 +80,15 @@ export default function TemplateCard({
                     },
                 }}
             >
-                {/* Header with Icon and Category */}
-                <Box
-                    sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        mb: 1,
-                    }}
-                >
-                    <Box
+                {/* Row 1: Icon + Title */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 0.8 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, }}>
+                         <Box
                         sx={{
-                            width: 32,
-                            height: 32,
+                            width: 28,
+                            height: 28,
                             borderRadius: 1.5,
+                            flexShrink: 0,
                             bgcolor: alpha(primaryColor, isDark ? 0.15 : 0.12),
                             display: 'flex',
                             alignItems: 'center',
@@ -103,53 +97,47 @@ export default function TemplateCard({
                             transform: isHovered ? 'scale(1.1)' : 'scale(1)',
                         }}
                     >
-                        <DescriptionOutlinedIcon
-                            sx={{
-                                fontSize: 16,
-                                color: primaryColor,
-                            }}
-                        />
+                        <DescriptionOutlinedIcon sx={{ fontSize: 16, color: primaryColor }} />
                     </Box>
-
-                    <Tooltip title={category} arrow placement="top">
-                        <Chip
-                            label={truncateText(category, 15)}
-                            size="small"
-                            sx={{
-                                bgcolor: 'action.hover',
-                                color: 'text.secondary',
-                                border: `1px solid ${chipBorderColor}`,
-                                fontWeight: 500,
-                                fontSize: '0.75rem',
-                                height: 24,
-                            }}
-                        />
-                    </Tooltip>
-                </Box>
-
-                {/* Title and Description */}
-                <Box sx={{ flex: 1, mb: 0.5 }}>
                     <Tooltip title={title} arrow placement="top">
                         <Typography
-                            variant="h6"
-                            fontWeight={600}
-                            sx={{
-                                color: 'text.primary',
-                                mb: 0.5,
-                                fontSize: '0.95rem',
-                                lineHeight: 1.3,
-                            }}
+                            variant="subtitle2"
+                            sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         >
-                            {truncateText(title, 25)}
+                            {truncateText(title, 22)}
                         </Typography>
                     </Tooltip>
+                    </Box>
+                   
+                    
+                    <Tooltip title={category} arrow placement="top">
+                        <Box
+                            component="span"
+                            sx={{
+                                display: 'inline-block',
+                                px: 0.6,
+                                py: 0.2,
+                                borderRadius: '4px',
+                                bgcolor: alpha(chipColor, isDark ? 0.12 : 0.07),
+                                border: `1px solid ${alpha(chipColor, isDark ? 0.40 : 0.28)}`,
+                                color: chipColor,
+                                fontSize: '0.6rem',
+                                fontWeight: 500,
+                            }}
+                        >
+                            {truncateText(category, 18)}
+                        </Box>
+                    </Tooltip>
+                
+                </Box>
+
+                {/* Row 2: Description */}
+                <Box sx={{ flex: 1, mb: 0.5 }}>
                     <Tooltip title={description} arrow placement="top">
                         <Typography
                             variant="body2"
                             sx={{
                                 color: 'text.secondary',
-                                fontSize: '0.8rem',
-                                lineHeight: 1.5,
                             }}
                         >
                             {truncateText(description, 60)}

@@ -11,6 +11,7 @@ import {
     Paper,
     Tooltip,
     Chip,
+    useTheme,
 } from '@mui/material';
 import { CheckCircle, Error, Save, Download } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
@@ -41,6 +42,7 @@ const PDFViewerContainer = dynamic(
 export default function PublicSigningPage() {
     const params = useParams();
     const token = params.token as string;
+    const isDark = useTheme().palette.mode === 'dark';
 
     // State
     const [loading, setLoading] = useState(true);
@@ -640,14 +642,14 @@ export default function PublicSigningPage() {
     // Completed state
     if (completed) {
         return (
-            <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50', p: 3 }}>
-                <Paper sx={{ p: 4, maxWidth: 500, textAlign: 'center' }}>
-                    <CheckCircle sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
+            <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default', p: 3 }}>
+                <Paper elevation={0} sx={{ p: 4, maxWidth: 500, textAlign: 'center', border: '1px solid', borderColor: 'divider', borderRadius: 3 }}>
+                    <CheckCircle sx={{ fontSize: 56, color: 'success.main', mb: 2 }} />
                     <Typography variant="h5" gutterBottom>Document Signed Successfully!</Typography>
-                    <Typography color="text.secondary" sx={{ mb: 2 }}>
-                        Thank you for signing "{signatureRequest?.contractTitle}". The contract has been updated.
+                    <Typography variant="body2" color="text.primary" sx={{ mb: 1.5 }}>
+                        Thank you for signing <strong>{signatureRequest?.contractTitle}</strong>. The contract has been updated.
                     </Typography>
-                    <Typography color="text.secondary" sx={{ mb: 3 }}>
+                    <Typography variant="body2" sx={{ mb: 3 }}>
                         You will get the signed document by email, once everyone has signed.
                     </Typography>
                     {/* {signedPdfBlob && (
@@ -667,7 +669,7 @@ export default function PublicSigningPage() {
                             Download
                         </Button>
                     )} */}
-                    <Alert severity="success">You can close this window now.</Alert>
+                    <Alert severity="success" sx={{ color: isDark ? '#fefefe' : '#000' }}>You can close this window now.</Alert>
                 </Paper>
             </Box>
         );

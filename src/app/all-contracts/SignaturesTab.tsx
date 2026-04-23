@@ -93,7 +93,7 @@ export default function SignaturesTab({ headerLeft }: { headerLeft?: React.React
     useEffect(() => {
         loadContracts();
         loadCategories();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Real-time polling
@@ -102,7 +102,7 @@ export default function SignaturesTab({ headerLeft }: { headerLeft?: React.React
         if (viewerOpen) return;
         pollIntervalRef.current = setInterval(() => { setHistoryAnchorEl(null); loadContracts(); }, 12000);
         return () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [viewerOpen]);
 
     const filteredContracts = contracts.filter(contract => {
@@ -165,7 +165,7 @@ export default function SignaturesTab({ headerLeft }: { headerLeft?: React.React
                         const sentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
                         const expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
                         for (const signer of result.unlockedExternalSigners) {
-                            sendSignatureRequestEmail({ to_email: signer.email, contract_title: selectedContract.title, sender_name: selectedContract.createdBy, sent_date: sentDate, expiry_date: expiryDate, signing_url: `${baseUrl}/sign/${signer.token}` }).catch(() => {});
+                            sendSignatureRequestEmail({ to_email: signer.email, contract_title: selectedContract.title, sender_name: selectedContract.createdBy, sent_date: sentDate, expiry_date: expiryDate, signing_url: `${baseUrl}/sign/${signer.token}` }).catch(() => { });
                         }
                     }
                     showNotification(`Fields for ${internalSigner.partyLabel} completed successfully!`, 'success');
@@ -203,14 +203,14 @@ export default function SignaturesTab({ headerLeft }: { headerLeft?: React.React
                     flexWrap: 'wrap',
                     gap: 1,
                     bgcolor: 'background.paper',
-                    px: 2,
-                    py: 1,
+                    px: 1,
+                    py: 0.6,
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                 }}>
                     {headerLeft || (
                         <Box>
-                            <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: { xs: '1rem', sm: '1.5rem', md: '20px' } }}>
+                            <Typography variant="h5">
                                 Contracts for Signature
                             </Typography>
                             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -246,24 +246,24 @@ export default function SignaturesTab({ headerLeft }: { headerLeft?: React.React
                 />
 
                 {/* Grid */}
-                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 2 }}>
-                {filteredContracts.length === 0 && !loading ? (
-                    <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 2, border: '1px dashed', borderColor: 'divider' }}>
-                        <DrawIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-                        <Typography variant="h6" color="text.secondary" gutterBottom>No Contracts to Sign</Typography>
-                        <Typography variant="body2" color="text.secondary">You don't have any contracts waiting for your signature at the moment.</Typography>
-                    </Paper>
-                ) : (
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 0.75 }}>
-                        {loading ? (
-                            <ShimmerCardGrid count={8} variant="contract" />
-                        ) : (
-                            filteredContracts.map((contract) => (
-                                <ContractCard key={contract.id} contract={contract} onView={handleView} onDownload={handleDownload} onHistory={(id, event) => { setHistoryContractId(id); setHistoryAnchorEl(event.currentTarget); }} />
-                            ))
-                        )}
-                    </Box>
-                )}
+                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 1 }}>
+                    {filteredContracts.length === 0 && !loading ? (
+                        <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 2, border: '1px dashed', borderColor: 'divider' }}>
+                            <DrawIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
+                            <Typography variant="h6" color="text.secondary" gutterBottom>No Contracts to Sign</Typography>
+                            <Typography variant="body2" color="text.secondary">You don't have any contracts waiting for your signature at the moment.</Typography>
+                        </Paper>
+                    ) : (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 0.75 }}>
+                            {loading ? (
+                                <ShimmerCardGrid count={8} variant="contract" />
+                            ) : (
+                                filteredContracts.map((contract) => (
+                                    <ContractCard key={contract.id} contract={contract} onView={handleView} onDownload={handleDownload} onHistory={(id, event) => { setHistoryContractId(id); setHistoryAnchorEl(event.currentTarget); }} />
+                                ))
+                            )}
+                        </Box>
+                    )}
                 </Box>
             </Box>
 

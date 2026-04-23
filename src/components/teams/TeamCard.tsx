@@ -77,16 +77,8 @@ export default function TeamCard({ team, contractCount, onClick, onRename }: Tea
 
                 <Tooltip title={team.name} arrow placement="top">
                     <Typography
-                        variant="h6"
-                        sx={{
-                            fontWeight: 600,
-                            fontSize: '0.95rem',
-                            color: 'text.primary',
-                            flex: 1,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                        }}
+                        variant="subtitle2"
+                        sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                     >
                         {team.name}
                     </Typography>

@@ -415,7 +415,7 @@ export default function ContractsPage() {
                             )}
 
                             {/* Title */}
-                            <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: '0.95rem' }}>
+                            <Typography variant="h5">
                                 {activeTeam ? activeTeam.name : isFlatView ? flatViewTitle : 'Contracts'}
                             </Typography>
 

@@ -33,7 +33,9 @@ import {
     ToggleButton,
     ToggleButtonGroup,
     Autocomplete,
+    useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
     Send,
     CheckCircle,
@@ -82,6 +84,9 @@ const MultiPartySignatureDialog = ({
     fieldValues = {},
 }: MultiPartySignatureDialogProps) => {
     // Form state for new assignment
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+
     const [selectedPartyId, setSelectedPartyId] = useState<string>('');
     const [signerType, setSignerType] = useState<'internal' | 'external'>('external');
     const [email, setEmail] = useState('');
@@ -407,16 +412,18 @@ const MultiPartySignatureDialog = ({
             {success ? (
                 <Box>
                     <Alert severity="success" icon={<CheckCircle />} sx={{ mb: 2 }}>
-                        Signer assignments have been created successfully!
+                        <Typography variant="body2" color="inherit">
+                            Signer assignments have been created successfully!
+                        </Typography>
                     </Alert>
-                    <Typography variant="body2" sx={{ mb: 2 }}>
-                        <strong>Internal users</strong> will see this contract in their Signatures page when it's their turn.
-                        <br />
-                        <strong>External clients</strong> will receive an email with a signing link when it's their turn.
+                    <Typography variant="body2" color="text.primary" sx={{ mb: 0.5 }}>
+                        <Typography component="span" variant="subtitle2">Internal users</Typography>
+                        {" will see this contract in their Signatures page when it's their turn."}
                     </Typography>
-                    {/* <Typography variant="body2" color="text.secondary">
-                        You can unlock each order from the contract details page after the previous order completes.
-                    </Typography> */}
+                    <Typography variant="body2" color="text.primary">
+                        <Typography component="span" variant="subtitle2">External clients</Typography>
+                        {" will receive an email with a signing link when it's their turn."}
+                    </Typography>
                 </Box>
             ) : (
                 <Box>
@@ -436,9 +443,9 @@ const MultiPartySignatureDialog = ({
                                 px: 1.5,
                                 py: 1,
                                 borderRadius: 2,
-                                bgcolor: '#eff9ff',
+                                bgcolor: isDark ? alpha('#3b82f6', 0.08) : '#eff9ff',
                                 border: '1px solid',
-                                borderColor: 'grey.200',
+                                borderColor: 'divider',
                             }}
                         >
                             <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', mb: 1, display: 'block' }}>
@@ -475,7 +482,7 @@ const MultiPartySignatureDialog = ({
                                         gap: 1,
                                         py: 0.5,
                                         borderTop: index > 0 || contractorFilledPartyIds.length > 0 ? '1px solid' : 'none',
-                                        borderColor: 'grey.200',
+                                        borderColor: 'divider',
                                     }}
                                 >
                                     <Chip
@@ -504,8 +511,8 @@ const MultiPartySignatureDialog = ({
                                             height: 20,
                                             fontSize: '0.65rem',
                                             fontWeight: 600,
-                                            bgcolor: signer.status === 'completed' ? '#e8f5e9' : signer.status === 'unlocked' ? '#e3f2fd' : '#fff3e0',
-                                            color: signer.status === 'completed' ? '#2e7d32' : signer.status === 'unlocked' ? '#1565c0' : '#e65100',
+                                            bgcolor: signer.status === 'completed' ? (isDark ? alpha('#22c55e', 0.15) : '#e8f5e9') : signer.status === 'unlocked' ? (isDark ? alpha('#3b82f6', 0.15) : '#e3f2fd') : (isDark ? alpha('#f97316', 0.15) : '#fff3e0'),
+                                            color: signer.status === 'completed' ? (isDark ? '#86efac' : '#2e7d32') : signer.status === 'unlocked' ? (isDark ? '#93c5fd' : '#1565c0') : (isDark ? '#fdba74' : '#e65100'),
                                         }}
                                     />
                                 </Box>
@@ -520,15 +527,15 @@ const MultiPartySignatureDialog = ({
                             sx={{
                                 p: 2,
                                 borderRadius: 2,
-                                bgcolor: '#f6faf6',
+                                bgcolor: isDark ? alpha(theme.palette.success.main, 0.07) : '#f6faf6',
                                 border: '1px solid',
-                                borderColor: 'grey.200',
+                                borderColor: 'divider',
                                 mb: 2,
                             }}
                         >
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                                <Groups sx={{ color: '#2e7d32', fontSize: 20 }} />
-                                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                <Groups sx={{ color: 'primary.main', fontSize: 20 }} />
+                                <Typography variant="subtitle2">
                                     Add Signer Assignment
                                 </Typography>
                             </Box>
@@ -542,7 +549,7 @@ const MultiPartySignatureDialog = ({
                                         onChange={(e) => setSelectedPartyId(e.target.value)}
                                         label="Party"
                                         disabled={loading}
-                                        sx={{ bgcolor: '#fff' }}
+                                        sx={{ bgcolor: 'background.paper' }}
                                     >
                                         {availableParties.map((party) => (
                                             <MenuItem key={party.id} value={party.id}>
@@ -566,7 +573,7 @@ const MultiPartySignatureDialog = ({
 
                             {/* Row 2: Type Selection */}
                             <Box sx={{ mb: 2 }}>
-                                <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                                <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
                                     Signer Type
                                 </Typography>
                                 <ToggleButtonGroup
@@ -574,13 +581,13 @@ const MultiPartySignatureDialog = ({
                                     exclusive
                                     onChange={(_e, value) => value && setSignerType(value)}
                                     size="small"
-                                    sx={{ bgcolor: '#fff' }}
+                                    sx={{ bgcolor: 'background.paper' }}
                                 >
-                                    <ToggleButton value="internal" sx={{ px: 2 }}>
+                                    <ToggleButton value="internal" sx={{ px: 1.5, textTransform: 'none', fontSize: '0.8rem', fontWeight: 500 }}>
                                         <Person sx={{ mr: 0.5, fontSize: 18 }} />
                                         Internal User
                                     </ToggleButton>
-                                    <ToggleButton value="external" sx={{ px: 2 }}>
+                                    <ToggleButton value="external" sx={{ px: 1.5, textTransform: 'none', fontSize: '0.8rem', fontWeight: 500 }}>
                                         <Email sx={{ mr: 0.5, fontSize: 18 }} />
                                         External Client
                                     </ToggleButton>
@@ -603,7 +610,7 @@ const MultiPartySignatureDialog = ({
                                                 {...params}
                                                 label="Select Internal User"
                                                 placeholder="Search by name or email..."
-                                                sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                                                sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'background.paper' } }}
                                             />
                                         )}
                                         renderOption={(props, option) => {
@@ -634,7 +641,7 @@ const MultiPartySignatureDialog = ({
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
                                             placeholder="client@example.com"
-                                            sx={{ flex: '1 1 200px', minWidth: 200, '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                                            sx={{ flex: '1 1 200px', minWidth: 200, '& .MuiOutlinedInput-root': { bgcolor: 'background.paper' } }}
                                             disabled={loading}
                                         />
                                         <TextField
@@ -643,7 +650,7 @@ const MultiPartySignatureDialog = ({
                                             value={name}
                                             onChange={(e) => setName(e.target.value)}
                                             placeholder="Client Name"
-                                            sx={{ flex: '1 1 150px', minWidth: 150, '& .MuiOutlinedInput-root': { bgcolor: '#fff' } }}
+                                            sx={{ flex: '1 1 150px', minWidth: 150, '& .MuiOutlinedInput-root': { bgcolor: 'background.paper' } }}
                                             disabled={loading}
                                         />
                                     </>
@@ -656,9 +663,9 @@ const MultiPartySignatureDialog = ({
                                     startIcon={<Add />}
                                     sx={{
                                         height: 40,
-                                        borderColor: '#2e7d32',
-                                        color: '#2e7d32',
-                                        '&:hover': { borderColor: '#1b5e20', bgcolor: '#e8f5e9' }
+                                        borderColor: 'primary.main',
+                                        color: 'primary.main',
+                                        '&:hover': { borderColor: 'primary.dark', bgcolor: alpha(theme.palette.primary.main, 0.08) }
                                     }}
                                 >
                                     Add
@@ -672,9 +679,9 @@ const MultiPartySignatureDialog = ({
                                 p: 2,
                                 borderRadius: 2,
                                 textAlign: 'center',
-                                bgcolor: '#f6faf6',
+                                bgcolor: isDark ? alpha(theme.palette.success.main, 0.07) : '#f6faf6',
                                 border: '1px solid',
-                                borderColor: 'grey.200',
+                                borderColor: 'divider',
                                 mb: 2,
                             }}
                         >
@@ -692,13 +699,13 @@ const MultiPartySignatureDialog = ({
                             sx={{
                                 p: 2,
                                 borderRadius: 2,
-                                bgcolor: '#fff',
+                                bgcolor: 'background.paper',
                                 border: '1px solid',
                                 borderColor: 'primary.main',
                             }}
                         >
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                                <Typography variant="subtitle2" sx={{ color: 'primary.main' }}>
                                     New Assignments
                                 </Typography>
                                 <Chip
@@ -759,14 +766,14 @@ const MultiPartySignatureDialog = ({
                                                         icon={<Person sx={{ fontSize: 14 }} />}
                                                         label="Internal"
                                                         size="small"
-                                                        sx={{ bgcolor: '#e3f2fd', color: '#1565c0', fontWeight: 500, height: 22 }}
+                                                        sx={{ bgcolor: isDark ? alpha('#3b82f6', 0.15) : '#e3f2fd', color: isDark ? '#93c5fd' : '#1565c0', fontWeight: 500, height: 22 }}
                                                     />
                                                 ) : (
                                                     <Chip
                                                         icon={<Email sx={{ fontSize: 14 }} />}
                                                         label="External"
                                                         size="small"
-                                                        sx={{ bgcolor: '#fff3e0', color: '#e65100', fontWeight: 500, height: 22 }}
+                                                        sx={{ bgcolor: isDark ? alpha('#f97316', 0.15) : '#fff3e0', color: isDark ? '#fdba74' : '#e65100', fontWeight: 500, height: 22 }}
                                                     />
                                                 )}
                                             </Box>
@@ -783,7 +790,7 @@ const MultiPartySignatureDialog = ({
                                                 onClick={() => handleRemoveAssignment(assignment.id)}
                                                 disabled={loading}
                                                 size="small"
-                                                sx={{ color: 'error.light', '&:hover': { color: 'error.main' } }}
+                                                sx={{ color: 'error.main', opacity: 0.7, '&:hover': { opacity: 1 } }}
                                             >
                                                 <Delete />
                                             </IconButton>
@@ -801,9 +808,9 @@ const MultiPartySignatureDialog = ({
                             sx={{
                                 p: 2,
                                 textAlign: 'center',
-                                bgcolor: '#fff',
+                                bgcolor: 'background.paper',
                                 borderStyle: 'dashed',
-                                borderColor: 'grey.300',
+                                borderColor: 'divider',
                                 borderRadius: 2,
                             }}
                         >

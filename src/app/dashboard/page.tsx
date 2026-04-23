@@ -269,7 +269,7 @@ export default function DashboardPage() {
                     }}>
                         {/* Left: Dashboard label */}
                         <Box>
-                            <Typography sx={{ color: 'rgba(255,255,255,0.75)', fontSize: '1rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                            <Typography variant="h5" sx={{ color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase' }}>
                                 {t('title')}
                             </Typography>
                         </Box>
@@ -363,7 +363,7 @@ export default function DashboardPage() {
                 {/* ── First 4 cards — overlap the hero ─────────────────── */}
                 <Box
                     sx={{
-                        mt: { xs: -6, md: -7 },
+                        mt: { xs: -5, md: -6 },
                         mx: { xs: 1, md: 2 },
                         position: 'relative',
                         zIndex: 2,
@@ -413,7 +413,7 @@ export default function DashboardPage() {
                 </Box>
 
                 {/* ── Recent Contracts ─────────────────────────────────── */}
-                <Box sx={{ mt: 2, mx: { xs: 1, md: 2 }, mb: 3 }}>
+                <Box sx={{ mt: 2, mx: { xs: 1, md: 2 }, mb: 2 }}>
                     <RecentContracts />
                 </Box>
 

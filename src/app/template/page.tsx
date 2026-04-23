@@ -181,7 +181,7 @@ export default function TemplatePage() {
                     borderColor: 'divider',
                 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: '0.95rem' }}>
+                        <Typography variant="h5">
                             {t('title')}
                         </Typography>
                         <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />

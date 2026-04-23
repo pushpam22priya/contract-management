@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Button, Typography } from '@mui/material';
+import { Box, Button, Typography, useTheme } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import SendIcon from '@mui/icons-material/Send';
 import BaseDialog from '@/components/common/BaseDialog';
@@ -13,11 +14,6 @@ interface ReviewConfirmationDialogProps {
     onMarkAndSendForFurtherReview: () => void;
 }
 
-/**
- * Dialog asking reviewer what they want to do after reviewing
- * - Just mark as reviewed
- * - Mark as reviewed and send for further review
- */
 export default function ReviewConfirmationDialog({
     open,
     onClose,
@@ -25,143 +21,98 @@ export default function ReviewConfirmationDialog({
     onMarkAsReviewed,
     onMarkAndSendForFurtherReview,
 }: ReviewConfirmationDialogProps) {
-    const handleMarkAsReviewed = () => {
-        onMarkAsReviewed();
-        onClose();
-    };
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
 
-    const handleMarkAndSendForFurtherReview = () => {
-        onMarkAndSendForFurtherReview();
-        onClose();
-    };
+    const handleMarkAsReviewed = () => { onMarkAsReviewed(); onClose(); };
+    const handleMarkAndSendForFurtherReview = () => { onMarkAndSendForFurtherReview(); onClose(); };
 
     const dialogActions = (
-        <>
-            <Button
-                onClick={onClose}
-                sx={{
-                    textTransform: 'none',
-                    color: 'text.secondary',
-                }}
-            >
-                Cancel
-            </Button>
-        </>
+        <Button onClick={onClose} sx={{ textTransform: 'none', color: 'text.secondary' }}>
+            Cancel
+        </Button>
     );
 
+    const optionSx = (color: string) => ({
+        p: 1.5,
+        border: '1px solid',
+        borderColor: isDark ? alpha(color, 0.25) : alpha(color, 0.35),
+        borderRadius: 2,
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        '&:hover': {
+            borderColor: color,
+            bgcolor: alpha(color, isDark ? 0.10 : 0.06),
+            transform: 'translateY(-1px)',
+            boxShadow: `0 4px 12px ${alpha(color, 0.18)}`,
+        },
+    });
+
+    const iconSx = (color: string) => ({
+        width: 40,
+        height: 40,
+        borderRadius: '50%',
+        bgcolor: alpha(color, isDark ? 0.15 : 0.10),
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+    });
+
+    const primaryColor = theme.palette.primary.main;
+    const infoColor = theme.palette.info?.main ?? '#1976d2';
+
     return (
-        <BaseDialog
-            open={open}
-            onClose={onClose}
-            title="REVIEW CONFIRMATION"
-            actions={dialogActions}
-            maxWidth="sm"
-        >
-            <Box>
+        <BaseDialog open={open} onClose={onClose} title="REVIEW CONFIRMATION" actions={dialogActions} maxWidth="sm">
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 {/* Contract Info */}
                 <Box
                     sx={{
-                        bgcolor: '#f8fafc',
+                        bgcolor: isDark ? alpha('#ffffff', 0.05) : '#f8fafc',
                         p: 1,
                         borderRadius: 2,
                         border: '1px solid',
-                        borderColor: 'rgba(0, 0, 0, 0.08)',
-                        mb: 1,
+                        borderColor: 'divider',
                     }}
                 >
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ display: 'block', mb: 0.25 }}>
                         Contract
                     </Typography>
-                    <Typography variant="body1" fontWeight={600}>
+                    <Typography variant="subtitle2">
                         {contractTitle}
                     </Typography>
                 </Box>
 
-                {/* Options */}
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {/* Option 1: Just Mark as Reviewed */}
-                    <Box
-                        onClick={handleMarkAsReviewed}
-                        sx={{
-                            p: 1,
-                            border: '2px solid',
-                            borderColor: '#e0f2f1',
-                            borderRadius: 2,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            '&:hover': {
-                                borderColor: '#00695c',
-                                bgcolor: '#f0fdfa',
-                                transform: 'translateY(-2px)',
-                                boxShadow: '0 4px 12px rgba(0, 105, 92, 0.15)',
-                            },
-                        }}
-                    >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Box
-                                sx={{
-                                    width: 48,
-                                    height: 48,
-                                    borderRadius: '50%',
-                                    bgcolor: '#e0f2f1',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                }}
-                            >
-                                <CheckCircleOutlineIcon sx={{ color: '#00695c', fontSize: 28 }} />
-                            </Box>
-                            <Box sx={{ flex: 1 }}>
-                                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 0.5 }}>
-                                    Mark as Reviewed
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    Complete your review without additional actions
-                                </Typography>
-                            </Box>
+                {/* Option 1 */}
+                <Box onClick={handleMarkAsReviewed} sx={optionSx(primaryColor)}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={iconSx(primaryColor)}>
+                            <CheckCircleOutlineIcon sx={{ color: primaryColor, fontSize: 22 }} />
+                        </Box>
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 0.25 }}>
+                                Mark as Reviewed
+                            </Typography>
+                            <Typography variant="body2">
+                                Complete your review without additional actions
+                            </Typography>
                         </Box>
                     </Box>
+                </Box>
 
-                    {/* Option 2: Mark and Send for Further Review */}
-                    <Box
-                        onClick={handleMarkAndSendForFurtherReview}
-                        sx={{
-                            p: 1,
-                            border: '2px solid',
-                            borderColor: '#e3f2fd',
-                            borderRadius: 2,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            '&:hover': {
-                                borderColor: '#1976d2',
-                                bgcolor: '#e3f2fd',
-                                transform: 'translateY(-2px)',
-                                boxShadow: '0 4px 12px rgba(25, 118, 210, 0.15)',
-                            },
-                        }}
-                    >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Box
-                                sx={{
-                                    width: 48,
-                                    height: 48,
-                                    borderRadius: '50%',
-                                    bgcolor: '#e3f2fd',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                }}
-                            >
-                                <SendIcon sx={{ color: '#1976d2', fontSize: 28 }} />
-                            </Box>
-                            <Box sx={{ flex: 1 }}>
-                                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 0.5 }}>
-                                    Mark as Reviewed & Send for Further Review
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    Add additional reviewers before approval
-                                </Typography>
-                            </Box>
+                {/* Option 2 */}
+                <Box onClick={handleMarkAndSendForFurtherReview} sx={optionSx(infoColor)}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={iconSx(infoColor)}>
+                            <SendIcon sx={{ color: infoColor, fontSize: 20 }} />
+                        </Box>
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 0.25 }}>
+                                Mark as Reviewed & Send for Further Review
+                            </Typography>
+                            <Typography variant="body2">
+                                Add additional reviewers before approval
+                            </Typography>
                         </Box>
                     </Box>
                 </Box>

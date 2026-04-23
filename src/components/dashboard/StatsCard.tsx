@@ -115,7 +115,7 @@ export default function StatsCard({
                 }}
             >
                 {/* Top row: icon badge + value */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
                     <Box
                         sx={{
                             width: 30,
@@ -134,11 +134,9 @@ export default function StatsCard({
                     </Box>
 
                     <Typography
+                        variant='h4'
                         sx={{
-                            fontSize: '1.9rem',
-                            fontWeight: 700,
                             color: isHovered ? (isDark ? alpha(iconColor, 0.85) : iconColor) : 'text.primary',
-                            lineHeight: 1,
                             transition: 'color 0.22s ease',
                         }}
                     >
@@ -148,12 +146,9 @@ export default function StatsCard({
 
                 {/* Title */}
                 <Typography
+                    variant='subtitle2'
                     sx={{
-                        fontSize: '0.78rem',
-                        fontWeight: 600,
-                        color: 'text.primary',
-                        lineHeight: 1.3,
-                        mb: 0.25,
+                        color: 'text.primary',   
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -161,20 +156,6 @@ export default function StatsCard({
                 >
                     {title}
                 </Typography>
-
-                {/* Description */}
-                {/* <Typography
-                    sx={{
-                        fontSize: '0.68rem',
-                        color: 'text.secondary',
-                        lineHeight: 1.3,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                    }}
-                >
-                    {description}
-                </Typography> */}
             </Paper>
         </Grow>
     );

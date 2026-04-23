@@ -1,12 +1,5 @@
 'use client';
 import { createTheme, Theme } from '@mui/material/styles';
-import { Roboto } from 'next/font/google';
-
-const roboto = Roboto({
-    weight: ['300', '400', '500', '700'],
-    subsets: ['latin'],
-    display: 'swap',
-});
 
 declare module '@mui/material/styles' {
     interface Theme {
@@ -20,6 +13,9 @@ declare module '@mui/material/styles' {
             selectedGradientHover?: string;
             accentGradient?: string;
             cardHoverGradient?: string;
+            itemFontSize: string;
+            itemFontWeight: number;
+            itemFontWeightSelected: number;
         };
         shimmer: {
             base: string;
@@ -56,6 +52,9 @@ declare module '@mui/material/styles' {
             selectedGradientHover?: string;
             accentGradient?: string;
             cardHoverGradient?: string;
+            itemFontSize?: string;
+            itemFontWeight?: number;
+            itemFontWeightSelected?: number;
         };
         shimmer?: {
             base?: string;
@@ -111,12 +110,102 @@ const sharedComponents = {
             },
         },
     },
+    MuiTypography: {
+        styleOverrides: {
+            h4: ({ theme }: { theme: Theme }) => ({
+                fontSize: '1.5rem',
+                fontWeight: 700,
+                color: theme.palette.primary.main,
+            }),
+            h5: ({ theme }: { theme: Theme }) => ({
+                fontSize: '1rem',
+                fontWeight: 600,
+                color: theme.palette.primary.main,
+            }),
+            h6: ({ theme }: { theme: Theme }) => ({
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                color: theme.palette.text.primary,
+            }),
+            caption: ({ theme }: { theme: Theme }) => ({
+                fontSize: '0.72rem',
+                fontWeight: 400,
+                color: theme.palette.text.secondary,
+            }),
+            subtitle2: ({ theme }: { theme: Theme }) => ({
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                color: theme.palette.text.primary,
+            }),
+            body2: ({ theme }: { theme: Theme }) => ({
+                fontSize: '0.75rem',
+                fontWeight: 400,
+                color: theme.palette.text.secondary,
+            }),
+        },
+    },
+    MuiMenuItem: {
+        styleOverrides: {
+            root: ({ theme }: { theme: Theme }) => ({
+                fontSize: '0.8rem',
+                fontWeight: 400,
+                color: theme.palette.text.primary,
+            }),
+        },
+    },
+    MuiAutocomplete: {
+        styleOverrides: {
+            option: ({ theme }: { theme: Theme }) => ({
+                fontSize: '0.8rem',
+                fontWeight: 400,
+                color: theme.palette.text.primary,
+            }),
+            noOptions: ({ theme }: { theme: Theme }) => ({
+                fontSize: '0.8rem',
+                color: theme.palette.text.secondary,
+            }),
+            paper: ({ theme }: { theme: Theme }) => ({
+                ...(theme.palette.mode === 'dark' && {
+                    backgroundColor: '#182030',
+                    backdropFilter: 'none',
+                    WebkitBackdropFilter: 'none',
+                    border: '1px solid rgba(255,255,255,0.10)',
+                }),
+            }),
+        },
+    },
+    MuiChip: {
+        styleOverrides: {
+            label: {
+                fontSize: '0.72rem',
+                fontWeight: 500,
+            },
+        },
+    },
+    MuiDialogTitle: {
+        styleOverrides: {
+            root: ({ theme }: { theme: Theme }) => ({
+                fontSize: '1rem',
+                fontWeight: 400,
+                color: theme.palette.text.primary,
+            }),
+        },
+    },
+    MuiDialogContent: {
+        styleOverrides: {
+            root: ({ theme }: { theme: Theme }) => ({
+                '& .MuiTypography-body2': {
+                    color: theme.palette.mode === 'dark' ? '#94a3b8' : '#64748b',
+                },
+            }),
+        },
+    },
 };
 
 // ── Light ─────────────────────────────────────────────────────────────────────
 export const lightTheme = createTheme({
     typography: {
-        fontFamily: roboto.style.fontFamily,
+        fontFamily:  "'Inter', sans-serif",
         h4: { fontWeight: 700, color: '#1e293b' },
         body1: { color: '#475569' },
     },
@@ -142,6 +231,9 @@ export const lightTheme = createTheme({
         selectedItemBg: 'rgba(0,0,0,0.22)',
         unselected: 'rgba(255,255,255,0.75)',
         cardHoverGradient: 'linear-gradient(90deg, #0d5f57 0%, #0f766e 50%, #34d399 100%)',
+        itemFontSize: '0.82rem',
+        itemFontWeight: 400,
+        itemFontWeightSelected: 600,
     },
     shimmer: {
         base: '#f1f5f9',
@@ -165,7 +257,7 @@ export const lightTheme = createTheme({
 // ── Dark ──────────────────────────────────────────────────────────────────────
 export const darkTheme = createTheme({
     typography: {
-        fontFamily: roboto.style.fontFamily,
+        fontFamily:  "'Inter', sans-serif",
         h4: { fontWeight: 700, color: '#f1f5f9' },
         body1: { color: '#94a3b8' },
     },
@@ -205,6 +297,9 @@ export const darkTheme = createTheme({
         selectedGradient: '#8474b4',
         selectedGradientHover: '#9585c0',
         accentGradient: 'linear-gradient(180deg, #a78bfa, #7c3aed, #c4b5fd)',
+        itemFontSize: '0.82rem',
+        itemFontWeight: 400,
+        itemFontWeightSelected: 600,
         cardHoverGradient: 'linear-gradient(90deg, #8474b4 0%, #c0b4e0 50%, #8474b4 100%)',
     },
     shimmer: {
@@ -309,7 +404,7 @@ export const darkTheme = createTheme({
 // ── Coffee ────────────────────────────────────────────────────────────────────
 export const coffeeTheme = createTheme({
     typography: {
-        fontFamily: roboto.style.fontFamily,
+        fontFamily:  "'Inter', sans-serif",
         h4: { fontWeight: 700, color: '#2c1810' },
         body1: { color: '#7c5c44' },
     },
@@ -327,7 +422,7 @@ export const coffeeTheme = createTheme({
         },
         text: {
             primary: '#2c1810',
-            secondary: '#7c5c44',
+            secondary: '#0000099',
         },
         divider: 'rgba(111,78,55,0.18)',
         action: {
@@ -347,6 +442,9 @@ export const coffeeTheme = createTheme({
         selectedItemBg: 'rgba(245,230,211,0.18)',
         unselected: '#c4a882',
         cardHoverGradient: 'linear-gradient(90deg, #4e3728 0%, #6f4e37 50%, #d4a974 100%)',
+        itemFontSize: '0.82rem',
+        itemFontWeight: 400,
+        itemFontWeightSelected: 600,
     },
     shimmer: {
         base: 'rgba(111,78,55,0.07)',
@@ -390,7 +488,7 @@ export const coffeeTheme = createTheme({
 // Text: #112A46 (dark navy) · Background: #ACC8E5 (steel blue)
 export const oceanTheme = createTheme({
     typography: {
-        fontFamily: roboto.style.fontFamily,
+        fontFamily:  "'Inter', sans-serif",
         h4: { fontWeight: 700, color: '#112A46' },
         body1: { color: '#2D5F8A' },
     },
@@ -408,7 +506,7 @@ export const oceanTheme = createTheme({
         },
         text: {
             primary: '#112A46',  // dark navy
-            secondary: '#2D5F8A',
+            secondary: '#00000099',
         },
         divider: 'rgba(17,42,70,0.15)',
         action: {
@@ -428,6 +526,9 @@ export const oceanTheme = createTheme({
         selectedItemBg: 'rgba(172,200,229,0.18)',
         unselected: 'rgba(172,200,229,0.65)',
         cardHoverGradient: 'linear-gradient(90deg, #0F4D7A 0%, #1A6FA8 50%, #ACC8E5 100%)',
+        itemFontSize: '0.82rem',
+        itemFontWeight: 400,
+        itemFontWeightSelected: 600,
     },
     shimmer: {
         base: 'rgba(17,42,70,0.07)',
@@ -471,7 +572,7 @@ export const oceanTheme = createTheme({
 // Text: #2b1812 (dark warm brown) · Background: #fdf5e6 (old lace / warm white)
 export const sunriseTheme = createTheme({
     typography: {
-        fontFamily: roboto.style.fontFamily,
+        fontFamily:  "'Inter', sans-serif",
         h4: { fontWeight: 700, color: '#2b1812' },
         body1: { color: '#663c2c' },
     },
@@ -489,7 +590,7 @@ export const sunriseTheme = createTheme({
         },
         text: {
             primary: '#2b1812',
-            secondary: '#663c2c',
+            secondary: '#00000099',
         },
         divider: 'rgba(216,90,56,0.18)',
         action: {
@@ -509,6 +610,9 @@ export const sunriseTheme = createTheme({
         selectedItemBg: 'rgba(255,220,181,0.20)',
         unselected: 'rgba(255,220,181,0.7)',
         cardHoverGradient: 'linear-gradient(90deg, #a83c21 0%, #d85a38 50%, #facc6b 100%)',
+        itemFontSize: '0.82rem',
+        itemFontWeight: 400,
+        itemFontWeightSelected: 600,
     },
     shimmer: {
         base: 'rgba(216,90,56,0.07)',
@@ -552,7 +656,7 @@ export const sunriseTheme = createTheme({
 // Text: #1a2e1e (dark forest) · Background: #f1f6f1 (pale sage)
 export const forestTheme = createTheme({
     typography: {
-        fontFamily: roboto.style.fontFamily,
+        fontFamily:  "'Inter', sans-serif",
         h4: { fontWeight: 700, color: '#1a2e1e' },
         body1: { color: '#3b5c43' },
     },
@@ -570,7 +674,7 @@ export const forestTheme = createTheme({
         },
         text: {
             primary: '#1a2e1e',
-            secondary: '#3b5c43',
+            secondary: '#00000099',
         },
         divider: 'rgba(46,125,50,0.18)',
         action: {
@@ -590,6 +694,9 @@ export const forestTheme = createTheme({
         selectedItemBg: 'rgba(165,214,167,0.25)',
         unselected: 'rgba(200,230,201,0.75)',
         cardHoverGradient: 'linear-gradient(90deg, #1b5e20 0%, #2e7d32 50%, #81c784 100%)',
+        itemFontSize: '0.82rem',
+        itemFontWeight: 400,
+        itemFontWeightSelected: 600,
     },
     shimmer: {
         base: 'rgba(46,125,50,0.07)',
@@ -633,7 +740,7 @@ export const forestTheme = createTheme({
 // Text: #00363a (deep cyan) · Background: #f1fbfd (pale water)
 export const waterTheme = createTheme({
     typography: {
-        fontFamily: roboto.style.fontFamily,
+        fontFamily:  "'Inter', sans-serif",
         h4: { fontWeight: 700, color: '#00363a' },
         body1: { color: '#005b61' },
     },
@@ -651,7 +758,7 @@ export const waterTheme = createTheme({
         },
         text: {
             primary: '#00363a',
-            secondary: '#005b61',
+            secondary: '#00000099',
         },
         divider: 'rgba(0,131,143,0.18)',
         action: {
@@ -671,6 +778,9 @@ export const waterTheme = createTheme({
         selectedItemBg: 'rgba(128,222,234,0.25)',
         unselected: 'rgba(178,235,242,0.75)',
         cardHoverGradient: 'linear-gradient(90deg, #005662 0%, #00838f 50%, #4dd0e1 100%)',
+        itemFontSize: '0.82rem',
+        itemFontWeight: 400,
+        itemFontWeightSelected: 600,
     },
     shimmer: {
         base: 'rgba(0,131,143,0.07)',

@@ -11,7 +11,9 @@ import {
     Autocomplete,
     TextField,
     Paper,
+    useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Pending';
@@ -51,6 +53,9 @@ export default function RequestReviewDialog({
     onSubmit,
 }: RequestReviewDialogProps) {
     // Available users from service
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+
     const [users, setUsers] = useState<User[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
 
@@ -389,11 +394,11 @@ export default function RequestReviewDialog({
                 {/* Contract Info */}
                 <Box
                     sx={{
-                        bgcolor: '#f8fafc',
+                        bgcolor: isDark ? alpha('#ffffff', 0.05) : '#f8fafc',
                         p: 0.8,
                         borderRadius: 2,
                         border: '1px solid',
-                        borderColor: 'rgba(0, 0, 0, 0.08)',
+                        borderColor: 'divider',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1
@@ -471,7 +476,7 @@ export default function RequestReviewDialog({
                                         key={index}
                                         elevation={0}
                                         sx={{
-                                            bgcolor: 'rgba(255, 255, 255, 0.6)',
+                                            bgcolor: isDark ? alpha('#ffffff', 0.06) : 'rgba(255, 255, 255, 0.6)',
                                             p: 1.5,
                                             borderRadius: 1,
                                             border: '1px solid rgba(237, 108, 2, 0.2)',
@@ -513,13 +518,14 @@ export default function RequestReviewDialog({
                     <Paper
                         elevation={0}
                         sx={{
-                            bgcolor: '#f0fdfa',
-                            border: '1px solid #99f6e4',
+                            bgcolor: isDark ? alpha(theme.palette.primary.main, 0.08) : '#f0fdfa',
+                            border: '1px solid',
+                borderColor: isDark ? alpha(theme.palette.primary.main, 0.25) : '#99f6e4',
                             borderRadius: 2,
                             p: 1,
                         }}
                     >
-                        <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: '#115e59' }}>
+                        <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: 'primary.main' }}>
                             Assigned Reviewers
                         </Typography>
 
@@ -579,7 +585,7 @@ export default function RequestReviewDialog({
                                                                         width: 12,
                                                                         height: 12,
                                                                         border: '2px solid',
-                                                                        borderColor: reviewer.status === 'reviewed' ? '#065f46' : '#92400e',
+                                                                        borderColor: reviewer.status === 'reviewed' ? (isDark ? '#86efac' : '#065f46') : (isDark ? '#fdba74' : '#92400e'),
                                                                         borderTopColor: 'transparent',
                                                                         borderRadius: '50%',
                                                                         animation: 'spin 1s linear infinite',
@@ -596,15 +602,15 @@ export default function RequestReviewDialog({
                                                     )}
                                                     disabled={!isReadOnly && removing !== null}
                                                     sx={{
-                                                        bgcolor: reviewer.status === 'reviewed' ? '#d1fae5' : '#fef3c7',
-                                                        color: reviewer.status === 'reviewed' ? '#065f46' : '#92400e',
+                                                        bgcolor: reviewer.status === 'reviewed' ? (isDark ? alpha('#22c55e', 0.15) : '#d1fae5') : (isDark ? alpha('#f97316', 0.15) : '#fef3c7'),
+                                                        color: reviewer.status === 'reviewed' ? (isDark ? '#86efac' : '#065f46') : (isDark ? '#fdba74' : '#92400e'),
                                                         '& .MuiChip-icon': {
-                                                            color: reviewer.status === 'reviewed' ? '#065f46' : '#92400e',
+                                                            color: reviewer.status === 'reviewed' ? (isDark ? '#86efac' : '#065f46') : (isDark ? '#fdba74' : '#92400e'),
                                                         },
                                                         '& .MuiChip-deleteIcon': {
-                                                            color: reviewer.status === 'reviewed' ? '#065f46' : '#92400e',
+                                                            color: reviewer.status === 'reviewed' ? (isDark ? '#86efac' : '#065f46') : (isDark ? '#fdba74' : '#92400e'),
                                                             '&:hover': {
-                                                                color: reviewer.status === 'reviewed' ? '#064e3b' : '#78350f',
+                                                                color: reviewer.status === 'reviewed' ? (isDark ? '#4ade80' : '#064e3b') : (isDark ? '#fb923c' : '#78350f'),
                                                             },
                                                         },
                                                     }}
@@ -617,9 +623,10 @@ export default function RequestReviewDialog({
                                                 sx={{
                                                     mt: 1,
                                                     p: 1,
-                                                    bgcolor: 'rgba(255, 255, 255, 0.6)',
+                                                    bgcolor: isDark ? alpha('#ffffff', 0.06) : 'rgba(255, 255, 255, 0.6)',
                                                     borderRadius: 1,
-                                                    borderLeft: '3px solid #00695c',
+                                                    borderLeft: '3px solid',
+                                                borderLeftColor: 'primary.main',
                                                 }}
                                             >
                                                 <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
@@ -655,7 +662,7 @@ export default function RequestReviewDialog({
                                 size="small"
                                 sx={{
                                     '& .MuiOutlinedInput-root': {
-                                        bgcolor: 'white',
+                                        bgcolor: 'background.paper',
                                     },
                                 }}
                             />
@@ -668,12 +675,12 @@ export default function RequestReviewDialog({
                                     label={option.email}
                                     deleteIcon={<CloseIcon />}
                                     sx={{
-                                        bgcolor: '#e0f2f1',
-                                        color: '#00695c',
+                                        bgcolor: isDark ? alpha(theme.palette.primary.main, 0.15) : '#e0f2f1',
+                                        color: isDark ? theme.palette.primary.light : '#00695c',
                                         '& .MuiChip-deleteIcon': {
-                                            color: '#00695c',
+                                            color: isDark ? theme.palette.primary.light : '#00695c',
                                             '&:hover': {
-                                                color: '#004d40',
+                                                color: isDark ? '#ffffff' : '#004d40',
                                             },
                                         },
                                     }}
@@ -696,7 +703,7 @@ export default function RequestReviewDialog({
                             sx={{
                                 mt: 1.5,
                                 p: 1.5,
-                                bgcolor: 'rgba(0, 105, 92, 0.04)',
+                                bgcolor: alpha(theme.palette.primary.main, 0.04),
                                 borderRadius: 1.5,
                                 border: '1px dashed rgba(0, 105, 92, 0.2)',
                             }}
@@ -704,7 +711,7 @@ export default function RequestReviewDialog({
                             <Typography
                                 variant="caption"
                                 fontWeight={500}
-                                sx={{ display: 'block', mb: 1, color: '#00695c' }}
+                                sx={{ display: 'block', mb: 1, color: isDark ? theme.palette.primary.light : '#00695c' }}
                             >
                                 Message to Reviewers
                             </Typography>
@@ -718,16 +725,16 @@ export default function RequestReviewDialog({
                                 size="small"
                                 sx={{
                                     '& .MuiOutlinedInput-root': {
-                                        bgcolor: 'white',
+                                        bgcolor: 'background.paper',
                                         fontSize: '0.875rem',
                                         '& fieldset': {
-                                            borderColor: 'rgba(0, 105, 92, 0.2)',
+                                            borderColor: alpha(theme.palette.primary.main, 0.2),
                                         },
                                         '&:hover fieldset': {
-                                            borderColor: 'rgba(0, 105, 92, 0.4)',
+                                            borderColor: alpha(theme.palette.primary.main, 0.4),
                                         },
                                         '&.Mui-focused fieldset': {
-                                            borderColor: '#00695c',
+                                            borderColor: theme.palette.primary.main,
                                         },
                                     },
                                 }}
@@ -749,9 +756,10 @@ export default function RequestReviewDialog({
                         <Box
                             sx={{
                                 p: 1,
-                                bgcolor: '#f7fdf0ff',
+                                bgcolor: isDark ? alpha(theme.palette.primary.main, 0.08) : '#f7fdf0ff',
                                 borderRadius: 2,
-                                border: '1px solid #ddf699ff',
+                                border: '1px solid',
+                            borderColor: isDark ? alpha(theme.palette.primary.main, 0.25) : '#ddf699ff',
                             }}
                         >
                             <Chip
@@ -776,7 +784,7 @@ export default function RequestReviewDialog({
                                                     width: 12,
                                                     height: 12,
                                                     border: '2px solid',
-                                                    borderColor: existingApprover.status === 'approved' ? '#1e40af' : '#92400e',
+                                                    borderColor: existingApprover.status === 'approved' ? (isDark ? '#93c5fd' : '#1e40af') : (isDark ? '#fdba74' : '#92400e'),
                                                     borderTopColor: 'transparent',
                                                     borderRadius: '50%',
                                                     animation: 'spin 1s linear infinite',
@@ -793,15 +801,15 @@ export default function RequestReviewDialog({
                                 )}
                                 disabled={!isReadOnly && removing !== null}
                                 sx={{
-                                    bgcolor: existingApprover.status === 'approved' ? '#dbeafe' : '#fef3c7',
-                                    color: existingApprover.status === 'approved' ? '#1e40af' : '#92400e',
+                                    bgcolor: existingApprover.status === 'approved' ? (isDark ? alpha('#3b82f6', 0.15) : '#dbeafe') : (isDark ? alpha('#f97316', 0.15) : '#fef3c7'),
+                                    color: existingApprover.status === 'approved' ? (isDark ? '#93c5fd' : '#1e40af') : (isDark ? '#fdba74' : '#92400e'),
                                     '& .MuiChip-icon': {
-                                        color: existingApprover.status === 'approved' ? '#1e40af' : '#92400e',
+                                        color: existingApprover.status === 'approved' ? (isDark ? '#93c5fd' : '#1e40af') : (isDark ? '#fdba74' : '#92400e'),
                                     },
                                     '& .MuiChip-deleteIcon': {
-                                        color: existingApprover.status === 'approved' ? '#1e40af' : '#92400e',
+                                        color: existingApprover.status === 'approved' ? (isDark ? '#93c5fd' : '#1e40af') : (isDark ? '#fdba74' : '#92400e'),
                                         '&:hover': {
-                                            color: existingApprover.status === 'approved' ? '#1e3a8a' : '#78350f',
+                                            color: existingApprover.status === 'approved' ? (isDark ? '#bfdbfe' : '#1e3a8a') : (isDark ? '#fb923c' : '#78350f'),
                                         },
                                     },
                                 }}
@@ -811,9 +819,10 @@ export default function RequestReviewDialog({
                                     sx={{
                                         mt: 1,
                                         p: 1,
-                                        bgcolor: 'rgba(255, 255, 255, 0.6)',
+                                        bgcolor: isDark ? alpha('#ffffff', 0.06) : 'rgba(255, 255, 255, 0.6)',
                                         borderRadius: 1,
-                                        borderLeft: '3px solid #a5e600ff',
+                                        borderLeft: '3px solid',
+                                        borderLeftColor: 'primary.main',
                                     }}
                                 >
                                     <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
@@ -843,7 +852,7 @@ export default function RequestReviewDialog({
                                         size="small"
                                         sx={{
                                             '& .MuiOutlinedInput-root': {
-                                                bgcolor: 'white',
+                                                bgcolor: 'background.paper',
                                             },
                                         }}
                                     />
@@ -860,15 +869,15 @@ export default function RequestReviewDialog({
                                         onDelete={() => setSelectedApprover(null)}
                                         deleteIcon={<CloseIcon />}
                                         sx={{
-                                            bgcolor: '#fef3c7',
-                                            color: '#92400e',
+                                            bgcolor: isDark ? alpha('#f97316', 0.15) : '#fef3c7',
+                                            color: isDark ? '#fdba74' : '#92400e',
                                             '& .MuiChip-icon': {
-                                                color: '#92400e',
+                                                color: isDark ? '#fdba74' : '#92400e',
                                             },
                                             '& .MuiChip-deleteIcon': {
-                                                color: '#92400e',
+                                                color: isDark ? '#fdba74' : '#92400e',
                                                 '&:hover': {
-                                                    color: '#78350f',
+                                                    color: isDark ? '#fb923c' : '#78350f',
                                                 },
                                             },
                                         }}
@@ -882,7 +891,7 @@ export default function RequestReviewDialog({
                                     sx={{
                                         mt: 1.5,
                                         p: 1.5,
-                                        bgcolor: 'rgba(0, 105, 92, 0.04)',
+                                        bgcolor: alpha(theme.palette.primary.main, 0.04),
                                         borderRadius: 1.5,
                                         border: '1px dashed rgba(0, 105, 92, 0.2)',
                                     }}
@@ -890,7 +899,7 @@ export default function RequestReviewDialog({
                                     <Typography
                                         variant="caption"
                                         fontWeight={500}
-                                        sx={{ display: 'block', mb: 1, color: '#00695c' }}
+                                        sx={{ display: 'block', mb: 1, color: isDark ? theme.palette.primary.light : '#00695c' }}
                                     >
                                         Message to Approver
                                     </Typography>
@@ -904,16 +913,16 @@ export default function RequestReviewDialog({
                                         size="small"
                                         sx={{
                                             '& .MuiOutlinedInput-root': {
-                                                bgcolor: 'white',
+                                                bgcolor: 'background.paper',
                                                 fontSize: '0.875rem',
                                                 '& fieldset': {
-                                                    borderColor: 'rgba(0, 105, 92, 0.2)',
+                                                    borderColor: alpha(theme.palette.primary.main, 0.2),
                                                 },
                                                 '&:hover fieldset': {
-                                                    borderColor: 'rgba(0, 105, 92, 0.4)',
+                                                    borderColor: alpha(theme.palette.primary.main, 0.4),
                                                 },
                                                 '&.Mui-focused fieldset': {
-                                                    borderColor: '#00695c',
+                                                    borderColor: theme.palette.primary.main,
                                                 },
                                             },
                                         }}

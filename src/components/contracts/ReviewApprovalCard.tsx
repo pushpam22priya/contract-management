@@ -226,7 +226,7 @@ export default function ReviewApprovalCard({
                 {/* Title + Status Chip + Actions Toggle */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
                     <Tooltip title={contract.title?.length > 22 ? contract.title : ''} arrow placement="top">
-                        <Typography variant="h6" fontWeight={600} sx={{ fontSize: '0.95rem', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <Typography variant="subtitle2" sx={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {truncate(contract.title, 22)}
                         </Typography>
                     </Tooltip>

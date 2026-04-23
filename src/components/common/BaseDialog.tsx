@@ -153,8 +153,8 @@ export default function BaseDialog({
             {/* Dialog Content */}
             <DialogContent
                 sx={{
-                    px: noPadding ? 0 : { xs: 2, sm: 2 },
-                    py: noPadding ? 0 : { xs: 3, sm: 2 },
+                    px: noPadding ? 0 : { xs: 2, sm: 1 },
+                    py: noPadding ? 0 : { xs: 3, sm: 1 },
                     paddingTop: noPadding ? '0 !important' : '16px !important',
                     // Full screen mode: fill available space
                     ...(isFullScreen && noPadding && {
