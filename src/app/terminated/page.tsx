@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Box, Typography } from '@mui/material';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
+import EmptyState from '@/components/common/EmptyState';
 import { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import AppLayout from '@/components/layout/AppLayout';
@@ -185,41 +186,13 @@ export default function TerminatedContractsPage() {
                     {loading ? (
                         <ShimmerCardGrid count={8} variant="contract" />
                     ) : filteredContracts.length === 0 ? (
-                        <Box
-                            sx={{
-                                gridColumn: '1 / -1',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                py: 10,
-                                gap: 1.5,
-                            }}
-                        >
-                            <Box
-                                sx={{
-                                    width: 72,
-                                    height: 72,
-                                    borderRadius: 3,
-                                    bgcolor: '#f1f5f9',
-                                    border: '1px solid #94a3b8',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                }}
-                            >
-                                <BlockOutlinedIcon sx={{ fontSize: 36, color: '#94a3b8' }} />
-                            </Box>
-                            <Typography fontWeight={600} fontSize="1rem" color="text.secondary">
-                                {hasActiveFilters ? t('noContractsFiltered') : t('noContracts')}
-                            </Typography>
-                            <Typography
-                                fontSize="0.85rem"
-                                color="text.disabled"
-                                textAlign="center"
-                                maxWidth={320}
-                            >
-                                {hasActiveFilters ? t('tryAdjusting') : t('appearHere')}
-                            </Typography>
+                        <Box sx={{ gridColumn: '1 / -1' }}>
+                            <EmptyState
+                                icon={<BlockOutlinedIcon />}
+                                title={hasActiveFilters ? t('noContractsFiltered') : t('noContracts')}
+                                description={hasActiveFilters ? t('tryAdjusting') : t('appearHere')}
+                                sx={{ minHeight: '55vh' }}
+                            />
                         </Box>
                     ) : (
                         filteredContracts.map(contract => (

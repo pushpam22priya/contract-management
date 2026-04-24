@@ -18,6 +18,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import dayjs from 'dayjs';
+import EmptyState from '@/components/common/EmptyState';
 
 export interface HistoryEntry {
     id: string;
@@ -197,10 +198,11 @@ function HistoryContent({
 
                 {/* Empty */}
                 {!loading && !error && chain.length === 0 && (
-                    <Box sx={{ py: 5, textAlign: 'center' }}>
-                        <HistoryIcon sx={{ fontSize: 36, color: 'text.disabled', mb: 1 }} />
-                        <Typography color="text.secondary" fontSize="0.82rem">No history yet.</Typography>
-                    </Box>
+                    <EmptyState
+                        compact
+                        icon={<HistoryIcon />}
+                        title="No history yet."
+                    />
                 )}
 
                 {/* Chain entries */}

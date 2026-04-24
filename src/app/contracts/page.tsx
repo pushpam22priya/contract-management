@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Typography, Tooltip, IconButton, Button, Chip } from '@mui/material';
+import { Box, Typography, Tooltip, IconButton, Chip } from '@mui/material';
+import EmptyState from '@/components/common/EmptyState';
 import { useState, useEffect, useCallback } from 'react';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -570,11 +571,13 @@ export default function ContractsPage() {
                                 loading ? (
                                     <ShimmerCardGrid count={8} variant="contract" />
                                 ) : filteredContracts.length === 0 ? (
-                                    <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
-                                        <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                                        <Typography color="text.secondary">
-                                            No contracts found with the selected filters.
-                                        </Typography>
+                                    <Box sx={{ gridColumn: '1 / -1' }}>
+                                        <EmptyState
+                                            icon={<FolderIcon />}
+                                            title="No contracts found"
+                                            description="Try adjusting your filters."
+                                            sx={{ minHeight: '55vh' }}
+                                        />
                                     </Box>
                                 ) : (
                                     filteredContracts.map(contract => (
@@ -593,11 +596,13 @@ export default function ContractsPage() {
                                 loading ? (
                                     <ShimmerCardGrid count={8} variant="contract" />
                                 ) : filteredContracts.length === 0 ? (
-                                    <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
-                                        <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                                        <Typography color="text.secondary">
-                                            No contracts in this team yet. Click <strong>+</strong> to create one.
-                                        </Typography>
+                                    <Box sx={{ gridColumn: '1 / -1' }}>
+                                        <EmptyState
+                                            icon={<FolderIcon />}
+                                            title="No contracts in this team yet"
+                                            description="Click the + button in the top right to create one."
+                                            sx={{ minHeight: '55vh' }}
+                                        />
                                     </Box>
                                 ) : (
                                     filteredContracts.map(contract => (
@@ -616,24 +621,27 @@ export default function ContractsPage() {
                                 teamsLoading ? (
                                     <ShimmerCardGrid count={6} variant="contract" />
                                 ) : teams.length === 0 ? (
-                                    <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
-                                        <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                                        <Typography color="text.secondary" gutterBottom>
-                                            No teams yet.
-                                        </Typography>
-                                        <Button
-                                            variant="outlined"
-                                            startIcon={<CreateNewFolderIcon />}
-                                            onClick={() => setCreateTeamOpen(true)}
-                                            size="small"
-                                        >
-                                            Create your first team
-                                        </Button>
+                                    <Box sx={{ gridColumn: '1 / -1' }}>
+                                        <EmptyState
+                                            icon={<FolderIcon />}
+                                            title="No teams yet"
+                                            description="Organize your contracts by creating a team."
+                                            action={{
+                                                label: 'Create your first team',
+                                                onClick: () => setCreateTeamOpen(true),
+                                                startIcon: <CreateNewFolderIcon />,
+                                                variant: 'outlined',
+                                            }}
+                                            sx={{ minHeight: '55vh' }}
+                                        />
                                     </Box>
                                 ) : filteredTeams.length === 0 ? (
-                                    <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
-                                        <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                                        <Typography color="text.secondary">No teams match your search.</Typography>
+                                    <Box sx={{ gridColumn: '1 / -1' }}>
+                                        <EmptyState
+                                            icon={<FolderIcon />}
+                                            title="No teams match your search."
+                                            sx={{ minHeight: '55vh' }}
+                                        />
                                     </Box>
                                 ) : (
                                     filteredTeams.map(team => (

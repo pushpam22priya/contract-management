@@ -1,7 +1,9 @@
 'use client';
 
-import { Box, Typography } from '@mui/material';
+import { Box } from '@mui/material';
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import NotificationItem, { Notification } from './NotificationItem';
+import EmptyState from '@/components/common/EmptyState';
 
 interface NotificationListProps {
     notifications: Notification[];
@@ -11,20 +13,11 @@ interface NotificationListProps {
 export default function NotificationList({ notifications, onViewContract }: NotificationListProps) {
     if (notifications.length === 0) {
         return (
-            <Box
-                sx={{
-                    textAlign: 'center',
-                    py: 8,
-                    color: 'text.secondary',
-                }}
-            >
-                <Typography variant="h6" sx={{ mb: 1, fontWeight: 500 }}>
-                    No notifications found
-                </Typography>
-                <Typography variant="body2">
-                    You're all caught up!
-                </Typography>
-            </Box>
+            <EmptyState
+                icon={<NotificationsNoneIcon />}
+                title="No notifications"
+                description="You're all caught up!"
+            />
         );
     }
 

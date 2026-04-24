@@ -2,6 +2,7 @@
 import { Box, Typography } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import FolderIcon from '@mui/icons-material/Folder';
+import EmptyState from '@/components/common/EmptyState';
 import ContractCard from '@/components/contracts/ContractCard';
 import { useEffect, useState, useCallback } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
@@ -489,9 +490,13 @@ export default function DraftPage() {
                     {loading ? (
                         <ShimmerCardGrid count={8} variant="contract" />
                     ) : filteredDrafts.length === 0 ? (
-                        <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
-                            <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                            <Typography color="text.secondary">No draft contracts found.</Typography>
+                        <Box sx={{ gridColumn: '1 / -1' }}>
+                            <EmptyState
+                                icon={<FolderIcon />}
+                                title="No draft contracts found."
+                                description="Create a new draft to get started."
+                                sx={{ minHeight: '50vh' }}
+                            />
                         </Box>
                     ) : (
                         filteredDrafts.map((contract) => (

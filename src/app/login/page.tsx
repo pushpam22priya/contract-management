@@ -208,11 +208,11 @@ export default function LoginPage() {
                             <ContractIcon sx={{ fontSize: 45 }} />
                         </Box>
 
-                        <Typography variant="h3" fontWeight="bold" gutterBottom>
+                        <Typography variant="h4" fontWeight="bold" gutterBottom>
                             Contract Management
                         </Typography>
                         <Typography
-                            variant="subtitle1"
+                            variant="body2"
                             sx={{ opacity: 0.90, mb: 4, maxWidth: 350, mx: 'auto', lineHeight: 1.6 }}
                         >
                             Effortless contract lifecycle management.<br />
@@ -245,7 +245,7 @@ export default function LoginPage() {
                         <Typography variant="h4" gutterBottom fontWeight="600">
                             Welcome Back
                         </Typography>
-                        <Typography variant="body1" sx={{ opacity: 0.65 }}>
+                        <Typography variant="body2" sx={{ opacity: 0.65 }}>
                             Please enter your details to sign in.
                         </Typography>
                     </Box>
@@ -253,12 +253,12 @@ export default function LoginPage() {
                     <Box component="form" noValidate onSubmit={handleSignIn}>
                         {error && (
                             <Alert severity="error" sx={{ mb: 2 }}>
-                                {error}
+                                <Typography variant="body2" color="inherit">{error}</Typography>
                             </Alert>
                         )}
                         {success && (
                             <Alert severity="success" sx={{ mb: 2 }}>
-                                {success}
+                                <Typography variant="body2" color="inherit">{success}</Typography>
                             </Alert>
                         )}
 

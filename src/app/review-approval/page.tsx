@@ -1,6 +1,9 @@
 'use client';
 
 import { Box, Typography, Alert, Tabs, Tab } from '@mui/material';
+import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
+import HistoryIcon from '@mui/icons-material/History';
+import EmptyState from '@/components/common/EmptyState';
 import { AlertColor } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import { useState, useEffect } from 'react';
@@ -544,11 +547,16 @@ export default function ReviewApprovalPage() {
                                 <ReviewApprovalShimmerGrid count={6} />
                             </Box>
                         ) : filteredContracts.length === 0 ? (
-                            <Alert severity="info">
-                                {tabValue === 0
-                                    ? 'No pending contracts for review or approval.'
-                                    : 'No completed reviews or approvals yet.'}
-                            </Alert>
+                            <EmptyState
+                                icon={tabValue === 0 ? <AssignmentOutlinedIcon /> : <HistoryIcon />}
+                                title={tabValue === 0 ? 'No pending tasks' : 'No history yet'}
+                                description={
+                                    tabValue === 0
+                                        ? 'No contracts are currently assigned to you for review or approval.'
+                                        : 'Completed reviews and approvals will appear here.'
+                                }
+                                sx={{ minHeight: '55vh' }}
+                            />
                         ) : (
                             <Box
                                 sx={{

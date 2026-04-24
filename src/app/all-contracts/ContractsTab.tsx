@@ -1,8 +1,8 @@
 'use client';
 
-import { Box, Typography, Tooltip, IconButton, Button } from '@mui/material';
+import { Box, Typography, Tooltip, IconButton } from '@mui/material';
+import EmptyState from '@/components/common/EmptyState';
 import { useState, useEffect, useCallback } from 'react';
-import AddIcon from '@mui/icons-material/Add';
 import FolderIcon from '@mui/icons-material/Folder';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
 import { useRouter } from 'next/navigation';
@@ -319,15 +319,27 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
                     {teamsLoading ? (
                         <ShimmerCardGrid count={6} variant="contract" />
                     ) : teams.length === 0 ? (
-                        <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
-                            <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                            <Typography color="text.secondary" gutterBottom>No teams yet.</Typography>
-                            <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setCreateTeamOpen(true)} size="small">Create your first team</Button>
+                        <Box sx={{ gridColumn: '1 / -1' }}>
+                            <EmptyState
+                                icon={<FolderIcon />}
+                                title="No teams yet"
+                                description="Organize your contracts by creating a team."
+                                action={{
+                                    label: 'Create your first team',
+                                    onClick: () => setCreateTeamOpen(true),
+                                    startIcon: <CreateNewFolderIcon />,
+                                    variant: 'outlined',
+                                }}
+                                sx={{ minHeight: '55vh' }}
+                            />
                         </Box>
                     ) : filteredTeams.length === 0 ? (
-                        <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
-                            <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                            <Typography color="text.secondary">No teams match your search.</Typography>
+                        <Box sx={{ gridColumn: '1 / -1' }}>
+                            <EmptyState
+                                icon={<FolderIcon />}
+                                title="No teams match your search."
+                                sx={{ minHeight: '55vh' }}
+                            />
                         </Box>
                     ) : (
                         filteredTeams.map(team => (

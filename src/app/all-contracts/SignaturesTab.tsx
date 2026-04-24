@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Typography, AlertColor, Paper } from '@mui/material';
+import { Box, Typography, AlertColor } from '@mui/material';
+import EmptyState from '@/components/common/EmptyState';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
@@ -248,11 +249,12 @@ export default function SignaturesTab({ headerLeft }: { headerLeft?: React.React
                 {/* Grid */}
                 <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 1 }}>
                     {filteredContracts.length === 0 && !loading ? (
-                        <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 2, border: '1px dashed', borderColor: 'divider' }}>
-                            <DrawIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-                            <Typography variant="h6" color="text.secondary" gutterBottom>No Contracts to Sign</Typography>
-                            <Typography variant="body2" color="text.secondary">You don't have any contracts waiting for your signature at the moment.</Typography>
-                        </Paper>
+                        <EmptyState
+                            icon={<DrawIcon />}
+                            title="No Contracts to Sign"
+                            description="You don't have any contracts waiting for your signature at the moment."
+                            sx={{ minHeight: '55vh' }}
+                        />
                     ) : (
                         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 0.75 }}>
                             {loading ? (

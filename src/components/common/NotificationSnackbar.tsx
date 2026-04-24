@@ -1,6 +1,6 @@
 'use client';
 
-import { Snackbar, Alert, AlertColor, useTheme } from '@mui/material';
+import { Snackbar, Alert, AlertColor, Typography, useTheme } from '@mui/material';
 
 interface NotificationSnackbarProps {
     open: boolean;
@@ -38,7 +38,7 @@ export default function NotificationSnackbar({
                         : '0 4px 12px rgba(0,0,0,0.15)',
                 }}
             >
-                {message}
+                <Typography variant="body2" color="inherit">{message}</Typography>
             </Alert>
         </Snackbar>
     );
