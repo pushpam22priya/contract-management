@@ -2,7 +2,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
-import { Box, Button, Alert, AlertColor, Typography, Chip, Tooltip } from '@mui/material';
+import AppButton from '@/components/common/AppButton';
+import { Box,  Alert, AlertColor, Typography, Chip, Tooltip } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import dynamic from 'next/dynamic';
 import { useRef, useState, useEffect, useMemo } from 'react';
@@ -661,14 +662,15 @@ export default function DocumentViewerDialog({
             {onSave && (
                 <Tooltip title={getSaveDisabledReason()} arrow>
                     <span>
-                        <Button
+                        <AppButton
                             variant="contained"
                             onClick={assignedPartyId ? handleSendButtonClick : handleSaveClick}
+                            loading={saving}
                             disabled={saveDisabled}
                             sx={{ py: 0.6 }}
                         >
                             {saving ? (assignedPartyId ? 'Sending...' : 'Saving...') : (assignedPartyId ? 'Send' : 'Save Changes')}
-                        </Button>
+                        </AppButton>
                     </span>
                 </Tooltip>
             )}

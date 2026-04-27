@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
-import { Box, CircularProgress } from '@mui/material';
+import { Box, CircularProgress, useTheme } from '@mui/material';
 
 interface PDFViewerContainerProps {
     documentUrl?: string;
@@ -91,6 +91,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
     ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole, currentUserEmail, canAddFormFields = false }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
+        const isDark = useTheme().palette.mode === 'dark';
         const [loading, setLoading] = useState(true);
         const [error, setError] = useState<string>('');
         const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1702,6 +1703,14 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
             },
         }));
 
+        // Sync app theme → viewer theme whenever it changes
+        useEffect(() => {
+            if (!viewerInstance.current) return;
+            viewerInstance.current.UI.setTheme(
+                isDark ? viewerInstance.current.UI.Theme.DARK : viewerInstance.current.UI.Theme.LIGHT
+            );
+        }, [isDark]);
+
         // Initialize viewer once (on mount)
         useEffect(() => {
             if (!viewerDiv.current || viewerInstance.current) return;
@@ -1823,6 +1832,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         // ✅ Set default tool mode to Pan (View mode) instead of Insert
                         UI.setToolMode('Pan');
                         console.log('✅ Default tool mode set to Pan (View)');
+                        // Sync viewer theme with app theme on init
+                        UI.setTheme(isDark ? UI.Theme.DARK : UI.Theme.LIGHT);
                     } catch (e) {
                         console.error('Failed to enable features:', e);
                     }
