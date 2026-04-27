@@ -1,13 +1,13 @@
 'use client';
 
+import AppButton from '@/components/common/AppButton';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import {
     Box,
     Typography,
     CircularProgress,
-    Alert,
-    Button,
+    Alert, 
     Paper,
     Tooltip,
     Chip,
@@ -653,7 +653,7 @@ export default function PublicSigningPage() {
                         You will get the signed document by email, once everyone has signed.
                     </Typography>
                     {/* {signedPdfBlob && (
-                        <Button
+                        <AppButton
                             variant="contained"
                             startIcon={<Download />}
                             onClick={handleDownloadSignedPdf}
@@ -667,7 +667,7 @@ export default function PublicSigningPage() {
                             }}
                         >
                             Download
-                        </Button>
+                        </AppButton>
                     )} */}
                     <Alert severity="success" sx={{ color: isDark ? '#fefefe' : '#000' }}>You can close this window now.</Alert>
                 </Paper>
@@ -725,23 +725,23 @@ export default function PublicSigningPage() {
                     arrow
                 >
                     <span>
-                        <Button
+                        <AppButton
                             variant="contained"
                             size="small"
+                            loading={submitting}
                             onClick={handleSubmitSignature}
-                            disabled={submitting || (validationTriggered && (!hasFilledAllAssignedFields || hasPartialParty)) || hasModifiedOtherPartyFields}
+                            disabled={(validationTriggered && (!hasFilledAllAssignedFields || hasPartialParty)) || hasModifiedOtherPartyFields}
                             sx={{
                                 bgcolor: 'white',
                                 color: 'primary.main',
                                 '&:hover': { bgcolor: 'grey.100' },
-                                '&:disabled': { bgcolor: 'grey.300', color: 'grey.500' },
-                                textTransform: 'none',
+                                '&.Mui-disabled': { bgcolor: 'grey.300', color: 'grey.500' },
                                 fontWeight: 600,
                                 py: 0.5
                             }}
                         >
                             {submitting ? 'Sending...' : 'Send'}
-                        </Button>
+                        </AppButton>
                     </span>
                 </Tooltip>
             </Box>

@@ -1,11 +1,11 @@
 'use client';
 
+import AppButton from '@/components/common/AppButton';
 import {
     Dialog,
     DialogTitle,
     DialogContent,
-    DialogActions,
-    Button,
+    DialogActions, 
     Box,
     Typography,
     Alert,
@@ -161,13 +161,13 @@ export default function SignaturePadDialog({
                 </Box>
             </DialogContent>
             <DialogActions sx={{ px: 3, py: 2 }}>
-                <Button onClick={clearSignature} color="error" sx={{ mr: 'auto' }}>
+                <AppButton variant="outlined" color="error" onClick={clearSignature} sx={{ mr: 'auto' }}>
                     Clear
-                </Button>
-                <Button onClick={onClose} sx={{ color: 'text.secondary' }}>
+                </AppButton>
+                <AppButton variant="outlined" onClick={onClose}>
                     Cancel
-                </Button>
-                <Button
+                </AppButton>
+                <AppButton
                     variant="contained"
                     onClick={handleSave}
                     disabled={!hasSignature}
@@ -177,7 +177,7 @@ export default function SignaturePadDialog({
                     }}
                 >
                     Sign & Save
-                </Button>
+                </AppButton>
             </DialogActions>
         </Dialog>
     );

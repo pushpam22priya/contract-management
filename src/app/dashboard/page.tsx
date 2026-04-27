@@ -1,7 +1,8 @@
 'use client';
 
-import { Box, Typography, Button } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
+import AppButton from '@/components/common/AppButton';
 import StatsCard from '@/components/dashboard/StatsCard';
 import RecentContracts from '@/components/dashboard/RecentContracts';
 import { useState, useEffect } from 'react';
@@ -276,64 +277,37 @@ export default function DashboardPage() {
 
                         {/* Center: Action buttons */}
                         <Box sx={{ display: 'flex', gap: 3, justifyContent: 'center' }}>
-                            <Button
-                                variant="text"
-                                onClick={() => router.push('/template')}
-                                sx={{
-                                    color: 'rgba(255,255,255,0.85)',
-                                    fontSize: '0.85rem',
-                                    fontWeight: 500,
-                                    textTransform: 'none',
-                                    px: 1,
-                                    py: 0.5,
-                                    minWidth: 0,
-                                    borderRadius: 0,
-                                    position: 'relative',
-                                    '&::after': {
-                                        content: '""',
-                                        position: 'absolute',
-                                        bottom: 0,
-                                        left: '50%',
-                                        width: 0,
-                                        height: '1px',
-                                        background: 'rgba(255,255,255,0.7)',
-                                        transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1), left 0.35s cubic-bezier(0.4,0,0.2,1)',
-                                    },
-                                    '&:hover': { color: 'white', bgcolor: 'transparent' },
-                                    '&:hover::after': { width: '100%', left: 0 },
-                                }}
-                            >
-                                {t('browseTemplates')}
-                            </Button>
-                            <Button
-                                variant="text"
-                                onClick={() => setCreateWizardOpen(true)}
-                                sx={{
-                                    color: 'rgba(255,255,255,0.85)',
-                                    fontSize: '0.85rem',
-                                    fontWeight: 500,
-                                    textTransform: 'none',
-                                    px: 1,
-                                    py: 0.5,
-                                    minWidth: 0,
-                                    borderRadius: 0,
-                                    position: 'relative',
-                                    '&::after': {
-                                        content: '""',
-                                        position: 'absolute',
-                                        bottom: 0,
-                                        left: '50%',
-                                        width: 0,
-                                        height: '1px',
-                                        background: 'rgba(255,255,255,0.7)',
-                                        transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1), left 0.35s cubic-bezier(0.4,0,0.2,1)',
-                                    },
-                                    '&:hover': { color: 'white', bgcolor: 'transparent' },
-                                    '&:hover::after': { width: '100%', left: 0 },
-                                }}
-                            >
-                                {t('createContract')}
-                            </Button>
+                            {([
+                                { label: t('browseTemplates'), onClick: () => router.push('/template') },
+                                { label: t('createContract'),  onClick: () => setCreateWizardOpen(true) },
+                            ] as const).map(({ label, onClick }) => (
+                                <AppButton
+                                    key={label}
+                                    variant="text"
+                                    onClick={onClick}
+                                    sx={{
+                                        color: 'rgba(255,255,255,0.85)',
+                                        fontSize: '0.85rem',
+                                        fontWeight: 500,
+                                        px: 1, py: 0.5,
+                                        minWidth: 0,
+                                        borderRadius: 0,
+                                        position: 'relative',
+                                        '&::after': {
+                                            content: '""',
+                                            position: 'absolute',
+                                            bottom: 0, left: '50%',
+                                            width: 0, height: '1px',
+                                            background: 'rgba(255,255,255,0.7)',
+                                            transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1), left 0.35s cubic-bezier(0.4,0,0.2,1)',
+                                        },
+                                        '&:hover': { color: 'white', bgcolor: 'transparent' },
+                                        '&:hover::after': { width: '100%', left: 0 },
+                                    }}
+                                >
+                                    {label}
+                                </AppButton>
+                            ))}
                         </Box>
 
                         {/* Right: Hi, Name + avatar */}

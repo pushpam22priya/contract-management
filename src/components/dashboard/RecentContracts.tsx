@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Typography, Paper, Button, Chip, Divider, Fade, Grow, SvgIcon, useTheme } from '@mui/material';
+import AppButton from '@/components/common/AppButton';
+import { Box, Typography, Paper, Chip, Divider, Fade, Grow, SvgIcon, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined';
@@ -181,10 +182,10 @@ export default function RecentContracts() {
                     </Typography>
                 </Box>
                 {!isExpiring && (
-                    <Button variant="contained" size="small" onClick={() => router.push('/contracts?status=active')}
-                        sx={{ textTransform: 'none', fontSize: '0.8rem', borderRadius: 2, px: 2.5, py: 0.6, boxShadow: `0 2px 8px ${alpha(primaryColor, 0.3)}` }}>
+                    <AppButton variant="contained" size="small" onClick={() => router.push('/contracts?status=active')}
+                        sx={{ fontSize: '0.8rem', borderRadius: 2, px: 2.5, py: 0.6, boxShadow: `0 2px 8px ${alpha(primaryColor, 0.3)}` }}>
                         {t('goToContracts')}
-                    </Button>
+                    </AppButton>
                 )}
             </Box>
         );
@@ -245,20 +246,20 @@ export default function RecentContracts() {
                         </Box>
                     </Box>
 
-                    <Button
+                    <AppButton
                         variant="outlined"
                         size="small"
                         onClick={() => router.push(activeTab === 'expiring' ? '/contracts?status=expiring' : '/contracts?status=all')}
                         endIcon={<ArrowForwardIcon sx={{ fontSize: '0.7rem !important' }} />}
                         sx={{
-                            textTransform: 'none', fontSize: '0.73rem', fontWeight: 600,
+                            fontSize: '0.73rem', fontWeight: 600,
                             borderRadius: 1.5, py: 0.35, px: 1.1, minWidth: 0,
                             color: primaryColor, borderColor: `${primaryColor}60`,
                             '&:hover': { bgcolor: `${primaryColor}0e`, borderColor: primaryColor },
                         }}
                     >
                         {t('viewAll')}
-                    </Button>
+                    </AppButton>
                 </Box>
 
                 {/* ── Body ───────────────────────────────────────────── */}
@@ -270,9 +271,8 @@ export default function RecentContracts() {
                         { key: 'recent', label: t('tabRecent') },
                         { key: 'expiring', label: `${t('tabExpiring')}${expiringContracts.length > 0 ? ` (${expiringContracts.length})` : ''}` },
                     ] as { key: ActiveTab; label: string }[]).map(tab => (
-                        <Button key={tab.key} size="small" onClick={() => setActiveTab(tab.key)}
+                        <AppButton key={tab.key} variant="text" size="small" onClick={() => setActiveTab(tab.key)}
                             sx={{
-                                textTransform: 'none',
                                 fontSize: '0.78rem',
                                 fontWeight: activeTab === tab.key ? 700 : 500,
                                 px: 1.5, py: 0.4,
@@ -298,7 +298,7 @@ export default function RecentContracts() {
                                 },
                             }}>
                             {tab.label}
-                        </Button>
+                        </AppButton>
                     ))}
                 </Box>
 
@@ -413,9 +413,9 @@ export default function RecentContracts() {
                                                 </Typography>
                                             </Box>
 
-                                            <Button size="small" onClick={(e) => { e.stopPropagation(); router.push(contract.path); }}
+                                            <AppButton variant="text" size="small" onClick={(e) => { e.stopPropagation(); router.push(contract.path); }}
                                                 sx={{
-                                                    ml: 'auto', textTransform: 'none', fontSize: '0.68rem', fontWeight: 600,
+                                                    ml: 'auto', fontSize: '0.68rem', fontWeight: 600,
                                                     py: 0.1, px: 0.75, minWidth: 0, borderRadius: 1,
                                                     color: isHovered ? sc.accent : 'text.secondary',
                                                     transition: 'color 0.2s ease',
@@ -423,7 +423,7 @@ export default function RecentContracts() {
                                                     '&:hover': { bgcolor: `${sc.accent}15` },
                                                 }}>
                                                 {t('view')}
-                                            </Button>
+                                            </AppButton>
                                         </Box>
                                     </Box>
                                 </Grow>

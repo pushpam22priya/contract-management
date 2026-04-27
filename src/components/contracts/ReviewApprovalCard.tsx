@@ -1,7 +1,8 @@
 'use client';
 
-import { Box, Typography, Chip, IconButton, Tooltip, Button, Popover, useTheme } from '@mui/material';
+import { Box, Typography, Chip, IconButton, Tooltip, Popover, useTheme } from '@mui/material';
 import { Visibility, CheckCircle, AccessTime, Person, AccountCircle, Message, Groups, Cancel, MoreVert } from '@mui/icons-material';
+import AppButton from '@/components/common/AppButton';
 import { Contract } from '@/types/contract';
 import { useState } from 'react';
 import { authService } from '@/services/authService';
@@ -436,24 +437,23 @@ export default function ReviewApprovalCard({
                             }}
                         />
                         <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                            <Button
+                            <AppButton
                                 size="small"
                                 variant="contained"
                                 onClick={handleRequestModification}
-                                sx={{ textTransform: 'none' }}
                             >
                                 Submit
-                            </Button>
-                            <Button
+                            </AppButton>
+                            <AppButton
                                 size="small"
+                                variant="outlined"
                                 onClick={() => {
                                     setShowCommentInput(false);
                                     setComments('');
                                 }}
-                                sx={{ textTransform: 'none' }}
                             >
                                 Cancel
-                            </Button>
+                            </AppButton>
                         </Box>
                     </Box>
                 )}

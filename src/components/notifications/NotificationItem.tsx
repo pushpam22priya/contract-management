@@ -1,7 +1,8 @@
 'use client';
 
-import { Box, Typography, Button, Chip, Paper, useTheme } from '@mui/material';
+import { Box, Typography, Chip, Paper, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import AppButton from '@/components/common/AppButton';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
@@ -123,12 +124,11 @@ export default function NotificationItem({ notification, onViewContract }: Notif
                     </Typography>
 
                     {contractId && (
-                        <Button
+                        <AppButton
                             variant="outlined"
                             size="small"
                             onClick={() => onViewContract?.(contractId)}
                             sx={{
-                                textTransform: 'none',
                                 fontWeight: 500,
                                 fontSize: '0.8125rem',
                                 borderColor: alpha(color, 0.45),
@@ -143,7 +143,7 @@ export default function NotificationItem({ notification, onViewContract }: Notif
                             }}
                         >
                             View Contract
-                        </Button>
+                        </AppButton>
                     )}
                 </Box>
             </Box>

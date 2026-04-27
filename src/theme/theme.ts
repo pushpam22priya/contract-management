@@ -1,5 +1,5 @@
 'use client';
-import { createTheme, Theme } from '@mui/material/styles';
+import { createTheme, Theme, alpha } from '@mui/material/styles';
 
 declare module '@mui/material/styles' {
     interface Theme {
@@ -80,16 +80,32 @@ export type ThemeName = 'light' | 'dark' | 'coffee' | 'ocean' | 'sunrise' | 'for
 // ── Shared component overrides (identical across all themes) ──────────────────
 const sharedComponents = {
     MuiButton: {
+        defaultProps: {
+            disableElevation: true,
+        },
         styleOverrides: {
             root: {
                 textTransform: 'none' as const,
-                borderRadius: 8,
-                padding: '10px 20px',
                 fontWeight: 600,
                 boxShadow: 'none',
                 '&:hover': {
-                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.10), 0 2px 4px -2px rgb(0 0 0 / 0.10)',
                 },
+            },
+            sizeSmall: {
+                fontSize: '0.8rem',
+                padding: '5px 14px',
+                borderRadius: 6,
+            },
+            sizeMedium: {
+                fontSize: '0.875rem',
+                padding: '8px 20px',
+                borderRadius: 8,
+            },
+            sizeLarge: {
+                fontSize: '1rem',
+                padding: '12px 28px',
+                borderRadius: 10,
             },
         },
     },
@@ -171,6 +187,34 @@ const sharedComponents = {
                     WebkitBackdropFilter: 'none',
                     border: '1px solid rgba(255,255,255,0.10)',
                 }),
+            }),
+        },
+    },
+    MuiAlert: {
+        styleOverrides: {
+            standardSuccess: ({ theme }: { theme: Theme }) => ({
+                backgroundColor: alpha(theme.palette.success.main, theme.palette.mode === 'dark' ? 0.14 : 0.08),
+                border: '1px solid',
+                borderColor: alpha(theme.palette.success.main, theme.palette.mode === 'dark' ? 0.32 : 0.22),
+                '& .MuiAlert-icon': { color: theme.palette.success.main },
+            }),
+            standardError: ({ theme }: { theme: Theme }) => ({
+                backgroundColor: alpha(theme.palette.error.main, theme.palette.mode === 'dark' ? 0.14 : 0.08),
+                border: '1px solid',
+                borderColor: alpha(theme.palette.error.main, theme.palette.mode === 'dark' ? 0.32 : 0.22),
+                '& .MuiAlert-icon': { color: theme.palette.error.main },
+            }),
+            standardWarning: ({ theme }: { theme: Theme }) => ({
+                backgroundColor: alpha(theme.palette.warning.main, theme.palette.mode === 'dark' ? 0.14 : 0.08),
+                border: '1px solid',
+                borderColor: alpha(theme.palette.warning.main, theme.palette.mode === 'dark' ? 0.32 : 0.22),
+                '& .MuiAlert-icon': { color: theme.palette.warning.main },
+            }),
+            standardInfo: ({ theme }: { theme: Theme }) => ({
+                backgroundColor: alpha(theme.palette.info.main, theme.palette.mode === 'dark' ? 0.14 : 0.08),
+                border: '1px solid',
+                borderColor: alpha(theme.palette.info.main, theme.palette.mode === 'dark' ? 0.32 : 0.22),
+                '& .MuiAlert-icon': { color: theme.palette.info.main },
             }),
         },
     },

@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { Box, Button, Typography, useTheme } from '@mui/material';
+import { Box, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import AppButton from '@/components/common/AppButton';
 import type { SxProps, Theme } from '@mui/material';
 
 interface EmptyStateAction {
@@ -101,13 +102,12 @@ export default function EmptyState({
             )}
 
             {action && (
-                <Button
+                <AppButton
                     variant={action.variant ?? 'outlined'}
                     size="small"
                     startIcon={action.startIcon}
                     onClick={action.onClick}
                     sx={{
-                        textTransform: 'none',
                         borderRadius: 2,
                         px: 2.5,
                         mt: !description ? 0 : undefined,
@@ -117,7 +117,7 @@ export default function EmptyState({
                     }}
                 >
                     {action.label}
-                </Button>
+                </AppButton>
             )}
         </Box>
     );

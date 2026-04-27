@@ -8,7 +8,6 @@ import {
     IconButton,
     Tooltip,
     Chip,
-    Button,
     useTheme,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -16,6 +15,7 @@ import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import SignatureProgressTimeline from '@/components/contracts/SignatureProgressTimeline';
+import AppButton from '@/components/common/AppButton';
 import AppLayout from '@/components/layout/AppLayout';
 import ContractInformation from '@/components/contracts/ContractInformation';
 import ContractDetailsPanel from '@/components/contracts/ContractDetailsPanel';
@@ -774,7 +774,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                         </Typography>
                                     </Box>
                                     {contract.renewedContractId && (
-                                        <Button
+                                        <AppButton
                                             size="small"
                                             variant="outlined"
                                             onClick={() => router.push(`/draft`)}
@@ -790,7 +790,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                             }}
                                         >
                                             {t('viewDraft')}
-                                        </Button>
+                                        </AppButton>
                                     )}
                                 </Box>
                             ) : (
@@ -823,7 +823,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                         </Typography>
                                     </Box>
                                     <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
-                                        <Button
+                                        <AppButton
                                             size="small"
                                             variant={isDark ? 'outlined' : 'contained'}
                                             onClick={() => setRenewDialogOpen(true)}
@@ -843,10 +843,10 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                             }}
                                         >
                                             {t('renew')}
-                                        </Button>
+                                        </AppButton>
                                         {/* Terminate — only for expired (not expiring), mutually exclusive with renewal */}
                                         {contract.status === ContractStatus.EXPIRED && (
-                                            <Button
+                                            <AppButton
                                                 size="small"
                                                 variant="outlined"
                                                 onClick={() => setTerminateDialogOpen(true)}
@@ -863,7 +863,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                                 }}
                                             >
                                                 {t('terminate')}
-                                            </Button>
+                                            </AppButton>
                                         )}
                                     </Box>
                                 </Box>

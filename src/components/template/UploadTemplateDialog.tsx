@@ -3,18 +3,17 @@
 import { useState, useEffect, useRef } from 'react';
 import {
     Box,
-    Button,
     TextField,
     Autocomplete,
     Typography,
     IconButton,
     Chip,
     alpha,
-    CircularProgress,
     Alert,
     AlertColor,
 } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
+import AppButton from '@/components/common/AppButton';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import CloseIcon from '@mui/icons-material/Close';
@@ -568,13 +567,12 @@ export default function UploadTemplateDialog({
 
     // Dialog actions - Step based
     const step1Actions = (
-        <Button
+        <AppButton
             onClick={handleNext}
             variant="contained"
             endIcon={<ArrowForward />}
             disabled={!templateName || !selectedCategory || !selectedFile}
             sx={{
-                textTransform: 'none',
                 fontWeight: 600,
                 px: 3,
                 py: 1,
@@ -585,19 +583,20 @@ export default function UploadTemplateDialog({
                     bgcolor: 'primary.dark',
                     boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}59`,
                 },
-                '&:disabled': {
+                '&.Mui-disabled': {
                     bgcolor: 'rgba(0, 0, 0, 0.12)',
                     color: 'rgba(0, 0, 0, 0.26)',
                 },
             }}
         >
             Next: Add Form Fields
-        </Button>
+        </AppButton>
     );
 
     const step2Actions = (
         <>
-            <Button
+            <AppButton
+                variant="outlined"
                 onClick={handleBack}
                 startIcon={<ArrowBack />}
                 sx={{
@@ -606,8 +605,8 @@ export default function UploadTemplateDialog({
                 }}
             >
                 Back
-            </Button>
-            <Button
+            </AppButton>
+            <AppButton
                 onClick={() => setShowPartyConfigDialog(true)}
                 variant="outlined"
                 sx={{
@@ -617,12 +616,11 @@ export default function UploadTemplateDialog({
                 }}
             >
                 {parties.length > 0 ? `${parties.length} Parties` : 'Configure Parties'}
-            </Button>
-            <Button
+            </AppButton>
+            <AppButton
                 onClick={handleSubmit}
                 variant="contained"
-                disabled={uploading}
-                startIcon={uploading ? <CircularProgress size={20} color="inherit" /> : null}
+                loading={uploading}
                 sx={{
                     px: 2,
                     py: 0.5,
@@ -636,7 +634,7 @@ export default function UploadTemplateDialog({
                 }}
             >
                 {uploading ? 'Uploading...' : 'Upload Template'}
-            </Button>
+            </AppButton>
         </>
     );
 
@@ -948,12 +946,11 @@ export default function UploadTemplateDialog({
                                         );
                                     }}
                                 />
-                                <Button
+                                <AppButton
                                     variant="outlined"
                                     startIcon={<AddCircleOutlineIcon />}
                                     onClick={() => setShowNewCategoryInput(true)}
                                     sx={{
-                                        textTransform: 'none',
                                         fontWeight: 600,
                                         // px: 2,
                                         // py: 1.75,
@@ -968,7 +965,7 @@ export default function UploadTemplateDialog({
                                     }}
                                 >
                                     New
-                                </Button>
+                                </AppButton>
                             </Box>
                         ) : (
                             <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -999,12 +996,11 @@ export default function UploadTemplateDialog({
                                         },
                                     }}
                                 />
-                                <Button
+                                <AppButton
                                     variant="contained"
                                     onClick={handleAddNewCategory}
                                     disabled={!newCategory.trim()}
                                     sx={{
-                                        textTransform: 'none',
                                         fontWeight: 600,
                                         borderRadius: 2,
                                         whiteSpace: 'nowrap',
@@ -1015,15 +1011,14 @@ export default function UploadTemplateDialog({
                                     }}
                                 >
                                     Add
-                                </Button>
-                                <Button
+                                </AppButton>
+                                <AppButton
                                     variant="outlined"
                                     onClick={() => {
                                         setShowNewCategoryInput(false);
                                         setNewCategory('');
                                     }}
                                     sx={{
-                                        textTransform: 'none',
                                         fontWeight: 600,
                                         borderRadius: 2,
                                         borderColor: 'rgba(0, 0, 0, 0.23)',
@@ -1035,7 +1030,7 @@ export default function UploadTemplateDialog({
                                     }}
                                 >
                                     Cancel
-                                </Button>
+                                </AppButton>
                             </Box>
                         )}
                     </Box>

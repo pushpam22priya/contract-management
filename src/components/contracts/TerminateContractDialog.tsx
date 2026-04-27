@@ -1,10 +1,10 @@
 'use client';
 
+import AppButton from '@/components/common/AppButton';
 import { useState } from 'react';
 import {
     Box,
-    Typography,
-    Button,
+    Typography, 
     Alert,
     alpha,
     useTheme,
@@ -79,10 +79,11 @@ export default function TerminateContractDialog({
             disableBackdropClick={loading}
             actions={
                 <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'flex-end', px: 0.5 }}>
-                    <Button
+                    <AppButton
                         variant="outlined"
                         onClick={handleClose}
                         disabled={loading}
+                        size="small"
                         sx={{
                             borderColor: 'divider',
                             color: 'text.secondary',
@@ -90,20 +91,21 @@ export default function TerminateContractDialog({
                         }}
                     >
                         Cancel
-                    </Button>
-                    <Button
+                    </AppButton>
+                    <AppButton
                         variant="contained"
                         onClick={handleTerminate}
-                        disabled={loading}
+                        loading={loading}
+                        size="small"
                         sx={{
                             bgcolor: isDark ? '#7f1d1d' : '#dc2626',
                             color: 'white',
                             '&:hover': { bgcolor: isDark ? '#991b1b' : '#b91c1c' },
-                            '&:disabled': { bgcolor: isDark ? 'rgba(127,29,29,0.5)' : '#fca5a5', color: 'white' },
+                            '&.Mui-disabled': { bgcolor: isDark ? 'rgba(127,29,29,0.5)' : '#fca5a5', color: 'white' },
                         }}
                     >
                         {loading ? 'Terminating…' : 'Terminate'}
-                    </Button>
+                    </AppButton>
                 </Box>
             }
         >

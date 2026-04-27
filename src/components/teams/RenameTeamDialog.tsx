@@ -1,7 +1,8 @@
 'use client';
 
+import AppButton from '@/components/common/AppButton';
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Typography, LinearProgress } from '@mui/material';
+import { Box,  TextField, Typography, LinearProgress } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
 import { Team } from '@/types/team';
 import { authService } from '@/services/authService';
@@ -87,18 +88,19 @@ export default function RenameTeamDialog({ open, team, onClose, onRenamed }: Ren
             disableBackdropClick={loading}
             actions={
                 <Box sx={{ display: 'flex', gap: 1, px: 0.5 }}>
-                    <Button onClick={handleClose} disabled={loading} variant="outlined" size="small" color="inherit">
+                    <AppButton variant="outlined" onClick={handleClose} disabled={loading} size="small">
                         Cancel
-                    </Button>
-                    <Button
-                        onClick={handleSave}
-                        disabled={loading || !name.trim() || name.trim() === team?.name}
+                    </AppButton>
+                    <AppButton
                         variant="contained"
+                        onClick={handleSave}
+                        loading={loading}
+                        disabled={!name.trim() || name.trim() === team?.name}
                         size="small"
                         sx={{ minWidth: 80 }}
                     >
                         {loading ? 'Saving…' : 'Save'}
-                    </Button>
+                    </AppButton>
                 </Box>
             }
         >

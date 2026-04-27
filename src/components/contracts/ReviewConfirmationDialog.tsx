@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Button, Typography, useTheme } from '@mui/material';
+import AppButton from '@/components/common/AppButton';
+import { Box,  Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import SendIcon from '@mui/icons-material/Send';
@@ -28,9 +29,9 @@ export default function ReviewConfirmationDialog({
     const handleMarkAndSendForFurtherReview = () => { onMarkAndSendForFurtherReview(); onClose(); };
 
     const dialogActions = (
-        <Button onClick={onClose} sx={{ textTransform: 'none', color: 'text.secondary' }}>
+        <AppButton variant="outlined" onClick={onClose}>
             Cancel
-        </Button>
+        </AppButton>
     );
 
     const optionSx = (color: string) => ({

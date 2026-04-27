@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Box,
-    Button,
     TextField,
     Typography,
     Paper,
@@ -12,13 +11,13 @@ import {
     useTheme,
     Stack,
     Alert,
-    CircularProgress,
 } from '@mui/material';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ContractIcon from '@/components/ContractIcon';
 import { authService } from '@/services/authService';
+import AppButton from '@/components/common/AppButton';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -157,6 +156,7 @@ export default function LoginPage() {
                         color: 'white',
                         position: 'relative',
                         overflow: 'hidden',
+                        '& .MuiTypography-root': { color: 'white' },
                     }}
                 >
                     {/* Decorative circles */}
@@ -321,22 +321,17 @@ export default function LoginPage() {
                             />
                         </Stack>
 
-                        <Button
+                        <AppButton
                             type="submit"
                             fullWidth
                             variant="contained"
                             size="large"
-                            endIcon={
-                                loading
-                                    ? <CircularProgress size={20} color="inherit" />
-                                    : <ArrowForwardIcon />
-                            }
-                            disabled={loading}
+                            loading={loading}
+                            endIcon={<ArrowForwardIcon />}
                             sx={{
                                 py: 1.5,
                                 mt: 3,
                                 fontSize: '1rem',
-                                textTransform: 'none',
                                 fontWeight: 600,
                                 borderRadius: 2,
                                 background: loginTheme.buttonBackground,
@@ -346,14 +341,14 @@ export default function LoginPage() {
                                     background: loginTheme.buttonHover,
                                     boxShadow: `0 8px 24px ${loginTheme.buttonBackground}55`,
                                 },
-                                '&:disabled': {
+                                '&.Mui-disabled': {
                                     background: loginTheme.buttonDisabled,
                                     color: 'rgba(255,255,255,0.6)',
                                 },
                             }}
                         >
                             {loading ? 'Signing In...' : 'Sign In'}
-                        </Button>
+                        </AppButton>
                     </Box>
                 </Box>
             </Paper>

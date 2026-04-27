@@ -1,11 +1,11 @@
 'use client';
 
+import AppButton from '@/components/common/AppButton';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Box,
-    Typography,
-    Button,
+    Typography, 
     TextField,
     RadioGroup,
     FormControlLabel,
@@ -542,38 +542,39 @@ export default function RenewContractDialog({
                 actions={
                     step === 1 ? (
                         <>
-                            <Button onClick={handleClose} disabled={creatingRenewal} variant="outlined" color="inherit" size="small">
+                            <AppButton onClick={handleClose} disabled={creatingRenewal} variant="outlined" color="inherit" size="small">
                                 Cancel
-                            </Button>
-                            <Button
+                            </AppButton>
+                            <AppButton
                                 onClick={handleNext}
-                                disabled={!isStep1Valid || creatingRenewal}
+                                disabled={!isStep1Valid}
+                                loading={creatingRenewal}
                                 variant="contained"
                                 size="small"
-                                endIcon={creatingRenewal
-                                    ? <CircularProgress size={14} color="inherit" />
-                                    : <ArrowForward />}
+                                endIcon={<ArrowForward />}
                             >
                                 {creatingRenewal ? 'Creating…' : renewalId ? 'Back to Editor' : 'Next: Edit Document'}
-                            </Button>
+                            </AppButton>
                         </>
                     ) : (
                         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                            <Button
+                            <AppButton
                                 onClick={() => setStep(1)}
+                                variant="outlined"
                                 startIcon={<ArrowBack />}
                                 sx={{ px: 1.5, py: 0.5, borderRadius: 2 }}
                             >
                                 Back to Details
-                            </Button>
+                            </AppButton>
 
                             <Tooltip title={hasPartialParty ? 'Complete all fields for the party you started' : ''} arrow>
                                 <span>
-                                    <Button
+                                    <AppButton
                                         onClick={handleSave}
                                         variant="contained"
                                         disabled={!canSave}
-                                        startIcon={saving ? <CircularProgress size={14} color="inherit" /> : <Save />}
+                                        loading={saving}
+                                        startIcon={<Save />}
                                         sx={{
                                             px: 2, py: 0.5, borderRadius: 2, minWidth: 150,
                                             bgcolor: 'primary.main',
@@ -581,11 +582,11 @@ export default function RenewContractDialog({
                                         }}
                                     >
                                         {saving ? 'Saving…' : 'Save Contract'}
-                                    </Button>
+                                    </AppButton>
                                 </span>
                             </Tooltip>
 
-                            <Button
+                            <AppButton
                                 variant="contained"
                                 onClick={handleReviewClick}
                                 disabled={!canSave}
@@ -596,9 +597,9 @@ export default function RenewContractDialog({
                                 }}
                             >
                                 Review & Approve
-                            </Button>
+                            </AppButton>
 
-                            <Button
+                            <AppButton
                                 variant="contained"
                                 onClick={handleSignatureClick}
                                 disabled={!canSave}
@@ -609,7 +610,7 @@ export default function RenewContractDialog({
                                 }}
                             >
                                 Signature
-                            </Button>
+                            </AppButton>
                         </Box>
                     )
                 }

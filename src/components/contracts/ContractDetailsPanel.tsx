@@ -6,9 +6,6 @@ import {
     Box,
     Typography,
     Paper,
-    Tabs,
-    Tab,
-    Button,
     Avatar,
     IconButton,
     Tooltip,
@@ -73,6 +70,7 @@ const ContractDetailsPanel = ({
                 borderRadius: 3,
                 border: '1px solid',
                 borderColor: 'divider',
+                bgcolor: isDark ? 'background.paper' : '#f8f9fb',
                 overflow: 'hidden',
                 transition: 'box-shadow 0.3s ease',
                 '&:hover': {
@@ -83,46 +81,60 @@ const ContractDetailsPanel = ({
             {/* Tabs */}
             <Box
                 sx={{
-                    bgcolor: tabHeaderBg,
                     borderBottom: '1px solid',
                     borderColor: 'divider',
-                    px: { xs: 1, sm: 2 },
-                    py: { xs: 0.5, sm: 0.5 },
+                    px: 1,
+                    py: 0.5,
+                    bgcolor: tabHeaderBg,
                 }}
             >
-                <Tabs
-                    value={activeTab}
-                    onChange={handleTabChange}
+                <Box
                     sx={{
-                        '& .MuiTab-root': {
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            fontSize: { xs: '0.9rem', sm: '1rem' },
-                            // minHeight: { xs: 48, sm: 56 },
-                            minHeight: 36, // Reduced height
-                            height: 36,    // Force height
-                            padding: '0 16px',
-                            transition: 'all 0.2s',
-                            '&.Mui-selected': {
-                                color: '#fff',
-                                bgcolor: 'primary.main',
-                                borderRadius: '8px',
-                            },
-                        },
-                        minHeight: 36,
-                        '& .MuiTabs-indicator': {
-                            display: 'none',
-                        },
+                        display: 'inline-flex',
+                        bgcolor: isDark ? alpha('#ffffff', 0.06) : alpha('#000000', 0.06),
+                        borderRadius: 2,
+                        p: 0.4,
+                        gap: 0.4,
                     }}
                 >
-                    {/* <Tab label="Overview" /> */}
-                    <Tab label={t('documents')} />
-                    <Tab label={t('activity')} />
-                </Tabs>
+                    {[t('documents'), t('activity')].map((label, idx) => {
+                        const isActive = activeTab === idx;
+                        return (
+                            <Box
+                                key={label}
+                                onClick={() => setActiveTab(idx)}
+                                sx={{
+                                    px: 2,
+                                    py: 0.6,
+                                    borderRadius: 1.5,
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    fontSize: '0.8rem',
+                                    lineHeight: 1.5,
+                                    transition: 'all 0.2s ease',
+                                    userSelect: 'none',
+                                    color: isActive ? primaryColor : 'text.secondary',
+                                    bgcolor: isActive
+                                        ? isDark ? alpha(primaryColor, 0.18) : 'background.paper'
+                                        : 'transparent',
+                                    boxShadow: isActive
+                                        ? isDark ? 'none' : '0 1px 4px rgba(0,0,0,0.12)'
+                                        : 'none',
+                                    '&:hover': !isActive ? {
+                                        color: 'text.primary',
+                                        bgcolor: isDark ? alpha('#ffffff', 0.05) : alpha('#000000', 0.04),
+                                    } : {},
+                                }}
+                            >
+                                {label}
+                            </Box>
+                        );
+                    })}
+                </Box>
             </Box>
 
             {/* Tab Content */}
-            <Box sx={{ p: { xs: 1, sm: 2 }, maxHeight: 350, overflowY: 'auto' }}>
+            <Box sx={{ p: { xs: 1, sm: 1 }, maxHeight: 350, overflowY: 'auto' }}>
                 {/* Documents Tab */}
                 {activeTab === 0 && (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -162,11 +174,8 @@ const ContractDetailsPanel = ({
                                     <Box sx={{ flex: 1, minWidth: 0 }}>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
                                             <Typography
-                                                variant="body1"
-                                                fontWeight={600}
+                                                variant="subtitle2"
                                                 sx={{
-                                                    color: 'text.primary',
-                                                    fontSize: { xs: '0.95rem', sm: '1rem' },
                                                     overflow: 'hidden',
                                                     textOverflow: 'ellipsis',
                                                     whiteSpace: 'nowrap',
@@ -184,22 +193,16 @@ const ContractDetailsPanel = ({
                                                         fontSize: '0.65rem',
                                                         fontWeight: 600,
                                                         flexShrink: 0,
-                                                        ...(doc.chainLabel === 'This contract' && { bgcolor: '#dbeafe', color: '#1e40af' }),
-                                                        ...(doc.chainLabel === 'Original' && { bgcolor: '#dcfce7', color: '#166534' }),
-                                                        ...(doc.chainLabel === 'Predecessor' && { bgcolor: '#f3f4f6', color: '#374151' }),
-                                                        ...(doc.chainLabel === 'Renewal' && { bgcolor: '#ede9fe', color: '#5b21b6' }),
-                                                        ...(doc.chainLabel === 'Draft (Renewal)' && { bgcolor: '#fef3c7', color: '#92400e' }),
+                                                        ...(doc.chainLabel === 'This contract' && { bgcolor: isDark ? alpha('#3b82f6', 0.18) : '#dbeafe', color: isDark ? '#93c5fd' : '#1e40af' }),
+                                                        ...(doc.chainLabel === 'Original' && { bgcolor: isDark ? alpha('#22c55e', 0.15) : '#dcfce7', color: isDark ? '#86efac' : '#166534' }),
+                                                        ...(doc.chainLabel === 'Predecessor' && { bgcolor: isDark ? alpha('#ffffff', 0.08) : '#f3f4f6', color: 'text.secondary' }),
+                                                        ...(doc.chainLabel === 'Renewal' && { bgcolor: isDark ? alpha('#a78bfa', 0.18) : '#ede9fe', color: isDark ? '#c4b5fd' : '#5b21b6' }),
+                                                        ...(doc.chainLabel === 'Draft (Renewal)' && { bgcolor: isDark ? alpha('#f59e0b', 0.15) : '#fef3c7', color: isDark ? '#fcd34d' : '#92400e' }),
                                                     }}
                                                 />
                                             )}
                                         </Box>
-                                        <Typography
-                                            variant="body2"
-                                            sx={{
-                                                color: 'text.secondary',
-                                                fontSize: { xs: '0.8rem', sm: '0.875rem' },
-                                            }}
-                                        >
+                                        <Typography variant="body2" color="text.secondary">
                                             {doc.size} • {t('uploaded', { date: doc.uploadDate })}
                                         </Typography>
                                     </Box>
@@ -292,31 +295,17 @@ const ContractDetailsPanel = ({
                                     >
                                         <FiberManualRecordIcon
                                             sx={{
-                                                color: '#4f46e5',
+                                                color: primaryColor,
                                                 fontSize: '0.75rem',
                                                 mt: 0.5,
                                                 flexShrink: 0,
                                             }}
                                         />
                                         <Box sx={{ flex: 1 }}>
-                                            <Typography
-                                                variant="body1"
-                                                fontWeight={600}
-                                                sx={{
-                                                    color: 'text.primary',
-                                                    // mb: 0.5,
-                                                    fontSize: { xs: '0.95rem', sm: '1rem' },
-                                                }}
-                                            >
+                                            <Typography variant="subtitle2">
                                                 {activity.title}
                                             </Typography>
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    color: 'text.secondary',
-                                                    fontSize: { xs: '0.8rem', sm: '0.875rem' },
-                                                }}
-                                            >
+                                            <Typography variant="body2" color="text.secondary">
                                                 {activity.user} • {activity.date}
                                             </Typography>
                                         </Box>

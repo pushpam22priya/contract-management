@@ -1,7 +1,8 @@
 'use client';
 
+import AppButton from '@/components/common/AppButton';
 import { useState } from 'react';
-import { Box, Typography, Button, Alert } from '@mui/material';
+import { Box, Typography,  Alert } from '@mui/material';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import BaseDialog from '@/components/common/BaseDialog';
 
@@ -60,10 +61,11 @@ export default function DeleteContractDialog({
             disableBackdropClick={loading}
             actions={
                 <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'flex-end', px: 0.5 }}>
-                    <Button
+                    <AppButton
                         variant="outlined"
                         onClick={handleClose}
                         disabled={loading}
+                        size="small"
                         sx={{
                             borderColor: 'divider',
                             color: 'text.secondary',
@@ -71,20 +73,21 @@ export default function DeleteContractDialog({
                         }}
                     >
                         Cancel
-                    </Button>
-                    <Button
+                    </AppButton>
+                    <AppButton
                         variant="contained"
                         onClick={handleDelete}
-                        disabled={loading}
+                        loading={loading}
+                        size="small"
                         sx={{
                             bgcolor: '#dc2626',
                             color: 'white',
                             '&:hover': { bgcolor: '#b91c1c' },
-                            '&:disabled': { bgcolor: '#fca5a5', color: 'white' },
+                            '&.Mui-disabled': { bgcolor: '#fca5a5', color: 'white' },
                         }}
                     >
                         {loading ? 'Deleting…' : 'Delete Permanently'}
-                    </Button>
+                    </AppButton>
                 </Box>
             }
         >

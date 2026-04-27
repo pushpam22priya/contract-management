@@ -3,18 +3,17 @@
 import { useState, useEffect, useRef } from 'react';
 import {
     Box,
-    Button,
     TextField,
     Autocomplete,
     Typography,
     IconButton,
     Chip,
     alpha,
-    CircularProgress,
     Alert,
     AlertColor,
 } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
+import AppButton from '@/components/common/AppButton';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
@@ -534,13 +533,12 @@ export default function EditTemplateDialog({
 
     // Dialog Actions
     const step1Actions = (
-        <Button
+        <AppButton
             onClick={handleNext}
             variant="contained"
             endIcon={<ArrowForward />}
             disabled={!templateName || !selectedCategory}
             sx={{
-                textTransform: 'none',
                 fontWeight: 600,
                 px: 3,
                 py: 1,
@@ -551,19 +549,20 @@ export default function EditTemplateDialog({
                     bgcolor: 'primary.dark',
                     boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}59`,
                 },
-                '&:disabled': {
+                '&.Mui-disabled': {
                     bgcolor: 'rgba(0, 0, 0, 0.12)',
                     color: 'rgba(0, 0, 0, 0.26)',
                 },
             }}
         >
             Next: Edit Form Fields
-        </Button>
+        </AppButton>
     );
 
     const step2Actions = (
         <>
-            <Button
+            <AppButton
+                variant="outlined"
                 onClick={handleBack}
                 startIcon={<ArrowBack />}
                 sx={{
@@ -572,8 +571,8 @@ export default function EditTemplateDialog({
                 }}
             >
                 Back
-            </Button>
-            <Button
+            </AppButton>
+            <AppButton
                 onClick={() => setShowPartyConfigDialog(true)}
                 variant="outlined"
                 sx={{
@@ -583,12 +582,11 @@ export default function EditTemplateDialog({
                 }}
             >
                 {parties.length > 0 ? `${parties.length} Parties` : 'Configure Parties'}
-            </Button>
-            <Button
+            </AppButton>
+            <AppButton
                 onClick={handleSubmit}
                 variant="contained"
-                disabled={updating}
-                startIcon={updating ? <CircularProgress size={20} color="inherit" /> : null}
+                loading={updating}
                 sx={{
                     px: 2,
                     py: 0.5,
@@ -602,7 +600,7 @@ export default function EditTemplateDialog({
                 }}
             >
                 {updating ? 'Updating...' : 'Update Template'}
-            </Button>
+            </AppButton>
         </>
     );
 
@@ -947,12 +945,11 @@ export default function EditTemplateDialog({
                                         );
                                     }}
                                 />
-                                <Button
+                                <AppButton
                                     variant="outlined"
                                     startIcon={<AddCircleOutlineIcon />}
                                     onClick={() => setShowNewCategoryInput(true)}
                                     sx={{
-                                        textTransform: 'none',
                                         fontWeight: 600,
                                         borderRadius: 2,
                                         whiteSpace: 'nowrap',
@@ -965,7 +962,7 @@ export default function EditTemplateDialog({
                                     }}
                                 >
                                     New
-                                </Button>
+                                </AppButton>
                             </Box>
                         ) : (
                             <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -997,12 +994,11 @@ export default function EditTemplateDialog({
                                         },
                                     }}
                                 />
-                                <Button
+                                <AppButton
                                     variant="contained"
                                     onClick={handleAddNewCategory}
                                     disabled={!newCategory.trim()}
                                     sx={{
-                                        textTransform: 'none',
                                         fontWeight: 600,
                                         borderRadius: 2,
                                         whiteSpace: 'nowrap',
@@ -1013,15 +1009,14 @@ export default function EditTemplateDialog({
                                     }}
                                 >
                                     Add
-                                </Button>
-                                <Button
+                                </AppButton>
+                                <AppButton
                                     variant="outlined"
                                     onClick={() => {
                                         setShowNewCategoryInput(false);
                                         setNewCategory('');
                                     }}
                                     sx={{
-                                        textTransform: 'none',
                                         fontWeight: 600,
                                         borderRadius: 2,
                                         borderColor: 'rgba(0, 0, 0, 0.23)',
@@ -1033,7 +1028,7 @@ export default function EditTemplateDialog({
                                     }}
                                 >
                                     Cancel
-                                </Button>
+                                </AppButton>
                             </Box>
                         )}
                     </Box>

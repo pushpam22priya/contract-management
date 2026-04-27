@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import {
     Box,
     Typography,
-    Button,
     Autocomplete,
     TextField,
     Alert,
@@ -17,6 +16,7 @@ import {
     useTheme,
 } from '@mui/material';
 import { Save, ArrowBack, ArrowForward } from '@mui/icons-material';
+import AppButton from '@/components/common/AppButton';
 import BaseDialog from '@/components/common/BaseDialog';
 import ConfirmationDialog from '@/components/common/ConfirmationDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
@@ -616,13 +616,12 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     // Step 1: Contract Details Actions
     const step1Actions = (
         <>
-            <Button
+            <AppButton
                 onClick={handleNextStep}
                 endIcon={<ArrowForward />}
                 variant="contained"
                 disabled={!selectedTemplate || !contractTitle.trim() || !clientName.trim()}
                 sx={{
-                    textTransform: 'none',
                     fontWeight: 600,
                     borderRadius: 2,
                     bgcolor: 'primary.main',
@@ -634,7 +633,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                 }}
             >
                 Next: Edit Document
-            </Button>
+            </AppButton>
         </>
     );
 
@@ -642,24 +641,25 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     // Step 2: PDF Editing Actions
     const step2Actions = (
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-            <Button
+            <AppButton
                 onClick={() => setCurrentStep(1)}
                 startIcon={<ArrowBack />}
-                // variant="outlined"
+                variant="outlined"
                 sx={{
                     padding: '4px 10px',
                     borderRadius: 2,
                 }}
             >
                 Back to Details
-            </Button>
+            </AppButton>
 
             <Tooltip title={hasPartialParty ? 'Complete all fields for the party you started' : ''} arrow>
                 <span>
-                    <Button
+                    <AppButton
                         onClick={handleSave}
                         variant="contained"
-                        disabled={!canSave || saving}
+                        loading={saving}
+                        disabled={!canSave}
                         sx={{
                             px: 2,
                             py: 0.5,
@@ -674,16 +674,15 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                         }}
                     >
                         {saving ? 'Saving...' : 'Save Contract'}
-                    </Button>
+                    </AppButton>
                 </span>
             </Tooltip>
 
-            <Button
+            <AppButton
                 variant="contained"
                 onClick={handleReviewClick}
                 disabled={saving || !canSave}
                 sx={{
-                    textTransform: 'none',
                     fontWeight: 600,
                     px: 2,
                     py: 0.5,
@@ -698,13 +697,12 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                 }}
             >
                 Review & Approve
-            </Button>
-            <Button
+            </AppButton>
+            <AppButton
                 variant="contained"
                 onClick={handleSignatureClick}
                 disabled={saving || !canSave}
                 sx={{
-                    textTransform: 'none',
                     fontWeight: 600,
                     px: 2,
                     py: 0.5,
@@ -719,7 +717,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                 }}
             >
                 Signature
-            </Button>
+            </AppButton>
         </Box>
     );
 

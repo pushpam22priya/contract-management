@@ -91,6 +91,7 @@ const ContractInformation = ({
                 borderRadius: 3,
                 border: '1px solid',
                 borderColor: 'divider',
+                bgcolor: isDark ? 'background.paper' : '#f8f9fb',
                 transition: 'box-shadow 0.3s ease',
                 '&:hover': {
                     boxShadow: '0 4px 12px rgba(0,0,0,0.08)',

@@ -1,7 +1,8 @@
 'use client';
 
+import AppButton from '@/components/common/AppButton';
 import React from 'react';
-import { Box, Alert, Typography, Button } from '@mui/material';
+import { Box, Alert, Typography } from '@mui/material';
 
 /**
  * Describes which fields to navigate to when the user dismisses the warning.
@@ -89,15 +90,15 @@ export default function WrongPartyWarningDialog({
                 <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
                     Please only fill the fields that belong to you.
                 </Typography>
-                <Button
+                <AppButton
                     fullWidth
                     variant="contained"
                     color="warning"
                     onClick={handleDismiss}
-                    sx={{ textTransform: 'none', fontWeight: 600, py: 0.8 }}
+                    sx={{ fontWeight: 600, py: 0.8 }}
                 >
                     I Understand — Go to My Fields
-                </Button>
+                </AppButton>
             </Alert>
         </Box>
     );

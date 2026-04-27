@@ -14,11 +14,9 @@
 
 import { useState, useEffect } from 'react';
 import {
-    Button,
     TextField,
     Box,
     Typography,
-    CircularProgress,
     Alert,
     IconButton,
     Chip,
@@ -47,6 +45,7 @@ import {
     Groups,
     DragIndicator,
 } from '@mui/icons-material';
+import AppButton from '@/components/common/AppButton';
 import BaseDialog from '@/components/common/BaseDialog';
 import { PartyConfiguration } from '@/types/template';
 import { ExternalSigner, InternalSigner, SignerAssignment } from '@/types/contract';
@@ -381,22 +380,23 @@ const MultiPartySignatureDialog = ({
             maxWidth="md"
             actions={
                 success ? (
-                    <Button onClick={handleClose} variant="contained">
+                    <AppButton onClick={handleClose} variant="contained">
                         Done
-                    </Button>
+                    </AppButton>
                 ) : (
                     <>
-                        <Button onClick={handleClose} disabled={loading}>
+                        <AppButton variant="outlined" onClick={handleClose} disabled={loading}>
                             Cancel
-                        </Button>
-                        <Button
+                        </AppButton>
+                        <AppButton
                             onClick={handleSubmit}
                             variant="contained"
-                            disabled={loading || assignments.length === 0}
-                            startIcon={loading ? <CircularProgress size={20} /> : <Send />}
+                            disabled={assignments.length === 0}
+                            loading={loading}
+                            startIcon={<Send />}
                         >
                             {loading ? 'Creating...' : `Create ${assignments.length} Assignment${assignments.length !== 1 ? 's' : ''}`}
-                        </Button>
+                        </AppButton>
                     </>
                 )
             }
@@ -656,7 +656,7 @@ const MultiPartySignatureDialog = ({
                                     </>
                                 )}
 
-                                <Button
+                                <AppButton
                                     variant="outlined"
                                     onClick={handleAddAssignment}
                                     disabled={loading || !selectedPartyId}
@@ -669,7 +669,7 @@ const MultiPartySignatureDialog = ({
                                     }}
                                 >
                                     Add
-                                </Button>
+                                </AppButton>
                             </Box>
                         </Paper>
                     ) : availableParties.length === 0 && (existingExternalSigners.length > 0 || existingInternalSigners.length > 0) ? (

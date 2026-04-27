@@ -2,8 +2,9 @@
 
 
 import { useState, useEffect } from 'react';
-import { Box, Typography, Button, Tooltip, IconButton, useTheme } from '@mui/material';
+import { Box, Typography, Tooltip, IconButton, useTheme } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
+import AppButton from '@/components/common/AppButton';
 import UploadIcon from '@mui/icons-material/Upload';
 import TemplateCard from '@/components/template/TemplateCard';
 import UploadTemplateDialog from '@/components/template/UploadTemplateDialog';
@@ -328,17 +329,18 @@ export default function TemplatePage() {
                     maxWidth="xs"
                     actions={
                         <>
-                            <Button
+                            <AppButton
+                                variant="outlined"
                                 onClick={() => setDeleteDialogOpen(false)}
                                 disabled={deleting}
                             >
                                 {t('cancel')}
-                            </Button>
-                            <Button
-                                onClick={confirmDelete}
+                            </AppButton>
+                            <AppButton
                                 variant="contained"
                                 color="error"
-                                disabled={deleting}
+                                loading={deleting}
+                                onClick={confirmDelete}
                                 sx={{
                                     minWidth: 100,
                                     ...(isDark && {
@@ -348,7 +350,7 @@ export default function TemplatePage() {
                                 }}
                             >
                                 {deleting ? t('deleting') : t('delete')}
-                            </Button>
+                            </AppButton>
                         </>
                     }
                 >

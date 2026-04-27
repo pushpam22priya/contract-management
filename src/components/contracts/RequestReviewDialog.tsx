@@ -5,7 +5,6 @@ import {
     Box,
     Typography,
     Chip,
-    Button,
     Alert,
     Divider,
     Autocomplete,
@@ -17,6 +16,7 @@ import { alpha } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Pending';
+import AppButton from '@/components/common/AppButton';
 import BaseDialog from '@/components/common/BaseDialog';
 import { userService, User } from '@/services/userService';
 import { contractService } from '@/services/contractService';
@@ -349,23 +349,19 @@ export default function RequestReviewDialog({
     // Dialog actions (footer buttons)
     const dialogActions = (
         <>
-            <Button
+            <AppButton
+                variant="outlined"
                 onClick={handleClose}
                 disabled={submitting}
-                sx={{
-                    textTransform: 'none',
-                    color: 'text.secondary',
-                }}
             >
                 Cancel
-            </Button>
+            </AppButton>
             {!isReadOnly && (
-                <Button
+                <AppButton
                     onClick={handleSubmit}
                     variant="contained"
-                    disabled={submitting}
+                    loading={submitting}
                     sx={{
-                        textTransform: 'none',
                         fontWeight: 600,
                         px: 3,
                         bgcolor: 'primary.main',
@@ -377,7 +373,7 @@ export default function RequestReviewDialog({
                     }}
                 >
                     {getSubmitLabel()}
-                </Button>
+                </AppButton>
             )}
         </>
     );

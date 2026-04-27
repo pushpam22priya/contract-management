@@ -1,7 +1,8 @@
 'use client';
 
+import AppButton from '@/components/common/AppButton';
 import { useState } from 'react';
-import { Box, Button, TextField, Typography, LinearProgress } from '@mui/material';
+import { Box,  TextField, Typography, LinearProgress } from '@mui/material';
 import FolderIcon from '@mui/icons-material/FolderOutlined';
 import BaseDialog from '@/components/common/BaseDialog';
 import { Team } from '@/types/team';
@@ -80,17 +81,17 @@ export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTea
             disableBackdropClick={loading}
             actions={
                 <Box sx={{ display: 'flex', gap: 1, px: 0.5 }}>
-                    <Button onClick={handleClose} disabled={loading} variant="outlined" color="inherit">
+                    <AppButton variant="outlined" onClick={handleClose} disabled={loading}>
                         Cancel
-                    </Button>
-                    <Button
-                        onClick={handleCreate}
-                        disabled={loading || !name.trim()}
+                    </AppButton>
+                    <AppButton
                         variant="contained"
-                        // size="small"
+                        onClick={handleCreate}
+                        loading={loading}
+                        disabled={!name.trim()}
                     >
                         {loading ? 'Creating…' : 'Create Team'}
-                    </Button>
+                    </AppButton>
                 </Box>
             }
         >

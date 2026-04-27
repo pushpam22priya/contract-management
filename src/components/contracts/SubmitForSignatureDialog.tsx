@@ -1,12 +1,10 @@
 'use client';
 
+import AppButton from '@/components/common/AppButton';
 import { useState } from 'react';
-import {
-    Button,
-    TextField,
+import { TextField,
     Box,
     Typography,
-    CircularProgress,
     Alert,
     InputAdornment,
 } from '@mui/material';
@@ -125,25 +123,27 @@ const SubmitForSignatureDialog = ({
             maxWidth="sm"
             actions={
                 success ? (
-                    <Button onClick={handleClose} variant="contained">
+                    <AppButton onClick={handleClose} variant="contained">
                         Done
-                    </Button>
+                    </AppButton>
                 ) : (
                     <>
-                        <Button
+                        <AppButton
+                            variant="outlined"
                             onClick={handleClose}
                             disabled={loading}
                         >
                             Cancel
-                        </Button>
-                        <Button
+                        </AppButton>
+                        <AppButton
                             onClick={handleSubmit}
                             variant="contained"
-                            disabled={loading || !signerEmail.trim()}
-                            startIcon={loading ? <CircularProgress size={20} /> : <Send />}
+                            loading={loading}
+                            disabled={!signerEmail.trim()}
+                            startIcon={<Send />}
                         >
                             {loading ? 'Sending...' : 'Send Request'}
-                        </Button>
+                        </AppButton>
                     </>
                 )
             }
@@ -198,14 +198,15 @@ const SubmitForSignatureDialog = ({
                                 >
                                     {signingUrl}
                                 </Typography>
-                                <Button
+                                <AppButton
+                                    variant="outlined"
                                     size="small"
                                     startIcon={copied ? <Check /> : <ContentCopy />}
                                     onClick={handleCopyUrl}
                                     color={copied ? 'success' : 'primary'}
                                 >
                                     {copied ? 'Copied' : 'Copy'}
-                                </Button>
+                                </AppButton>
                             </Box>
                         </Box>
                     )}
