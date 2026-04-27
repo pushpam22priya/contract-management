@@ -25,6 +25,7 @@ export default function TemplatePage() {
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
     const t = useTranslations('template');
+    const tFilters = useTranslations('filters');
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -32,7 +33,7 @@ export default function TemplatePage() {
     const [selectedTemplateForUse, setSelectedTemplateForUse] = useState<string | undefined>(undefined);
     const [templates, setTemplates] = useState<Template[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState<{ label: string; value: string }[]>([{ label: 'All Categories', value: 'All Categories' }]);
+    const [selectedCategory, setSelectedCategory] = useState<{ label: string; value: string }[]>([{ label: tFilters('allCategories'), value: 'all' }]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -63,7 +64,7 @@ export default function TemplatePage() {
 
     const loadCategories = () => {
         const allCategories = categoryService.getAllCategories();
-        setCategories(['All Categories', ...allCategories.map(cat => cat.name)]);
+        setCategories(allCategories.map(cat => cat.name));
     };
 
     const checkAdminStatus = () => {
@@ -151,16 +152,16 @@ export default function TemplatePage() {
         }
     };
 
-    const hasActiveFilters = searchQuery !== '' || selectedCategory.every(f => f.value !== 'All Categories');
+    const hasActiveFilters = searchQuery !== '' || selectedCategory.every(f => f.value !== 'all');
 
     const handleClearFilters = () => {
         setSearchQuery('');
-        setSelectedCategory([{ label: 'All Categories', value: 'All Categories' }]);
+        setSelectedCategory([{ label: tFilters('allCategories'), value: 'all' }]);
     };
 
     // Filter templates
     const filteredTemplates = templates.filter(template => {
-        const matchesCategory = selectedCategory.some(f => f.value === 'All Categories') ||
+        const matchesCategory = selectedCategory.some(f => f.value === 'all') ||
             selectedCategory.some(f => f.value === template.category);
         const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             template.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -221,13 +222,13 @@ export default function TemplatePage() {
                 <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search templates"
+                    searchPlaceholder={tFilters('searchTemplates')}
                     filters={[
                         {
-                            label: 'Category',
+                            label: tFilters('category'),
                             value: selectedCategory,
-                            onChange: (newValue) => setSelectedCategory(newValue || [{ label: 'All Categories', value: 'All Categories' }]),
-                            options: categories.map(c => ({ label: c, value: c })),
+                            onChange: (newValue) => setSelectedCategory(newValue || [{ label: tFilters('allCategories'), value: 'all' }]),
+                            options: [{ label: tFilters('allCategories'), value: 'all' }, ...categories.map(c => ({ label: c, value: c }))],
                             multiple: true,
                         }
                     ]}

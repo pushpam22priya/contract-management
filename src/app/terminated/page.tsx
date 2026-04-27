@@ -24,6 +24,7 @@ import { useTranslations } from 'next-intl';
 
 export default function TerminatedContractsPage() {
     const t = useTranslations('terminated');
+    const tFilters = useTranslations('filters');
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -149,12 +150,12 @@ export default function TerminatedContractsPage() {
                 <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search by title or client…"
+                    searchPlaceholder={tFilters('searchByTitle')}
                     filters={[
                         {
-                            label: 'Category',
+                            label: tFilters('category'),
                             value: categoryFilter,
-                            onChange: (val) => setCategoryFilter(val || [{ label: 'All Categories', value: 'all' }]),
+                            onChange: (val) => setCategoryFilter(val || [{ label: tFilters('allCategories'), value: 'all' }]),
                             options: categoryOptions,
                             multiple: true,
                         },
@@ -169,7 +170,7 @@ export default function TerminatedContractsPage() {
                     dateFilterTitle="Filter by Termination Date Range"
                     filteredCount={filteredContracts.length}
                     totalCount={contracts.length}
-                    countLabel="contracts"
+                    countLabel={tFilters('countContracts')}
                     hasActiveFilters={hasActiveFilters}
                     onClearFilters={handleClearFilters}
                 />

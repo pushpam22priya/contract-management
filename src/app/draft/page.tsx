@@ -25,6 +25,7 @@ import { useTranslations } from 'next-intl';
 
 export default function DraftPage() {
     const t = useTranslations('draft');
+    const tFilters = useTranslations('filters');
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -53,14 +54,14 @@ export default function DraftPage() {
     });
 
     const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([
-        { label: 'All Categories', value: 'all' }
+        { label: tFilters('allCategories'), value: 'all' }
     ]);
-    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
+    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
 
     const loadCategories = () => {
         const categories = categoryService.getAllCategories();
         const options = [
-            { label: 'All Categories', value: 'all' },
+            { label: tFilters('allCategories'), value: 'all' },
             ...categories.map(cat => ({ label: cat.name, value: cat.name }))
         ];
         setCategoryOptions(options);
@@ -297,19 +298,19 @@ export default function DraftPage() {
 
     // Filter states
     const statusOptions: FilterOption[] = [
-        { label: 'All Status', value: 'all' },
-        { label: 'Draft', value: ContractStatus.DRAFT },
-        { label: 'Under Review', value: ContractStatus.IN_REVIEW },
-        { label: 'Under Approval', value: ContractStatus.IN_APPROVAL },
-        { label: 'Review and Approve', value: ContractStatus.REVIEW_APPROVAL },
-        { label: 'Reviewed', value: ContractStatus.REVIEWED },
-        { label: 'Rejected by Reviewer', value: ContractStatus.REJECTED_BY_REVIEWER },
-        { label: 'Rejected by Approver', value: ContractStatus.REJECTED_BY_APPROVER },
+        { label: tFilters('allStatus'), value: 'all' },
+        { label: tFilters('draft'), value: ContractStatus.DRAFT },
+        { label: tFilters('underReview'), value: ContractStatus.IN_REVIEW },
+        { label: tFilters('underApproval'), value: ContractStatus.IN_APPROVAL },
+        { label: tFilters('reviewAndApprove'), value: ContractStatus.REVIEW_APPROVAL },
+        { label: tFilters('reviewed'), value: ContractStatus.REVIEWED },
+        { label: tFilters('rejectedByReviewer'), value: ContractStatus.REJECTED_BY_REVIEWER },
+        { label: tFilters('rejectedByApprover'), value: ContractStatus.REJECTED_BY_APPROVER },
     ];
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState<FilterOption[]>([{ label: 'All Status', value: 'all' }]);
-    const [teamFilter, setTeamFilter] = useState<FilterOption[]>([{ label: 'All Teams', value: 'all' }]);
+    const [statusFilter, setStatusFilter] = useState<FilterOption[]>([{ label: tFilters('allStatus'), value: 'all' }]);
+    const [teamFilter, setTeamFilter] = useState<FilterOption[]>([{ label: tFilters('allTeams'), value: 'all' }]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -339,17 +340,17 @@ export default function DraftPage() {
 
     // Flat view title from URL param (for breadcrumb when coming from dashboard)
     const draftStatusLabelMap: Record<string, string> = {
-        [ContractStatus.DRAFT]: 'Draft Contracts',
-        [ContractStatus.IN_REVIEW]: 'Under Review',
-        [ContractStatus.IN_APPROVAL]: 'Under Approval',
-        [ContractStatus.REVIEWED]: 'Reviewed',
-        [ContractStatus.REJECTED_BY_REVIEWER]: 'Rejected by Reviewer',
-        [ContractStatus.REJECTED_BY_APPROVER]: 'Rejected by Approver',
+        [ContractStatus.DRAFT]: t('statusDraft'),
+        [ContractStatus.IN_REVIEW]: t('statusInReview'),
+        [ContractStatus.IN_APPROVAL]: t('statusInApproval'),
+        [ContractStatus.REVIEWED]: t('statusReviewed'),
+        [ContractStatus.REJECTED_BY_REVIEWER]: t('statusRejectedByReviewer'),
+        [ContractStatus.REJECTED_BY_APPROVER]: t('statusRejectedByApprover'),
     };
     const titleParam = searchParams.get('title');
     const pageTitle = titleParam || (statusFromUrl && statusFromUrl !== 'all'
-        ? (draftStatusLabelMap[statusFromUrl] ?? 'Draft Contracts')
-        : 'Draft Contracts');
+        ? (draftStatusLabelMap[statusFromUrl] ?? t('title'))
+        : t('title'));
 
     // All teams created by the user (for team filter dropdown)
     const teamFilterOptions: FilterOption[] = [
@@ -414,10 +415,10 @@ export default function DraftPage() {
                 <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search drafts or clients"
+                    searchPlaceholder={tFilters('searchDrafts')}
                     filters={[
                         {
-                            label: 'Status',
+                            label: tFilters('status'),
                             value: statusFilter,
                             onChange: (newValue) => setStatusFilter(newValue || []),
                             options: statusOptions,
@@ -425,16 +426,16 @@ export default function DraftPage() {
                             disabled: isFlatView && !!statusFromUrl && statusFromUrl !== 'all' && !statusFromUrl.includes(','),
                         },
                         {
-                            label: 'Category',
+                            label: tFilters('category'),
                             value: categoryFilter,
-                            onChange: (newValue) => setCategoryFilter(newValue || [{ label: 'All Categories', value: 'all' }]),
+                            onChange: (newValue) => setCategoryFilter(newValue || [{ label: tFilters('allCategories'), value: 'all' }]),
                             options: categoryOptions,
                             multiple: true,
                         },
                         {
-                            label: 'Team',
+                            label: tFilters('team'),
                             value: teamFilter,
-                            onChange: (newValue) => setTeamFilter(newValue || [{ label: 'All Teams', value: 'all' }]),
+                            onChange: (newValue) => setTeamFilter(newValue || [{ label: tFilters('allTeams'), value: 'all' }]),
                             options: teamFilterOptions,
                             multiple: true,
                         },
@@ -449,7 +450,7 @@ export default function DraftPage() {
                     dateFilterTitle="Filter by Draft Date Range"
                     filteredCount={filteredDrafts.length}
                     totalCount={draftContracts.length}
-                    countLabel="drafts"
+                    countLabel={tFilters('countDrafts')}
                     hasActiveFilters={
                         searchQuery !== '' ||
                         (!(isFlatView && statusFromUrl && !statusFromUrl.includes(',')) && statusFilter.every(f => f.value !== 'all')) ||
@@ -464,10 +465,10 @@ export default function DraftPage() {
                             const statusValues = statusFromUrl.split(',');
                             setStatusFilter(statusOptions.filter(opt => statusValues.includes(opt.value)));
                         } else {
-                            setStatusFilter([{ label: 'All Status', value: 'all' }]);
+                            setStatusFilter([{ label: tFilters('allStatus'), value: 'all' }]);
                         }
-                        setCategoryFilter([{ label: 'All Categories', value: 'all' }]);
-                        setTeamFilter([{ label: 'All Teams', value: 'all' }]);
+                        setCategoryFilter([{ label: tFilters('allCategories'), value: 'all' }]);
+                        setTeamFilter([{ label: tFilters('allTeams'), value: 'all' }]);
                         setStartDate(null);
                         setEndDate(null);
                         setShowAdvancedFilters(false);

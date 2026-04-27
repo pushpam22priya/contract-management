@@ -25,13 +25,6 @@ import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog'
 import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
 import { useTranslations } from 'next-intl';
 
-const signingStatusOptions = [
-    { label: 'All Status', value: 'all' },
-    { label: 'Pending My Signature', value: 'pending' },
-    { label: 'Signed', value: 'completed' },
-    { label: 'Terminated', value: 'terminated' },
-];
-
 function SearchParamsReader({ onStatus }: { onStatus: (status: string) => void }) {
     const searchParams = useSearchParams();
     useEffect(() => {
@@ -48,18 +41,27 @@ function SearchParamsReader({ onStatus }: { onStatus: (status: string) => void }
  */
 export default function SignaturesPage() {
     const t = useTranslations('signatures');
+    const tFilters = useTranslations('filters');
+
+    const signingStatusOptions = [
+        { label: tFilters('allStatus'), value: 'all' },
+        { label: tFilters('pendingMySignature'), value: 'pending' },
+        { label: tFilters('signed'), value: 'completed' },
+        { label: tFilters('terminated'), value: 'terminated' },
+    ];
+
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Filter state
     const [searchQuery, setSearchQuery] = useState('');
     const [signingStatusFilter, setSigningStatusFilter] = useState<FilterOption[]>([signingStatusOptions[0]]);
-    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
+    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([
-        { label: 'All Categories', value: 'all' }
+        { label: tFilters('allCategories'), value: 'all' }
     ]);
 
     // Sync URL param → signing status filter on initial navigation (e.g. from dashboard)
@@ -138,7 +140,7 @@ export default function SignaturesPage() {
     const loadCategories = () => {
         const categories = categoryService.getAllCategories();
         const options = [
-            { label: 'All Categories', value: 'all' },
+            { label: tFilters('allCategories'), value: 'all' },
             ...categories.map(cat => ({ label: cat.name, value: cat.name }))
         ];
         setCategoryOptions(options);
@@ -493,19 +495,19 @@ export default function SignaturesPage() {
                 <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search contracts or clients"
+                    searchPlaceholder={tFilters('searchContracts')}
                     filters={[
                         {
-                            label: 'Status',
+                            label: tFilters('status'),
                             value: signingStatusFilter,
                             onChange: (newValue) => setSigningStatusFilter(newValue || [signingStatusOptions[0]]),
                             options: signingStatusOptions,
                             multiple: true,
                         },
                         {
-                            label: 'Category',
+                            label: tFilters('category'),
                             value: categoryFilter,
-                            onChange: (newValue) => setCategoryFilter(newValue || [{ label: 'All Categories', value: 'all' }]),
+                            onChange: (newValue) => setCategoryFilter(newValue || [{ label: tFilters('allCategories'), value: 'all' }]),
                             options: categoryOptions,
                             multiple: true,
                         }
@@ -520,7 +522,7 @@ export default function SignaturesPage() {
                     dateFilterTitle="Filter by Contract Date Range"
                     filteredCount={filteredCount}
                     totalCount={totalContracts}
-                    countLabel="contracts"
+                    countLabel={tFilters('countContracts')}
                     hasActiveFilters={
                         searchQuery !== '' ||
                         signingStatusFilter.every(f => f.value !== 'all') ||
@@ -530,7 +532,7 @@ export default function SignaturesPage() {
                     onClearFilters={() => {
                         setSearchQuery('');
                         setSigningStatusFilter([signingStatusOptions[0]]);
-                        setCategoryFilter([{ label: 'All Categories', value: 'all' }]);
+                        setCategoryFilter([{ label: tFilters('allCategories'), value: 'all' }]);
                         setStartDate(null);
                         setEndDate(null);
                         setShowAdvancedFilters(false);

@@ -29,6 +29,7 @@ import TeamCard from '@/components/teams/TeamCard';
 import CreateTeamDialog from '@/components/teams/CreateTeamDialog';
 import RenameTeamDialog from '@/components/teams/RenameTeamDialog';
 import { Team } from '@/types/team';
+import { useTranslations } from 'next-intl';
 
 const CONTRACT_PAGE_STATUSES = [
     ContractStatus.APPROVED,
@@ -41,20 +42,23 @@ const CONTRACT_PAGE_STATUSES = [
     ContractStatus.EXPIRED,
 ];
 
-const statusOptions = [
-    { label: 'All Status', value: 'all' },
-    { label: 'Active', value: ContractStatus.ACTIVE },
-    { label: 'Expiring', value: ContractStatus.EXPIRING },
-    { label: 'Approved', value: ContractStatus.APPROVED },
-    { label: 'Ready for Signature', value: ContractStatus.READY_FOR_SIGNATURE },
-    { label: 'Waiting for Signature', value: ContractStatus.WAITING_FOR_SIGNATURE },
-    { label: 'Signed by Assigned Parties', value: ContractStatus.SIGNED_BY_EVERYONE },
-    { label: 'Signed', value: ContractStatus.SIGNED },
-    { label: 'Expired', value: ContractStatus.EXPIRED },
-];
-
 export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactNode }) {
     const router = useRouter();
+    const tTooltips = useTranslations('tooltips');
+    const tContracts = useTranslations('contracts');
+    const tFilters = useTranslations('filters');
+
+    const statusOptions = [
+        { label: tFilters('allStatus'), value: 'all' },
+        { label: tFilters('active'), value: ContractStatus.ACTIVE },
+        { label: tFilters('expiring'), value: ContractStatus.EXPIRING },
+        { label: tFilters('approved'), value: ContractStatus.APPROVED },
+        { label: tFilters('readyForSignature'), value: ContractStatus.READY_FOR_SIGNATURE },
+        { label: tFilters('waitingForSignature'), value: ContractStatus.WAITING_FOR_SIGNATURE },
+        { label: tFilters('signedByAssignedParties'), value: ContractStatus.SIGNED_BY_EVERYONE },
+        { label: tFilters('signed'), value: ContractStatus.SIGNED },
+        { label: tFilters('expired'), value: ContractStatus.EXPIRED },
+    ];
 
     const [teams, setTeams] = useState<Team[]>([]);
     const [teamsLoading, setTeamsLoading] = useState(true);
@@ -65,8 +69,8 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
 
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<FilterOption[]>([statusOptions[0]]);
-    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
-    const [teamFilterValue, setTeamFilterValue] = useState<FilterOption[]>([{ label: 'All Teams', value: 'all' }]);
+    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
+    const [teamFilterValue, setTeamFilterValue] = useState<FilterOption[]>([{ label: tFilters('allTeams'), value: 'all' }]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -86,7 +90,7 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
     const [terminateDialogOpen, setTerminateDialogOpen] = useState(false);
     const [contractForTermination, setContractForTermination] = useState<Contract | null>(null);
 
-    const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
+    const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
 
     const showNotification = (message: string, severity: AlertColor = 'success') => {
         setSnackbar({ open: true, message, severity });
@@ -95,7 +99,7 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
     const loadCategories = () => {
         const categories = categoryService.getAllCategories();
         setCategoryOptions([
-            { label: 'All Categories', value: 'all' },
+            { label: tFilters('allCategories'), value: 'all' },
             ...categories.map(cat => ({ label: cat.name, value: cat.name }))
         ]);
     };
@@ -146,7 +150,7 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
 
     // Derived data
     const teamFilterOptions: FilterOption[] = [
-        { label: 'All Teams', value: 'all' },
+        { label: tFilters('allTeams'), value: 'all' },
         ...teams.map(t => ({ label: t.name, value: t._id })),
     ];
     const filteredTeams = teams.filter(t => {
@@ -264,14 +268,14 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
                     {headerLeft || (
                         <Box>
                             <Typography variant="h5">
-                                Contracts
+                                {tContracts('title')}
                             </Typography>
                             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                Manage your teams and contracts
+                                {tContracts('description')}
                             </Typography>
                         </Box>
                     )}
-                    <Tooltip title="Create Team" arrow>
+                    <Tooltip title={tTooltips('createTeam')} arrow>
                         <IconButton
                             onClick={() => setCreateTeamOpen(true)}
                             sx={{
@@ -296,8 +300,8 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
                 <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search teams"
-                    filters={[{ label: 'Team', value: teamFilterValue, onChange: (v) => setTeamFilterValue(v || [{ label: 'All Teams', value: 'all' }]), options: teamFilterOptions, multiple: true }]}
+                    searchPlaceholder={tFilters('searchTeams')}
+                    filters={[{ label: tFilters('team'), value: teamFilterValue, onChange: (v) => setTeamFilterValue(v || [{ label: tFilters('allTeams'), value: 'all' }]), options: teamFilterOptions, multiple: true }]}
                     enableDateFilter={true}
                     startDate={startDate}
                     onStartDateChange={setStartDate}
@@ -308,9 +312,9 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
                     dateFilterTitle="Filter by Team Creation Date"
                     filteredCount={filteredTeams.length}
                     totalCount={teams.length}
-                    countLabel="teams"
+                    countLabel={tFilters('countTeams')}
                     hasActiveFilters={searchQuery !== '' || teamFilterValue.every(f => f.value !== 'all') || startDate !== null || endDate !== null}
-                    onClearFilters={() => { setSearchQuery(''); setStatusFilter([statusOptions[0]]); setCategoryFilter([{ label: 'All Categories', value: 'all' }]); setTeamFilterValue([{ label: 'All Teams', value: 'all' }]); setStartDate(null); setEndDate(null); setShowAdvancedFilters(false); }}
+                    onClearFilters={() => { setSearchQuery(''); setStatusFilter([statusOptions[0]]); setCategoryFilter([{ label: tFilters('allCategories'), value: 'all' }]); setTeamFilterValue([{ label: tFilters('allTeams'), value: 'all' }]); setStartDate(null); setEndDate(null); setShowAdvancedFilters(false); }}
                 />
 
                 {/* Grid — Root: team cards */}

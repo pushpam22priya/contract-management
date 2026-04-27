@@ -6,48 +6,49 @@ import { alpha } from '@mui/material/styles';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import CheckIcon from '@mui/icons-material/Check';
 import { useThemeName, ThemeName } from '@/context/ThemeContext';
+import { useTranslations } from 'next-intl';
 
-const themes: { name: ThemeName; label: string; subtitle: string; gradient: string }[] = [
+const themes: { name: ThemeName; labelKey: string; subtitleKey: string; gradient: string }[] = [
     {
         name: 'light',
-        label: 'Jade',
-        subtitle: 'Clean & minimal',
+        labelKey: 'jadeLabel',
+        subtitleKey: 'jadeSubtitle',
         gradient: 'linear-gradient(135deg, #0d5f57 0%, #0f766e 50%, #c2ffbf 100%)',
     },
     {
         name: 'dark',
-        label: 'Midnight',
-        subtitle: 'Dark & focused',
+        labelKey: 'midnightLabel',
+        subtitleKey: 'midnightSubtitle',
         gradient: 'linear-gradient(135deg, #0f172a 0%, #1e0a3c 50%, #9585c0 100%)',
     },
     {
         name: 'coffee',
-        label: 'Mocha',
-        subtitle: 'Warm & cozy',
+        labelKey: 'mochaLabel',
+        subtitleKey: 'mochaSubtitle',
         gradient: 'linear-gradient(135deg, #3b2314 0%, #6f4e37 55%, #d4a974 100%)',
     },
     {
         name: 'ocean',
-        label: 'Azure',
-        subtitle: 'Crisp & oceanic',
+        labelKey: 'azureLabel',
+        subtitleKey: 'azureSubtitle',
         gradient: 'linear-gradient(135deg, #0D2035 0%, #1A6FA8 55%, #ACC8E5 100%)',
     },
     {
         name: 'sunrise',
-        label: 'Ember',
-        subtitle: 'Bold & vibrant',
+        labelKey: 'emberLabel',
+        subtitleKey: 'emberSubtitle',
         gradient: 'linear-gradient(135deg, #7a2412 0%, #d85a38 55%, #facc6b 100%)',
     },
     {
         name: 'forest',
-        label: 'Evergreen',
-        subtitle: 'Natural & calm',
+        labelKey: 'evergreenLabel',
+        subtitleKey: 'evergreenSubtitle',
         gradient: 'linear-gradient(135deg, #1b5e20 0%, #2e7d32 55%, #81c784 100%)',
     },
     {
         name: 'water',
-        label: 'Cascade',
-        subtitle: 'Fresh & flowing',
+        labelKey: 'cascadeLabel',
+        subtitleKey: 'cascadeSubtitle',
         gradient: 'linear-gradient(135deg, #005662 0%, #00838f 55%, #4dd0e1 100%)',
     },
 ];
@@ -69,6 +70,7 @@ export default function ThemeToggle() {
     const { themeName, setThemeName } = useThemeName();
     const [anchor, setAnchor] = useState<null | HTMLElement>(null);
     const theme = useTheme();
+    const t = useTranslations('themes');
 
     const current = themes.find((t) => t.name === themeName) ?? themes[0];
     const borderColor = alpha(theme.palette.text.secondary, 0.30);
@@ -95,7 +97,7 @@ export default function ThemeToggle() {
             >
                 <Swatch gradient={current.gradient} />
                 <Typography sx={{ fontSize: '0.72rem', fontWeight: 600, color: 'text.secondary', lineHeight: 1 }}>
-                    {current.label}
+                    {t(current.labelKey as any)}
                 </Typography>
                 <KeyboardArrowDownIcon sx={{ fontSize: 14, color: 'text.disabled', ml: 0.1 }} />
             </ButtonBase>
@@ -119,13 +121,13 @@ export default function ThemeToggle() {
                     },
                 }}
             >
-                {themes.map((t) => {
-                    const isActive = themeName === t.name;
+                {themes.map((tItem) => {
+                    const isActive = themeName === tItem.name;
                     return (
                         <MenuItem
-                            key={t.name}
+                            key={tItem.name}
                             selected={isActive}
-                            onClick={() => { setThemeName(t.name); setAnchor(null); }}
+                            onClick={() => { setThemeName(tItem.name); setAnchor(null); }}
                             sx={{
                                 display: 'flex',
                                 alignItems: 'center',
@@ -137,7 +139,7 @@ export default function ThemeToggle() {
                                 minHeight: 0,
                             }}
                         >
-                            <Swatch gradient={t.gradient} size={22} />
+                            <Swatch gradient={tItem.gradient} size={22} />
 
                             <Box sx={{ flex: 1, minWidth: 0 }}>
                                 <Typography sx={{
@@ -146,14 +148,14 @@ export default function ThemeToggle() {
                                     color: 'text.primary',
                                     lineHeight: 1.2,
                                 }}>
-                                    {t.label}
+                                    {t(tItem.labelKey as any)}
                                 </Typography>
                                 <Typography sx={{
                                     fontSize: '0.68rem',
                                     color: 'text.disabled',
                                     lineHeight: 1.3,
                                 }}>
-                                    {t.subtitle}
+                                    {t(tItem.subtitleKey as any)}
                                 </Typography>
                             </Box>
 

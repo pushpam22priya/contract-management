@@ -7,6 +7,7 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 interface TemplateCardProps {
     id: string;
@@ -44,6 +45,7 @@ export default function TemplateCard({
 }: TemplateCardProps) {
     const [isHovered, setIsHovered] = useState(false);
     const theme = useTheme();
+    const tTooltips = useTranslations('tooltips');
     const primaryColor = theme.palette.primary.main;
     const isDark = theme.palette.mode === 'dark';
 
@@ -164,7 +166,7 @@ export default function TemplateCard({
                 >
                     {[
                         {
-                            title: 'View Template',
+                            title: tTooltips('viewTemplate'),
                             icon: <VisibilityOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
                             onClick: () => onView?.(id),
                             color: primaryColor,
@@ -172,7 +174,7 @@ export default function TemplateCard({
                             show: true
                         },
                         {
-                            title: 'Edit Template',
+                            title: tTooltips('editTemplate'),
                             icon: <EditOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
                             onClick: (e: React.MouseEvent) => {
                                 e.stopPropagation();
@@ -183,7 +185,7 @@ export default function TemplateCard({
                             show: isAdmin
                         },
                         {
-                            title: 'Delete Template',
+                            title: tTooltips('deleteTemplate'),
                             icon: <DeleteOutlineIcon sx={{ fontSize: '0.8rem' }} />,
                             onClick: (e: React.MouseEvent) => {
                                 e.stopPropagation();

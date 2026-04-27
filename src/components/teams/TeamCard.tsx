@@ -7,6 +7,7 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { Team } from '@/types/team';
 import dayjs from 'dayjs';
+import { useTranslations } from 'next-intl';
 
 interface TeamCardProps {
     team: Team;
@@ -19,6 +20,7 @@ export default function TeamCard({ team, contractCount, onClick, onRename }: Tea
     const theme = useTheme();
     const primaryColor = theme.palette.primary.main;
     const isDark = theme.palette.mode === 'dark';
+    const tTooltips = useTranslations('tooltips');
     const chipColor = isDark ? '#e8ce7aff' : primaryColor;
     const iconBtnBorder = alpha(theme.palette.text.secondary, 0.35);
     return (
@@ -115,12 +117,12 @@ export default function TeamCard({ team, contractCount, onClick, onRename }: Tea
             >
                 {[
                     {
-                        title: 'Open Team',
+                        title: tTooltips('openTeam'),
                         icon: <VisibilityOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
                         onClick: () => onClick(team._id),
                     },
                     {
-                        title: 'Rename Team',
+                        title: tTooltips('renameTeam'),
                         icon: <EditOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
                         onClick: () => onRename(team),
                     },

@@ -11,6 +11,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { Dayjs } from 'dayjs';
+import { useTranslations } from 'next-intl';
 
 // Re-export types so consumers can swap import paths without touching type imports
 export type { FilterOption, FilterConfig } from './ReusableFilter';
@@ -162,6 +163,7 @@ const CompactFilter = ({
     onClearFilters,
     extraActions,
 }: CompactFilterProps) => {
+    const tTooltips = useTranslations('tooltips');
 
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
@@ -319,7 +321,7 @@ const CompactFilter = ({
 
                     {/* Clear all filters */}
                     {hasActiveFilters && onClearFilters && (
-                        <Tooltip title="Clear all filters" arrow>
+                        <Tooltip title={tTooltips('clearAllFilters')} arrow>
                             <IconButton
                                 size="small"
                                 onClick={onClearFilters}

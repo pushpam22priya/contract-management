@@ -21,25 +21,30 @@ import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
 import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog';
 import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
+import { useTranslations } from 'next-intl';
 
-const signingStatusOptions = [
-    { label: 'All Status', value: 'all' },
-    { label: 'Pending My Signature', value: 'pending' },
-    { label: 'Signed', value: 'completed' },
-    { label: 'Terminated', value: 'terminated' },
-];
 
 export default function SignaturesTab({ headerLeft }: { headerLeft?: React.ReactNode }) {
+    const tSignatures = useTranslations('signatures');
+    const tFilters = useTranslations('filters');
+
+    const signingStatusOptions = [
+        { label: tFilters('allStatus'), value: 'all' },
+        { label: tFilters('pendingMySignature'), value: 'pending' },
+        { label: tFilters('signed'), value: 'completed' },
+        { label: tFilters('terminated'), value: 'terminated' },
+    ];
+
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [signingStatusFilter, setSigningStatusFilter] = useState<FilterOption[]>([signingStatusOptions[0]]);
-    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
+    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-    const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
+    const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
 
     const [viewerOpen, setViewerOpen] = useState(false);
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
@@ -72,7 +77,7 @@ export default function SignaturesTab({ headerLeft }: { headerLeft?: React.React
 
     const loadCategories = () => {
         const categories = categoryService.getAllCategories();
-        setCategoryOptions([{ label: 'All Categories', value: 'all' }, ...categories.map(cat => ({ label: cat.name, value: cat.name }))]);
+        setCategoryOptions([{ label: tFilters('allCategories'), value: 'all' }, ...categories.map(cat => ({ label: cat.name, value: cat.name }))]);
     };
 
     const loadContracts = async () => {
@@ -212,10 +217,10 @@ export default function SignaturesTab({ headerLeft }: { headerLeft?: React.React
                     {headerLeft || (
                         <Box>
                             <Typography variant="h5">
-                                Contracts for Signature
+                                {tSignatures('title')}
                             </Typography>
                             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                Review and sign contracts assigned to you
+                                {tSignatures('description')}
                             </Typography>
                         </Box>
                     )}
@@ -226,10 +231,10 @@ export default function SignaturesTab({ headerLeft }: { headerLeft?: React.React
                 <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search contracts or clients"
+                    searchPlaceholder={tFilters('searchContracts')}
                     filters={[
-                        { label: 'Status', value: signingStatusFilter, onChange: (v) => setSigningStatusFilter(v || [signingStatusOptions[0]]), options: signingStatusOptions, multiple: true },
-                        { label: 'Category', value: categoryFilter, onChange: (v) => setCategoryFilter(v || [{ label: 'All Categories', value: 'all' }]), options: categoryOptions, multiple: true },
+                        { label: tFilters('status'), value: signingStatusFilter, onChange: (v) => setSigningStatusFilter(v || [signingStatusOptions[0]]), options: signingStatusOptions, multiple: true },
+                        { label: tFilters('category'), value: categoryFilter, onChange: (v) => setCategoryFilter(v || [{ label: tFilters('allCategories'), value: 'all' }]), options: categoryOptions, multiple: true },
                     ]}
                     enableDateFilter={true}
                     startDate={startDate}
@@ -241,9 +246,9 @@ export default function SignaturesTab({ headerLeft }: { headerLeft?: React.React
                     dateFilterTitle="Filter by Contract Date Range"
                     filteredCount={filteredContracts.length}
                     totalCount={contracts.length}
-                    countLabel="contracts"
+                    countLabel={tFilters('countContracts')}
                     hasActiveFilters={searchQuery !== '' || signingStatusFilter.every(f => f.value !== 'all') || categoryFilter.every(f => f.value !== 'all') || startDate !== null || endDate !== null}
-                    onClearFilters={() => { setSearchQuery(''); setSigningStatusFilter([signingStatusOptions[0]]); setCategoryFilter([{ label: 'All Categories', value: 'all' }]); setStartDate(null); setEndDate(null); setShowAdvancedFilters(false); }}
+                    onClearFilters={() => { setSearchQuery(''); setSigningStatusFilter([signingStatusOptions[0]]); setCategoryFilter([{ label: tFilters('allCategories'), value: 'all' }]); setStartDate(null); setEndDate(null); setShowAdvancedFilters(false); }}
                 />
 
                 {/* Grid */}

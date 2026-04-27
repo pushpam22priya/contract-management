@@ -5,6 +5,7 @@ import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { Contract, ContractStatus } from '@/types/contract';
+import { useTranslations } from 'next-intl';
 
 /**
  * Unified ContractCard component that handles draft, contract, and terminated views.
@@ -55,6 +56,7 @@ const ContractCard = ({
      */
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
+    const tTooltips = useTranslations('tooltips');
 
     const getMultiPartySigningProgress = (): { orderIndex: number; totalOrders: number } | null => {
         const allSigners = [
@@ -237,8 +239,8 @@ const ContractCard = ({
 
     const getShareTooltip = (): string => {
         return variant === 'draft'
-            ? 'Submit for review or approval'
-            : 'Submit for signature';
+            ? tTooltips('submitForReviewOrApproval')
+            : tTooltips('submitForSignature');
     };
 
     const statusColors = getStatusColor(contract.status);
@@ -327,7 +329,7 @@ const ContractCard = ({
             {contract.renewedFromId &&
                 ![ContractStatus.ACTIVE, ContractStatus.EXPIRING, ContractStatus.EXPIRED, ContractStatus.TERMINATED]
                     .includes(contract.status) && (
-                    <Tooltip title="Renewal contract" arrow placement="right">
+                    <Tooltip title={tTooltips('renewalContract')} arrow placement="right">
                         <Box sx={{
                             position: 'absolute',
                             bottom: 8,
@@ -473,7 +475,7 @@ const ContractCard = ({
                 {/* ── Standard action buttons (hidden for terminated variant) ── */}
                 {variant !== 'terminated' && [
                     {
-                        title: variant === 'draft' ? 'View' : 'View Contract',
+                        title: variant === 'draft' ? tTooltips('view') : tTooltips('viewContract'),
                         icon: <Visibility sx={{ fontSize: '0.9rem' }} />,
                         onClick: () => onView?.(contract.id),
                         color: 'primary.main',
@@ -481,7 +483,7 @@ const ContractCard = ({
                         show: !!onView,
                     },
                     {
-                        title: 'Download PDF',
+                        title: tTooltips('downloadPdf'),
                         icon: <Download sx={{ fontSize: '0.9rem' }} />,
                         onClick: () => onDownload?.(contract.id),
                         color: 'primary.main',
@@ -497,7 +499,7 @@ const ContractCard = ({
                         show: shouldShowShareButton(),
                     },
                     {
-                        title: 'Renew Contract',
+                        title: tTooltips('renewContract'),
                         icon: <AutorenewOutlined sx={{ fontSize: '0.9rem' }} />,
                         onClick: () => onRenew?.(contract.id),
                         color: 'primary.main',
@@ -509,7 +511,7 @@ const ContractCard = ({
                             !contract.renewalStatus,
                     },
                     {
-                        title: 'Terminate Contract',
+                        title: tTooltips('terminateContract'),
                         icon: <BlockOutlinedIcon sx={{ fontSize: '0.9rem' }} />,
                         onClick: () => onTerminate?.(contract.id),
                         color: '#dc2626',
@@ -550,7 +552,7 @@ const ContractCard = ({
 
                 {/* ── History button: terminated variant OR any chain contract with onHistory ── */}
                 {!!onHistory && (variant === 'terminated' || !!(contract.renewedFromId || contract.renewedContractId)) && (
-                    <Tooltip title="View contract history" arrow>
+                    <Tooltip title={tTooltips('viewContractHistory')} arrow>
                         <IconButton
                             size="small"
                             onClick={(e) => onHistory(contract.id, e)}
@@ -577,7 +579,7 @@ const ContractCard = ({
 
                 {/* ── Delete button: terminated variant only ── */}
                 {variant === 'terminated' && !!onDelete && (
-                    <Tooltip title="Delete permanently" arrow>
+                    <Tooltip title={tTooltips('deletePermanently')} arrow>
                         <IconButton
                             size="small"
                             onClick={() => onDelete(contract.id)}

@@ -30,6 +30,7 @@ import dayjs from 'dayjs';
  */
 export default function ReviewApprovalPage() {
     const t = useTranslations('reviewApproval');
+    const tFilters = useTranslations('filters');
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
     const [tabValue, setTabValue] = useState(0); // 0 = My Tasks, 1 = History
@@ -65,26 +66,26 @@ export default function ReviewApprovalPage() {
 
     // Role filter options
     const roleOptions: FilterOption[] = [
-        { label: 'All Roles', value: 'all' },
-        { label: 'As Reviewer', value: 'reviewer' },
-        { label: 'As Approver', value: 'approver' },
+        { label: tFilters('allRoles'), value: 'all' },
+        { label: tFilters('asReviewer'), value: 'reviewer' },
+        { label: tFilters('asApprover'), value: 'approver' },
     ];
 
     // Status filter options based on tab
     const getStatusOptions = (): FilterOption[] => {
         if (tabValue === 0) {
             return [
-                { label: 'All Status', value: 'all' },
-                { label: 'Pending Review', value: 'pending_review' },
-                { label: 'Ready for Approval', value: 'ready_approval' },
-                { label: 'Awaiting Reviews', value: 'awaiting_reviews' },
+                { label: tFilters('allStatus'), value: 'all' },
+                { label: tFilters('pendingReview'), value: 'pending_review' },
+                { label: tFilters('readyApproval'), value: 'ready_approval' },
+                { label: tFilters('awaitingReviews'), value: 'awaiting_reviews' },
             ];
         } else {
             return [
-                { label: 'All Status', value: 'all' },
-                { label: 'Reviewed', value: 'reviewed' },
-                { label: 'Approved', value: 'approved' },
-                { label: 'Rejected', value: 'rejected' },
+                { label: tFilters('allStatus'), value: 'all' },
+                { label: tFilters('reviewed'), value: 'reviewed' },
+                { label: tFilters('approved'), value: 'approved' },
+                { label: tFilters('rejectedByReviewer'), value: 'rejected' },
             ];
         }
     };
@@ -474,8 +475,8 @@ export default function ReviewApprovalPage() {
                                 },
                             }}
                         >
-                            <Tab label="My Tasks" />
-                            <Tab label="History" />
+                            <Tab label={tFilters('myTasks')} />
+                            <Tab label={tFilters('history')} />
                         </Tabs>
                     )}
                 </Box>
@@ -495,17 +496,17 @@ export default function ReviewApprovalPage() {
                         <CompactFilter
                             searchQuery={searchQuery}
                             onSearchChange={setSearchQuery}
-                            searchPlaceholder="Search by contract or client name"
+                            searchPlaceholder={tFilters('searchByContract')}
                             filters={[
                                 {
-                                    label: 'Role',
+                                    label: tFilters('role'),
                                     value: roleFilterValues,
                                     onChange: setRoleFilterValues,
                                     options: roleOptions.filter(o => o.value !== 'all'),
                                     multiple: true,
                                 },
                                 {
-                                    label: 'Status',
+                                    label: tFilters('status'),
                                     value: statusFilterValues,
                                     onChange: setStatusFilterValues,
                                     options: getStatusOptions().filter(o => o.value !== 'all'),
@@ -523,7 +524,7 @@ export default function ReviewApprovalPage() {
                             showCounts={true}
                             filteredCount={filteredContracts.length}
                             totalCount={tabContracts.length}
-                            countLabel={tabValue === 0 ? 'tasks' : 'items'}
+                            countLabel={tabValue === 0 ? tFilters('countTasks') : tFilters('countItems')}
                             hasActiveFilters={hasActiveFilters}
                             onClearFilters={handleClearFilters}
                         />

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
     Box,
     TextField,
@@ -24,6 +25,7 @@ import AppButton from '@/components/common/AppButton';
 export default function LoginPage() {
     const theme = useTheme();
     const router = useRouter();
+    const t = useTranslations('login');
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -53,7 +55,7 @@ export default function LoginPage() {
                 setError(response.message);
             }
         } catch (err) {
-            setError('An unexpected error occurred. Please try again.');
+            setError(t('unexpectedError'));
         } finally {
             setLoading(false);
         }
@@ -209,14 +211,18 @@ export default function LoginPage() {
                         </Box>
 
                         <Typography variant="h4" fontWeight="bold" gutterBottom>
-                            Contract Management
+                            {t('title')}
                         </Typography>
                         <Typography
                             variant="body2"
                             sx={{ opacity: 0.90, mb: 4, maxWidth: 350, mx: 'auto', lineHeight: 1.6 }}
                         >
-                            Effortless contract lifecycle management.<br />
-                            Create, track, and sign documents with confidence and security.
+                            {t('description').split('\n').map((line, i) => (
+                                <React.Fragment key={i}>
+                                    {line}
+                                    {i === 0 && <br />}
+                                </React.Fragment>
+                            ))}
                         </Typography>
                     </Box>
                 </Box>
@@ -243,10 +249,10 @@ export default function LoginPage() {
                 >
                     <Box sx={{ mb: 4 }}>
                         <Typography variant="h4" gutterBottom fontWeight="600">
-                            Welcome Back
+                            {t('welcomeBack')}
                         </Typography>
                         <Typography variant="body2" sx={{ opacity: 0.65 }}>
-                            Please enter your details to sign in.
+                            {t('pleaseEnterDetails')}
                         </Typography>
                     </Box>
 
@@ -267,7 +273,7 @@ export default function LoginPage() {
                                 required
                                 fullWidth
                                 id="email"
-                                label="Email Address"
+                                label={t('emailAddress')}
                                 name="email"
                                 autoComplete="email"
                                 autoFocus
@@ -295,7 +301,7 @@ export default function LoginPage() {
                                 required
                                 fullWidth
                                 name="password"
-                                label="Password"
+                                label={t('password')}
                                 type="password"
                                 id="password"
                                 autoComplete="current-password"
@@ -347,7 +353,7 @@ export default function LoginPage() {
                                 },
                             }}
                         >
-                            {loading ? 'Signing In...' : 'Sign In'}
+                            {loading ? t('signingIn') : t('signIn')}
                         </AppButton>
                     </Box>
                 </Box>

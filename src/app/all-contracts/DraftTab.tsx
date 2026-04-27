@@ -20,19 +20,25 @@ import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { apiService } from '@/services/apiService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import { Team } from '@/types/team';
+import { useTranslations } from 'next-intl';
 
-const statusOptions: FilterOption[] = [
-    { label: 'All Status', value: 'all' },
-    { label: 'Draft', value: ContractStatus.DRAFT },
-    { label: 'Under Review', value: ContractStatus.IN_REVIEW },
-    { label: 'Under Approval', value: ContractStatus.IN_APPROVAL },
-    { label: 'Review and Approve', value: ContractStatus.REVIEW_APPROVAL },
-    { label: 'Reviewed', value: ContractStatus.REVIEWED },
-    { label: 'Rejected by Reviewer', value: ContractStatus.REJECTED_BY_REVIEWER },
-    { label: 'Rejected by Approver', value: ContractStatus.REJECTED_BY_APPROVER },
-];
+
 
 export default function DraftTab({ headerLeft }: { headerLeft?: React.ReactNode }) {
+    const tDraft = useTranslations('draft');
+    const tFilters = useTranslations('filters');
+
+    const statusOptions: FilterOption[] = [
+        { label: tFilters('allStatus'), value: 'all' },
+        { label: tFilters('draft'), value: ContractStatus.DRAFT },
+        { label: tFilters('underReview'), value: ContractStatus.IN_REVIEW },
+        { label: tFilters('underApproval'), value: ContractStatus.IN_APPROVAL },
+        { label: tFilters('reviewAndApprove'), value: ContractStatus.REVIEW_APPROVAL },
+        { label: tFilters('reviewed'), value: ContractStatus.REVIEWED },
+        { label: tFilters('rejectedByReviewer'), value: ContractStatus.REJECTED_BY_REVIEWER },
+        { label: tFilters('rejectedByApprover'), value: ContractStatus.REJECTED_BY_APPROVER },
+    ];
+
     const [teams, setTeams] = useState<Team[]>([]);
     const [draftContracts, setDraftContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
@@ -46,11 +52,11 @@ export default function DraftTab({ headerLeft }: { headerLeft?: React.ReactNode 
 
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as AlertColor });
 
-    const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
-    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
+    const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
+    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState<FilterOption[]>([{ label: 'All Status', value: 'all' }]);
-    const [teamFilter, setTeamFilter] = useState<FilterOption[]>([{ label: 'All Teams', value: 'all' }]);
+    const [statusFilter, setStatusFilter] = useState<FilterOption[]>([{ label: tFilters('allStatus'), value: 'all' }]);
+    const [teamFilter, setTeamFilter] = useState<FilterOption[]>([{ label: tFilters('allTeams'), value: 'all' }]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -61,7 +67,7 @@ export default function DraftTab({ headerLeft }: { headerLeft?: React.ReactNode 
 
     const loadCategories = () => {
         const categories = categoryService.getAllCategories();
-        setCategoryOptions([{ label: 'All Categories', value: 'all' }, ...categories.map(cat => ({ label: cat.name, value: cat.name }))]);
+        setCategoryOptions([{ label: tFilters('allCategories'), value: 'all' }, ...categories.map(cat => ({ label: cat.name, value: cat.name }))]);
     };
 
     const loadTeams = useCallback(async () => {
@@ -192,10 +198,10 @@ export default function DraftTab({ headerLeft }: { headerLeft?: React.ReactNode 
                     {headerLeft || (
                         <Box>
                             <Typography variant="h5">
-                                Draft Contracts
+                                {tDraft('title')}
                             </Typography>
                             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                Review and manage your draft contracts
+                                {tDraft('description')}
                             </Typography>
                         </Box>
                     )}
@@ -206,11 +212,11 @@ export default function DraftTab({ headerLeft }: { headerLeft?: React.ReactNode 
                 <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search drafts or clients"
+                    searchPlaceholder={tFilters('searchDrafts')}
                     filters={[
-                        { label: 'Status', value: statusFilter, onChange: (v) => setStatusFilter(v || []), options: statusOptions, multiple: true },
-                        { label: 'Category', value: categoryFilter, onChange: (v) => setCategoryFilter(v || [{ label: 'All Categories', value: 'all' }]), options: categoryOptions, multiple: true },
-                        { label: 'Team', value: teamFilter, onChange: (v) => setTeamFilter(v || [{ label: 'All Teams', value: 'all' }]), options: teamFilterOptions, multiple: true },
+                        { label: tFilters('status'), value: statusFilter, onChange: (v) => setStatusFilter(v || []), options: statusOptions, multiple: true },
+                        { label: tFilters('category'), value: categoryFilter, onChange: (v) => setCategoryFilter(v || [{ label: tFilters('allCategories'), value: 'all' }]), options: categoryOptions, multiple: true },
+                        { label: tFilters('team'), value: teamFilter, onChange: (v) => setTeamFilter(v || [{ label: tFilters('allTeams'), value: 'all' }]), options: teamFilterOptions, multiple: true },
                     ]}
                     enableDateFilter={true}
                     startDate={startDate}
@@ -222,9 +228,9 @@ export default function DraftTab({ headerLeft }: { headerLeft?: React.ReactNode 
                     dateFilterTitle="Filter by Draft Date Range"
                     filteredCount={filteredDrafts.length}
                     totalCount={draftContracts.length}
-                    countLabel="drafts"
+                    countLabel={tFilters('countDrafts')}
                     hasActiveFilters={searchQuery !== '' || statusFilter.every(f => f.value !== 'all') || categoryFilter.every(f => f.value !== 'all') || teamFilter.every(f => f.value !== 'all') || startDate !== null || endDate !== null}
-                    onClearFilters={() => { setSearchQuery(''); setStatusFilter([{ label: 'All Status', value: 'all' }]); setCategoryFilter([{ label: 'All Categories', value: 'all' }]); setTeamFilter([{ label: 'All Teams', value: 'all' }]); setStartDate(null); setEndDate(null); setShowAdvancedFilters(false); }}
+                    onClearFilters={() => { setSearchQuery(''); setStatusFilter([{ label: tFilters('allStatus'), value: 'all' }]); setCategoryFilter([{ label: tFilters('allCategories'), value: 'all' }]); setTeamFilter([{ label: tFilters('allTeams'), value: 'all' }]); setStartDate(null); setEndDate(null); setShowAdvancedFilters(false); }}
                 />
 
                 {/* Grid */}
