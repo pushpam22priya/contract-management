@@ -516,7 +516,7 @@ const ContractCard = ({
                         onClick: () => onTerminate?.(contract.id),
                         color: '#dc2626',
                         shadow: 'rgba(220, 38, 38, 0.2)',
-                        // Terminate only for expired (not expiring), mutually exclusive with Renew
+                        // Terminate only for expired, mutually exclusive with Renew
                         show: variant === 'contract' &&
                             !!onTerminate &&
                             contract.status === ContractStatus.EXPIRED &&

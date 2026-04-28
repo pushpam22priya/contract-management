@@ -18,14 +18,13 @@ import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import DraftsIcon from '@mui/icons-material/Drafts';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
-import RateReviewIcon from '@mui/icons-material/RateReview';
 import DrawIcon from '@mui/icons-material/Draw';
-import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import { useTranslations } from 'next-intl';
 import { useThemeName } from '@/context/ThemeContext';
+import { authService } from '@/services/authService';
 
 interface SidebarProps {
     open: boolean;
@@ -39,18 +38,28 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const pathname = usePathname();
     const router = useRouter();
-    const t = useTranslations('nav');
-    const { themeName } = useThemeName();
+    const isAdmin = authService.getCurrentUser()?.isAdmin;
 
-    const menuItems = [
-        { text: t('dashboard'),      icon: <DashboardOutlinedIcon sx={{ fontSize: 20 }} />,  path: '/dashboard' },
-        { text: t('allContracts'),   icon: <LayersOutlinedIcon sx={{ fontSize: 20 }} />,      path: '/all-contracts' },
-        { text: t('contracts'),      icon: <ArticleOutlinedIcon sx={{ fontSize: 20 }} />,     path: '/contracts' },
-        { text: t('draft'),          icon: <RateReviewIcon sx={{ fontSize: 20 }} />,          path: '/draft' },
-        { text: t('signatures'),     icon: <DrawIcon sx={{ fontSize: 20 }} />,                path: '/signatures' },
-        { text: t('reviewApproval'), icon: <DraftsIcon sx={{ fontSize: 20 }} />,              path: '/review-approval' },
-        { text: t('template'),       icon: <DescriptionOutlinedIcon sx={{ fontSize: 20 }} />, path: '/template' },
-        { text: t('terminated'),     icon: <BlockOutlinedIcon sx={{ fontSize: 20 }} />,       path: '/terminated' },
+    const t = useTranslations('nav');
+    useThemeName();
+
+    type MenuItem = {
+        text: string;
+        icon: React.ReactNode;
+        path: string;
+    };
+
+    const menuItems: MenuItem[] = [
+        { text: t('dashboard'), icon: <DashboardOutlinedIcon sx={{ fontSize: 20 }} />, path: '/dashboard' },
+        // { text: t('allContracts'), icon: <LayersOutlinedIcon sx={{ fontSize: 20 }} />, path: '/all-contracts' },
+        { text: t('contracts'), icon: <ArticleOutlinedIcon sx={{ fontSize: 20 }} />, path: '/contracts' },
+        { text: t('signatures'), icon: <DrawIcon sx={{ fontSize: 20 }} />, path: '/signatures' },
+        { text: t('reviewApproval'), icon: <DraftsIcon sx={{ fontSize: 20 }} />, path: '/review-approval' },
+        ...(isAdmin ? [{
+            text: t('template'),
+            icon: <DescriptionOutlinedIcon sx={{ fontSize: 20 }} />,
+            path: '/template'
+        }] : [])
     ];
 
     useEffect(() => {
@@ -79,20 +88,20 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
     // In dark mode use the dashboard-style (translucent violet) for all pages
     const effectiveIsDashboard = isDashboard || isDarkMode;
 
-    const sidebarBg         = effectiveIsDashboard ? palette.background.default           : sidebar.background;
-    const toggleColor       = effectiveIsDashboard ? palette.text.secondary                : sidebar.unselected;
-    const toggleHoverBg     = effectiveIsDashboard ? `${primary}1a`                        : sidebar.hover;
+    const sidebarBg = effectiveIsDashboard ? palette.background.default : sidebar.background;
+    const toggleColor = effectiveIsDashboard ? palette.text.secondary : sidebar.unselected;
+    const toggleHoverBg = effectiveIsDashboard ? `${primary}1a` : sidebar.hover;
     const isDarkSidebar = !effectiveIsDashboard && isDarkMode;
 
-    const selectedBg        = effectiveIsDashboard ? `${primary}20`          : isDarkSidebar ? (sidebar.selectedGradient ?? sidebar.selectedItemBg)      : sidebar.selectedItemBg;
-    const selectedHoverBg   = effectiveIsDashboard ? `${primary}28`          : isDarkSidebar ? (sidebar.selectedGradientHover ?? sidebar.selectedItemBg) : sidebar.selectedItemBg;
-    const hoverBg           = effectiveIsDashboard ? `${primary}10`          : sidebar.hover;
-    const selectedIconColor = effectiveIsDashboard ? primary                  : sidebar.selected;
-    const inactiveIconColor = effectiveIsDashboard ? palette.text.secondary   : sidebar.unselected;
-    const selectedTextColor = effectiveIsDashboard ? primary                  : sidebar.selected;
-    const inactiveTextColor = effectiveIsDashboard ? palette.text.secondary   : sidebar.unselected;
-    const accentBarColor    = effectiveIsDashboard ? primary                  : sidebar.selected;
-    const accentBarBg       = isDarkSidebar ? (sidebar.accentGradient ?? accentBarColor) : accentBarColor;
+    const selectedBg = effectiveIsDashboard ? `${primary}20` : isDarkSidebar ? (sidebar.selectedGradient ?? sidebar.selectedItemBg) : sidebar.selectedItemBg;
+    const selectedHoverBg = effectiveIsDashboard ? `${primary}28` : isDarkSidebar ? (sidebar.selectedGradientHover ?? sidebar.selectedItemBg) : sidebar.selectedItemBg;
+    const hoverBg = effectiveIsDashboard ? `${primary}10` : sidebar.hover;
+    const selectedIconColor = effectiveIsDashboard ? primary : sidebar.selected;
+    const inactiveIconColor = effectiveIsDashboard ? palette.text.secondary : sidebar.unselected;
+    const selectedTextColor = effectiveIsDashboard ? primary : sidebar.selected;
+    const inactiveTextColor = effectiveIsDashboard ? palette.text.secondary : sidebar.unselected;
+    const accentBarColor = effectiveIsDashboard ? primary : sidebar.selected;
+    const accentBarBg = isDarkSidebar ? (sidebar.accentGradient ?? accentBarColor) : accentBarColor;
 
     const drawer = (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', background: sidebarBg }}>

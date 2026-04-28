@@ -16,7 +16,6 @@ import { AlertColor } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
-// import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
 import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { apiService } from '@/services/apiService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
@@ -30,23 +29,18 @@ export default function DraftPage() {
     const searchParams = useSearchParams();
 
     const statusFromUrl = searchParams.get('status');
-    // isFlatView: came here from dashboard with a specific status (for back button)
     const isFlatView = statusFromUrl !== null;
 
-    // Teams — loaded only for team name lookup on contract cards
     const [teams, setTeams] = useState<Team[]>([]);
-
     const [draftContracts, setDraftContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
 
     const [viewerOpen, setViewerOpen] = useState(false);
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
 
-    // Request Review Dialog state
     const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
     const [contractForReview, setContractForReview] = useState<Contract | null>(null);
 
-    // Snackbar state
     const [snackbar, setSnackbar] = useState({
         open: false,
         message: '',
@@ -103,26 +97,18 @@ export default function DraftPage() {
         let formFields: any[] | undefined = undefined;
 
         if (contract.fileUrl) {
-            console.log('📄 [DraftPage] Using contract.fileUrl (fetching latest from API)');
-            console.log('📄 [DraftPage] File URL:', contract.fileUrl);
-            console.log('📄 [DraftPage] XFDF length:', contract.xfdfData?.length || 0);
-            console.log('📄 [DraftPage] FormFields count:', contract.formFields?.length || 0);
             fileUrl = contract.fileUrl;
             initialXfdf = contract.xfdfData;
             formFields = contract.formFields;
         } else if (contract.fileData) {
-            console.log('📄 [DraftPage] Using contract.fileData (base64)');
             fileUrl = `data:application/pdf;base64,${contract.fileData}`;
-            // ✅ CRITICAL FIX: Always load XFDF/FormFields to ensure signatures/inputs are restored
             initialXfdf = contract.xfdfData;
             formFields = contract.formFields;
         } else if (contract.signedPdfBase64) {
-            console.log('📄 [DraftPage] Using signedPdfBase64 (baked signatures)');
             fileUrl = `data:application/pdf;base64,${contract.signedPdfBase64}`;
             initialXfdf = contract.xfdfData;
             formFields = contract.formFields;
         } else if (contract.templateId) {
-            console.log('📄 [DraftPage] Fallback: Fetching template PDF...');
             try {
                 const template = await templateService.getTemplateById(contract.templateId);
                 if (template) {
@@ -162,8 +148,6 @@ export default function DraftPage() {
             c.status === ContractStatus.REJECTED_BY_APPROVER
         );
         setDraftContracts(drafts);
-
-
         setLoading(false);
     };
 
@@ -231,25 +215,12 @@ export default function DraftPage() {
     const handleSaveChanges = async (pdfBlob: Blob, xfdfString: string, fieldValues?: Record<string, string>, formFields?: any[], isAutoSave?: boolean) => {
         if (!selectedContract) return;
 
-        console.log('═══════════════════════════════════════════════════════════════════');
-        console.log('💾 [DraftPage] Saving contract changes:', selectedContract.id);
-        console.log('✅ [DraftPage] All pending changes were committed before this callback');
-        console.log('═══════════════════════════════════════════════════════════════════');
-        console.log(`📄 PDF Blob size: ${pdfBlob.size} bytes`);
-        console.log(`📋 XFDF string length: ${xfdfString?.length || 0} chars`);
-        console.log(`📋 XFDF preview: ${xfdfString?.substring(0, 500)}...`);
-        console.log(`📝 Field values count: ${fieldValues ? Object.keys(fieldValues).length : 0}`);
-        console.log(`📋 Form fields count: ${formFields?.length || 0}`);
-        console.log(`📋 Previous XFDF length: ${selectedContract.xfdfData?.length || 0} chars`);
-
         try {
-            console.log('📄 [DraftPage] Converting PDF Blob to base64...');
             const arrayBuffer = await pdfBlob.arrayBuffer();
             const bytes = new Uint8Array(arrayBuffer);
 
             const header = String.fromCharCode(...bytes.slice(0, 5));
             if (!header.startsWith('%PDF-')) {
-                console.error('❌ Invalid PDF: does not start with %PDF-');
                 showNotification('Failed to save: Invalid PDF data', 'error');
                 return;
             }
@@ -270,22 +241,18 @@ export default function DraftPage() {
                         ...(selectedContract.fieldValues || {}),
                         ...fieldValues
                     };
-                    console.log('📝 [DraftPage] Persisting fieldValues:', metadataUpdates.fieldValues);
                 }
 
                 if (formFields && formFields.length > 0) {
                     metadataUpdates.formFields = formFields;
                     metadataUpdates.hasFormFields = formFields.length > 0;
-                    console.log('📝 [DraftPage] Persisting formFields:', formFields.length, 'fields');
                 }
 
                 if (Object.keys(metadataUpdates).length > 0) {
                     await apiService.updateContractMetadata(selectedContract.id, metadataUpdates);
-                    console.log('✅ [DraftPage] Field metadata updated successfully');
                 }
 
                 showNotification('Changes saved successfully!', 'success');
-                console.log('💾 [DraftPage] Save completed - dialog stays open for continued editing');
             } else {
                 showNotification('Failed to save changes: ' + result.message, 'error');
                 throw new Error(result.message);
@@ -296,7 +263,6 @@ export default function DraftPage() {
         }
     };
 
-    // Filter states
     const statusOptions: FilterOption[] = [
         { label: tFilters('allStatus'), value: 'all' },
         { label: tFilters('draft'), value: ContractStatus.DRAFT },
@@ -315,8 +281,6 @@ export default function DraftPage() {
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-    // URL params for deep linking (e.g. from Dashboard Recent Contracts)
-    // Supports comma-separated status values, e.g. ?status=draft,in_review
     useEffect(() => {
         const statusParam = searchParams.get('status');
         const searchParam = searchParams.get('search');
@@ -331,14 +295,10 @@ export default function DraftPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams]);
 
-    // ─── Derived data ─────────────────────────────────────────────────────────
-
-    // Team name lookup map (for contract card display)
     const teamNameById: Record<string, string> = Object.fromEntries(
         teams.map(t => [t._id, t.name])
     );
 
-    // Flat view title from URL param (for breadcrumb when coming from dashboard)
     const draftStatusLabelMap: Record<string, string> = {
         [ContractStatus.DRAFT]: t('statusDraft'),
         [ContractStatus.IN_REVIEW]: t('statusInReview'),
@@ -352,9 +312,8 @@ export default function DraftPage() {
         ? (draftStatusLabelMap[statusFromUrl] ?? t('title'))
         : t('title'));
 
-    // All teams created by the user (for team filter dropdown)
     const teamFilterOptions: FilterOption[] = [
-        { label: 'All Teams', value: 'all' },
+        { label: tFilters('allTeams'), value: 'all' },
         ...teams.map(t => ({ label: t.name, value: t._id })),
     ];
 
@@ -411,7 +370,6 @@ export default function DraftPage() {
                 </Box>
 
                 {/* Filter Section */}
-                {/* <ReusableFilter */}
                 <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
@@ -515,7 +473,6 @@ export default function DraftPage() {
                 </Box>
             </Box>
 
-            {/* ← VIEWER DIALOG */}
             {selectedContract && viewerData && (
                 <DocumentViewerDialog
                     open={viewerOpen}
@@ -546,7 +503,6 @@ export default function DraftPage() {
                 />
             )}
 
-            {/* Request Review Dialog */}
             {contractForReview && (
                 <RequestReviewDialog
                     open={reviewDialogOpen}
@@ -560,7 +516,6 @@ export default function DraftPage() {
                 />
             )}
 
-            {/* Notification Snackbar */}
             <NotificationSnackbar
                 open={snackbar.open}
                 message={snackbar.message}

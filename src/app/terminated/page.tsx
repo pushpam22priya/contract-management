@@ -12,7 +12,6 @@ import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
 import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog';
 import DeleteContractDialog from '@/components/contracts/DeleteContractDialog';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
-// import ReusableFilter from '@/components/common/ReusableFilter';
 import CompactFilter from '@/components/common/CompactFilter';
 import { contractService } from '@/services/contractService';
 import { authService } from '@/services/authService';
@@ -30,8 +29,8 @@ export default function TerminatedContractsPage() {
 
     // Filter state
     const [searchQuery, setSearchQuery] = useState('');
-    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
-    const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
+    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
+    const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -56,8 +55,6 @@ export default function TerminatedContractsPage() {
 
             const statusById = new Map(allContracts.map(c => [c.id, c.status]));
 
-            // Only show the "head" of each terminated chain — hide prior versions
-            // that are superseded by a newer terminated contract in the same chain.
             const terminated = allContracts.filter(c => {
                 if (c.createdBy !== currentUser.email) return false;
                 if (c.status !== ContractStatus.TERMINATED) return false;
@@ -78,15 +75,13 @@ export default function TerminatedContractsPage() {
 
     useEffect(() => {
         loadContracts();
-        // Load categories for the dropdown
         const cats = categoryService.getAllCategories();
         setCategoryOptions([
-            { label: 'All Categories', value: 'all' },
+            { label: tFilters('allCategories'), value: 'all' },
             ...cats.map(c => ({ label: c.name, value: c.name })),
         ]);
     }, [loadContracts]);
 
-    // Client-side filtering
     const filteredContracts = contracts.filter(contract => {
         const matchesSearch = searchQuery === '' ||
             contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -114,7 +109,7 @@ export default function TerminatedContractsPage() {
 
     const handleClearFilters = () => {
         setSearchQuery('');
-        setCategoryFilter([{ label: 'All Categories', value: 'all' }]);
+        setCategoryFilter([{ label: tFilters('allCategories'), value: 'all' }]);
         setStartDate(null);
         setEndDate(null);
         setShowAdvancedFilters(false);
@@ -145,8 +140,6 @@ export default function TerminatedContractsPage() {
                     </Box>
                 </Box>
 
-                {/* Reusable Filter */}
-                {/* <ReusableFilter */}
                 <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
@@ -217,7 +210,6 @@ export default function TerminatedContractsPage() {
                 </Box>
             </Box>
 
-            {/* Contract History Panel */}
             <ContractHistoryPanel
                 open={Boolean(historyAnchorEl)}
                 anchorEl={historyAnchorEl}
@@ -227,7 +219,6 @@ export default function TerminatedContractsPage() {
                 onSelectEntry={(entry) => setHistoryDialogEntry(entry)}
             />
 
-            {/* History detail dialog */}
             <ContractHistoryDialog
                 open={!!historyDialogEntry}
                 onClose={() => setHistoryDialogEntry(null)}
@@ -235,7 +226,6 @@ export default function TerminatedContractsPage() {
                 currentContractId={historyContractId || ''}
             />
 
-            {/* Delete confirmation dialog */}
             <DeleteContractDialog
                 open={deleteDialogOpen}
                 onClose={() => { setDeleteDialogOpen(false); setContractForDeletion(null); }}

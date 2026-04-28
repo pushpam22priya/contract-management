@@ -844,7 +844,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                         >
                                             {t('renew')}
                                         </AppButton>
-                                        {/* Terminate — only for expired (not expiring), mutually exclusive with renewal */}
+                                        {/* Terminate — only for expired contracts */}
                                         {contract.status === ContractStatus.EXPIRED && (
                                             <AppButton
                                                 size="small"
@@ -1044,7 +1044,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                         // contracts page re-fetches fresh data when navigated back to,
                         // ensuring the terminated card no longer appears there.
                         router.refresh();
-                        router.push('/terminated');
+                        router.push('/contracts?status=terminated');
                     }}
                 />
             )}
