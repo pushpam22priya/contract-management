@@ -3733,6 +3733,13 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             console.log('✅ Setting loading to false');
                             setLoading(false);
 
+                            // Set initial zoom to fit-width so the document fills the editor width
+                            try {
+                                Core.documentViewer.setFitMode(Core.documentViewer.FitMode.FitWidth);
+                            } catch (e) {
+                                console.warn('⚠️ Could not set fit-width zoom:', e);
+                            }
+
                             // ✅ CRITICAL: Delay setting isLoadingInitialDocument to false
                             // This allows the widget rebuild process to complete first
                             // Widget rebuild happens async after document load, and we need to protect signatures during that process
