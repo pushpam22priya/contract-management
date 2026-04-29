@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, ReactNode } from 'react';
-import { Box, useMediaQuery, useTheme, IconButton } from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
+import { Box, useTheme } from '@mui/material';
 import Header from './Header';
 import Sidebar from './Sidebar';
 
@@ -12,7 +11,6 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children }: AppLayoutProps) {
     const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
     const [sidebarOpen, setSidebarOpen] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -33,49 +31,35 @@ export default function AppLayout({ children }: AppLayoutProps) {
         setMobileOpen(!mobileOpen);
     };
 
-    const drawerWidth = sidebarOpen ? 240 : 64;
-
     return (
-        <Box sx={{ display: 'flex', bgcolor: 'background.default', position: 'absolute', inset: 0, overflow: 'hidden' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', bgcolor: 'background.default', position: 'absolute', inset: 0, overflow: 'hidden' }}>
             {/* Header */}
-            <Header />
+            <Header onMobileMenuToggle={handleMobileToggle} />
 
-            {/* Sidebar */}
-            <Sidebar
-                open={sidebarOpen}
-                onToggle={handleSidebarToggle}
-                mobileOpen={mobileOpen}
-                onMobileToggle={handleMobileToggle}
-            />
+            {/* Body: Sidebar + Main */}
+            <Box sx={{ display: 'flex', flex: 1, mt: '40px', overflow: 'hidden' }}>
+                <Sidebar
+                    open={sidebarOpen}
+                    onToggle={handleSidebarToggle}
+                    mobileOpen={mobileOpen}
+                    onMobileToggle={handleMobileToggle}
+                />
 
-            {/* Main Content */}
-            <Box
-                component="main"
-                sx={{
-                    flex: 1,
-                    minWidth: 0,
-                    p: 0,
-                    mt: '40px',
-                    transition: theme.transitions.create('width', {
-                        easing: theme.transitions.easing.sharp,
-                        duration: theme.transitions.duration.enteringScreen,
-                    }),
-                }}
-            >
-                {/* Mobile Menu Button */}
-                {isMobile && (
-                    <IconButton
-                        color="primary"
-                        aria-label="open drawer"
-                        edge="start"
-                        onClick={handleMobileToggle}
-                        sx={{ mb: 2 }}
-                    >
-                        <MenuIcon />
-                    </IconButton>
-                )}
-
-                {children}
+                {/* Main Content */}
+                <Box
+                    component="main"
+                    sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        transition: theme.transitions.create('width', {
+                            easing: theme.transitions.easing.sharp,
+                            duration: theme.transitions.duration.enteringScreen,
+                        }),
+                    }}
+                >
+                    {children}
+                </Box>
             </Box>
         </Box>
     );

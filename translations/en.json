@@ -92,6 +92,7 @@
   "header": {
     "notifications": "Notifications",
     "logout": "Logout",
+    "theme": "Theme",
     "language": "Language",
     "switchToHindi": "Switch to Hindi",
     "switchToEnglish": "Switch to English"

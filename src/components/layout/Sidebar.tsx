@@ -89,6 +89,8 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
     const effectiveIsDashboard = isDashboard || isDarkMode;
 
     const sidebarBg = effectiveIsDashboard ? palette.background.default : sidebar.background;
+    // Mobile drawer overlays content — needs a solid background in light mode (many themes use transparent background.default)
+    const mobileSidebarBg = effectiveIsDashboard && !isDarkMode ? palette.background.paper : sidebarBg;
     const toggleColor = effectiveIsDashboard ? palette.text.secondary : sidebar.unselected;
     const toggleHoverBg = effectiveIsDashboard ? `${primary}1a` : sidebar.hover;
     const isDarkSidebar = !effectiveIsDashboard && isDarkMode;
@@ -104,7 +106,7 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
     const accentBarBg = isDarkSidebar ? (sidebar.accentGradient ?? accentBarColor) : accentBarColor;
 
     const drawer = (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', background: sidebarBg }}>
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'inherit' }}>
             {/* Toggle Button */}
             {!isMobile && (
                 <Box sx={{ px: 1, pt: 1.5, pb: 0.5 }}>
@@ -231,9 +233,11 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                         '& .MuiDrawer-paper': {
                             width: 220,
                             boxSizing: 'border-box',
-                            background: sidebarBg,
+                            background: mobileSidebarBg,
                             borderRight: '1px solid',
                             borderColor: 'divider',
+                            top: '40px',
+                            height: 'calc(100% - 40px)',
                         },
                     }}
                 >
