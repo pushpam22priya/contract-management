@@ -86,25 +86,49 @@ const sharedComponents = {
         styleOverrides: {
             root: {
                 textTransform: 'none' as const,
-                fontWeight: 600,
+                fontWeight: 500,
+                borderRadius: 8,
                 boxShadow: 'none',
+                transition: 'all 0.2s ease-in-out',
                 '&:hover': {
-                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.10), 0 2px 4px -2px rgb(0 0 0 / 0.10)',
+                    boxShadow: 'none',
+                },
+            },
+            contained: {
+                '&:hover': {
+                    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.12)',
+                    transform: 'translateY(-1px)',
+                },
+                '&:active': {
+                    transform: 'translateY(0)',
+                    boxShadow: 'none',
+                },
+            },
+            outlined: {
+                borderWidth: '1.5px',
+                '&:hover': {
+                    borderWidth: '1.5px',
+                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+                    transform: 'translateY(-1px)',
+                    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+                },
+                '&:active': {
+                    transform: 'translateY(0)',
+                    boxShadow: 'none',
                 },
             },
             sizeSmall: {
-                fontSize: '0.8rem',
-                padding: '5px 14px',
+                fontSize: '0.75rem',
+                padding: '4px 12px',
                 borderRadius: 6,
             },
             sizeMedium: {
-                fontSize: '0.875rem',
-                padding: '8px 20px',
-                borderRadius: 8,
+                fontSize: '0.8125rem',
+                padding: '6px 16px',
             },
             sizeLarge: {
-                fontSize: '1rem',
-                padding: '12px 28px',
+                fontSize: '0.875rem',
+                padding: '8px 24px',
                 borderRadius: 10,
             },
         },
@@ -265,8 +289,8 @@ export const lightTheme = createTheme({
             default: '#f1f5f9',
             paper: '#fafafa',
         },
-        success: { main: '#0f766e', light: '#f0fdfa', dark: '#064e3b' },
-        error:   { main: '#dc2626', light: '#fef2f2', dark: '#991b1b' },
+        success: { main: '#059669', light: '#d1fae5', dark: '#047857', contrastText: '#ffffff' },
+        error:   { main: '#dc2626', light: '#fef2f2', dark: '#991b1b', contrastText: '#ffffff' },
     },
     sidebar: {
         background: '#0f766e',
@@ -329,8 +353,8 @@ export const darkTheme = createTheme({
             disabled: 'rgba(255,255,255,0.3)',
             disabledBackground: 'rgba(255,255,255,0.08)',
         },
-        success: { main: '#34d399', light: 'rgba(52,211,153,0.12)', dark: '#6ee7b7' },
-        error:   { main: '#f87171', light: 'rgba(248,113,113,0.12)', dark: '#fca5a5' },
+        success: { main: '#10b981', light: '#34d399', dark: '#059669', contrastText: '#ffffff' },
+        error:   { main: '#ef4444', light: '#f87171', dark: '#b91c1c', contrastText: '#ffffff' },
     },
     sidebar: {
         background: '#020617',
@@ -476,8 +500,8 @@ export const coffeeTheme = createTheme({
             disabled: 'rgba(44,24,16,0.3)',
             disabledBackground: 'rgba(44,24,16,0.08)',
         },
-        success: { main: '#5a7a40', light: '#f5f9f0', dark: '#3a5228' },
-        error:   { main: '#c0392b', light: '#fef5f4', dark: '#8b2519' },
+        success: { main: '#059669', light: '#d1fae5', dark: '#047857', contrastText: '#ffffff' },
+        error:   { main: '#dc2626', light: '#fef2f2', dark: '#991b1b', contrastText: '#ffffff' },
     },
     sidebar: {
         background: '#3b2314',
@@ -560,8 +584,8 @@ export const oceanTheme = createTheme({
             disabled: 'rgba(17,42,70,0.3)',
             disabledBackground: 'rgba(17,42,70,0.08)',
         },
-        success: { main: '#0e7490', light: '#ecfeff', dark: '#155e75' },
-        error:   { main: '#dc2626', light: '#fef2f2', dark: '#991b1b' },
+        success: { main: '#059669', light: '#d1fae5', dark: '#047857', contrastText: '#ffffff' },
+        error:   { main: '#dc2626', light: '#fef2f2', dark: '#991b1b', contrastText: '#ffffff' },
     },
     sidebar: {
         background: '#0D2035',
@@ -644,8 +668,8 @@ export const sunriseTheme = createTheme({
             disabled: 'rgba(43,24,18,0.3)',
             disabledBackground: 'rgba(43,24,18,0.08)',
         },
-        success: { main: '#4d7c0f', light: '#f7fee7', dark: '#3a5c0b' },
-        error:   { main: '#dc2626', light: '#fef2f2', dark: '#991b1b' },
+        success: { main: '#059669', light: '#d1fae5', dark: '#047857', contrastText: '#ffffff' },
+        error:   { main: '#dc2626', light: '#fef2f2', dark: '#991b1b', contrastText: '#ffffff' },
     },
     sidebar: {
         background: 'linear-gradient(to bottom, rgba(74, 28, 21, 0.85), rgba(168, 60, 33, 0.4)), url("/images/rising-sun.avif") center bottom / cover no-repeat',
@@ -728,8 +752,8 @@ export const forestTheme = createTheme({
             disabled: 'rgba(26,46,30,0.3)',
             disabledBackground: 'rgba(26,46,30,0.08)',
         },
-        success: { main: '#2e7d32', light: '#f0fdf4', dark: '#1b5e20' },
-        error:   { main: '#dc2626', light: '#fef2f2', dark: '#991b1b' },
+        success: { main: '#059669', light: '#d1fae5', dark: '#047857', contrastText: '#ffffff' },
+        error:   { main: '#dc2626', light: '#fef2f2', dark: '#991b1b', contrastText: '#ffffff' },
     },
     sidebar: {
         background: 'linear-gradient(to bottom, rgba(16, 42, 24, 0.85), rgba(46, 125, 50, 0.4)), url("/images/forest-theme.avif") center bottom / cover no-repeat',
@@ -812,8 +836,8 @@ export const waterTheme = createTheme({
             disabled: 'rgba(0,54,58,0.3)',
             disabledBackground: 'rgba(0,54,58,0.08)',
         },
-        success: { main: '#0e7490', light: '#ecfeff', dark: '#155e75' },
-        error:   { main: '#dc2626', light: '#fef2f2', dark: '#991b1b' },
+        success: { main: '#059669', light: '#d1fae5', dark: '#047857', contrastText: '#ffffff' },
+        error:   { main: '#dc2626', light: '#fef2f2', dark: '#991b1b', contrastText: '#ffffff' },
     },
     sidebar: {
         background: 'linear-gradient(to bottom, rgba(0, 54, 58, 0.85), rgba(0, 131, 143, 0.4)), url("/images/water.avif") center bottom / cover no-repeat',

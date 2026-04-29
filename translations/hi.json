@@ -6,6 +6,7 @@
     "draft": "मसौदा",
     "signatures": "हस्ताक्षर हेतु अनुबंध",
     "reviewApproval": "समीक्षा और अनुमोदन",
+    "inbox": "इनबॉक्स",
     "template": "टेम्पलेट",
     "terminated": "समाप्त"
   },
@@ -64,6 +65,21 @@
   "reviewApproval": {
     "title": "समीक्षा और अनुमोदन",
     "description": "समीक्षाधीन अनुबंध"
+  },
+  "inbox": {
+    "title": "इनबॉक्स",
+    "description": "आपको सौंपे गए कार्य और हस्ताक्षर",
+    "loading": "लोड हो रहा है…",
+    "inboxTab": "इनबॉक्स",
+    "sendboxTab": "सेंडबॉक्स",
+    "type": "प्रकार",
+    "typeReviewApproval": "समीक्षा और अनुमोदन",
+    "typeSignature": "हस्ताक्षर",
+    "noInboxTitle": "कोई लंबित कार्य नहीं",
+    "noInboxDescription": "वर्तमान में आपको कोई अनुबंध कार्रवाई के लिए नहीं सौंपा गया है।",
+    "noSendboxTitle": "कोई पूर्ण आइटम नहीं",
+    "noSendboxDescription": "पूर्ण समीक्षाएं, अनुमोदन और हस्ताक्षर यहाँ दिखाई देंगे।",
+    "noFilteredDescription": "अधिक परिणाम देखने के लिए फ़िल्टर समायोजित करें।"
   },
   "template": {
     "title": "अनुबंध टेम्पलेट",

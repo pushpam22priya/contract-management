@@ -5,7 +5,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import AppButton from '@/components/common/AppButton';
 import StatsCard from '@/components/dashboard/StatsCard';
 import RecentContracts from '@/components/dashboard/RecentContracts';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { contractService } from '@/services/contractService';
 import { authService } from '@/services/authService';
 import { useRouter } from 'next/navigation';
@@ -34,119 +34,119 @@ export default function DashboardPage() {
         waitingForSigCount: 0,
     });
 
-    useEffect(() => {
-        const loadStats = async () => {
-            const currentUser = authService.getCurrentUser();
-            if (!currentUser) return;
+    const loadStats = useCallback(async () => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) return;
 
-            try {
-                const allContracts = await contractService.getAllContracts();
+        try {
+            const allContracts = await contractService.getAllContracts();
 
-                // Count logic for all statuses
-                let draft = 0;
-                let underReview = 0;
-                let underApproval = 0;
-                let active = 0;
-                let expiring = 0;
-                let expired = 0;
-                let requested = 0;
-                let receivedSigned = 0;
-                let waitingForSig = 0;
+            // Count logic for all statuses
+            let draft = 0;
+            let underReview = 0;
+            let underApproval = 0;
+            let active = 0;
+            let expiring = 0;
+            let expired = 0;
+            let requested = 0;
+            let receivedSigned = 0;
+            let waitingForSig = 0;
 
-                if (Array.isArray(allContracts)) {
-                    // Build a status lookup so we can apply the same superseded-chain
-                    // exclusion that the contracts page uses (hide old expired versions
-                    // whose renewal has already progressed or been terminated).
-                    const statusById = new Map(allContracts.map(c => [c.id, c.status]));
+            if (Array.isArray(allContracts)) {
+                // Build a status lookup so we can apply the same superseded-chain
+                // exclusion that the contracts page uses (hide old expired versions
+                // whose renewal has already progressed or been terminated).
+                const statusById = new Map(allContracts.map(c => [c.id, c.status]));
 
-                    allContracts.forEach(c => {
-                        const isCreator = c.createdBy === currentUser.email;
-                        // Unlocked internal signer = it's their turn to sign
-                        const isInternalSignerPending = (c.internalSigners || []).some(
-                            (s: any) => s.email === currentUser.email && s.status === 'unlocked'
-                        );
-                        // Legacy single-signer flow
-                        const isLegacySigner = c.signer?.email === currentUser.email;
+                allContracts.forEach(c => {
+                    const isCreator = c.createdBy === currentUser.email;
+                    // Unlocked internal signer = it's their turn to sign
+                    const isInternalSignerPending = (c.internalSigners || []).some(
+                        (s: any) => s.email === currentUser.email && s.status === 'unlocked'
+                    );
+                    // Legacy single-signer flow
+                    const isLegacySigner = c.signer?.email === currentUser.email;
 
-                        const isRelevant = isCreator || isInternalSignerPending || isLegacySigner;
-                        if (!isRelevant) return;
+                    const isRelevant = isCreator || isInternalSignerPending || isLegacySigner;
+                    if (!isRelevant) return;
 
-                        // Creator-owned contract counters
-                        if (isCreator) {
-                            if (c.status === ContractStatus.DRAFT) draft++;
-                            if (
-                                c.status === ContractStatus.IN_REVIEW ||
-                                c.status === ContractStatus.REVIEW_APPROVAL
-                            ) underReview++;
-                            if (
-                                c.status === ContractStatus.IN_APPROVAL ||
-                                c.status === ContractStatus.REVIEWED
-                            ) underApproval++;
-                            if (c.status === ContractStatus.ACTIVE) active++;
-                            if (c.status === ContractStatus.EXPIRING) expiring++;
-
-                            // Only count expired contracts that are actually visible on the
-                            // contracts page. Mirror the exact same exclusion logic:
-                            // hide if the contract has a renewal whose status is anything
-                            // beyond draft-stage (same set as CONTRACT_PAGE_STATUSES) or terminated.
-                            if (c.status === ContractStatus.EXPIRED) {
-                                let superseded = false;
-                                if (c.renewedContractId) {
-                                    const renewalStatus = statusById.get(c.renewedContractId);
-                                    const hiddenWhenRenewalIs = new Set([
-                                        ContractStatus.APPROVED,
-                                        ContractStatus.READY_FOR_SIGNATURE,
-                                        ContractStatus.WAITING_FOR_SIGNATURE,
-                                        ContractStatus.SIGNED_BY_EVERYONE,
-                                        ContractStatus.SIGNED,
-                                        ContractStatus.ACTIVE,
-                                        ContractStatus.EXPIRING,
-                                        ContractStatus.EXPIRED,
-                                        ContractStatus.TERMINATED,
-                                    ]);
-                                    if (renewalStatus && hiddenWhenRenewalIs.has(renewalStatus as ContractStatus)) {
-                                        superseded = true;
-                                    }
-                                }
-                                if (!superseded) expired++;
-                            }
-
-                            // Shared but not all signed yet
-                            if (c.status === ContractStatus.WAITING_FOR_SIGNATURE) requested++;
-                            // All assigned parties have signed
-                            if (c.status === ContractStatus.SIGNED_BY_EVERYONE) receivedSigned++;
-                        }
-
-                        // Contracts THIS user still needs to sign (not yet completed)
+                    // Creator-owned contract counters
+                    if (isCreator) {
+                        if (c.status === ContractStatus.DRAFT) draft++;
                         if (
-                            isInternalSignerPending ||
-                            (isLegacySigner && c.status === ContractStatus.WAITING_FOR_SIGNATURE)
-                        ) {
-                            waitingForSig++;
+                            c.status === ContractStatus.IN_REVIEW ||
+                            c.status === ContractStatus.REVIEW_APPROVAL
+                        ) underReview++;
+                        if (
+                            c.status === ContractStatus.IN_APPROVAL ||
+                            c.status === ContractStatus.REVIEWED
+                        ) underApproval++;
+                        if (c.status === ContractStatus.ACTIVE) active++;
+                        if (c.status === ContractStatus.EXPIRING) expiring++;
+
+                        // Only count expired contracts that are actually visible on the
+                        // contracts page. Mirror the exact same exclusion logic:
+                        // hide if the contract has a renewal whose status is anything
+                        // beyond draft-stage (same set as CONTRACT_PAGE_STATUSES) or terminated.
+                        if (c.status === ContractStatus.EXPIRED) {
+                            let superseded = false;
+                            if (c.renewedContractId) {
+                                const renewalStatus = statusById.get(c.renewedContractId);
+                                const hiddenWhenRenewalIs = new Set([
+                                    ContractStatus.APPROVED,
+                                    ContractStatus.READY_FOR_SIGNATURE,
+                                    ContractStatus.WAITING_FOR_SIGNATURE,
+                                    ContractStatus.SIGNED_BY_EVERYONE,
+                                    ContractStatus.SIGNED,
+                                    ContractStatus.ACTIVE,
+                                    ContractStatus.EXPIRING,
+                                    ContractStatus.EXPIRED,
+                                    ContractStatus.TERMINATED,
+                                ]);
+                                if (renewalStatus && hiddenWhenRenewalIs.has(renewalStatus as ContractStatus)) {
+                                    superseded = true;
+                                }
+                            }
+                            if (!superseded) expired++;
                         }
-                    });
-                } else {
-                    console.error("DashboardPage: getAllContracts returned non-array", allContracts);
-                }
 
-                setStats({
-                    draftCount: draft,
-                    underReviewCount: underReview,
-                    underApprovalCount: underApproval,
-                    activeCount: active,
-                    expiringCount: expiring,
-                    expiredCount: expired,
-                    requestedCount: requested,
-                    receivedSignedCount: receivedSigned,
-                    waitingForSigCount: waitingForSig,
+                        // Shared but not all signed yet
+                        if (c.status === ContractStatus.WAITING_FOR_SIGNATURE) requested++;
+                        // All assigned parties have signed
+                        if (c.status === ContractStatus.SIGNED_BY_EVERYONE) receivedSigned++;
+                    }
+
+                    // Contracts THIS user still needs to sign (not yet completed)
+                    if (
+                        isInternalSignerPending ||
+                        (isLegacySigner && c.status === ContractStatus.WAITING_FOR_SIGNATURE)
+                    ) {
+                        waitingForSig++;
+                    }
                 });
-            } catch (error) {
-                console.error("DashboardPage: Failed to load stats", error);
+            } else {
+                console.error("DashboardPage: getAllContracts returned non-array", allContracts);
             }
-        };
 
-        loadStats();
+            setStats({
+                draftCount: draft,
+                underReviewCount: underReview,
+                underApprovalCount: underApproval,
+                activeCount: active,
+                expiringCount: expiring,
+                expiredCount: expired,
+                requestedCount: requested,
+                receivedSignedCount: receivedSigned,
+                waitingForSigCount: waitingForSig,
+            });
+        } catch (error) {
+            console.error("DashboardPage: Failed to load stats", error);
+        }
     }, []);
+
+    useEffect(() => {
+        loadStats();
+    }, [loadStats]);
 
     const statsData = [
         {
@@ -397,6 +397,7 @@ export default function DashboardPage() {
             <CreateContractDialog
                 open={createWizardOpen}
                 onClose={() => setCreateWizardOpen(false)}
+                onSuccess={loadStats}
             />
         </AppLayout>
     );

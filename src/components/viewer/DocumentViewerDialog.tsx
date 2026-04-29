@@ -86,6 +86,7 @@ interface DocumentViewerDialogProps {
     assignedPartyId?: string;
     assignedPartyLabel?: string;
     assignedPartyColor?: string;
+    extraActions?: React.ReactNode;
 }
 
 export default function DocumentViewerDialog({
@@ -116,6 +117,7 @@ export default function DocumentViewerDialog({
     assignedPartyId,
     assignedPartyLabel,
     assignedPartyColor,
+    extraActions,
 }: DocumentViewerDialogProps) {
 
 
@@ -659,6 +661,7 @@ export default function DocumentViewerDialog({
     // ✅ Disable save when party fields are partially filled or not all assigned fields are complete
     const dialogActions = (
         <>
+            {extraActions}
             {onSave && (
                 <Tooltip title={getSaveDisabledReason()} arrow>
                     <span>

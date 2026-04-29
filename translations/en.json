@@ -6,6 +6,7 @@
     "draft": "Draft",
     "signatures": "Contract for Signature",
     "reviewApproval": "Review & Approval",
+    "inbox": "Inbox",
     "template": "Template",
     "terminated": "Terminated"
   },
@@ -64,6 +65,21 @@
   "reviewApproval": {
     "title": "Review & Approval",
     "description": "Contracts under review"
+  },
+  "inbox": {
+    "title": "Inbox",
+    "description": "Tasks and signatures assigned to you",
+    "loading": "Loading…",
+    "inboxTab": "Inbox",
+    "sendboxTab": "Sendbox",
+    "type": "Type",
+    "typeReviewApproval": "Review & Approval",
+    "typeSignature": "Signature",
+    "noInboxTitle": "No pending tasks",
+    "noInboxDescription": "No contracts are currently assigned to you for action.",
+    "noSendboxTitle": "No completed items",
+    "noSendboxDescription": "Completed reviews, approvals, and signatures will appear here.",
+    "noFilteredDescription": "Try adjusting your filters to see more results."
   },
   "template": {
     "title": "Contract Templates",

@@ -20,6 +20,7 @@ import DraftsIcon from '@mui/icons-material/Drafts';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import DrawIcon from '@mui/icons-material/Draw';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import AllInboxIcon from '@mui/icons-material/AllInbox';
 import MenuIcon from '@mui/icons-material/Menu';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import { useTranslations } from 'next-intl';
@@ -53,8 +54,9 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
         { text: t('dashboard'), icon: <DashboardOutlinedIcon sx={{ fontSize: 20 }} />, path: '/dashboard' },
         // { text: t('allContracts'), icon: <LayersOutlinedIcon sx={{ fontSize: 20 }} />, path: '/all-contracts' },
         { text: t('contracts'), icon: <ArticleOutlinedIcon sx={{ fontSize: 20 }} />, path: '/contracts' },
-        { text: t('signatures'), icon: <DrawIcon sx={{ fontSize: 20 }} />, path: '/signatures' },
-        { text: t('reviewApproval'), icon: <DraftsIcon sx={{ fontSize: 20 }} />, path: '/review-approval' },
+        // { text: t('signatures'), icon: <DrawIcon sx={{ fontSize: 20 }} />, path: '/signatures' },
+        // { text: t('reviewApproval'), icon: <DraftsIcon sx={{ fontSize: 20 }} />, path: '/review-approval' },
+        { text: t('inbox'), icon: <DraftsIcon sx={{ fontSize: 20 }} />, path: '/inbox' },
         ...(isAdmin ? [{
             text: t('template'),
             icon: <DescriptionOutlinedIcon sx={{ fontSize: 20 }} />,

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+
 import {
     Box,
     Typography,
@@ -50,7 +50,6 @@ interface CreateContractDialogProps {
 }
 
 const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, teamId }: CreateContractDialogProps) => {
-    const router = useRouter();
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
@@ -423,6 +422,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             console.log('Contract saved successfully with PDF!');
 
             setSnackbar({ open: true, message: 'Contract Saved successfully!', severity: 'success' });
+            onSuccess?.();
             return activeContractId;
         } catch (err) {
             console.error('❌ Error creating contract:', err);
@@ -514,7 +514,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
 
         if (pendingAction === 'close') {
             handleClose();
-            router.push('/draft');
+            onSuccess?.();
         } else if (pendingAction === 'review') {
             setReviewDialogOpen(true);
         } else if (pendingAction === 'signature') {
@@ -574,11 +574,10 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             if (result.success) {
                 setSnackbar({ open: true, message: 'Mixed signature assignments created successfully', severity: 'success' });
                 setMultiPartyDialogOpen(false);
-                // After submitting for signature, close dialog and redirect
+                // After submitting for signature, close dialog
                 setTimeout(() => {
                     handleClose();
                     onSuccess?.(); // Trigger refresh if provided
-                    router.push('/contracts');
                 }, 1500);
                 return { success: true };
             } else {
@@ -1057,12 +1056,10 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                         if (result.success) {
                             setSnackbar({ open: true, message: result.message, severity: 'success' });
                             setReviewDialogOpen(false);
-                            // After submitting for review, we should close the create dialog 
-                            // as the contract is no longer in "Edit/Draft" mode
+                            // After submitting for review, close the dialog
                             setTimeout(() => {
                                 handleClose();
                                 onSuccess?.(); // Trigger refresh if provided
-                                router.push('/draft');
                             }, 1500);
                         } else {
                             setSnackbar({ open: true, message: result.message, severity: 'error' });
@@ -1087,11 +1084,10 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                         if (result.success) {
                             setSnackbar({ open: true, message: result.message, severity: 'success' });
                             setSignatureDialogOpen(false);
-                            // After submitting for signature, close dialog and redirect
+                            // After submitting for signature, close dialog
                             setTimeout(() => {
                                 handleClose();
                                 onSuccess?.(); // Trigger refresh if provided
-                                router.push('/contracts');
                             }, 1500);
                         }
                         return result;
