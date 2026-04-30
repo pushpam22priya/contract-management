@@ -111,7 +111,8 @@
     "theme": "Theme",
     "language": "Language",
     "switchToHindi": "Switch to Hindi",
-    "switchToEnglish": "Switch to English"
+    "switchToEnglish": "Switch to English",
+    "settings": "Settings"
   },
   "recentContracts": {
     "title": "Recent Contracts",
@@ -312,5 +313,22 @@
     "awaitingReviews": "Awaiting Reviews",
     "myTasks": "My Tasks",
     "history": "History"
+  },
+  "profileSettings": {
+    "title": "Profile Settings",
+    "email": "Email",
+    "fullName": "Full Name",
+    "fullNamePlaceholder": "Enter your full name",
+    "department": "Department",
+    "departmentPlaceholder": "e.g. Legal, Finance, Operations",
+    "organization": "Organization",
+    "organizationPlaceholder": "Enter your organization name",
+    "saveChanges": "Save Changes",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "saveSuccess": "Profile updated successfully",
+    "saveError": "Failed to update profile",
+    "admin": "Admin",
+    "user": "User"
   }
 }

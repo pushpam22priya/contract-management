@@ -11,6 +11,9 @@ export interface LoggedInUser {
     email: string;
     lastLogin: string;
     isAdmin: boolean;
+    name?: string;
+    department?: string;
+    organization?: string;
 }
 
 export interface LoginCredentials {

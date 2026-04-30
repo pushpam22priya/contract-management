@@ -111,7 +111,8 @@
     "theme": "थीम",
     "language": "भाषा",
     "switchToHindi": "हिंदी में बदलें",
-    "switchToEnglish": "अंग्रेज़ी में बदलें"
+    "switchToEnglish": "अंग्रेज़ी में बदलें",
+    "settings": "सेटिंग्स"
   },
   "recentContracts": {
     "title": "हालिया अनुबंध",
@@ -312,5 +313,22 @@
     "awaitingReviews": "समीक्षाओं की प्रतीक्षा",
     "myTasks": "मेरे कार्य",
     "history": "इतिहास"
+  },
+  "profileSettings": {
+    "title": "प्रोफ़ाइल सेटिंग्स",
+    "email": "ईमेल",
+    "fullName": "पूरा नाम",
+    "fullNamePlaceholder": "अपना पूरा नाम दर्ज करें",
+    "department": "विभाग",
+    "departmentPlaceholder": "जैसे कानूनी, वित्त, संचालन",
+    "organization": "संगठन",
+    "organizationPlaceholder": "अपने संगठन का नाम दर्ज करें",
+    "saveChanges": "परिवर्तन सहेजें",
+    "saving": "सहेज रहे हैं...",
+    "cancel": "रद्द करें",
+    "saveSuccess": "प्रोफ़ाइल सफलतापूर्वक अपडेट की गई",
+    "saveError": "प्रोफ़ाइल अपडेट करने में विफल",
+    "admin": "एडमिन",
+    "user": "उपयोगकर्ता"
   }
 }

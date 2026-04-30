@@ -5,6 +5,7 @@ import { AppBar, Toolbar, Box, IconButton, Badge, Typography, Tooltip, useMediaQ
 import { alpha } from '@mui/material/styles';
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ContractIcon from '@/components/ContractIcon';
@@ -13,6 +14,7 @@ import { authService } from '@/services/authService';
 import { useTranslations } from 'next-intl';
 import LanguageToggle from './LanguageToggle';
 import ThemeToggle from './ThemeToggle';
+import ProfileSettingsDialog from './ProfileSettingsDialog';
 
 interface HeaderProps {
     onMobileMenuToggle?: () => void;
@@ -24,6 +26,7 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const [moreAnchorEl, setMoreAnchorEl] = useState<null | HTMLElement>(null);
+    const [profileOpen, setProfileOpen] = useState(false);
 
     const handleLogout = () => {
         authService.logout();
@@ -34,6 +37,7 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
     const handleMoreClose = () => setMoreAnchorEl(null);
 
     return (
+        <>
         <AppBar
             position="fixed"
             elevation={0}
@@ -126,24 +130,35 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
                         </IconButton>
                     </Tooltip>
 
-                    {/* Desktop: logout inline */}
+                    {/* Desktop: settings + logout inline */}
                     {!isMobile && (
-                        <Tooltip title={t('logout')} arrow placement="bottom">
-                            <IconButton
-                                onClick={handleLogout}
-                                size="small"
-                                sx={{
-                                    p: 0.5,
-                                    color: 'text.secondary',
-                                    '&:hover': {
-                                        color: 'error.main',
-                                        bgcolor: 'rgba(211, 47, 47, 0.08)',
-                                    },
-                                }}
-                            >
-                                <LogoutOutlinedIcon sx={{ fontSize: '22px' }} />
-                            </IconButton>
-                        </Tooltip>
+                        <>
+                            <Tooltip title={t('settings')} arrow placement="bottom">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setProfileOpen(true)}
+                                    sx={{ p: 0.5, color: 'text.secondary' }}
+                                >
+                                    <SettingsOutlinedIcon sx={{ fontSize: '22px' }} />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title={t('logout')} arrow placement="bottom">
+                                <IconButton
+                                    onClick={handleLogout}
+                                    size="small"
+                                    sx={{
+                                        p: 0.5,
+                                        color: 'text.secondary',
+                                        '&:hover': {
+                                            color: 'error.main',
+                                            bgcolor: 'rgba(211, 47, 47, 0.08)',
+                                        },
+                                    }}
+                                >
+                                    <LogoutOutlinedIcon sx={{ fontSize: '22px' }} />
+                                </IconButton>
+                            </Tooltip>
+                        </>
                     )}
 
                     {/* Mobile: three-dot overflow menu */}
@@ -209,6 +224,26 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
 
                                 <Divider sx={{ mx: 1.5 }} />
 
+                                {/* Settings */}
+                                <MenuItem
+                                    onClick={() => { handleMoreClose(); setProfileOpen(true); }}
+                                    sx={{
+                                        mx: 0.75,
+                                        mt: 0.5,
+                                        borderRadius: 1.5,
+                                        px: 1.5,
+                                        py: 1,
+                                        '&:hover': { bgcolor: 'action.hover' },
+                                    }}
+                                >
+                                    <SettingsOutlinedIcon sx={{ fontSize: 18, mr: 1.25, color: 'text.secondary' }} />
+                                    <Typography sx={{ fontSize: '0.82rem', fontWeight: 500 }}>
+                                        {t('settings')}
+                                    </Typography>
+                                </MenuItem>
+
+                                <Divider sx={{ mx: 1.5 }} />
+
                                 {/* Logout */}
                                 <MenuItem
                                     onClick={() => { handleMoreClose(); handleLogout(); }}
@@ -234,5 +269,8 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
                 </Box>
             </Toolbar>
         </AppBar>
+
+        <ProfileSettingsDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
+        </>
     );
 }
