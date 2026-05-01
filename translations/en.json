@@ -330,5 +330,16 @@
     "saveError": "Failed to update profile",
     "admin": "Admin",
     "user": "User"
+  },
+  "autofill": {
+    "button": "Autofill",
+    "tooltip": "Fill fields from your profile",
+    "dialogTitle": "Select Your Party",
+    "dialogDescription": "Choose the party you represent to autofill your profile data into matching fields.",
+    "dialogConfirm": "Autofill",
+    "successMessage": "{count} fields filled from your profile",
+    "noMatchMessage": "No matching fields found for your profile data",
+    "noProfileMessage": "Please complete your profile in Settings first",
+    "noFieldsMessage": "No fillable fields found in this document"
   }
 }

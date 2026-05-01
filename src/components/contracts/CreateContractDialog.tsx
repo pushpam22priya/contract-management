@@ -16,6 +16,7 @@ import {
     useTheme,
 } from '@mui/material';
 import { Save, ArrowBack, ArrowForward } from '@mui/icons-material';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import AppButton from '@/components/common/AppButton';
 import BaseDialog from '@/components/common/BaseDialog';
 import ConfirmationDialog from '@/components/common/ConfirmationDialog';
@@ -23,6 +24,7 @@ import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import RequestReviewDialog from '@/components/contracts/RequestReviewDialog';
 import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
 import MultiPartySignatureDialog from '@/components/contracts/MultiPartySignatureDialog';
+import AutofillPartyDialog from '@/components/contracts/AutofillPartyDialog';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import PartyValidationWarningPopup from '@/components/viewer/pdfViewer/PartyValidationWarningPopup';
 import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
@@ -100,6 +102,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
     const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
     const [multiPartyDialogOpen, setMultiPartyDialogOpen] = useState(false);
+    const [autofillPartyDialogOpen, setAutofillPartyDialogOpen] = useState(false);
 
     // Track filled field values
     // Explanation: This stores the values user enters in form fields (e.g., {"client_name": "John Doe"})
@@ -449,6 +452,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         setContractId(null); // Reset so next dialog creates a new contract
         setFilledFieldValues({}); // Reset for next contract
         setValidationTriggered(false);
+        setAutofillPartyDialogOpen(false);
 
         // Dispose PDF viewer
         pdfViewerRef.current?.dispose();
@@ -591,6 +595,58 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         }
     };
 
+    const handleAutofillConfirm = (partyId: string) => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) {
+            setSnackbar({ open: true, message: 'Please log in to use autofill', severity: 'warning' });
+            return;
+        }
+
+        const profileData = {
+            name: currentUser.name?.trim() || '',
+            department: currentUser.department?.trim() || '',
+            organization: currentUser.organization?.trim() || '',
+            email: currentUser.email?.trim() || '',
+        };
+
+        if (!profileData.name && !profileData.department && !profileData.organization) {
+            setSnackbar({ open: true, message: 'Please complete your profile in Settings first', severity: 'warning' });
+            return;
+        }
+
+        try {
+            const count = pdfViewerRef.current?.autofillFields(partyId, profileData) ?? 0;
+            if (count === 0) {
+                setSnackbar({ open: true, message: 'No matching fields found for your profile data', severity: 'warning' });
+            } else {
+                setSnackbar({ open: true, message: `${count} field${count !== 1 ? 's' : ''} filled from your profile`, severity: 'success' });
+            }
+        } catch {
+            setSnackbar({ open: true, message: 'Something went wrong during autofill. Please try manually.', severity: 'error' });
+        }
+    };
+
+    const handleAutofillClick = () => {
+        const parties = selectedTemplate?.parties || [];
+        const formFields = selectedTemplate?.formFields || [];
+
+        const getTextFieldCount = (partyId: string) =>
+            (formFields as any[]).filter((f) => f.assignedParty === partyId && f.type !== 'Sig' && f.type !== 'signature').length;
+
+        const partiesWithFields = parties.filter((p: any) => getTextFieldCount(p.id) > 0);
+
+        if (partiesWithFields.length === 0) {
+            setSnackbar({ open: true, message: 'No fillable fields found in this document', severity: 'warning' });
+            return;
+        }
+
+        if (partiesWithFields.length === 1) {
+            handleAutofillConfirm(partiesWithFields[0].id);
+        } else {
+            setAutofillPartyDialogOpen(true);
+        }
+    };
+
     const handleNextStep = () => {
         // Validation before proceeding to Step 2
         if (!selectedTemplate) {
@@ -651,6 +707,21 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             >
                 Back to Details
             </AppButton>
+
+            <Tooltip title="Fill fields from your profile" arrow>
+                <span>
+                    <AppButton
+                        variant="outlined"
+                        onClick={handleAutofillClick}
+                        disabled={!documentLoaded || saving}
+                        size="small"
+                        startIcon={<AutoFixHighIcon sx={{ fontSize: 16 }} />}
+                        sx={{ borderRadius: 2, py: 0.5 }}
+                    >
+                        Autofill
+                    </AppButton>
+                </span>
+            </Tooltip>
 
             <Tooltip title={hasPartialParty ? 'Complete all fields for the party you started' : ''} arrow>
                 <span>
@@ -1107,6 +1178,18 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                     fieldValues={filledFieldValues}
                 />
             )}
+
+            {/* Autofill Party Selection Dialog */}
+            <AutofillPartyDialog
+                open={autofillPartyDialogOpen}
+                onClose={() => setAutofillPartyDialogOpen(false)}
+                onConfirm={(partyId) => {
+                    setAutofillPartyDialogOpen(false);
+                    handleAutofillConfirm(partyId);
+                }}
+                parties={selectedTemplate?.parties || []}
+                formFields={selectedTemplate?.formFields || []}
+            />
 
             {/* Notification Snackbar */}
             <NotificationSnackbar

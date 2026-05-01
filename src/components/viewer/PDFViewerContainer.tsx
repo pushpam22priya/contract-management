@@ -85,6 +85,7 @@ export interface PDFViewerHandle {
     getFieldPartyAssignment: (fieldName: string) => { partyId: string; partyLabel: string } | null;
     getAllFieldPartyAssignments: () => Record<string, { partyId: string; partyLabel: string }>;
     highlightPartyFields: (partyId: string | null) => void;
+    autofillFields: (partyId: string | null, profileData: { name?: string; department?: string; organization?: string; email?: string }) => number;
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
@@ -1356,6 +1357,105 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                 } catch (error) {
                     console.error(`❌ [PARTY HIGHLIGHT] Error:`, error);
                 }
+            },
+
+            /**
+             * Autofill text fields for a given party using profile data.
+             * Skips signature fields, read-only fields, already-filled fields, and wrong-party fields.
+             * Returns the count of fields successfully filled.
+             */
+            autofillFields: (partyId: string | null, profileData: { name?: string; department?: string; organization?: string; email?: string }): number => {
+                if (!viewerInstance.current) return 0;
+
+                // Priority-ordered keyword → profile value mappings
+                const mappings = [
+                    { keywords: ['name', 'fullname', 'full_name', 'signer_name', 'client_name', 'signername', 'clientname'], value: profileData.name },
+                    { keywords: ['organization', 'org', 'company', 'company_name', 'companyname'], value: profileData.organization },
+                    { keywords: ['department', 'dept', 'division'], value: profileData.department },
+                    { keywords: ['email', 'signer_email', 'contact_email', 'signeremail', 'contactemail'], value: profileData.email },
+                ];
+
+                let filledCount = 0;
+
+                try {
+                    const { Core } = viewerInstance.current;
+                    const annotationManager = Core.annotationManager;
+                    const fieldManager = annotationManager.getFieldManager();
+                    const allFields = fieldManager.getFields() || [];
+                    const fieldsArray = Array.isArray(allFields) ? allFields : Array.from(allFields);
+
+                    fieldsArray.forEach((field: any) => {
+                        try {
+                            const fieldName: string = field.name;
+                            if (!fieldName) return;
+
+                            // Skip signature fields
+                            const widgets = field.widgets || [];
+                            const isSignature = field.type === 'Sig' ||
+                                (widgets[0] instanceof Core.Annotations.SignatureWidgetAnnotation);
+                            if (isSignature) return;
+
+                            // Skip read-only fields
+                            if (field.flags?.ReadOnly || field.isReadOnly?.()) return;
+
+                            // Skip if field already has a value
+                            const currentValue = field.getValue ? field.getValue() : '';
+                            if (currentValue && currentValue.toString().trim() !== '') return;
+
+                            // Check party assignment when partyId is specified
+                            if (partyId !== null) {
+                                const fieldDef = formFieldsRef.current?.find((f: any) => f.name === fieldName);
+                                const assignedParty =
+                                    fieldDef?.assignedParty ||
+                                    fieldPartyAssignmentsRef.current.get(fieldName)?.partyId ||
+                                    widgets[0]?.getCustomData?.('assignedParty');
+
+                                // Skip fields not assigned to the selected party
+                                if (!assignedParty || assignedParty !== partyId) return;
+                            }
+
+                            // Match field name against keyword mappings (first match wins)
+                            const fieldNameNorm = fieldName.toLowerCase().replace(/[\s-]/g, '_');
+                            let matchedValue: string | undefined;
+
+                            for (const mapping of mappings) {
+                                if (!mapping.value?.trim()) continue;
+                                if (mapping.keywords.some(kw => fieldNameNorm.includes(kw))) {
+                                    matchedValue = mapping.value.trim();
+                                    break;
+                                }
+                            }
+
+                            if (!matchedValue) return;
+
+                            // Set value in the PDF field
+                            if (field.setValue && typeof field.setValue === 'function') {
+                                field.setValue(matchedValue);
+                                capturedFieldValuesRef.current.set(fieldName, matchedValue);
+
+                                // Redraw widget to show the new value visually
+                                if (widgets.length > 0) {
+                                    annotationManager.redrawAnnotation(widgets[0]);
+                                }
+
+                                // Notify parent (updates filledFieldValues state in CreateContractDialog / DocumentViewerDialog)
+                                if (onFieldChangeRef.current) {
+                                    onFieldChangeRef.current(fieldName, matchedValue);
+                                }
+
+                                filledCount++;
+                            }
+                        } catch (fieldError) {
+                            console.warn(`⚠️ [AUTOFILL] Skipping field due to error:`, fieldError);
+                        }
+                    });
+
+                    console.log(`✅ [AUTOFILL] Filled ${filledCount} fields for party: ${partyId || 'all'}`);
+                } catch (error) {
+                    console.error(`❌ [AUTOFILL] Unexpected error:`, error);
+                }
+
+                return filledCount;
             },
 
             /**

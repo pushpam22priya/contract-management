@@ -5,6 +5,8 @@
 import AppButton from '@/components/common/AppButton';
 import { Box,  Alert, AlertColor, Typography, Chip, Tooltip } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import { authService } from '@/services/authService';
 import dynamic from 'next/dynamic';
 import { useRef, useState, useEffect, useMemo } from 'react';
 import BaseDialog from '@/components/common/BaseDialog';
@@ -639,6 +641,39 @@ export default function DocumentViewerDialog({
         }
     };
 
+    const handleAutofill = () => {
+        if (!assignedPartyId) return;
+
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) {
+            setSnackbar({ open: true, message: 'Please log in to use autofill', severity: 'warning' });
+            return;
+        }
+
+        const profileData = {
+            name: currentUser.name?.trim() || '',
+            department: currentUser.department?.trim() || '',
+            organization: currentUser.organization?.trim() || '',
+            email: currentUser.email?.trim() || '',
+        };
+
+        if (!profileData.name && !profileData.department && !profileData.organization) {
+            setSnackbar({ open: true, message: 'Please complete your profile in Settings first', severity: 'warning' });
+            return;
+        }
+
+        try {
+            const count = pdfViewerRef.current?.autofillFields(assignedPartyId, profileData) ?? 0;
+            if (count === 0) {
+                setSnackbar({ open: true, message: 'No matching fields found for your profile data', severity: 'warning' });
+            } else {
+                setSnackbar({ open: true, message: `${count} field${count !== 1 ? 's' : ''} filled from your profile`, severity: 'success' });
+            }
+        } catch {
+            setSnackbar({ open: true, message: 'Something went wrong during autofill. Please try manually.', severity: 'error' });
+        }
+    };
+
     // ✅ Determine if save button should be disabled
     // For internal signers (assignedPartyId is set): require all assigned party fields to be filled
     // For legacy client signing mode: require signature committed
@@ -662,6 +697,22 @@ export default function DocumentViewerDialog({
     const dialogActions = (
         <>
             {extraActions}
+            {assignedPartyId && !readOnly && (
+                <Tooltip title="Fill fields from your profile" arrow>
+                    <span>
+                        <AppButton
+                            variant="outlined"
+                            onClick={handleAutofill}
+                            disabled={saving}
+                            size="small"
+                            startIcon={<AutoFixHighIcon sx={{ fontSize: 16 }} />}
+                            sx={{ borderRadius: 2, py: 0.6 }}
+                        >
+                            Autofill
+                        </AppButton>
+                    </span>
+                </Tooltip>
+            )}
             {onSave && (
                 <Tooltip title={getSaveDisabledReason()} arrow>
                     <span>
