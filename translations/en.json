@@ -341,5 +341,17 @@
     "noMatchMessage": "No matching fields found for your profile data",
     "noProfileMessage": "Please complete your profile in Settings first",
     "noFieldsMessage": "No fillable fields found in this document"
+  },
+  "profileMapping": {
+    "dialogTitle": "Map Fields to Profile",
+    "dialogDescription": "Map each field to a user profile key. When a signer autofills, the matching profile value is inserted automatically.",
+    "columnField": "Field",
+    "columnParty": "Party",
+    "columnProfileKey": "Profile Key",
+    "keyNone": "— None —",
+    "sectionUnassigned": "Unassigned",
+    "noMappableFields": "No mappable fields found in this template.",
+    "saveMappings": "Save Mappings",
+    "cancel": "Cancel"
   }
 }

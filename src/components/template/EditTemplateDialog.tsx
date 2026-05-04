@@ -29,8 +29,10 @@ import { Template, PartyConfiguration, FormFieldDefinition } from '@/types/templ
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import PartyConfigDialog from '@/components/template/PartyConfigDialog';
 import PartyAssignmentPanel from '@/components/template/PartyAssignmentPanel';
+import ProfileFieldMappingDialog from '@/components/template/ProfileFieldMappingDialog';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Category } from '@/types/template';
+import { getProfileKeyOptions, ProfileKeyOption } from '@/utils/profileKeyOptions';
 
 interface EditTemplateDialogProps {
     open: boolean;
@@ -72,6 +74,12 @@ export default function EditTemplateDialog({
     const [selectedFieldName, setSelectedFieldName] = useState<string | null>(null);
     const [showPartyPanel, setShowPartyPanel] = useState(true);
 
+    // Profile mapping state
+    const [showMappingDialog, setShowMappingDialog] = useState(false);
+    const [profileKeyOptions, setProfileKeyOptions] = useState<ProfileKeyOption[]>([]);
+    const pendingExportRef = useRef<{ exportedFormFields: any[]; xfdfData: string; fileToUpload: File | Blob | null } | null>(null);
+    const closePendingRef = useRef(false);
+
     // Load categories and pre-fill form on mount
     useEffect(() => {
         if (open) {
@@ -86,7 +94,7 @@ export default function EditTemplateDialog({
             setError('');
             setSuccess('');
             setShowNewCategoryInput(false);
-            setCurrentStep(1); // Always start at step 1
+            setCurrentStep(1);
             setDocumentUrl('');
 
             // Load existing parties and form fields
@@ -94,6 +102,9 @@ export default function EditTemplateDialog({
             setFormFields(template.formFields || []);
             setSelectedFieldName(null);
             setShowPartyPanel(true);
+
+            const user = authService.getCurrentUser();
+            if (user) setProfileKeyOptions(getProfileKeyOptions(user));
         }
     }, [open, template]);
 
@@ -338,12 +349,66 @@ export default function EditTemplateDialog({
     // State for modification tracking
     const [pdfModified, setPdfModified] = useState(false);
 
+    // executeSave: performs the actual update with resolved form fields
+    const executeSave = async (resolvedFormFields: any[], xfdfData: string, fileToUpload: File | Blob | null): Promise<boolean> => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) {
+            setError('You must be logged in to update templates');
+            setUpdating(false);
+            return false;
+        }
+
+        try {
+            console.log('💾 Updating template via Service...');
+            console.log(`  - Parties: ${parties.length}`);
+
+            const updateData: any = {
+                name: templateName.trim(),
+                description: description.trim(),
+                category: selectedCategory,
+                formFields: resolvedFormFields,
+                hasFormFields: resolvedFormFields.length > 0,
+                xfdfData: xfdfData,
+                parties: parties.length > 0 ? parties : undefined,
+            };
+
+            if (fileToUpload) {
+                updateData.file = fileToUpload;
+                updateData.fileName = selectedFile?.name || template.fileName;
+                updateData.fileType = 'pdf';
+            }
+
+            const result = await templateService.updateTemplate(template.id, updateData, currentUser.email);
+
+            if (result.success) {
+                console.log('✅ Template updated successfully!', result.template?.id);
+                setSnackbar({ open: true, message: result.message || 'Template updated successfully!', severity: 'success' });
+                onSuccess?.();
+
+                if (closePendingRef.current) {
+                    closePendingRef.current = false;
+                    handleClose();
+                }
+
+                return true;
+            } else {
+                setError(result.message);
+                return false;
+            }
+        } catch (err: any) {
+            console.error('❌ Error updating template:', err);
+            setError('Failed to update template. Please try again.');
+            return false;
+        } finally {
+            setUpdating(false);
+        }
+    };
+
     // Handle submit (Update)
     const handleSubmit = async (): Promise<boolean> => {
         setError('');
         setSuccess('');
 
-        // Validate form
         if (!templateName.trim()) {
             setError('Please enter a template name');
             return false;
@@ -365,7 +430,6 @@ export default function EditTemplateDialog({
             if (pdfViewerRef.current) {
                 pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
                 pdfViewerRef.current.setToolMode('Pan');
-                console.log('Set toolbar to View mode and Pan tool before save');
             }
             await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -373,21 +437,15 @@ export default function EditTemplateDialog({
 
             let xfdfData: string = '';
             let exportedFormFields: any[] = [];
-
-            // Start with selected file (if new) or null (if keeping existing)
             let fileToUpload: File | Blob | null = selectedFile;
 
             if (currentStep === 2 && pdfViewerRef.current) {
                 console.log('📦 Exporting data from Viewer...');
                 try {
-                    // 1. Export XFDF & Binary
                     const exportResult = await pdfViewerRef.current.exportAnnotations();
-
                     if (exportResult) {
                         xfdfData = exportResult.xfdfString;
                         console.log(`  ✓ Extracted XFDF (${xfdfData.length} chars)`);
-
-
                         if (pdfModified) {
                             console.log('  ⚠️ PDF was modified, using regenerated binary Blob...');
                             fileToUpload = exportResult.blob;
@@ -401,21 +459,15 @@ export default function EditTemplateDialog({
                     throw new Error('Failed to prepare document for update.');
                 }
 
-                // 3. Export form fields with party assignments
                 try {
                     exportedFormFields = await pdfViewerRef.current.exportFormFields();
                     console.log(`  ✓ Extracted ${exportedFormFields.length} form fields`);
 
-                    // Get party assignments from the viewer and merge with form fields
                     if (parties.length > 0) {
                         const partyAssignments = pdfViewerRef.current.getAllFieldPartyAssignments();
-                        console.log(`  ✓ Party assignments:`, partyAssignments);
-
-                        // Merge party assignments into form fields
                         exportedFormFields = exportedFormFields.map(field => {
                             const assignment = partyAssignments[field.name];
                             if (assignment) {
-                                // Look up party color from parties array
                                 const party = parties.find(p => p.id === assignment.partyId);
                                 return {
                                     ...field,
@@ -432,50 +484,34 @@ export default function EditTemplateDialog({
                 }
             }
 
-            // Update template using templateService.updateTemplate
-            console.log('💾 Updating template via Service...');
-            console.log(`  - Parties: ${parties.length}`);
-
-            // Build update data
-            const updateData: any = {
-                name: templateName.trim(),
-                description: description.trim(),
-                category: selectedCategory,
-                formFields: exportedFormFields,
-                hasFormFields: exportedFormFields.length > 0,
-                xfdfData: xfdfData,
-                parties: parties.length > 0 ? parties : undefined,  // ✅ Include parties if configured
-            };
-
-            // Only add file stuff if we have a file to upload (either new selected file OR modified blob)
-            if (fileToUpload) {
-                updateData.file = fileToUpload;
-                // Use new filename if selected, otherwise preserve existing
-                updateData.fileName = selectedFile?.name || template.fileName;
-                updateData.fileType = 'pdf';
+            // Merge profileKey from component state (not stored in PDF/XFDF)
+            if (exportedFormFields.length > 0 && formFields.length > 0) {
+                exportedFormFields = exportedFormFields.map((ef: any) => {
+                    const stateField = formFields.find((sf) => sf.name === ef.name);
+                    return stateField?.profileKey != null
+                        ? { ...ef, profileKey: stateField.profileKey }
+                        : ef;
+                });
             }
 
-            const result = await templateService.updateTemplate(
-                template.id,
-                updateData,
-                currentUser.email
-            );
+            // If there are mappable fields, show mapping dialog first
+            const mappableCount = exportedFormFields.filter(
+                (f: any) => f.type !== 'Sig' && f.type !== 'signature'
+            ).length;
 
-            if (result.success) {
-                console.log('✅ Template updated successfully!', result.template?.id);
-                setSnackbar({ open: true, message: result.message || 'Template updated successfully!', severity: 'success' });
-                onSuccess?.();
-                return true;
-            } else {
-                setError(result.message);
+            if (mappableCount > 0) {
+                pendingExportRef.current = { exportedFormFields, xfdfData, fileToUpload };
+                setUpdating(false);
+                setShowMappingDialog(true);
                 return false;
             }
+
+            return await executeSave(exportedFormFields, xfdfData, fileToUpload);
         } catch (err: any) {
             console.error('❌ Error updating template:', err);
             setError('Failed to update template. Please try again.');
-            return false;
-        } finally {
             setUpdating(false);
+            return false;
         }
     };
 
@@ -487,8 +523,8 @@ export default function EditTemplateDialog({
 
     const handleUnsavedYes = async () => {
         setShowUnsavedDialog(false);
-        const saved = await handleSubmit();
-        if (saved) handleClose();
+        closePendingRef.current = true;
+        await handleSubmit();
     };
 
     const handleUnsavedNo = () => {
@@ -511,22 +547,20 @@ export default function EditTemplateDialog({
             setShowNewCategoryInput(false);
             setError('');
             setSuccess('');
-
-            // Reset party state
             setParties([]);
             setFormFields([]);
             setSelectedFieldName(null);
             setShowPartyPanel(true);
             setShowPartyConfigDialog(false);
-
-            // Cleanup
+            setShowMappingDialog(false);
+            pendingExportRef.current = null;
+            closePendingRef.current = false;
             if (selectedFile && documentUrl) {
                 URL.revokeObjectURL(documentUrl);
             }
             setDocumentUrl('');
             setDocumentLoaded(false);
             setCurrentStep(1);
-
             onClose();
         }
     };
@@ -1137,6 +1171,34 @@ export default function EditTemplateDialog({
             onClose={handleUnsavedCancel}
             loading={updating}
         />
+
+        {/* Profile Field Mapping Dialog */}
+        <ProfileFieldMappingDialog
+            open={showMappingDialog}
+            onClose={() => {
+                setShowMappingDialog(false);
+                if (pendingExportRef.current) {
+                    const { exportedFormFields, xfdfData, fileToUpload } = pendingExportRef.current;
+                    pendingExportRef.current = null;
+                    setUpdating(true);
+                    executeSave(exportedFormFields, xfdfData, fileToUpload);
+                }
+            }}
+            onSave={(updatedFields) => {
+                setShowMappingDialog(false);
+                setFormFields(updatedFields);
+                if (pendingExportRef.current) {
+                    const { xfdfData, fileToUpload } = pendingExportRef.current;
+                    pendingExportRef.current = null;
+                    setUpdating(true);
+                    executeSave(updatedFields, xfdfData, fileToUpload);
+                }
+            }}
+            formFields={pendingExportRef.current?.exportedFormFields ?? formFields}
+            parties={parties}
+            profileKeyOptions={profileKeyOptions}
+        />
+
         <NotificationSnackbar
             open={snackbar.open}
             message={snackbar.message}

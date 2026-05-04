@@ -85,7 +85,7 @@ export interface PDFViewerHandle {
     getFieldPartyAssignment: (fieldName: string) => { partyId: string; partyLabel: string } | null;
     getAllFieldPartyAssignments: () => Record<string, { partyId: string; partyLabel: string }>;
     highlightPartyFields: (partyId: string | null) => void;
-    autofillFields: (partyId: string | null, profileData: { name?: string; department?: string; organization?: string; email?: string }) => number;
+    autofillFields: (partyId: string | null, profileData: Record<string, string>) => number;
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
@@ -1364,16 +1364,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
              * Skips signature fields, read-only fields, already-filled fields, and wrong-party fields.
              * Returns the count of fields successfully filled.
              */
-            autofillFields: (partyId: string | null, profileData: { name?: string; department?: string; organization?: string; email?: string }): number => {
+            autofillFields: (partyId: string | null, profileData: Record<string, string>): number => {
                 if (!viewerInstance.current) return 0;
-
-                // Priority-ordered keyword → profile value mappings
-                const mappings = [
-                    { keywords: ['name', 'fullname', 'full_name', 'signer_name', 'client_name', 'signername', 'clientname'], value: profileData.name },
-                    { keywords: ['organization', 'org', 'company', 'company_name', 'companyname'], value: profileData.organization },
-                    { keywords: ['department', 'dept', 'division'], value: profileData.department },
-                    { keywords: ['email', 'signer_email', 'contact_email', 'signeremail', 'contactemail'], value: profileData.email },
-                ];
 
                 let filledCount = 0;
 
@@ -1414,17 +1406,16 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 if (!assignedParty || assignedParty !== partyId) return;
                             }
 
-                            // Match field name against keyword mappings (first match wins)
-                            const fieldNameNorm = fieldName.toLowerCase().replace(/[\s-]/g, '_');
-                            let matchedValue: string | undefined;
+                            // Look up the explicit profileKey mapping for this field
+                            const fieldDef = formFieldsRef.current?.find((f: any) => f.name === fieldName);
+                            const profileKey: string | null =
+                                fieldDef?.profileKey ||
+                                widgets[0]?.getCustomData?.('profileKey') ||
+                                null;
 
-                            for (const mapping of mappings) {
-                                if (!mapping.value?.trim()) continue;
-                                if (mapping.keywords.some(kw => fieldNameNorm.includes(kw))) {
-                                    matchedValue = mapping.value.trim();
-                                    break;
-                                }
-                            }
+                            if (!profileKey) return;
+
+                            const matchedValue = profileData[profileKey]?.trim();
 
                             if (!matchedValue) return;
 

@@ -42,6 +42,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { ContractStatus } from '@/types/contract';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
+import { buildProfileData } from '@/utils/profileKeyOptions';
 
 interface CreateContractDialogProps {
     open: boolean;
@@ -334,10 +335,12 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                     return {
                         ...field,
                         value: filledFieldValues[field.name] || field.value || '',
-                        // ✅ Preserve party assignment from template
+                        // Preserve party assignment from template
                         assignedParty: templateField?.assignedParty || field.assignedParty,
                         partyLabel: templateField?.partyLabel || field.partyLabel,
                         partyColor: templateField?.partyColor || field.partyColor,
+                        // Preserve profileKey mapping from template
+                        profileKey: templateField?.profileKey ?? field.profileKey ?? null,
                     };
                 });
                 console.log('📝 [Contract Creation] Form fields with party assignments:',
@@ -602,14 +605,9 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             return;
         }
 
-        const profileData = {
-            name: currentUser.name?.trim() || '',
-            department: currentUser.department?.trim() || '',
-            organization: currentUser.organization?.trim() || '',
-            email: currentUser.email?.trim() || '',
-        };
+        const profileData = buildProfileData(currentUser);
 
-        if (!profileData.name && !profileData.department && !profileData.organization) {
+        if (Object.values(profileData).every(v => !v.trim())) {
             setSnackbar({ open: true, message: 'Please complete your profile in Settings first', severity: 'warning' });
             return;
         }
@@ -630,8 +628,11 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         const parties = selectedTemplate?.parties || [];
         const formFields = selectedTemplate?.formFields || [];
 
+        // Only count fields that have a profileKey mapping (those can actually be autofilled)
         const getTextFieldCount = (partyId: string) =>
-            (formFields as any[]).filter((f) => f.assignedParty === partyId && f.type !== 'Sig' && f.type !== 'signature').length;
+            (formFields as any[]).filter(
+                (f) => f.assignedParty === partyId && f.type !== 'Sig' && f.type !== 'signature' && !!f.profileKey
+            ).length;
 
         const partiesWithFields = parties.filter((p: any) => getTextFieldCount(p.id) > 0);
 

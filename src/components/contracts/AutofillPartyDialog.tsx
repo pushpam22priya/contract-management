@@ -43,10 +43,10 @@ export default function AutofillPartyDialog({
         onConfirm(id);
     };
 
-    // Count text (non-signature) fields per party
+    // Count mapped (non-signature) fields per party — only fields with a profileKey can be autofilled
     const getTextFieldCount = (partyId: string) =>
         formFields.filter(
-            (f) => f.assignedParty === partyId && f.type !== 'Sig' && f.type !== 'signature'
+            (f) => f.assignedParty === partyId && f.type !== 'Sig' && f.type !== 'signature' && !!f.profileKey
         ).length;
 
     const partiesWithFields = parties.filter((p) => getTextFieldCount(p.id) > 0);

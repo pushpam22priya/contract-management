@@ -7,6 +7,7 @@ import { Box,  Alert, AlertColor, Typography, Chip, Tooltip } from '@mui/materia
 import SaveIcon from '@mui/icons-material/Save';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import { authService } from '@/services/authService';
+import { buildProfileData } from '@/utils/profileKeyOptions';
 import dynamic from 'next/dynamic';
 import { useRef, useState, useEffect, useMemo } from 'react';
 import BaseDialog from '@/components/common/BaseDialog';
@@ -650,14 +651,9 @@ export default function DocumentViewerDialog({
             return;
         }
 
-        const profileData = {
-            name: currentUser.name?.trim() || '',
-            department: currentUser.department?.trim() || '',
-            organization: currentUser.organization?.trim() || '',
-            email: currentUser.email?.trim() || '',
-        };
+        const profileData = buildProfileData(currentUser);
 
-        if (!profileData.name && !profileData.department && !profileData.organization) {
+        if (Object.values(profileData).every(v => !v.trim())) {
             setSnackbar({ open: true, message: 'Please complete your profile in Settings first', severity: 'warning' });
             return;
         }
