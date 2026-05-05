@@ -298,13 +298,23 @@ export default function UploadTemplateDialog({
         }
     };
 
-    // Refresh form fields list from viewer
+    // Refresh form fields list from viewer — preserves profileKey, skips 0-field results
     const refreshFormFields = async () => {
         if (pdfViewerRef.current) {
             try {
                 const fields = await pdfViewerRef.current.exportFormFieldsWithParty();
-                setFormFields(fields as FormFieldDefinition[]);
-                console.log(`[UPLOAD-TEMPLATE] Refreshed ${fields.length} form fields`);
+                console.log(`[UPLOAD-TEMPLATE] refreshFormFields: got ${fields.length} fields from PDF`);
+                if (fields.length === 0) {
+                    console.log('[UPLOAD-TEMPLATE] refreshFormFields: skipping update (0 fields returned)');
+                    return;
+                }
+                setFormFields(prev => {
+                    const prevMap = new Map(prev.map((f: any) => [f.name, f]));
+                    return (fields as FormFieldDefinition[]).map((f: any) => ({
+                        ...f,
+                        profileKey: prevMap.get(f.name)?.profileKey ?? f.profileKey ?? null,
+                    }));
+                });
             } catch (e) {
                 console.warn('[UPLOAD-TEMPLATE] Failed to refresh form fields:', e);
             }
@@ -1114,7 +1124,18 @@ export default function UploadTemplateDialog({
                                         refreshFormFields();
                                     }}
                                     onFieldsWithPartyExported={(fields) => {
-                                        setFormFields(fields as FormFieldDefinition[]);
+                                        console.log(`[UPLOAD-TEMPLATE] onFieldsWithPartyExported: got ${fields.length} fields from PDF`);
+                                        if (fields.length === 0) {
+                                            console.log('[UPLOAD-TEMPLATE] onFieldsWithPartyExported: skipping update (0 fields returned)');
+                                            return;
+                                        }
+                                        setFormFields(prev => {
+                                            const prevMap = new Map(prev.map((f: any) => [f.name, f]));
+                                            return (fields as FormFieldDefinition[]).map((f: any) => ({
+                                                ...f,
+                                                profileKey: prevMap.get(f.name)?.profileKey ?? f.profileKey ?? null,
+                                            }));
+                                        });
                                     }}
                                 />
                             </Box>

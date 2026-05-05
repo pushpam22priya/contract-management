@@ -99,7 +99,9 @@ export default function EditTemplateDialog({
 
             // Load existing parties and form fields
             setParties(template.parties || []);
-            setFormFields(template.formFields || []);
+            const loadedFields = template.formFields || [];
+            console.log(`[EDIT-TEMPLATE] INIT: loading ${loadedFields.length} fields from template. ProfileKeys:`, loadedFields.map((f: any) => `${f.name}=${f.profileKey ?? 'null'}`));
+            setFormFields(loadedFields);
             setSelectedFieldName(null);
             setShowPartyPanel(true);
 
@@ -277,13 +279,26 @@ export default function EditTemplateDialog({
         }
     };
 
-    // Refresh form fields list from viewer (called when fields are added/removed)
+    // Refresh form fields list from viewer — preserves profileKey from existing state
     const refreshFormFields = async () => {
         if (pdfViewerRef.current) {
             try {
                 const fields = await pdfViewerRef.current.exportFormFieldsWithParty();
-                setFormFields(fields as FormFieldDefinition[]);
-                console.log(`[EDIT-TEMPLATE] Refreshed ${fields.length} form fields`);
+                console.log(`[EDIT-TEMPLATE] refreshFormFields: got ${fields.length} fields from PDF`);
+                if (fields.length === 0) {
+                    console.log('[EDIT-TEMPLATE] refreshFormFields: skipping update (0 fields returned)');
+                    return;
+                }
+                setFormFields(prev => {
+                    const prevMap = new Map(prev.map((f: any) => [f.name, f]));
+                    const merged = (fields as FormFieldDefinition[]).map((f: any) => {
+                        const prevField = prevMap.get(f.name);
+                        const profileKey = prevField?.profileKey ?? f.profileKey ?? null;
+                        if (profileKey) console.log(`[EDIT-TEMPLATE] refreshFormFields: preserving profileKey "${profileKey}" for field "${f.name}"`);
+                        return { ...f, profileKey };
+                    });
+                    return merged;
+                });
             } catch (e) {
                 console.warn('[EDIT-TEMPLATE] Failed to refresh form fields:', e);
             }
@@ -485,14 +500,20 @@ export default function EditTemplateDialog({
             }
 
             // Merge profileKey from component state (not stored in PDF/XFDF)
+            console.log(`[EDIT-TEMPLATE] MERGE: formFields.length=${formFields.length}, exportedFormFields.length=${exportedFormFields.length}`);
+            console.log(`[EDIT-TEMPLATE] MERGE: formFields profileKeys:`, formFields.map((f: any) => `${f.name}=${f.profileKey ?? 'null'}`));
             if (exportedFormFields.length > 0 && formFields.length > 0) {
                 exportedFormFields = exportedFormFields.map((ef: any) => {
                     const stateField = formFields.find((sf) => sf.name === ef.name);
+                    if (stateField?.profileKey != null) {
+                        console.log(`[EDIT-TEMPLATE] MERGE: applying profileKey "${stateField.profileKey}" to field "${ef.name}"`);
+                    }
                     return stateField?.profileKey != null
                         ? { ...ef, profileKey: stateField.profileKey }
                         : ef;
                 });
             }
+            console.log(`[EDIT-TEMPLATE] MERGE result:`, exportedFormFields.map((f: any) => `${f.name}=${f.profileKey ?? 'null'}`));
 
             // If there are mappable fields, show mapping dialog first
             const mappableCount = exportedFormFields.filter(
@@ -1114,7 +1135,21 @@ export default function EditTemplateDialog({
                                         refreshFormFields();
                                     }}
                                     onFieldsWithPartyExported={(fields) => {
-                                        setFormFields(fields as FormFieldDefinition[]);
+                                        console.log(`[EDIT-TEMPLATE] onFieldsWithPartyExported: got ${fields.length} fields from PDF`);
+                                        if (fields.length === 0) {
+                                            console.log('[EDIT-TEMPLATE] onFieldsWithPartyExported: skipping update (0 fields returned)');
+                                            return;
+                                        }
+                                        setFormFields(prev => {
+                                            const prevMap = new Map(prev.map((f: any) => [f.name, f]));
+                                            const merged = (fields as FormFieldDefinition[]).map((f: any) => {
+                                                const prevField = prevMap.get(f.name);
+                                                const profileKey = prevField?.profileKey ?? f.profileKey ?? null;
+                                                if (profileKey) console.log(`[EDIT-TEMPLATE] onFieldsWithPartyExported: preserving profileKey "${profileKey}" for field "${f.name}"`);
+                                                return { ...f, profileKey };
+                                            });
+                                            return merged;
+                                        });
                                     }}
                                 />
                             </Box>

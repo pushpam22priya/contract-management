@@ -189,10 +189,14 @@ export default function ContractsPage() {
 
                 if (!isCreator && !(isSigner && isValidSignerStatus)) return false;
 
-                // Hide expired contracts superseded by a non-draft renewal or terminated renewal
-                if (c.status === ContractStatus.EXPIRED && c.renewedContractId) {
+                // Hide expired/expiring contracts when a renewal exists (any status, including draft)
+                if ((c.status === ContractStatus.EXPIRED || c.status === ContractStatus.EXPIRING) && c.renewedContractId) {
                     const renewalStatus = statusById.get(c.renewedContractId);
-                    if (renewalStatus && (CONTRACT_PAGE_STATUSES.includes(renewalStatus as ContractStatus) || renewalStatus === ContractStatus.TERMINATED)) {
+                    if (renewalStatus && (
+                        renewalStatus === ContractStatus.DRAFT ||
+                        CONTRACT_PAGE_STATUSES.includes(renewalStatus as ContractStatus) ||
+                        renewalStatus === ContractStatus.TERMINATED
+                    )) {
                         return false;
                     }
                 }
@@ -707,7 +711,7 @@ export default function ContractsPage() {
                             sx={{
                                 display: 'grid',
                                 gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
-                                gap: 0.75,
+                                gap: 1,
                             }}
                         >
                             {isFlatView ? (

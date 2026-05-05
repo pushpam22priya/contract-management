@@ -225,9 +225,9 @@ export async function DELETE(
             return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
         }
 
-        if (contract.status !== 'terminated') {
+        if (contract.status !== 'terminated' && contract.status !== 'draft') {
             return NextResponse.json(
-                { error: 'Only terminated contracts can be permanently deleted.' },
+                { error: 'Only draft or terminated contracts can be permanently deleted.' },
                 { status: 403 }
             );
         }

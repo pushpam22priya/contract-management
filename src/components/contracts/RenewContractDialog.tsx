@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { ArrowBack, ArrowForward, Save } from '@mui/icons-material';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -37,6 +38,8 @@ import { contractService } from '@/services/contractService';
 import { apiService } from '@/services/apiService';
 import { submitForMixedSignature } from '@/services/externalSignatureService';
 import { validatePartyFields } from '@/utils/partyValidation';
+import AutofillPartyDialog from '@/components/contracts/AutofillPartyDialog';
+import { buildProfileData } from '@/utils/profileKeyOptions';
 
 interface Template {
     id: string;
@@ -116,6 +119,7 @@ export default function RenewContractDialog({
     const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
     const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
     const [multiPartyDialogOpen, setMultiPartyDialogOpen] = useState(false);
+    const [autofillPartyDialogOpen, setAutofillPartyDialogOpen] = useState(false);
 
     // ── Snackbar ──────────────────────────────────────────────────────────────
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: AlertColor }>({
@@ -389,6 +393,7 @@ export default function RenewContractDialog({
                         assignedParty: base?.assignedParty || field.assignedParty,
                         partyLabel: base?.partyLabel || field.partyLabel,
                         partyColor: base?.partyColor || field.partyColor,
+                        profileKey: base?.profileKey ?? field.profileKey ?? null,
                     };
                 });
                 await apiService.updateContractMetadata(renewalId, {
@@ -433,7 +438,7 @@ export default function RenewContractDialog({
 
         if (pendingAction === 'close') {
             handleClose();
-            router.push(`/draft?search=${encodeURIComponent(`${contractTitle} (Renewal)`)}`);
+            onSuccess?.(savedId);
         } else if (pendingAction === 'review') {
             setReviewDialogOpen(true);
         } else if (pendingAction === 'signature') {
@@ -490,6 +495,56 @@ export default function RenewContractDialog({
             return { success: false, error: result.error };
         } catch (e: any) {
             return { success: false, error: e.message };
+        }
+    };
+
+    // ── Autofill ──────────────────────────────────────────────────────────────
+    const handleAutofillConfirm = (partyId: string) => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) {
+            setSnackbar({ open: true, message: 'Please log in to use autofill', severity: 'warning' });
+            return;
+        }
+
+        const profileData = buildProfileData(currentUser);
+
+        if (Object.values(profileData).every(v => !v.trim())) {
+            setSnackbar({ open: true, message: 'Please complete your profile in Settings first', severity: 'warning' });
+            return;
+        }
+
+        try {
+            const count = pdfViewerRef.current?.autofillFields(partyId, profileData) ?? 0;
+            if (count === 0) {
+                setSnackbar({ open: true, message: 'No matching fields found for your profile data', severity: 'warning' });
+            } else {
+                setSnackbar({ open: true, message: `${count} field${count !== 1 ? 's' : ''} filled from your profile`, severity: 'success' });
+            }
+        } catch {
+            setSnackbar({ open: true, message: 'Something went wrong during autofill. Please try manually.', severity: 'error' });
+        }
+    };
+
+    const handleAutofillClick = () => {
+        const formFields = renewalContract?.formFields || [];
+        const parties = effectiveParties;
+
+        const getMappedFieldCount = (partyId: string) =>
+            formFields.filter(
+                (f: any) => f.assignedParty === partyId && f.type !== 'Sig' && f.type !== 'signature' && !!f.profileKey
+            ).length;
+
+        const partiesWithFields = parties.filter((p: any) => getMappedFieldCount(p.id) > 0);
+
+        if (partiesWithFields.length === 0) {
+            setSnackbar({ open: true, message: 'No fillable fields found in this document', severity: 'warning' });
+            return;
+        }
+
+        if (partiesWithFields.length === 1) {
+            handleAutofillConfirm(partiesWithFields[0].id);
+        } else {
+            setAutofillPartyDialogOpen(true);
         }
     };
 
@@ -566,6 +621,21 @@ export default function RenewContractDialog({
                             >
                                 Back to Details
                             </AppButton>
+
+                            <Tooltip title="Fill fields from your profile" arrow>
+                                <span>
+                                    <AppButton
+                                        variant="outlined"
+                                        onClick={handleAutofillClick}
+                                        disabled={!documentLoaded || saving}
+                                        size="small"
+                                        startIcon={<AutoFixHighIcon sx={{ fontSize: 16 }} />}
+                                        sx={{ borderRadius: 2, py: 0.5 }}
+                                    >
+                                        Autofill
+                                    </AppButton>
+                                </span>
+                            </Tooltip>
 
                             <Tooltip title={hasPartialParty ? 'Complete all fields for the party you started' : ''} arrow>
                                 <span>
@@ -870,6 +940,18 @@ export default function RenewContractDialog({
                 existingInternalSigners={renewalContract?.internalSigners}
                 fieldValues={filledFieldValues}
                 onSubmit={handleMixedSignatureSubmit}
+            />
+
+            {/* Autofill Party Selection Dialog */}
+            <AutofillPartyDialog
+                open={autofillPartyDialogOpen}
+                onClose={() => setAutofillPartyDialogOpen(false)}
+                onConfirm={(partyId) => {
+                    setAutofillPartyDialogOpen(false);
+                    handleAutofillConfirm(partyId);
+                }}
+                parties={effectiveParties}
+                formFields={renewalContract?.formFields || []}
             />
 
             {/* Snackbar */}

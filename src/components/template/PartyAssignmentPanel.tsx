@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useTheme } from '@mui/material/styles';
 import {
     Box,
     Typography,
@@ -79,6 +80,8 @@ export default function PartyAssignmentPanel({
     onMultipleFieldsAssign,
     onFieldUnassigned,
 }: PartyAssignmentPanelProps) {
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
     const [expandedParty, setExpandedParty] = useState<string | null>('unassigned'); // Start with unassigned expanded
     const [partiesSectionExpanded, setPartiesSectionExpanded] = useState(true);
     const [hoveredParty, setHoveredParty] = useState<string | null>(null);
@@ -555,7 +558,7 @@ export default function PartyAssignmentPanel({
                                                 px: 1,
                                                 borderRadius: 1,
                                                 bgcolor: isChecked ? 'primary.main' : isSelected ? 'primary.main' : 'warning.light',
-                                                color: (isChecked || isSelected) ? 'white' : 'inherit',
+                                                color: (isChecked || isSelected) ? 'white' : isDark ? 'white' : 'inherit',
                                                 mb: 0.5,
                                                 cursor: 'grab',
                                                 border: (isChecked || isSelected) ? '2px solid' : '2px solid transparent',
@@ -593,7 +596,13 @@ export default function PartyAssignmentPanel({
                                                 sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, overflow: 'hidden' }}
                                             >
                                                 {getFieldTypeIcon(field.type)}
-                                                <Typography variant="body2" fontWeight={(isChecked || isSelected) ? 'bold' : 'normal'} noWrap sx={{ flex: 1 }}>
+                                                <Typography
+                                                    variant="body2"
+                                                    fontWeight={(isChecked || isSelected) ? 'bold' : 'normal'}
+                                                    noWrap
+                                                    sx={{ flex: 1 }}
+                                                    style={{ color: (isChecked || isSelected) ? '#fff' : isDark ? '#fff' : 'rgba(0,0,0,0.87)' }}
+                                                >
                                                     {field.label || field.name}
                                                 </Typography>
                                             </Box>

@@ -96,6 +96,10 @@ export async function POST(request: Request) {
                     email: existingUser.email,
                     lastLogin: new Date().toISOString(),
                     isAdmin,
+                    // Include profile fields so autofill works immediately after login
+                    ...(existingUser.name && { name: existingUser.name }),
+                    ...(existingUser.department && { department: existingUser.department }),
+                    ...(existingUser.organization && { organization: existingUser.organization }),
                 },
             });
         } else {
