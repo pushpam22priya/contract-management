@@ -15,6 +15,7 @@ import ConfirmationDialog from '@/components/common/ConfirmationDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
 import PartyValidationWarningPopup from '@/components/viewer/pdfViewer/PartyValidationWarningPopup';
+import AutofillPartyDialog from '@/components/contracts/AutofillPartyDialog';
 import { validatePartyFields } from '@/utils/partyValidation';
 import { PartyConfiguration } from '@/types/template';
 
@@ -133,6 +134,9 @@ export default function DocumentViewerDialog({
 
     // ✅ Wrong party warning for contractor - shows when contractor tries to edit client party field
     const [showWrongPartyWarning, setShowWrongPartyWarning] = useState(false);
+
+    // ✅ Autofill party picker — shown when contractor hasn't committed to a party yet
+    const [showAutofillPartyPicker, setShowAutofillPartyPicker] = useState(false);
     // Track values at last save to detect unsaved changes
     const lastSavedValuesRef = useRef<Record<string, string>>({});
 
@@ -642,24 +646,20 @@ export default function DocumentViewerDialog({
         }
     };
 
-    const handleAutofill = () => {
-        if (!assignedPartyId) return;
-
+    // Core autofill execution — called after a party is resolved
+    const runAutofill = (targetPartyId: string | null) => {
         const currentUser = authService.getCurrentUser();
         if (!currentUser) {
             setSnackbar({ open: true, message: 'Please log in to use autofill', severity: 'warning' });
             return;
         }
-
         const profileData = buildProfileData(currentUser);
-
         if (Object.values(profileData).every(v => !v.trim())) {
             setSnackbar({ open: true, message: 'Please complete your profile in Settings first', severity: 'warning' });
             return;
         }
-
         try {
-            const count = pdfViewerRef.current?.autofillFields(assignedPartyId, profileData) ?? 0;
+            const count = pdfViewerRef.current?.autofillFields(targetPartyId, profileData) ?? 0;
             if (count === 0) {
                 setSnackbar({ open: true, message: 'No matching fields found for your profile data', severity: 'warning' });
             } else {
@@ -668,6 +668,61 @@ export default function DocumentViewerDialog({
         } catch {
             setSnackbar({ open: true, message: 'Something went wrong during autofill. Please try manually.', severity: 'error' });
         }
+    };
+
+    // Called when user selects a party from the autofill picker
+    const handleAutofillPartySelected = (partyId: string) => {
+        setShowAutofillPartyPicker(false);
+        // Commit the contractor to this party (same as when they manually fill a field)
+        contractorCommittedPartyIdRef.current = partyId;
+        setContractorCommittedPartyId(partyId);
+        runAutofill(partyId);
+    };
+
+    const handleAutofill = () => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) {
+            setSnackbar({ open: true, message: 'Please log in to use autofill', severity: 'warning' });
+            return;
+        }
+        const profileData = buildProfileData(currentUser);
+        if (Object.values(profileData).every(v => !v.trim())) {
+            setSnackbar({ open: true, message: 'Please complete your profile in Settings first', severity: 'warning' });
+            return;
+        }
+
+        if (assignedPartyId) {
+            // Internal signer: always fill their specific assigned party
+            runAutofill(assignedPartyId);
+            return;
+        }
+
+        // Contractor path
+        const contractorParties = (parties || []).filter((p: any) => !allClientPartyIds.includes(p.id));
+
+        if (contractorParties.length === 0) {
+            // No party config — fill all empty fields
+            runAutofill(null);
+            return;
+        }
+
+        // If contractor already committed to a party (manually filled at least one field), use that party
+        if (contractorCommittedPartyId) {
+            runAutofill(contractorCommittedPartyId);
+            return;
+        }
+
+        // Only one contractor party — auto-select, no need to ask
+        if (contractorParties.length === 1) {
+            const p = contractorParties[0];
+            contractorCommittedPartyIdRef.current = p.id;
+            setContractorCommittedPartyId(p.id);
+            runAutofill(p.id);
+            return;
+        }
+
+        // Multiple contractor parties and none committed yet — show party picker
+        setShowAutofillPartyPicker(true);
     };
 
     // ✅ Determine if save button should be disabled
@@ -693,7 +748,7 @@ export default function DocumentViewerDialog({
     const dialogActions = (
         <>
             {extraActions}
-            {assignedPartyId && !readOnly && (
+            {(assignedPartyId || currentUserRole === 'contractor') && !readOnly && (
                 <Tooltip title="Fill fields from your profile" arrow>
                     <span>
                         <AppButton
@@ -874,6 +929,15 @@ export default function DocumentViewerDialog({
             loading={saving}
             disableYes={saveDisabled}
             yesTooltip={getSaveDisabledReason()}
+        />
+
+        {/* ✅ Autofill party picker — shown when contractor hasn't committed to a party yet */}
+        <AutofillPartyDialog
+            open={showAutofillPartyPicker}
+            onClose={() => setShowAutofillPartyPicker(false)}
+            onConfirm={handleAutofillPartySelected}
+            parties={((parties || []).filter((p: any) => !allClientPartyIds.includes(p.id))) as PartyConfiguration[]}
+            formFields={formFields || []}
         />
         </>
     );

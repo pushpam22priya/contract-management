@@ -4,14 +4,11 @@ import { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
-    Chip,
     MenuItem,
     Select,
     FormControl,
     useMediaQuery,
     useTheme,
-    Divider,
-    Paper,
 } from '@mui/material';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import BaseDialog from '@/components/common/BaseDialog';
@@ -56,7 +53,7 @@ export default function ProfileFieldMappingDialog({
 
     // Only text-type fields are mappable (exclude signature fields)
     const mappableFields = formFields.filter(
-        (f) => f.type !== 'signature'
+        (f) => f.type !== 'signature' && (f.type as string) !== 'Sig'
     );
 
     // Group fields by party
@@ -85,59 +82,16 @@ export default function ProfileFieldMappingDialog({
         onSave(updated);
     };
 
-    const renderFieldRow = (field: FormFieldDefinition, party: PartyConfiguration | null) => {
+    const renderFieldRow = (field: FormFieldDefinition) => {
         const currentMapping = mappings[field.name] ?? '';
 
-        if (isMobile) {
-            return (
-                <Paper
-                    key={field.name}
-                    variant="outlined"
-                    sx={{ p: 1.5, mb: 1, borderRadius: 2 }}
-                >
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-all' }}>
-                            {field.label || field.name}
-                        </Typography>
-                        {party && (
-                            <Chip
-                                label={party.label}
-                                size="small"
-                                sx={{ bgcolor: party.color, color: '#fff', fontWeight: 600, fontSize: '0.65rem', ml: 1, flexShrink: 0 }}
-                            />
-                        )}
-                    </Box>
-                    <FormControl fullWidth size="small">
-                        <Select
-                            value={currentMapping}
-                            onChange={(e) => handleChange(field.name, e.target.value)}
-                            displayEmpty
-                            sx={{ fontSize: '0.8rem' }}
-                        >
-                            <MenuItem value="">
-                                <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
-                                    — None —
-                                </Typography>
-                            </MenuItem>
-                            {profileKeyOptions.map((opt) => (
-                                <MenuItem key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                </Paper>
-            );
-        }
-
-        // Desktop row
         return (
             <Box
                 key={field.name}
                 sx={{
                     display: 'grid',
-                    gridTemplateColumns: '1fr 120px 180px',
-                    gap: 2,
+                    gridTemplateColumns: isMobile ? '1fr' : '1fr 180px',
+                    gap: isMobile ? 0.5 : 2,
                     alignItems: 'center',
                     py: 0.75,
                     px: 1,
@@ -148,19 +102,6 @@ export default function ProfileFieldMappingDialog({
                 <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
                     {field.label || field.name}
                 </Typography>
-                <Box>
-                    {party ? (
-                        <Chip
-                            label={party.label}
-                            size="small"
-                            sx={{ bgcolor: party.color, color: '#fff', fontWeight: 600, fontSize: '0.65rem' }}
-                        />
-                    ) : (
-                        <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
-                            Unassigned
-                        </Typography>
-                    )}
-                </Box>
                 <FormControl fullWidth size="small">
                     <Select
                         value={currentMapping}
@@ -189,7 +130,7 @@ export default function ProfileFieldMappingDialog({
             open={open}
             onClose={onClose}
             title="Map Fields to Profile"
-            maxWidth="md"
+            maxWidth="sm"
             actions={
                 <>
                     <AppButton variant="outlined" onClick={onClose} size="small">
@@ -217,22 +158,19 @@ export default function ProfileFieldMappingDialog({
                     </Typography>
                 ) : (
                     <>
-                        {/* Desktop column headers */}
+                        {/* Column headers */}
                         {!isMobile && (
                             <Box
                                 sx={{
                                     display: 'grid',
-                                    gridTemplateColumns: '1fr 120px 180px',
+                                    gridTemplateColumns: '1fr 180px',
                                     gap: 2,
                                     px: 1,
-                                    mb: 0.5,
+                                    mb: 1,
                                 }}
                             >
                                 <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                                     Field
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                    Party
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                                     Profile Key
@@ -240,28 +178,39 @@ export default function ProfileFieldMappingDialog({
                             </Box>
                         )}
 
-                        {partyGroups.map(({ party, fields }, idx) => (
-                            <Box key={party?.id ?? 'unassigned'} sx={{ mb: 1 }}>
-                                {partyGroups.length > 1 && (
-                                    <>
-                                        {idx > 0 && <Divider sx={{ my: 1 }} />}
-                                        <Typography
-                                            variant="caption"
-                                            sx={{
-                                                display: 'block',
-                                                fontWeight: 700,
-                                                color: party ? party.color : 'text.secondary',
-                                                mb: 0.5,
-                                                px: isMobile ? 0 : 1,
-                                                textTransform: 'uppercase',
-                                                letterSpacing: 0.5,
-                                            }}
-                                        >
-                                            {party ? party.label : 'Unassigned'}
-                                        </Typography>
-                                    </>
-                                )}
-                                {fields.map((f) => renderFieldRow(f, party))}
+                        {partyGroups.map(({ party, fields }) => (
+                            <Box
+                                key={party?.id ?? 'unassigned'}
+                                component="fieldset"
+                                sx={{
+                                    border: '1px solid',
+                                    borderColor: party ? party.color : 'divider',
+                                    borderRadius: 2,
+                                    mb: 2,
+                                    px: 0.5,
+                                    pb: 0.5,
+                                    pt: 0,
+                                    margin: '0 0 16px 0',
+                                    minWidth: 0,
+                                }}
+                            >
+                                <Box
+                                    component="legend"
+                                    sx={{
+                                        px: 0.75,
+                                        ml: 0.5,
+                                        color: party ? party.color : 'text.secondary',
+                                        fontWeight: 700,
+                                        fontSize: '0.7rem',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: 0.5,
+                                        lineHeight: 1.4,
+                                    }}
+                                >
+                                    {party ? party.label : 'Unassigned'}
+                                </Box>
+
+                                {fields.map((f) => renderFieldRow(f))}
                             </Box>
                         ))}
                     </>
