@@ -93,7 +93,7 @@ class AuthService {
     /**
      * Update user profile (name, department, organization) in DB and session
      */
-    async updateProfile(profile: { name: string; department: string; organization: string }): Promise<{ success: boolean; message: string }> {
+    async updateProfile(profile: { name: string; department: string; organization: string; dateOfBirth?: string; gender?: string; permanentAddress?: string; panCard?: string; aadharCard?: string }): Promise<{ success: boolean; message: string }> {
         const currentUser = this.getCurrentUser();
         if (!currentUser) return { success: false, message: 'Not authenticated' };
 

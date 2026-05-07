@@ -19,11 +19,11 @@ export async function GET(request: Request) {
 
         const user = await db.collection('users').findOne(
             { email: { $regex: new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
-            { projection: { name: 1, department: 1, organization: 1, email: 1, _id: 0 } }
+            { projection: { name: 1, department: 1, organization: 1, dateOfBirth: 1, gender: 1, permanentAddress: 1, panCard: 1, aadharCard: 1, email: 1, _id: 0 } }
         );
 
         if (!user) {
-            return NextResponse.json({ email, name: '', department: '', organization: '' });
+            return NextResponse.json({ email, name: '', department: '', organization: '', dateOfBirth: '', gender: '', permanentAddress: '', panCard: '', aadharCard: '' });
         }
 
         return NextResponse.json({
@@ -31,6 +31,11 @@ export async function GET(request: Request) {
             name: user.name || '',
             department: user.department || '',
             organization: user.organization || '',
+            dateOfBirth: user.dateOfBirth || '',
+            gender: user.gender || '',
+            permanentAddress: user.permanentAddress || '',
+            panCard: user.panCard || '',
+            aadharCard: user.aadharCard || '',
         });
     } catch (e) {
         console.error('Failed to fetch user profile:', e);
@@ -44,7 +49,7 @@ export async function GET(request: Request) {
  */
 export async function PATCH(request: Request) {
     try {
-        const { email, name, department, organization } = await request.json();
+        const { email, name, department, organization, dateOfBirth, gender, permanentAddress, panCard, aadharCard } = await request.json();
 
         if (!email) {
             return NextResponse.json(
@@ -63,6 +68,11 @@ export async function PATCH(request: Request) {
                     name: name?.trim() || '',
                     department: department?.trim() || '',
                     organization: organization?.trim() || '',
+                    dateOfBirth: dateOfBirth?.trim() || '',
+                    gender: gender?.trim() || '',
+                    permanentAddress: permanentAddress?.trim() || '',
+                    panCard: panCard?.trim().toUpperCase() || '',
+                    aadharCard: aadharCard?.trim() || '',
                     profileUpdatedAt: new Date().toISOString(),
                 },
             }
@@ -82,6 +92,11 @@ export async function PATCH(request: Request) {
                 name: name?.trim() || '',
                 department: department?.trim() || '',
                 organization: organization?.trim() || '',
+                dateOfBirth: dateOfBirth?.trim() || '',
+                gender: gender?.trim() || '',
+                permanentAddress: permanentAddress?.trim() || '',
+                panCard: panCard?.trim().toUpperCase() || '',
+                aadharCard: aadharCard?.trim() || '',
             },
         });
     } catch (e) {

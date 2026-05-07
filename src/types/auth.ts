@@ -14,6 +14,11 @@ export interface LoggedInUser {
     name?: string;
     department?: string;
     organization?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    permanentAddress?: string;
+    panCard?: string;
+    aadharCard?: string;
 }
 
 export interface LoginCredentials {

@@ -11,6 +11,11 @@ const PROFILE_KEY_LABELS: Record<string, string> = {
     email: 'Email',
     department: 'Department',
     organization: 'Organization',
+    dateOfBirth: 'Date of Birth',
+    gender: 'Gender',
+    permanentAddress: 'Permanent Address',
+    panCard: 'PAN Card Number',
+    aadharCard: 'Aadhar Card Number',
 };
 
 // Converts a camelCase or snake_case key to "Title Case"
