@@ -125,42 +125,42 @@ const ContractCard = ({
     const getStatusColor = (status: Contract['status']) => {
         if (isDark) {
             if (variant === 'draft' && status === ContractStatus.DRAFT && contract.reviewStatus === 'changes_requested')
-                return { bg: 'rgba(234,88,12,0.08)', color: '#b87a50', border: 'rgba(234,88,12,0.22)' };
+                return { bg: 'rgba(234,88,12,0.15)', color: '#fb923c', border: 'rgba(251,146,60,0.40)' };
             switch (status) {
                 case ContractStatus.ACTIVE:
                 case ContractStatus.SIGNED:
-                    return { bg: 'rgba(16,185,129,0.08)', color: '#6bac8e', border: 'rgba(16,185,129,0.20)' };
+                    return { bg: 'rgba(16,185,129,0.15)', color: '#4ade80bd', border: 'rgba(74,222,128,0.38)' };
                 case ContractStatus.EXPIRING:
-                    return { bg: 'rgba(245,158,11,0.08)', color: '#b8935a', border: 'rgba(245,158,11,0.20)' };
+                    return { bg: 'rgba(245,158,11,0.14)', color: '#fbbe24bd', border: 'rgba(251,191,36,0.38)' };
                 case ContractStatus.EXPIRED:
                 case ContractStatus.REJECTED:
                 case ContractStatus.REJECTED_BY_REVIEWER:
                 case ContractStatus.REJECTED_BY_APPROVER:
-                    return { bg: 'rgba(239,68,68,0.08)', color: '#b07070', border: 'rgba(239,68,68,0.20)' };
+                    return { bg: 'rgba(239,68,68,0.14)', color: '#f87171bd', border: 'rgba(248,113,113,0.38)' };
                 case ContractStatus.TERMINATED:
-                    return { bg: 'rgba(148,163,184,0.07)', color: '#6b7e90', border: 'rgba(148,163,184,0.18)' };
+                    return { bg: 'rgba(120,113,108,0.18)', color: '#b5a99de6', border: 'rgba(168,162,158,0.40)' };
                 case ContractStatus.IN_REVIEW:
-                    return { bg: 'rgba(139,92,246,0.08)', color: '#9080c0', border: 'rgba(139,92,246,0.22)' };
+                    return { bg: 'rgba(139,92,246,0.15)', color: '#a78bfabd', border: 'rgba(167,139,250,0.38)' };
                 case ContractStatus.IN_APPROVAL:
-                    return { bg: 'rgba(245,158,11,0.08)', color: '#b8935a', border: 'rgba(245,158,11,0.20)' };
+                    return { bg: 'rgba(245,158,11,0.14)', color: '#fbbe24bd', border: 'rgba(251,191,36,0.38)' };
                 case ContractStatus.REVIEW_APPROVAL:
                 case ContractStatus.REVIEWED:
-                    return { bg: 'rgba(59,130,246,0.08)', color: '#6888ac', border: 'rgba(59,130,246,0.20)' };
+                    return { bg: 'rgba(59,130,246,0.14)', color: '#60a5fabd', border: 'rgba(96,165,250,0.38)' };
                 case ContractStatus.APPROVED:
-                    return { bg: 'rgba(16,185,129,0.08)', color: '#6bac8e', border: 'rgba(16,185,129,0.20)' };
+                    return { bg: 'rgba(16,185,129,0.15)', color: '#34d399bd', border: 'rgba(52,211,153,0.38)' };
                 case ContractStatus.READY_FOR_SIGNATURE:
-                    return { bg: 'rgba(20,184,166,0.08)', color: '#4e8e88', border: 'rgba(20,184,166,0.20)' };
+                    return { bg: 'rgba(20,184,166,0.14)', color: '#2dd4bebd', border: 'rgba(45,212,191,0.38)' };
                 case ContractStatus.WAITING_FOR_SIGNATURE: {
                     const progress = getMultiPartySigningProgress();
                     if (progress && progress.orderIndex > 0)
-                        return { bg: 'rgba(20,184,166,0.08)', color: '#4e8e88', border: 'rgba(20,184,166,0.20)' };
-                    return { bg: 'rgba(245,158,11,0.08)', color: '#b8935a', border: 'rgba(245,158,11,0.20)' };
+                        return { bg: 'rgba(20,184,166,0.14)', color: '#2dd4bebd', border: 'rgba(45,212,191,0.38)' };
+                    return { bg: 'rgba(245,158,11,0.14)', color: '#fbbe24bd', border: 'rgba(251,191,36,0.38)' };
                 }
                 case ContractStatus.SIGNED_BY_EVERYONE:
-                    return { bg: 'rgba(59,130,246,0.08)', color: '#6888ac', border: 'rgba(59,130,246,0.20)' };
+                    return { bg: 'rgba(59,130,246,0.14)', color: '#60a5fabd', border: 'rgba(96,165,250,0.38)' };
                 case ContractStatus.DRAFT:
                 default:
-                    return { bg: 'rgba(148,163,184,0.07)', color: '#6b7e90', border: 'rgba(148,163,184,0.18)' };
+                    return { bg: 'rgba(148,163,184,0.11)', color: '#94a3b8bd', border: 'rgba(148,163,184,0.30)' };
             }
         }
 
@@ -257,7 +257,7 @@ const ContractCard = ({
                 borderRadius: 3,
                 p: 1,
                 border: '1px solid',
-                borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+                borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
                 boxShadow: variant === 'terminated'
                     ? '0 1px 4px rgba(0, 0, 0, 0.06)'
                     : '0 2px 8px rgba(0, 0, 0, 0.04)',
@@ -441,7 +441,7 @@ const ContractCard = ({
                                 color: variant === 'terminated'
                                     ? 'text.secondary'
                                     : contract.expiresInDays < 30
-                                        ? (isDark ? '#b07070' : 'error.main')
+                                        ? (isDark ? '#f87171bd' : 'error.main')
                                         : 'text.primary',
                                 fontWeight: 500,
                             }}

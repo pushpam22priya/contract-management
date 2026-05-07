@@ -189,11 +189,12 @@ export default function ContractsPage() {
 
                 if (!isCreator && !(isSigner && isValidSignerStatus)) return false;
 
-                // Hide expired/expiring contracts when a renewal exists (any status, including draft)
+                // Hide expired/expiring contracts when a renewal exists at any stage
+                // (Draft, any review/approval step, signature step, active, terminated…)
                 if ((c.status === ContractStatus.EXPIRED || c.status === ContractStatus.EXPIRING) && c.renewedContractId) {
                     const renewalStatus = statusById.get(c.renewedContractId);
                     if (renewalStatus && (
-                        renewalStatus === ContractStatus.DRAFT ||
+                        DRAFT_STATUSES.includes(renewalStatus as ContractStatus) ||
                         CONTRACT_PAGE_STATUSES.includes(renewalStatus as ContractStatus) ||
                         renewalStatus === ContractStatus.TERMINATED
                     )) {

@@ -11,6 +11,7 @@ import {
     alpha,
     Alert,
     AlertColor,
+    useTheme,
 } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
 import AppButton from '@/components/common/AppButton';
@@ -46,6 +47,9 @@ export default function UploadTemplateDialog({
     onClose,
     onSuccess,
 }: UploadTemplateDialogProps) {
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+
     // Wizard state
     const [currentStep, setCurrentStep] = useState<1 | 2>(1);
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
@@ -627,8 +631,8 @@ export default function UploadTemplateDialog({
                     boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}59`,
                 },
                 '&.Mui-disabled': {
-                    bgcolor: 'rgba(0, 0, 0, 0.12)',
-                    color: 'rgba(0, 0, 0, 0.26)',
+                    bgcolor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)',
+                    color: isDark ? 'rgba(255,255,255,0.32)' : 'rgba(0,0,0,0.26)',
                 },
             }}
         >
@@ -731,13 +735,13 @@ export default function UploadTemplateDialog({
                                 onDrop={handleDrop}
                                 sx={{
                                     border: '2px dashed',
-                                    borderColor: dragActive ? 'primary.main' : 'rgba(0, 0, 0, 0.12)',
+                                    borderColor: dragActive ? 'primary.main' : (isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)'),
                                     borderRadius: 2,
                                     p: 1,
                                     textAlign: 'center',
                                     bgcolor: dragActive
-                                        ? (theme: any) => alpha(theme.palette.primary.main, 0.04)
-                                        : 'rgba(0, 0, 0, 0.02)',
+                                        ? (t: any) => alpha(t.palette.primary.main, 0.06)
+                                        : (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'),
                                     transition: 'all 0.3s',
                                     cursor: 'pointer',
                                     '&:hover': {
@@ -750,7 +754,7 @@ export default function UploadTemplateDialog({
                                 <CloudUploadIcon
                                     sx={{
                                         fontSize: 48,
-                                        color: dragActive ? 'primary.main' : 'rgba(0, 0, 0, 0.3)',
+                                        color: dragActive ? 'primary.main' : (isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.3)'),
                                         mb: 2,
                                     }}
                                 />
@@ -785,13 +789,13 @@ export default function UploadTemplateDialog({
                             <Box
                                 sx={{
                                     border: '1px solid',
-                                    borderColor: 'rgba(0, 0, 0, 0.12)',
+                                    borderColor: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)',
                                     borderRadius: 2,
                                     p: 1,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
-                                    bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
+                                    bgcolor: (t: any) => alpha(t.palette.primary.main, 0.06),
                                 }}
                             >
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>

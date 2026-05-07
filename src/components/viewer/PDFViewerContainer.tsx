@@ -1107,7 +1107,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 const fieldName = field.name || 'signed';
                                 field.setValue(fieldName);
                                 if (field.commit) {
-                                    try { field.commit(fieldName, widget); } catch (e) { /* ok */ }
+                                    try { field.commit(); } catch (e) { /* ok */ }
                                 }
                                 // ✅ Do NOT set ReadOnly — allows user to clear/remove signatures
 
@@ -1339,7 +1339,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         if (partyId === null) {
                             // Clear highlighting - restore original appearance
                             annot.Opacity = 1;
-                            annot.StrokeThickness = 3;
+                            annot.StrokeThickness = 2;
                         } else if (assignedParty === partyId) {
                             // Highlight this field
                             annot.Opacity = 1;

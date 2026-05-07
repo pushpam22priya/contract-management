@@ -11,6 +11,7 @@ import {
     alpha,
     Alert,
     AlertColor,
+    useTheme,
 } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
 import AppButton from '@/components/common/AppButton';
@@ -50,6 +51,8 @@ export default function EditTemplateDialog({
     // Wizard state
     const [currentStep, setCurrentStep] = useState<1 | 2>(1);
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
 
     const [templateName, setTemplateName] = useState('');
     const [description, setDescription] = useState('');
@@ -663,583 +666,583 @@ export default function EditTemplateDialog({
 
     return (
         <>
-        <BaseDialog
-            open={open}
-            onClose={handleCloseAttempt}
-            title={currentStep === 1 ? "Edit Template - Step 1: Basic Information" : "Edit Template - Step 2: Edit Form Fields"}
-            actions={dialogActions}
-            maxWidth={currentStep === 1 ? 'sm' : 'xl'}
-            fullWidth
-            fullScreen={currentStep === 2}
-            noPadding={currentStep === 2}
-        >
-            {/* STEP 1: Basic Information */}
-            {currentStep === 1 && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {/* Error/Success Messages */}
-                    {error && (
-                        <Alert severity="error" onClose={() => setError('')}>
-                            {error}
-                        </Alert>
-                    )}
-                    {success && (
-                        <Alert severity="success">
-                            {success}
-                        </Alert>
-                    )}
+            <BaseDialog
+                open={open}
+                onClose={handleCloseAttempt}
+                title={currentStep === 1 ? "Edit Template - Step 1: Basic Information" : "Edit Template - Step 2: Edit Form Fields"}
+                actions={dialogActions}
+                maxWidth={currentStep === 1 ? 'sm' : 'xl'}
+                fullWidth
+                fullScreen={currentStep === 2}
+                noPadding={currentStep === 2}
+            >
+                {/* STEP 1: Basic Information */}
+                {currentStep === 1 && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {/* Error/Success Messages */}
+                        {error && (
+                            <Alert severity="error" onClose={() => setError('')}>
+                                {error}
+                            </Alert>
+                        )}
+                        {success && (
+                            <Alert severity="success">
+                                {success}
+                            </Alert>
+                        )}
 
-                    {/* Current File Info */}
-                    <Box
-                        sx={{
-                            bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
-                            border: '1px solid',
-                            borderColor: (theme: any) => alpha(theme.palette.primary.main, 0.2),
-                            borderRadius: 2,
-                            p: 1.5,
-                        }}
-                    >
-                        <Typography
-                            variant="body2"
+                        {/* Current File Info */}
+                        <Box
                             sx={{
-                                fontWeight: 600,
-                                color: 'text.primary',
-                                mb: 0.5,
+                                bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
+                                border: '1px solid',
+                                borderColor: (theme: any) => alpha(theme.palette.primary.main, 0.2),
+                                borderRadius: 2,
+                                p: 1.5,
                             }}
                         >
-                            Current File
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <InsertDriveFileOutlinedIcon
-                                sx={{ fontSize: 16, color: 'primary.main' }}
-                            />
                             <Typography
                                 variant="body2"
-                                sx={{ color: 'text.secondary' }}
-                            >
-                                {template.fileName}
-                            </Typography>
-                        </Box>
-                    </Box>
-
-                    {/* File Upload Area (Optional) */}
-                    <Box>
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                fontWeight: 600,
-                                mb: 0.5,
-                                color: 'text.primary',
-                            }}
-                        >
-                            Replace File <span style={{ color: '#9ca3af' }}>(Optional)</span>
-                        </Typography>
-
-                        {!selectedFile ? (
-                            <Box
-                                onDragEnter={handleDrag}
-                                onDragLeave={handleDrag}
-                                onDragOver={handleDrag}
-                                onDrop={handleDrop}
                                 sx={{
-                                    border: '2px dashed',
-                                    borderColor: dragActive ? 'primary.main' : 'rgba(0, 0, 0, 0.12)',
-                                    borderRadius: 2,
-                                    p: 1,
-                                    textAlign: 'center',
-                                    bgcolor: dragActive
-                                        ? (theme: any) => alpha(theme.palette.primary.main, 0.04)
-                                        : 'rgba(0, 0, 0, 0.02)',
-                                    transition: 'all 0.3s',
-                                    cursor: 'pointer',
-                                    '&:hover': {
-                                        borderColor: 'primary.main',
-                                        bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
-                                    },
+                                    fontWeight: 600,
+                                    color: 'text.primary',
+                                    mb: 0.5,
                                 }}
-                                onClick={() => document.getElementById('file-edit-input')?.click()}
                             >
-                                <CloudUploadIcon
-                                    sx={{
-                                        fontSize: 48,
-                                        color: dragActive ? 'primary.main' : 'rgba(0, 0, 0, 0.3)',
-                                        mb: 2,
-                                    }}
+                                Current File
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <InsertDriveFileOutlinedIcon
+                                    sx={{ fontSize: 16, color: 'primary.main' }}
                                 />
-                                <Typography
-                                    variant="body1"
-                                    sx={{
-                                        fontWeight: 600,
-                                        color: 'text.primary',
-                                        mb: 0.5,
-                                    }}
-                                >
-                                    Drop your file here or click to browse
-                                </Typography>
                                 <Typography
                                     variant="body2"
-                                    sx={{
-                                        color: 'text.secondary',
-                                        fontSize: '0.875rem',
-                                    }}
+                                    sx={{ color: 'text.secondary' }}
                                 >
-                                    Supported formats: PDF
+                                    {template.fileName}
                                 </Typography>
-                                <input
-                                    id="file-edit-input"
-                                    type="file"
-                                    accept=".pdf"
-                                    onChange={handleFileChange}
-                                    style={{ display: 'none' }}
-                                />
                             </Box>
-                        ) : (
-                            <Box
+                        </Box>
+
+                        {/* File Upload Area (Optional) */}
+                        <Box>
+                            <Typography
+                                variant="body2"
                                 sx={{
-                                    border: '1px solid',
-                                    borderColor: 'rgba(0, 0, 0, 0.12)',
-                                    borderRadius: 2,
-                                    p: 1,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
+                                    fontWeight: 600,
+                                    mb: 0.5,
+                                    color: 'text.primary',
                                 }}
                             >
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                    <Box
-                                        sx={{
-                                            width: 40,
-                                            height: 40,
-                                            borderRadius: 1.5,
-                                            bgcolor: 'primary.main',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                        }}
-                                    >
-                                        <InsertDriveFileOutlinedIcon
-                                            sx={{ fontSize: 20, color: 'white' }}
-                                        />
-                                    </Box>
-                                    <Box>
-                                        <Typography
-                                            variant="body2"
-                                            sx={{
-                                                fontWeight: 600,
-                                                color: 'text.primary',
-                                            }}
-                                        >
-                                            {selectedFile.name}
-                                        </Typography>
-                                        <Typography
-                                            variant="caption"
-                                            sx={{
-                                                color: 'text.secondary',
-                                            }}
-                                        >
-                                            {(selectedFile.size / 1024).toFixed(2)} KB
-                                        </Typography>
-                                    </Box>
-                                </Box>
-                                <IconButton
-                                    onClick={handleRemoveFile}
-                                    size="small"
+                                Replace File <span style={{ color: '#9ca3af' }}>(Optional)</span>
+                            </Typography>
+
+                            {!selectedFile ? (
+                                <Box
+                                    onDragEnter={handleDrag}
+                                    onDragLeave={handleDrag}
+                                    onDragOver={handleDrag}
+                                    onDrop={handleDrop}
                                     sx={{
-                                        color: 'text.secondary',
-                                        '&:hover': {
-                                            bgcolor: 'rgba(0, 0, 0, 0.08)',
-                                            color: 'error.main',
-                                        },
-                                    }}
-                                >
-                                    <CloseIcon fontSize="small" />
-                                </IconButton>
-                            </Box>
-                        )}
-                    </Box>
-
-                    {/* Template Name */}
-                    <Box>
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                fontWeight: 600,
-                                mb: 0.5,
-                                color: 'text.primary',
-                            }}
-                        >
-                            Template Name <span style={{ color: '#ef4444' }}>*</span>
-                        </Typography>
-                        <TextField
-                            fullWidth
-                            placeholder="Enter template name"
-                            value={templateName}
-                            onChange={(e) => setTemplateName(e.target.value)}
-                            inputProps={{ maxLength: 50 }}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    '&:hover fieldset': {
-                                        borderColor: 'rgba(0, 0, 0, 0.3)',
-                                    },
-                                    '&.Mui-focused fieldset': {
-                                        borderWidth: 2,
-                                    },
-                                },
-                                '& .MuiOutlinedInput-input': {
-                                    py: 1.25,
-                                    px: 1.5,
-                                },
-                            }}
-                        />
-                    </Box>
-
-                    {/* Description */}
-                    <Box>
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                fontWeight: 600,
-                                mb: 1.5,
-                                color: 'text.primary',
-                            }}
-                        >
-                            Description
-                        </Typography>
-                        <TextField
-                            fullWidth
-                            multiline
-                            rows={2}
-                            placeholder="Enter template description (optional)"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            inputProps={{ maxLength: 200 }}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    '&:hover fieldset': {
-                                        borderColor: 'rgba(0, 0, 0, 0.3)',
-                                    },
-                                    '&.Mui-focused fieldset': {
-                                        borderWidth: 2,
-                                    },
-                                },
-                            }}
-                        />
-                    </Box>
-
-                    {/* Category Selection */}
-                    <Box>
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                fontWeight: 600,
-                                mb: 1.5,
-                                color: 'text.primary',
-                            }}
-                        >
-                            Category <span style={{ color: '#ef4444' }}>*</span>
-                        </Typography>
-
-                        {!showNewCategoryInput ? (
-                            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
-                                <Autocomplete
-                                    fullWidth
-                                    options={categories}
-                                    value={categories.find(c => c.name === selectedCategory) || null}
-                                    onChange={(event, newValue) => {
-                                        setSelectedCategory(newValue ? (typeof newValue === 'string' ? newValue : (newValue as Category).name) : null);
-                                    }}
-                                    getOptionLabel={(option) => typeof option === 'string' ? option : (option as Category).name}
-                                    renderInput={(params) => (
-                                        <TextField
-                                            {...params}
-                                            placeholder="Select category"
-                                            sx={{
-                                                '& .MuiOutlinedInput-root': {
-                                                    borderRadius: 2,
-                                                    padding: 0.4,
-                                                    '&:hover fieldset': {
-                                                        borderColor: 'rgba(0, 0, 0, 0.3)',
-                                                    },
-                                                    '&.Mui-focused fieldset': {
-                                                        borderWidth: 2,
-                                                    },
-                                                },
-                                            }}
-                                        />
-                                    )}
-                                    renderOption={(props, option) => {
-                                        const { key, ...otherProps } = props as any;
-                                        return (
-                                            <li key={key} {...otherProps} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                                                <Chip
-                                                    label={option.name}
-                                                    size="small"
-                                                    sx={{
-                                                        bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.08),
-                                                        color: 'primary.main',
-                                                        fontWeight: 500,
-                                                    }}
-                                                />
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={(e) => handleDeleteCategory(e, option.id)}
-                                                    sx={{
-                                                        ml: 1,
-                                                        color: 'text.secondary',
-                                                        '&:hover': {
-                                                            color: 'error.main',
-                                                            bgcolor: 'rgba(239, 68, 68, 0.08)',
-                                                        },
-                                                    }}
-                                                >
-                                                    <DeleteIcon fontSize="inherit" />
-                                                </IconButton>
-                                            </li>
-                                        );
-                                    }}
-                                />
-                                <AppButton
-                                    variant="outlined"
-                                    startIcon={<AddCircleOutlineIcon />}
-                                    onClick={() => setShowNewCategoryInput(true)}
-                                    sx={{
-                                        fontWeight: 600,
+                                        border: '2px dashed',
+                                        borderColor: dragActive ? 'primary.main' : (isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)'),
                                         borderRadius: 2,
-                                        whiteSpace: 'nowrap',
-                                        borderColor: 'rgba(0, 0, 0, 0.23)',
-                                        color: 'text.primary',
+                                        p: 1,
+                                        textAlign: 'center',
+                                        bgcolor: dragActive
+                                            ? (t: any) => alpha(t.palette.primary.main, 0.06)
+                                            : (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'),
+                                        transition: 'all 0.3s',
+                                        cursor: 'pointer',
                                         '&:hover': {
                                             borderColor: 'primary.main',
                                             bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
                                         },
                                     }}
+                                    onClick={() => document.getElementById('file-edit-input')?.click()}
                                 >
-                                    New
-                                </AppButton>
-                            </Box>
-                        ) : (
-                            <Box sx={{ display: 'flex', gap: 1.5 }}>
-                                <TextField
-                                    fullWidth
-                                    placeholder="Enter new category name"
-                                    value={newCategory}
-                                    onChange={(e) => setNewCategory(e.target.value)}
-                                    inputProps={{ maxLength: 20 }}
-                                    onKeyPress={(e) => {
-                                        if (e.key === 'Enter') {
-                                            handleAddNewCategory();
-                                        }
-                                    }}
-                                    autoFocus
+                                    <CloudUploadIcon
+                                        sx={{
+                                            fontSize: 48,
+                                            color: dragActive ? 'primary.main' : (isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.3)'),
+                                            mb: 2,
+                                        }}
+                                    />
+                                    <Typography
+                                        variant="body1"
+                                        sx={{
+                                            fontWeight: 600,
+                                            color: 'text.primary',
+                                            mb: 0.5,
+                                        }}
+                                    >
+                                        Drop your file here or click to browse
+                                    </Typography>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            color: 'text.secondary',
+                                            fontSize: '0.875rem',
+                                        }}
+                                    >
+                                        Supported formats: PDF
+                                    </Typography>
+                                    <input
+                                        id="file-edit-input"
+                                        type="file"
+                                        accept=".pdf"
+                                        onChange={handleFileChange}
+                                        style={{ display: 'none' }}
+                                    />
+                                </Box>
+                            ) : (
+                                <Box
                                     sx={{
-                                        '& .MuiOutlinedInput-root': {
-                                            borderRadius: 2,
-                                            '&:hover fieldset': {
-                                                borderColor: 'rgba(0, 0, 0, 0.3)',
-                                            },
-                                            '&.Mui-focused fieldset': {
-                                                borderWidth: 2,
-                                            },
-                                        },
-                                        '& .MuiOutlinedInput-input': {
-                                            py: 1.25,
-                                            px: 1.5,
-                                        },
-                                    }}
-                                />
-                                <AppButton
-                                    variant="contained"
-                                    onClick={handleAddNewCategory}
-                                    disabled={!newCategory.trim()}
-                                    sx={{
-                                        fontWeight: 600,
+                                        border: '1px solid',
+                                        borderColor: 'rgba(0, 0, 0, 0.12)',
                                         borderRadius: 2,
-                                        whiteSpace: 'nowrap',
-                                        bgcolor: 'primary.main',
-                                        '&:hover': {
-                                            bgcolor: 'primary.dark',
-                                        },
+                                        p: 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
                                     }}
                                 >
-                                    Add
-                                </AppButton>
-                                <AppButton
-                                    variant="outlined"
-                                    onClick={() => {
-                                        setShowNewCategoryInput(false);
-                                        setNewCategory('');
-                                    }}
-                                    sx={{
-                                        fontWeight: 600,
-                                        borderRadius: 2,
-                                        borderColor: 'rgba(0, 0, 0, 0.23)',
-                                        color: 'text.primary',
-                                        '&:hover': {
-                                            borderColor: 'rgba(0, 0, 0, 0.4)',
-                                            bgcolor: 'rgba(0, 0, 0, 0.02)',
-                                        },
-                                    }}
-                                >
-                                    Cancel
-                                </AppButton>
-                            </Box>
-                        )}
-                    </Box>
-                </Box>
-            )}
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                        <Box
+                                            sx={{
+                                                width: 40,
+                                                height: 40,
+                                                borderRadius: 1.5,
+                                                bgcolor: 'primary.main',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
+                                        >
+                                            <InsertDriveFileOutlinedIcon
+                                                sx={{ fontSize: 20, color: 'white' }}
+                                            />
+                                        </Box>
+                                        <Box>
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    fontWeight: 600,
+                                                    color: 'text.primary',
+                                                }}
+                                            >
+                                                {selectedFile.name}
+                                            </Typography>
+                                            <Typography
+                                                variant="caption"
+                                                sx={{
+                                                    color: 'text.secondary',
+                                                }}
+                                            >
+                                                {(selectedFile.size / 1024).toFixed(2)} KB
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                    <IconButton
+                                        onClick={handleRemoveFile}
+                                        size="small"
+                                        sx={{
+                                            color: 'text.secondary',
+                                            '&:hover': {
+                                                bgcolor: 'rgba(0, 0, 0, 0.08)',
+                                                color: 'error.main',
+                                            },
+                                        }}
+                                    >
+                                        <CloseIcon fontSize="small" />
+                                    </IconButton>
+                                </Box>
+                            )}
+                        </Box>
 
-            {/* STEP 2: PDF Form Builder - Full Screen */}
-            {currentStep === 2 && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                    {/* Error Alert */}
-                    {error && (
-                        <Alert severity="error" sx={{ mb: 1, mx: 1 }} onClose={() => setError('')}>
-                            {error}
-                        </Alert>
-                    )}
-
-                    {/* Main Content Area */}
-                    <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-                        {/* Full-Screen PDF Viewer */}
-                        {documentUrl ? (
-                            <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                                <PDFViewerContainer
-                                    ref={pdfViewerRef}
-                                    documentUrl={documentUrl}
-                                    isReadOnly={false}
-                                    canAddFormFields={true}
-                                    onDocumentModified={() => {
-                                        console.log('📝 Template modified by user (fields added/changed)');
-                                        if (!pdfModified) {
-                                            setPdfModified(true);
-                                        }
-                                        // Refresh form fields when document is modified (field added/removed)
-                                        refreshFormFields();
-                                    }}
-                                    initialToolbarGroup="toolbarGroup-Forms"
-                                    onDocumentLoaded={() => {
-                                        setDocumentLoaded(true);
-                                        // Refresh form fields when document loads
-                                        setTimeout(refreshFormFields, 500);
-                                    }}
-                                    onError={(err) => setError(err)}
-                                    initialXfdf={selectedFile ? undefined : template.xfdfData}
-                                    formFields={selectedFile ? undefined : template.formFields}
-                                    parties={parties}
-                                    enablePartyAssignment={parties.length > 0}
-                                    onFieldChange={handleFieldChange}
-                                    onPartyAssigned={(fieldName, partyId, partyLabel) => {
-                                        console.log(`[EDIT-TEMPLATE] Field "${fieldName}" assigned to "${partyLabel}"`);
-                                        refreshFormFields();
-                                    }}
-                                    onFieldsWithPartyExported={(fields) => {
-                                        console.log(`[EDIT-TEMPLATE] onFieldsWithPartyExported: got ${fields.length} fields from PDF`);
-                                        if (fields.length === 0) {
-                                            console.log('[EDIT-TEMPLATE] onFieldsWithPartyExported: skipping update (0 fields returned)');
-                                            return;
-                                        }
-                                        setFormFields(prev => {
-                                            const prevMap = new Map(prev.map((f: any) => [f.name, f]));
-                                            const merged = (fields as FormFieldDefinition[]).map((f: any) => {
-                                                const prevField = prevMap.get(f.name);
-                                                const profileKey = prevField?.profileKey ?? f.profileKey ?? null;
-                                                if (profileKey) console.log(`[EDIT-TEMPLATE] onFieldsWithPartyExported: preserving profileKey "${profileKey}" for field "${f.name}"`);
-                                                return { ...f, profileKey };
-                                            });
-                                            return merged;
-                                        });
-                                    }}
-                                />
-                            </Box>
-                        ) : (
-                            <Box
+                        {/* Template Name */}
+                        <Box>
+                            <Typography
+                                variant="body2"
                                 sx={{
-                                    flex: 1,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    bgcolor: 'grey.50'
+                                    fontWeight: 600,
+                                    mb: 0.5,
+                                    color: 'text.primary',
                                 }}
                             >
-                                <Typography variant="h6" color="text.secondary">
-                                    No document loaded
-                                </Typography>
-                            </Box>
-                        )}
-
-                        {/* Party Assignment Panel - Show when parties are configured */}
-                        {parties.length > 0 && showPartyPanel && documentLoaded && (
-                            <PartyAssignmentPanel
-                                parties={parties}
-                                formFields={formFields}
-                                selectedFieldName={selectedFieldName}
-                                onPartySelected={handlePartySelected}
-                                onFieldSelected={(fieldName) => setSelectedFieldName(fieldName)}
-                                onHighlightParty={handleHighlightParty}
-                                onConfigureParties={() => setShowPartyConfigDialog(true)}
-                                onMultipleFieldsAssign={handleMultipleFieldsAssign}
-                                onFieldUnassigned={handleFieldUnassigned}
+                                Template Name <span style={{ color: '#ef4444' }}>*</span>
+                            </Typography>
+                            <TextField
+                                fullWidth
+                                placeholder="Enter template name"
+                                value={templateName}
+                                onChange={(e) => setTemplateName(e.target.value)}
+                                inputProps={{ maxLength: 50 }}
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        borderRadius: 2,
+                                        '&:hover fieldset': {
+                                            borderColor: 'rgba(0, 0, 0, 0.3)',
+                                        },
+                                        '&.Mui-focused fieldset': {
+                                            borderWidth: 2,
+                                        },
+                                    },
+                                    '& .MuiOutlinedInput-input': {
+                                        py: 1.25,
+                                        px: 1.5,
+                                    },
+                                }}
                             />
-                        )}
+                        </Box>
+
+                        {/* Description */}
+                        <Box>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    fontWeight: 600,
+                                    mb: 1.5,
+                                    color: 'text.primary',
+                                }}
+                            >
+                                Description
+                            </Typography>
+                            <TextField
+                                fullWidth
+                                multiline
+                                rows={2}
+                                placeholder="Enter template description (optional)"
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                inputProps={{ maxLength: 200 }}
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        borderRadius: 2,
+                                        '&:hover fieldset': {
+                                            borderColor: 'rgba(0, 0, 0, 0.3)',
+                                        },
+                                        '&.Mui-focused fieldset': {
+                                            borderWidth: 2,
+                                        },
+                                    },
+                                }}
+                            />
+                        </Box>
+
+                        {/* Category Selection */}
+                        <Box>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    fontWeight: 600,
+                                    mb: 1.5,
+                                    color: 'text.primary',
+                                }}
+                            >
+                                Category <span style={{ color: '#ef4444' }}>*</span>
+                            </Typography>
+
+                            {!showNewCategoryInput ? (
+                                <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                                    <Autocomplete
+                                        fullWidth
+                                        options={categories}
+                                        value={categories.find(c => c.name === selectedCategory) || null}
+                                        onChange={(event, newValue) => {
+                                            setSelectedCategory(newValue ? (typeof newValue === 'string' ? newValue : (newValue as Category).name) : null);
+                                        }}
+                                        getOptionLabel={(option) => typeof option === 'string' ? option : (option as Category).name}
+                                        renderInput={(params) => (
+                                            <TextField
+                                                {...params}
+                                                placeholder="Select category"
+                                                sx={{
+                                                    '& .MuiOutlinedInput-root': {
+                                                        borderRadius: 2,
+                                                        padding: 0.4,
+                                                        '&:hover fieldset': {
+                                                            borderColor: 'rgba(0, 0, 0, 0.3)',
+                                                        },
+                                                        '&.Mui-focused fieldset': {
+                                                            borderWidth: 2,
+                                                        },
+                                                    },
+                                                }}
+                                            />
+                                        )}
+                                        renderOption={(props, option) => {
+                                            const { key, ...otherProps } = props as any;
+                                            return (
+                                                <li key={key} {...otherProps} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                                    <Chip
+                                                        label={option.name}
+                                                        size="small"
+                                                        sx={{
+                                                            bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.08),
+                                                            color: 'primary.main',
+                                                            fontWeight: 500,
+                                                        }}
+                                                    />
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={(e) => handleDeleteCategory(e, option.id)}
+                                                        sx={{
+                                                            ml: 1,
+                                                            color: 'text.secondary',
+                                                            '&:hover': {
+                                                                color: 'error.main',
+                                                                bgcolor: 'rgba(239, 68, 68, 0.08)',
+                                                            },
+                                                        }}
+                                                    >
+                                                        <DeleteIcon fontSize="inherit" />
+                                                    </IconButton>
+                                                </li>
+                                            );
+                                        }}
+                                    />
+                                    <AppButton
+                                        variant="outlined"
+                                        startIcon={<AddCircleOutlineIcon />}
+                                        onClick={() => setShowNewCategoryInput(true)}
+                                        sx={{
+                                            fontWeight: 600,
+                                            borderRadius: 2,
+                                            whiteSpace: 'nowrap',
+                                            borderColor: 'rgba(0, 0, 0, 0.23)',
+                                            color: 'text.primary',
+                                            '&:hover': {
+                                                borderColor: 'primary.main',
+                                                bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
+                                            },
+                                        }}
+                                    >
+                                        New
+                                    </AppButton>
+                                </Box>
+                            ) : (
+                                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                                    <TextField
+                                        fullWidth
+                                        placeholder="Enter new category name"
+                                        value={newCategory}
+                                        onChange={(e) => setNewCategory(e.target.value)}
+                                        inputProps={{ maxLength: 20 }}
+                                        onKeyPress={(e) => {
+                                            if (e.key === 'Enter') {
+                                                handleAddNewCategory();
+                                            }
+                                        }}
+                                        autoFocus
+                                        sx={{
+                                            '& .MuiOutlinedInput-root': {
+                                                borderRadius: 2,
+                                                '&:hover fieldset': {
+                                                    borderColor: 'rgba(0, 0, 0, 0.3)',
+                                                },
+                                                '&.Mui-focused fieldset': {
+                                                    borderWidth: 2,
+                                                },
+                                            },
+                                            '& .MuiOutlinedInput-input': {
+                                                py: 1.25,
+                                                px: 1.5,
+                                            },
+                                        }}
+                                    />
+                                    <AppButton
+                                        variant="contained"
+                                        onClick={handleAddNewCategory}
+                                        disabled={!newCategory.trim()}
+                                        sx={{
+                                            fontWeight: 600,
+                                            borderRadius: 2,
+                                            whiteSpace: 'nowrap',
+                                            bgcolor: 'primary.main',
+                                            '&:hover': {
+                                                bgcolor: 'primary.dark',
+                                            },
+                                        }}
+                                    >
+                                        Add
+                                    </AppButton>
+                                    <AppButton
+                                        variant="outlined"
+                                        onClick={() => {
+                                            setShowNewCategoryInput(false);
+                                            setNewCategory('');
+                                        }}
+                                        sx={{
+                                            fontWeight: 600,
+                                            borderRadius: 2,
+                                            borderColor: 'rgba(0, 0, 0, 0.23)',
+                                            color: 'text.primary',
+                                            '&:hover': {
+                                                borderColor: 'rgba(0, 0, 0, 0.4)',
+                                                bgcolor: 'rgba(0, 0, 0, 0.02)',
+                                            },
+                                        }}
+                                    >
+                                        Cancel
+                                    </AppButton>
+                                </Box>
+                            )}
+                        </Box>
                     </Box>
-                </Box>
-            )}
+                )}
 
-            {/* Party Configuration Dialog */}
-            <PartyConfigDialog
-                open={showPartyConfigDialog}
-                onClose={() => setShowPartyConfigDialog(false)}
-                onSave={handlePartiesSave}
-                initialParties={parties}
+                {/* STEP 2: PDF Form Builder - Full Screen */}
+                {currentStep === 2 && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                        {/* Error Alert */}
+                        {error && (
+                            <Alert severity="error" sx={{ mb: 1, mx: 1 }} onClose={() => setError('')}>
+                                {error}
+                            </Alert>
+                        )}
+
+                        {/* Main Content Area */}
+                        <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                            {/* Full-Screen PDF Viewer */}
+                            {documentUrl ? (
+                                <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                                    <PDFViewerContainer
+                                        ref={pdfViewerRef}
+                                        documentUrl={documentUrl}
+                                        isReadOnly={false}
+                                        canAddFormFields={true}
+                                        onDocumentModified={() => {
+                                            console.log('📝 Template modified by user (fields added/changed)');
+                                            if (!pdfModified) {
+                                                setPdfModified(true);
+                                            }
+                                            // Refresh form fields when document is modified (field added/removed)
+                                            refreshFormFields();
+                                        }}
+                                        initialToolbarGroup="toolbarGroup-Forms"
+                                        onDocumentLoaded={() => {
+                                            setDocumentLoaded(true);
+                                            // Refresh form fields when document loads
+                                            setTimeout(refreshFormFields, 500);
+                                        }}
+                                        onError={(err) => setError(err)}
+                                        initialXfdf={selectedFile ? undefined : template.xfdfData}
+                                        formFields={selectedFile ? undefined : template.formFields}
+                                        parties={parties}
+                                        enablePartyAssignment={parties.length > 0}
+                                        onFieldChange={handleFieldChange}
+                                        onPartyAssigned={(fieldName, partyId, partyLabel) => {
+                                            console.log(`[EDIT-TEMPLATE] Field "${fieldName}" assigned to "${partyLabel}"`);
+                                            refreshFormFields();
+                                        }}
+                                        onFieldsWithPartyExported={(fields) => {
+                                            console.log(`[EDIT-TEMPLATE] onFieldsWithPartyExported: got ${fields.length} fields from PDF`);
+                                            if (fields.length === 0) {
+                                                console.log('[EDIT-TEMPLATE] onFieldsWithPartyExported: skipping update (0 fields returned)');
+                                                return;
+                                            }
+                                            setFormFields(prev => {
+                                                const prevMap = new Map(prev.map((f: any) => [f.name, f]));
+                                                const merged = (fields as FormFieldDefinition[]).map((f: any) => {
+                                                    const prevField = prevMap.get(f.name);
+                                                    const profileKey = prevField?.profileKey ?? f.profileKey ?? null;
+                                                    if (profileKey) console.log(`[EDIT-TEMPLATE] onFieldsWithPartyExported: preserving profileKey "${profileKey}" for field "${f.name}"`);
+                                                    return { ...f, profileKey };
+                                                });
+                                                return merged;
+                                            });
+                                        }}
+                                    />
+                                </Box>
+                            ) : (
+                                <Box
+                                    sx={{
+                                        flex: 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        bgcolor: 'grey.50'
+                                    }}
+                                >
+                                    <Typography variant="h6" color="text.secondary">
+                                        No document loaded
+                                    </Typography>
+                                </Box>
+                            )}
+
+                            {/* Party Assignment Panel - Show when parties are configured */}
+                            {parties.length > 0 && showPartyPanel && documentLoaded && (
+                                <PartyAssignmentPanel
+                                    parties={parties}
+                                    formFields={formFields}
+                                    selectedFieldName={selectedFieldName}
+                                    onPartySelected={handlePartySelected}
+                                    onFieldSelected={(fieldName) => setSelectedFieldName(fieldName)}
+                                    onHighlightParty={handleHighlightParty}
+                                    onConfigureParties={() => setShowPartyConfigDialog(true)}
+                                    onMultipleFieldsAssign={handleMultipleFieldsAssign}
+                                    onFieldUnassigned={handleFieldUnassigned}
+                                />
+                            )}
+                        </Box>
+                    </Box>
+                )}
+
+                {/* Party Configuration Dialog */}
+                <PartyConfigDialog
+                    open={showPartyConfigDialog}
+                    onClose={() => setShowPartyConfigDialog(false)}
+                    onSave={handlePartiesSave}
+                    initialParties={parties}
+                />
+            </BaseDialog>
+
+            {/* Unsaved Changes Confirmation Dialog */}
+            <ConfirmationDialog
+                open={showUnsavedDialog}
+                title="Unsaved Changes"
+                message="Do you want to save changes?"
+                onYes={handleUnsavedYes}
+                onNo={handleUnsavedNo}
+                onClose={handleUnsavedCancel}
+                loading={updating}
             />
-        </BaseDialog>
 
-        {/* Unsaved Changes Confirmation Dialog */}
-        <ConfirmationDialog
-            open={showUnsavedDialog}
-            title="Unsaved Changes"
-            message="Do you want to save changes?"
-            onYes={handleUnsavedYes}
-            onNo={handleUnsavedNo}
-            onClose={handleUnsavedCancel}
-            loading={updating}
-        />
+            {/* Profile Field Mapping Dialog */}
+            <ProfileFieldMappingDialog
+                open={showMappingDialog}
+                onClose={() => {
+                    setShowMappingDialog(false);
+                    if (pendingExportRef.current) {
+                        const { exportedFormFields, xfdfData, fileToUpload } = pendingExportRef.current;
+                        pendingExportRef.current = null;
+                        setUpdating(true);
+                        executeSave(exportedFormFields, xfdfData, fileToUpload);
+                    }
+                }}
+                onSave={(updatedFields) => {
+                    setShowMappingDialog(false);
+                    setFormFields(updatedFields);
+                    if (pendingExportRef.current) {
+                        const { xfdfData, fileToUpload } = pendingExportRef.current;
+                        pendingExportRef.current = null;
+                        setUpdating(true);
+                        executeSave(updatedFields, xfdfData, fileToUpload);
+                    }
+                }}
+                formFields={pendingExportRef.current?.exportedFormFields ?? formFields}
+                parties={parties}
+                profileKeyOptions={profileKeyOptions}
+            />
 
-        {/* Profile Field Mapping Dialog */}
-        <ProfileFieldMappingDialog
-            open={showMappingDialog}
-            onClose={() => {
-                setShowMappingDialog(false);
-                if (pendingExportRef.current) {
-                    const { exportedFormFields, xfdfData, fileToUpload } = pendingExportRef.current;
-                    pendingExportRef.current = null;
-                    setUpdating(true);
-                    executeSave(exportedFormFields, xfdfData, fileToUpload);
-                }
-            }}
-            onSave={(updatedFields) => {
-                setShowMappingDialog(false);
-                setFormFields(updatedFields);
-                if (pendingExportRef.current) {
-                    const { xfdfData, fileToUpload } = pendingExportRef.current;
-                    pendingExportRef.current = null;
-                    setUpdating(true);
-                    executeSave(updatedFields, xfdfData, fileToUpload);
-                }
-            }}
-            formFields={pendingExportRef.current?.exportedFormFields ?? formFields}
-            parties={parties}
-            profileKeyOptions={profileKeyOptions}
-        />
-
-        <NotificationSnackbar
-            open={snackbar.open}
-            message={snackbar.message}
-            severity={snackbar.severity}
-            onClose={() => setSnackbar({ ...snackbar, open: false })}
-        />
+            <NotificationSnackbar
+                open={snackbar.open}
+                message={snackbar.message}
+                severity={snackbar.severity}
+                onClose={() => setSnackbar({ ...snackbar, open: false })}
+            />
         </>
     );
 }

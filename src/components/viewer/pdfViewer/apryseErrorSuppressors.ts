@@ -23,9 +23,45 @@ export function installApryseErrorSuppressors(): void {
         _orig(...args);
     };
 
-    // 2. Suppress unhandled promise rejections of type PDFWorkerError
+    // 2. Intercept fetch calls to Apryse telemetry endpoints and swallow them silently.
+    //    This prevents "Failed to fetch" unhandled rejections from pws-collect.pdftron.com
+    //    from bubbling up to the Next.js error overlay.
+    const _origFetch = window.fetch.bind(window);
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string'
+            ? input
+            : input instanceof URL
+                ? input.href
+                : (input as Request).url;
+        if (url && url.includes('pdftron.com')) {
+            // Return an empty 200 so Apryse's code doesn't see a rejection
+            return Promise.resolve(new Response('', { status: 200 }));
+        }
+        return _origFetch(input, init);
+    };
+
+    // 3. Suppress unhandled promise rejections from Apryse internals
     window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
-        if (event.reason?.type === 'PDFWorkerError') {
+        const reason = event.reason;
+
+        // PDFWorkerError — always suppress
+        if (reason?.type === 'PDFWorkerError') {
+            event.preventDefault();
+            return;
+        }
+
+        // Apryse internal errors from webviewer-core.min.js
+        // e.g. "oa.yg is not a function" — minified internal method missing in this build
+        if (reason instanceof TypeError) {
+            const stack = reason.stack ?? '';
+            if (stack.includes('webviewer-core.min.js') || stack.includes('webviewer-core')) {
+                event.preventDefault();
+                return;
+            }
+        }
+
+        // Stray "Failed to fetch" rejections that escaped the fetch interceptor
+        if (reason instanceof TypeError && reason.message === 'Failed to fetch') {
             event.preventDefault();
         }
     });

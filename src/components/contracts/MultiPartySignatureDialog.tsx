@@ -443,9 +443,9 @@ const MultiPartySignatureDialog = ({
                                 px: 1.5,
                                 py: 1,
                                 borderRadius: 2,
-                                bgcolor: isDark ? alpha('#3b82f6', 0.08) : '#eff9ff',
+                                bgcolor: isDark ? 'rgba(99,102,241,0.13)' : '#eff9ff',
                                 border: '1px solid',
-                                borderColor: 'divider',
+                                borderColor: isDark ? 'rgba(99,102,241,0.30)' : '#bfdbfe',
                             }}
                         >
                             <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', mb: 1, display: 'block' }}>
@@ -527,9 +527,9 @@ const MultiPartySignatureDialog = ({
                             sx={{
                                 p: 2,
                                 borderRadius: 2,
-                                bgcolor: isDark ? alpha(theme.palette.success.main, 0.07) : '#f6faf6',
+                                bgcolor: isDark ? 'rgba(255,255,255,0.05)' : '#f6faf6',
                                 border: '1px solid',
-                                borderColor: 'divider',
+                                borderColor: isDark ? 'rgba(255,255,255,0.14)' : '#e2e8f0',
                                 mb: 2,
                             }}
                         >
@@ -679,9 +679,9 @@ const MultiPartySignatureDialog = ({
                                 p: 2,
                                 borderRadius: 2,
                                 textAlign: 'center',
-                                bgcolor: isDark ? alpha(theme.palette.success.main, 0.07) : '#f6faf6',
+                                bgcolor: isDark ? 'rgba(255,255,255,0.05)' : '#f6faf6',
                                 border: '1px solid',
-                                borderColor: 'divider',
+                                borderColor: isDark ? 'rgba(255,255,255,0.14)' : '#e2e8f0',
                                 mb: 2,
                             }}
                         >

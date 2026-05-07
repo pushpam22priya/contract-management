@@ -20,6 +20,13 @@ export default function NotificationSnackbar({
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
 
+    const darkSolidBg: Record<AlertColor, string> = {
+        success: '#166534',
+        error:   '#991b1b',
+        warning: '#92400e',
+        info:    '#1e3a8a',
+    };
+
     return (
         <Snackbar
             open={open}
@@ -34,8 +41,14 @@ export default function NotificationSnackbar({
                 sx={{
                     width: '100%',
                     boxShadow: isDark
-                        ? '0 4px 16px rgba(0,0,0,0.40)'
+                        ? '0 4px 16px rgba(0,0,0,0.50)'
                         : '0 4px 12px rgba(0,0,0,0.15)',
+                    ...(isDark && {
+                        bgcolor: darkSolidBg[severity],
+                        color: '#fff',
+                        '& .MuiAlert-icon': { color: '#fff' },
+                        '& .MuiAlert-action .MuiIconButton-root': { color: '#fff' },
+                    }),
                 }}
             >
                 <Typography variant="body2" color="inherit">{message}</Typography>
