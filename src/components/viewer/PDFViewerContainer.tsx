@@ -1368,6 +1368,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                 if (!viewerInstance.current) return 0;
 
                 let filledCount = 0;
+                let firstFilledWidget: any = null;
 
                 try {
                     const { Core } = viewerInstance.current;
@@ -1427,6 +1428,17 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 // Redraw widget to show the new value visually
                                 if (widgets.length > 0) {
                                     annotationManager.redrawAnnotation(widgets[0]);
+                                    
+                                    // Track the first filled widget for scrolling
+                                    if (!firstFilledWidget) {
+                                        firstFilledWidget = widgets[0];
+                                    } else {
+                                        // Update to the structurally first widget if multiple are filled
+                                        if (widgets[0].PageNumber < firstFilledWidget.PageNumber || 
+                                            (widgets[0].PageNumber === firstFilledWidget.PageNumber && widgets[0].Y < firstFilledWidget.Y)) {
+                                            firstFilledWidget = widgets[0];
+                                        }
+                                    }
                                 }
 
                                 // Notify parent (updates filledFieldValues state in CreateContractDialog / DocumentViewerDialog)
@@ -1440,6 +1452,33 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             console.warn(`⚠️ [AUTOFILL] Skipping field due to error:`, fieldError);
                         }
                     });
+
+                    // Scroll to the first filled widget if we found any
+                    if (firstFilledWidget && filledCount > 0) {
+                        const { documentViewer } = Core;
+                        try {
+                            const scrollContainer = documentViewer.getScrollViewElement();
+                            if (scrollContainer) scrollContainer.style.scrollBehavior = 'smooth';
+                            
+                            annotationManager.deselectAllAnnotations();
+                            
+                            (async () => {
+                                if (documentViewer.getCurrentPage() !== firstFilledWidget.PageNumber) {
+                                    documentViewer.setCurrentPage(firstFilledWidget.PageNumber);
+                                    await new Promise(resolve => setTimeout(resolve, 250));
+                                }
+                                
+                                annotationManager.selectAnnotation(firstFilledWidget);
+                                await new Promise(resolve => setTimeout(resolve, 50));
+                                annotationManager.jumpToAnnotation(firstFilledWidget);
+                                flashHighlight(Core, firstFilledWidget);
+                                
+                                setTimeout(() => { if (scrollContainer) scrollContainer.style.scrollBehavior = 'auto'; }, 600);
+                            })();
+                        } catch (navError) {
+                            console.warn(`⚠️ [AUTOFILL] Failed to navigate to first filled field:`, navError);
+                        }
+                    }
 
                     console.log(`✅ [AUTOFILL] Filled ${filledCount} fields for party: ${partyId || 'all'}`);
                 } catch (error) {
@@ -1967,19 +2006,31 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             UI.setSelectedTab('signatureModal', 'textSignaturePanelButton');
                             console.log('✅ Default signature tab set to Type');
 
-                            // Pre-populate the "Type" signature input with the current user's email.
+                            // Pre-populate the "Type" signature input with the current user's name or email.
                             // External signers don't have a session, so the email is passed via the
                             // currentUserEmail prop. Internal users fall back to sessionStorage.
-                            const emailForSignature = currentUserEmail || (() => {
-                                try {
-                                    const raw = sessionStorage.getItem('cms_current_user');
-                                    return raw ? JSON.parse(raw)?.email : null;
-                                } catch { return null; }
-                            })();
-                            if (emailForSignature) {
-                               const nameFromEmail = emailForSignature.split('@')[0];
-                                Core.annotationManager.setCurrentUser(nameFromEmail);
-                                console.log('✅ Typed signature pre-populated with:', nameFromEmail);
+                            let signatureName = null;
+                            try {
+                                const raw = sessionStorage.getItem('cms_current_user');
+                                const parsedUser = raw ? JSON.parse(raw) : null;
+                                
+                                if (parsedUser?.name) {
+                                    signatureName = parsedUser.name;
+                                } else {
+                                    const emailForSignature = currentUserEmail || parsedUser?.email;
+                                    if (emailForSignature) {
+                                        signatureName = emailForSignature.split('@')[0];
+                                    }
+                                }
+                            } catch {
+                                if (currentUserEmail) {
+                                    signatureName = currentUserEmail.split('@')[0];
+                                }
+                            }
+
+                            if (signatureName) {
+                                Core.annotationManager.setCurrentUser(signatureName);
+                                console.log('✅ Typed signature pre-populated with:', signatureName);
                             }
                         } catch (tabErr) {
                             console.warn('⚠️ Could not reorder signature tabs:', tabErr);

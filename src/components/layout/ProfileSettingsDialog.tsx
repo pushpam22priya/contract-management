@@ -101,6 +101,42 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
     const [panCard, setPanCard] = useState('');
     const [aadharCard, setAadharCard] = useState('');
 
+    type ProfileErrors = Partial<Record<'name' | 'dateOfBirth' | 'panCard' | 'aadharCard', string>>;
+    const [errors, setErrors] = useState<ProfileErrors>({});
+
+    const clearError = (key: keyof ProfileErrors) =>
+        setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
+
+    const validate = (): boolean => {
+        const e: ProfileErrors = {};
+
+        if (name.trim() && name.trim().length < 2)
+            e.name = t('errorNameMin');
+        else if (name.trim() && !/^[a-zA-Z\s.\-']+$/.test(name.trim()))
+            e.name = t('errorNameChars');
+
+        if (dateOfBirth) {
+            const dob = new Date(dateOfBirth);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (isNaN(dob.getTime()))
+                e.dateOfBirth = t('errorDobInvalid');
+            else if (dob > today)
+                e.dateOfBirth = t('errorDobFuture');
+            else if (today.getFullYear() - dob.getFullYear() > 120)
+                e.dateOfBirth = t('errorDobInvalid');
+        }
+
+        if (panCard && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panCard))
+            e.panCard = t('errorPanFormat');
+
+        if (aadharCard && aadharCard.length !== 12)
+            e.aadharCard = t('errorAadharLength');
+
+        setErrors(e);
+        return Object.keys(e).length === 0;
+    };
+
     const [fetching, setFetching] = useState(false);
     const [saving, setSaving] = useState(false);
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
@@ -109,6 +145,7 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
 
     useEffect(() => {
         if (!open || !currentUser?.email) return;
+        setErrors({});
         const controller = new AbortController();
         setFetching(true);
         fetch(`/api/users/profile?email=${encodeURIComponent(currentUser.email)}`, { signal: controller.signal })
@@ -147,6 +184,7 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
     };
 
     const handleSave = async () => {
+        if (!validate()) return;
         setSaving(true);
         const result = await authService.updateProfile({
             name, department, organization,
@@ -244,9 +282,11 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                                 <TextField
                                     label={t('fullName')}
                                     value={name}
-                                    onChange={(e) => setName(e.target.value)}
+                                    onChange={(e) => { setName(e.target.value); clearError('name'); }}
                                     size="small" fullWidth placeholder={t('fullNamePlaceholder')}
-                                    slotProps={{ input: { startAdornment: <InputAdornment position="start"><PersonOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> } }}
+                                    error={!!errors.name}
+                                    helperText={errors.name}
+                                    slotProps={{ input: { startAdornment: <InputAdornment position="start"><PersonOutlinedIcon sx={{ fontSize: 18, color: errors.name ? 'error.main' : 'text.secondary' }} /></InputAdornment> } }}
                                     sx={fieldSx}
                                 />
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
@@ -277,11 +317,13 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                                         label={t('dateOfBirth')}
                                         type="date"
                                         value={dateOfBirth}
-                                        onChange={(e) => setDateOfBirth(e.target.value)}
+                                        onChange={(e) => { setDateOfBirth(e.target.value); clearError('dateOfBirth'); }}
                                         size="small" fullWidth
+                                        error={!!errors.dateOfBirth}
+                                        helperText={errors.dateOfBirth}
                                         slotProps={{
                                             inputLabel: { shrink: true },
-                                            input: { startAdornment: <InputAdornment position="start"><CakeOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> },
+                                            input: { startAdornment: <InputAdornment position="start"><CakeOutlinedIcon sx={{ fontSize: 18, color: errors.dateOfBirth ? 'error.main' : 'text.secondary' }} /></InputAdornment> },
                                         }}
                                         sx={fieldSx}
                                     />
@@ -321,19 +363,27 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                                     <TextField
                                         label={t('panCard')}
                                         value={panCard}
-                                        onChange={(e) => setPanCard(e.target.value.toUpperCase())}
+                                        onChange={(e) => { setPanCard(e.target.value.toUpperCase()); clearError('panCard'); }}
                                         size="small" fullWidth placeholder={t('panCardPlaceholder')}
-                                        inputProps={{ maxLength: 10 }}
-                                        slotProps={{ input: { startAdornment: <InputAdornment position="start"><CreditCardOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> } }}
+                                        error={!!errors.panCard}
+                                        helperText={errors.panCard}
+                                        slotProps={{
+                                            htmlInput: { maxLength: 10 },
+                                            input: { startAdornment: <InputAdornment position="start"><CreditCardOutlinedIcon sx={{ fontSize: 18, color: errors.panCard ? 'error.main' : 'text.secondary' }} /></InputAdornment> },
+                                        }}
                                         sx={fieldSx}
                                     />
                                     <TextField
                                         label={t('aadharCard')}
                                         value={aadharCard}
-                                        onChange={(e) => setAadharCard(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                                        onChange={(e) => { setAadharCard(e.target.value.replace(/\D/g, '').slice(0, 12)); clearError('aadharCard'); }}
                                         size="small" fullWidth placeholder={t('aadharCardPlaceholder')}
-                                        inputProps={{ maxLength: 12 }}
-                                        slotProps={{ input: { startAdornment: <InputAdornment position="start"><FingerprintOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> } }}
+                                        error={!!errors.aadharCard}
+                                        helperText={errors.aadharCard}
+                                        slotProps={{
+                                            htmlInput: { maxLength: 12 },
+                                            input: { startAdornment: <InputAdornment position="start"><FingerprintOutlinedIcon sx={{ fontSize: 18, color: errors.aadharCard ? 'error.main' : 'text.secondary' }} /></InputAdornment> },
+                                        }}
                                         sx={fieldSx}
                                     />
                                 </Box>
