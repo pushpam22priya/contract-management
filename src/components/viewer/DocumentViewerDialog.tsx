@@ -5,7 +5,6 @@
 import AppButton from '@/components/common/AppButton';
 import { Box,  Alert, AlertColor, Typography, Chip, Tooltip } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import { authService } from '@/services/authService';
 import { buildProfileData } from '@/utils/profileKeyOptions';
 import dynamic from 'next/dynamic';
@@ -756,7 +755,6 @@ export default function DocumentViewerDialog({
                             onClick={handleAutofill}
                             disabled={saving}
                             size="small"
-                            startIcon={<AutoFixHighIcon sx={{ fontSize: 16 }} />}
                             sx={{ borderRadius: 2, py: 0.6 }}
                         >
                             Autofill

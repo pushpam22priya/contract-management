@@ -19,7 +19,6 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { ArrowBack, ArrowForward, Save } from '@mui/icons-material';
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -629,7 +628,6 @@ export default function RenewContractDialog({
                                         onClick={handleAutofillClick}
                                         disabled={!documentLoaded || saving}
                                         size="small"
-                                        startIcon={<AutoFixHighIcon sx={{ fontSize: 16 }} />}
                                         sx={{ borderRadius: 2, py: 0.5 }}
                                     >
                                         Autofill

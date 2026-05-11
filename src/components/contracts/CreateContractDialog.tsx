@@ -16,7 +16,6 @@ import {
     useTheme,
 } from '@mui/material';
 import { Save, ArrowBack, ArrowForward } from '@mui/icons-material';
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import AppButton from '@/components/common/AppButton';
 import BaseDialog from '@/components/common/BaseDialog';
 import ConfirmationDialog from '@/components/common/ConfirmationDialog';
@@ -716,7 +715,6 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                         onClick={handleAutofillClick}
                         disabled={!documentLoaded || saving}
                         size="small"
-                        startIcon={<AutoFixHighIcon sx={{ fontSize: 16 }} />}
                         sx={{ borderRadius: 2, py: 0.5 }}
                     >
                         Autofill

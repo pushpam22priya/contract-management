@@ -9,7 +9,6 @@ import {
     Radio,
     Chip,
 } from '@mui/material';
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import BaseDialog from '@/components/common/BaseDialog';
 import AppButton from '@/components/common/AppButton';
 import { PartyConfiguration } from '@/types/template';
@@ -70,7 +69,6 @@ export default function AutofillPartyDialog({
                         onClick={handleConfirm}
                         disabled={!selectedPartyId || selectedPartyHasNoFields}
                         size="small"
-                        startIcon={<AutoFixHighIcon sx={{ fontSize: 16 }} />}
                     >
                         Autofill
                     </AppButton>

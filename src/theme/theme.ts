@@ -85,7 +85,7 @@ const sharedComponents = {
         },
         styleOverrides: {
             root: {
-                textTransform: 'none' as const,
+                textTransform: 'uppercase' as const,
                 fontWeight: 500,
                 borderRadius: 8,
                 boxShadow: 'none',

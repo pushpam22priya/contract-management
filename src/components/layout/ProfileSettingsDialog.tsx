@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { makeProfileSchema, type ProfileForm } from '@/schemas/profileSchema';
 import {
     Box,
     Typography,
@@ -86,56 +89,22 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
     const t = useTranslations('profileSettings');
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
-
     const currentUser = authService.getCurrentUser();
 
-    // Work info
-    const [name, setName] = useState('');
-    const [department, setDepartment] = useState('');
-    const [organization, setOrganization] = useState('');
-    // Personal details
-    const [dateOfBirth, setDateOfBirth] = useState('');
-    const [gender, setGender] = useState('');
-    const [permanentAddress, setPermanentAddress] = useState('');
-    // Identity info
-    const [panCard, setPanCard] = useState('');
-    const [aadharCard, setAadharCard] = useState('');
+    // Memoised so the schema (and its error messages) is only rebuilt when the locale changes
+    const profileSchema = useMemo(() => makeProfileSchema(t), [t]);
 
-    type ProfileErrors = Partial<Record<'name' | 'dateOfBirth' | 'panCard' | 'aadharCard', string>>;
-    const [errors, setErrors] = useState<ProfileErrors>({});
+    const { control, handleSubmit, reset, watch } = useForm<ProfileForm>({
+        resolver: zodResolver(profileSchema),
+        defaultValues: {
+            name: '', department: '', organization: '',
+            dateOfBirth: '', gender: '', permanentAddress: '',
+            panCard: '', aadharCard: '',
+        },
+    });
 
-    const clearError = (key: keyof ProfileErrors) =>
-        setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
-
-    const validate = (): boolean => {
-        const e: ProfileErrors = {};
-
-        if (name.trim() && name.trim().length < 2)
-            e.name = t('errorNameMin');
-        else if (name.trim() && !/^[a-zA-Z\s.\-']+$/.test(name.trim()))
-            e.name = t('errorNameChars');
-
-        if (dateOfBirth) {
-            const dob = new Date(dateOfBirth);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            if (isNaN(dob.getTime()))
-                e.dateOfBirth = t('errorDobInvalid');
-            else if (dob > today)
-                e.dateOfBirth = t('errorDobFuture');
-            else if (today.getFullYear() - dob.getFullYear() > 120)
-                e.dateOfBirth = t('errorDobInvalid');
-        }
-
-        if (panCard && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panCard))
-            e.panCard = t('errorPanFormat');
-
-        if (aadharCard && aadharCard.length !== 12)
-            e.aadharCard = t('errorAadharLength');
-
-        setErrors(e);
-        return Object.keys(e).length === 0;
-    };
+    // Watched so the avatar banner reflects the name as the user types
+    const watchedName = watch('name');
 
     const [fetching, setFetching] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -145,51 +114,52 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
 
     useEffect(() => {
         if (!open || !currentUser?.email) return;
-        setErrors({});
         const controller = new AbortController();
         setFetching(true);
         fetch(`/api/users/profile?email=${encodeURIComponent(currentUser.email)}`, { signal: controller.signal })
             .then((r) => r.json())
             .then((data) => {
-                setName(data.name || '');
-                setDepartment(data.department || '');
-                setOrganization(data.organization || '');
-                setDateOfBirth(data.dateOfBirth || '');
-                setGender(data.gender || '');
-                setPermanentAddress(data.permanentAddress || '');
-                setPanCard(data.panCard || '');
-                setAadharCard(data.aadharCard || '');
+                reset({
+                    name: data.name || '',
+                    department: data.department || '',
+                    organization: data.organization || '',
+                    dateOfBirth: data.dateOfBirth || '',
+                    gender: data.gender || '',
+                    permanentAddress: data.permanentAddress || '',
+                    panCard: data.panCard || '',
+                    aadharCard: data.aadharCard || '',
+                });
             })
             .catch((err) => {
                 if (err.name === 'AbortError') return;
-                setName(currentUser.name || '');
-                setDepartment(currentUser.department || '');
-                setOrganization(currentUser.organization || '');
-                setDateOfBirth(currentUser.dateOfBirth || '');
-                setGender(currentUser.gender || '');
-                setPermanentAddress(currentUser.permanentAddress || '');
-                setPanCard(currentUser.panCard || '');
-                setAadharCard(currentUser.aadharCard || '');
+                reset({
+                    name: currentUser.name || '',
+                    department: currentUser.department || '',
+                    organization: currentUser.organization || '',
+                    dateOfBirth: currentUser.dateOfBirth || '',
+                    gender: currentUser.gender || '',
+                    permanentAddress: currentUser.permanentAddress || '',
+                    panCard: currentUser.panCard || '',
+                    aadharCard: currentUser.aadharCard || '',
+                });
             })
             .finally(() => { if (!controller.signal.aborted) setFetching(false); });
         return () => controller.abort();
     }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const getInitials = (email: string) => {
-        if (name?.trim()) return name.trim()[0].toUpperCase();
+        if (watchedName?.trim()) return watchedName.trim()[0].toUpperCase();
         const local = email.split('@')[0];
         const parts = local.split(/[._-]/);
         if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
         return local.slice(0, 2).toUpperCase();
     };
 
-    const handleSave = async () => {
-        if (!validate()) return;
+    const onSubmit = async (data: ProfileForm) => {
         setSaving(true);
         const result = await authService.updateProfile({
-            name, department, organization,
-            dateOfBirth, gender, permanentAddress,
-            panCard: panCard.toUpperCase(), aadharCard,
+            ...data,
+            panCard: data.panCard.toUpperCase(),
         });
         setSaving(false);
         setSnackbar({
@@ -219,7 +189,7 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                         </AppButton>
                         <AppButton
                             variant="contained"
-                            onClick={handleSave}
+                            onClick={handleSubmit(onSubmit)}
                             disabled={fetching || saving}
                             size="small"
                             startIcon={saving ? <CircularProgress size={14} color="inherit" /> : undefined}
@@ -254,7 +224,7 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                         {currentUser ? getInitials(currentUser.email) : '?'}
                     </Avatar>
                     <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: '1rem', lineHeight: 1.3 }}>
-                        {name || currentUser?.email?.split('@')[0] || t('user')}
+                        {watchedName || currentUser?.email?.split('@')[0] || t('user')}
                     </Typography>
                     <Typography sx={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.75rem', mt: -0.5 }}>
                         {currentUser?.email}
@@ -279,32 +249,58 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                                     slotProps={{ input: { startAdornment: <InputAdornment position="start"><EmailOutlinedIcon sx={{ fontSize: 18, color: 'text.disabled' }} /></InputAdornment> } }}
                                     sx={fieldSx}
                                 />
-                                <TextField
-                                    label={t('fullName')}
-                                    value={name}
-                                    onChange={(e) => { setName(e.target.value); clearError('name'); }}
-                                    size="small" fullWidth placeholder={t('fullNamePlaceholder')}
-                                    error={!!errors.name}
-                                    helperText={errors.name}
-                                    slotProps={{ input: { startAdornment: <InputAdornment position="start"><PersonOutlinedIcon sx={{ fontSize: 18, color: errors.name ? 'error.main' : 'text.secondary' }} /></InputAdornment> } }}
-                                    sx={fieldSx}
+                                <Controller
+                                    name="name"
+                                    control={control}
+                                    render={({ field, fieldState }) => (
+                                        <TextField
+                                            {...field}
+                                            label={t('fullName')}
+                                            size="small" fullWidth
+                                            placeholder={t('fullNamePlaceholder')}
+                                            error={!!fieldState.error}
+                                            helperText={fieldState.error?.message}
+                                            slotProps={{
+                                                input: {
+                                                    startAdornment: (
+                                                        <InputAdornment position="start">
+                                                            <PersonOutlinedIcon sx={{ fontSize: 18, color: fieldState.error ? 'error.main' : 'text.secondary' }} />
+                                                        </InputAdornment>
+                                                    ),
+                                                },
+                                            }}
+                                            sx={fieldSx}
+                                        />
+                                    )}
                                 />
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                                    <TextField
-                                        label={t('department')}
-                                        value={department}
-                                        onChange={(e) => setDepartment(e.target.value)}
-                                        size="small" fullWidth placeholder={t('departmentPlaceholder')}
-                                        slotProps={{ input: { startAdornment: <InputAdornment position="start"><BusinessOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> } }}
-                                        sx={fieldSx}
+                                    <Controller
+                                        name="department"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <TextField
+                                                {...field}
+                                                label={t('department')}
+                                                size="small" fullWidth
+                                                placeholder={t('departmentPlaceholder')}
+                                                slotProps={{ input: { startAdornment: <InputAdornment position="start"><BusinessOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> } }}
+                                                sx={fieldSx}
+                                            />
+                                        )}
                                     />
-                                    <TextField
-                                        label={t('organization')}
-                                        value={organization}
-                                        onChange={(e) => setOrganization(e.target.value)}
-                                        size="small" fullWidth placeholder={t('organizationPlaceholder')}
-                                        slotProps={{ input: { startAdornment: <InputAdornment position="start"><CorporateFareOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> } }}
-                                        sx={fieldSx}
+                                    <Controller
+                                        name="organization"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <TextField
+                                                {...field}
+                                                label={t('organization')}
+                                                size="small" fullWidth
+                                                placeholder={t('organizationPlaceholder')}
+                                                slotProps={{ input: { startAdornment: <InputAdornment position="start"><CorporateFareOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> } }}
+                                                sx={fieldSx}
+                                            />
+                                        )}
                                     />
                                 </Box>
                             </SectionBox>
@@ -313,46 +309,67 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                             <SectionBox>
                                 <SectionHeader icon={<PersonPinOutlinedIcon sx={{ fontSize: 15 }} />} label={t('sectionPersonal')} />
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                                    <TextField
-                                        label={t('dateOfBirth')}
-                                        type="date"
-                                        value={dateOfBirth}
-                                        onChange={(e) => { setDateOfBirth(e.target.value); clearError('dateOfBirth'); }}
-                                        size="small" fullWidth
-                                        error={!!errors.dateOfBirth}
-                                        helperText={errors.dateOfBirth}
-                                        slotProps={{
-                                            inputLabel: { shrink: true },
-                                            input: { startAdornment: <InputAdornment position="start"><CakeOutlinedIcon sx={{ fontSize: 18, color: errors.dateOfBirth ? 'error.main' : 'text.secondary' }} /></InputAdornment> },
-                                        }}
-                                        sx={fieldSx}
+                                    <Controller
+                                        name="dateOfBirth"
+                                        control={control}
+                                        render={({ field, fieldState }) => (
+                                            <TextField
+                                                {...field}
+                                                label={t('dateOfBirth')}
+                                                type="date"
+                                                size="small" fullWidth
+                                                error={!!fieldState.error}
+                                                helperText={fieldState.error?.message}
+                                                slotProps={{
+                                                    inputLabel: { shrink: true },
+                                                    input: {
+                                                        startAdornment: (
+                                                            <InputAdornment position="start">
+                                                                <CakeOutlinedIcon sx={{ fontSize: 18, color: fieldState.error ? 'error.main' : 'text.secondary' }} />
+                                                            </InputAdornment>
+                                                        ),
+                                                    },
+                                                }}
+                                                sx={fieldSx}
+                                            />
+                                        )}
                                     />
-                                    <FormControl size="small" fullWidth sx={{ '& .MuiInputBase-root': { borderRadius: 2 } }}>
-                                        <InputLabel shrink>{t('gender')}</InputLabel>
-                                        <Select
-                                            value={gender}
-                                            onChange={(e) => setGender(e.target.value)}
-                                            label={t('gender')}
-                                            displayEmpty
-                                            notched
-                                            startAdornment={<InputAdornment position="start"><WcOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary', ml: 0.5 }} /></InputAdornment>}
-                                        >
-                                            <MenuItem value=""><em style={{ color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.38)' }}>Select</em></MenuItem>
-                                            <MenuItem value="Male">{t('genderMale')}</MenuItem>
-                                            <MenuItem value="Female">{t('genderFemale')}</MenuItem>
-                                            <MenuItem value="Other">{t('genderOther')}</MenuItem>
-                                            <MenuItem value="Prefer not to say">{t('genderPreferNot')}</MenuItem>
-                                        </Select>
-                                    </FormControl>
+                                    <Controller
+                                        name="gender"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <FormControl size="small" fullWidth sx={{ '& .MuiInputBase-root': { borderRadius: 2 } }}>
+                                                <InputLabel shrink>{t('gender')}</InputLabel>
+                                                <Select
+                                                    {...field}
+                                                    label={t('gender')}
+                                                    displayEmpty
+                                                    notched
+                                                    startAdornment={<InputAdornment position="start"><WcOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary', ml: 0.5 }} /></InputAdornment>}
+                                                >
+                                                    <MenuItem value=""><em style={{ color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.38)' }}>Select</em></MenuItem>
+                                                    <MenuItem value="Male">{t('genderMale')}</MenuItem>
+                                                    <MenuItem value="Female">{t('genderFemale')}</MenuItem>
+                                                    <MenuItem value="Other">{t('genderOther')}</MenuItem>
+                                                    <MenuItem value="Prefer not to say">{t('genderPreferNot')}</MenuItem>
+                                                </Select>
+                                            </FormControl>
+                                        )}
+                                    />
                                 </Box>
-                                <TextField
-                                    label={t('permanentAddress')}
-                                    value={permanentAddress}
-                                    onChange={(e) => setPermanentAddress(e.target.value)}
-                                    size="small" fullWidth multiline rows={2}
-                                    placeholder={t('permanentAddressPlaceholder')}
-                                    slotProps={{ input: { startAdornment: <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1 }}><HomeOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> } }}
-                                    sx={fieldSx}
+                                <Controller
+                                    name="permanentAddress"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <TextField
+                                            {...field}
+                                            label={t('permanentAddress')}
+                                            size="small" fullWidth multiline rows={2}
+                                            placeholder={t('permanentAddressPlaceholder')}
+                                            slotProps={{ input: { startAdornment: <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1 }}><HomeOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> } }}
+                                            sx={fieldSx}
+                                        />
+                                    )}
                                 />
                             </SectionBox>
 
@@ -360,31 +377,57 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                             <SectionBox>
                                 <SectionHeader icon={<BadgeOutlinedIcon sx={{ fontSize: 15 }} />} label={t('sectionIdentity')} />
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                                    <TextField
-                                        label={t('panCard')}
-                                        value={panCard}
-                                        onChange={(e) => { setPanCard(e.target.value.toUpperCase()); clearError('panCard'); }}
-                                        size="small" fullWidth placeholder={t('panCardPlaceholder')}
-                                        error={!!errors.panCard}
-                                        helperText={errors.panCard}
-                                        slotProps={{
-                                            htmlInput: { maxLength: 10 },
-                                            input: { startAdornment: <InputAdornment position="start"><CreditCardOutlinedIcon sx={{ fontSize: 18, color: errors.panCard ? 'error.main' : 'text.secondary' }} /></InputAdornment> },
-                                        }}
-                                        sx={fieldSx}
+                                    <Controller
+                                        name="panCard"
+                                        control={control}
+                                        render={({ field, fieldState }) => (
+                                            <TextField
+                                                {...field}
+                                                onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                                                label={t('panCard')}
+                                                size="small" fullWidth
+                                                placeholder={t('panCardPlaceholder')}
+                                                error={!!fieldState.error}
+                                                helperText={fieldState.error?.message}
+                                                slotProps={{
+                                                    htmlInput: { maxLength: 10 },
+                                                    input: {
+                                                        startAdornment: (
+                                                            <InputAdornment position="start">
+                                                                <CreditCardOutlinedIcon sx={{ fontSize: 18, color: fieldState.error ? 'error.main' : 'text.secondary' }} />
+                                                            </InputAdornment>
+                                                        ),
+                                                    },
+                                                }}
+                                                sx={fieldSx}
+                                            />
+                                        )}
                                     />
-                                    <TextField
-                                        label={t('aadharCard')}
-                                        value={aadharCard}
-                                        onChange={(e) => { setAadharCard(e.target.value.replace(/\D/g, '').slice(0, 12)); clearError('aadharCard'); }}
-                                        size="small" fullWidth placeholder={t('aadharCardPlaceholder')}
-                                        error={!!errors.aadharCard}
-                                        helperText={errors.aadharCard}
-                                        slotProps={{
-                                            htmlInput: { maxLength: 12 },
-                                            input: { startAdornment: <InputAdornment position="start"><FingerprintOutlinedIcon sx={{ fontSize: 18, color: errors.aadharCard ? 'error.main' : 'text.secondary' }} /></InputAdornment> },
-                                        }}
-                                        sx={fieldSx}
+                                    <Controller
+                                        name="aadharCard"
+                                        control={control}
+                                        render={({ field, fieldState }) => (
+                                            <TextField
+                                                {...field}
+                                                onChange={(e) => field.onChange(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                                                label={t('aadharCard')}
+                                                size="small" fullWidth
+                                                placeholder={t('aadharCardPlaceholder')}
+                                                error={!!fieldState.error}
+                                                helperText={fieldState.error?.message}
+                                                slotProps={{
+                                                    htmlInput: { maxLength: 12 },
+                                                    input: {
+                                                        startAdornment: (
+                                                            <InputAdornment position="start">
+                                                                <FingerprintOutlinedIcon sx={{ fontSize: 18, color: fieldState.error ? 'error.main' : 'text.secondary' }} />
+                                                            </InputAdornment>
+                                                        ),
+                                                    },
+                                                }}
+                                                sx={fieldSx}
+                                            />
+                                        )}
                                     />
                                 </Box>
                             </SectionBox>
