@@ -222,7 +222,10 @@
     "password": "पासवर्ड",
     "signIn": "साइन इन करें",
     "signingIn": "साइन इन हो रहा है...",
-    "unexpectedError": "एक अप्रत्याशित त्रुटि हुई। कृपया पुन: प्रयास करें।"
+    "unexpectedError": "एक अप्रत्याशित त्रुटि हुई। कृपया पुन: प्रयास करें।",
+    "errorEmailRequired": "ईमेल आवश्यक है",
+    "errorEmailInvalid": "कृपया एक वैध ईमेल पता दर्ज करें",
+    "errorPasswordRequired": "पासवर्ड आवश्यक है"
   },
   "themes": {
     "jadeLabel": "जेड",

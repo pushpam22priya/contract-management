@@ -2,6 +2,9 @@
 
 import AppButton from '@/components/common/AppButton';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { renewContractSchema, RenewContractForm } from '@/schemas/contractSchema';
 import { useRouter } from 'next/navigation';
 import {
     Box,
@@ -87,7 +90,11 @@ export default function RenewContractDialog({
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
     const [templateError, setTemplateError] = useState('');
-    const [notes, setNotes] = useState('');
+    const { control, reset: resetForm, watch } = useForm<RenewContractForm>({
+        resolver: zodResolver(renewContractSchema),
+        defaultValues: { notes: '' },
+    });
+    const { notes } = watch();
     const [creatingRenewal, setCreatingRenewal] = useState(false);
     const [step1Error, setStep1Error] = useState('');
 
@@ -136,7 +143,7 @@ export default function RenewContractDialog({
             setDocSource('same');
             setSelectedTemplate(null);
             setTemplateError('');
-            setNotes('');
+            resetForm();
             setStep1Error('');
             setRenewalId(null);
             setRenewalContract(null);
@@ -788,17 +795,24 @@ export default function RenewContractDialog({
                             <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', mb: 0.5 }}>
                                 Renewal Notes{' '}
                             </Typography>
-                            <TextField
-                                fullWidth
-                                multiline
-                                rows={3}
-                                size="small"
-                                placeholder="Add any notes about this renewal"
-                                value={notes}
-                                onChange={(e) => { if (e.target.value.length <= 300) setNotes(e.target.value); }}
-                                slotProps={{ htmlInput: { maxLength: 300 } }}
-                                helperText={`${notes.length}/300`}
-                                sx={{ '& .MuiOutlinedInput-root': { bgcolor: inputBg, borderRadius: 2 } }}
+                            <Controller
+                                name="notes"
+                                control={control}
+                                render={({ field, fieldState }) => (
+                                    <TextField
+                                        {...field}
+                                        onChange={(e) => field.onChange(e.target.value.slice(0, 300))}
+                                        fullWidth
+                                        multiline
+                                        rows={3}
+                                        size="small"
+                                        placeholder="Add any notes about this renewal"
+                                        error={!!fieldState.error}
+                                        helperText={fieldState.error?.message || `${notes.length}/300`}
+                                        slotProps={{ htmlInput: { maxLength: 300 } }}
+                                        sx={{ '& .MuiOutlinedInput-root': { bgcolor: inputBg, borderRadius: 2 } }}
+                                    />
+                                )}
                             />
                         </Box>
                     </Box>

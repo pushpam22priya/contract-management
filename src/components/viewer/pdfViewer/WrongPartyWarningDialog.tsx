@@ -75,6 +75,7 @@ export default function WrongPartyWarningDialog({
                     borderRadius: 2,
                     border: '2px solid',
                     borderColor: 'warning.main',
+                    bgcolor: (theme) => theme.palette.mode === 'dark' ? '#2d1f00' : '#fff4e5',
 
                     '& .MuiAlert-icon': {
                         padding: '12px 0'

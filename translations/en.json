@@ -222,7 +222,10 @@
     "password": "Password",
     "signIn": "Sign In",
     "signingIn": "Signing In...",
-    "unexpectedError": "An unexpected error occurred. Please try again."
+    "unexpectedError": "An unexpected error occurred. Please try again.",
+    "errorEmailRequired": "Email is required",
+    "errorEmailInvalid": "Please enter a valid email address",
+    "errorPasswordRequired": "Password is required"
   },
   "themes": {
     "jadeLabel": "Jade",

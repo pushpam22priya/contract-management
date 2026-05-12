@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { templateStep1Schema, TemplateStep1Form } from '@/schemas/templateSchema';
 import {
     Box,
     TextField,
@@ -53,9 +56,12 @@ export default function UploadTemplateDialog({
     // Wizard state
     const [currentStep, setCurrentStep] = useState<1 | 2>(1);
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
-    const [templateName, setTemplateName] = useState('');
-    const [description, setDescription] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const { control, reset, watch, setValue, trigger, formState: { errors: fieldErrors } } = useForm<TemplateStep1Form>({
+        resolver: zodResolver(templateStep1Schema),
+        defaultValues: { templateName: '', description: '', category: '' },
+    });
+    const { templateName, description, category: selectedCategory } = watch();
+    const [fileError, setFileError] = useState('');
     const [categories, setCategories] = useState<Category[]>([]);
     const [newCategory, setNewCategory] = useState('');
     const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
@@ -95,7 +101,7 @@ export default function UploadTemplateDialog({
         const file = event.target.files?.[0];
         if (file) {
             setSelectedFile(file);
-            setError('');
+            setFileError('');
         }
     };
 
@@ -149,7 +155,7 @@ export default function UploadTemplateDialog({
         if (result.success && result.category) {
             const updatedCategories = [...categories, result.category];
             setCategories(updatedCategories);
-            setSelectedCategory(result.category.name);
+            setValue('category', result.category.name);
             setNewCategory('');
             setShowNewCategoryInput(false);
         } else {
@@ -166,7 +172,7 @@ export default function UploadTemplateDialog({
         if (result.success) {
             const categoryToDelete = categories.find(c => c.id === categoryId);
             if (categoryToDelete && selectedCategory === categoryToDelete.name) {
-                setSelectedCategory(null);
+                setValue('category', '');
             }
             setCategories(prev => prev.filter(c => c.id !== categoryId));
         } else {
@@ -175,31 +181,21 @@ export default function UploadTemplateDialog({
     };
 
     // Navigate to Step 2
-    const handleNext = () => {
-        // Validate Step 1
-        if (!templateName.trim()) {
-            setError('Please enter a template name');
-            return;
-        }
-        if (!selectedCategory) {
-            setError('Please select a category');
-            return;
-        }
+    const handleNext = async () => {
+        const valid = await trigger(['templateName', 'category']);
+        if (!valid) return;
         if (!selectedFile) {
-            setError('Please upload a file');
+            setFileError('Please upload a file');
             return;
         }
-
-        // Only proceed to Step 2 if it's a PDF
-        if (selectedFile.type === 'application/pdf') {
-            // Create blob URL for PDFViewerContainer
-            const url = URL.createObjectURL(selectedFile);
-            setDocumentUrl(url);
-            setCurrentStep(2);
-            setError('');
-        } else {
-            setError('Please upload a PDF file to use the form builder');
+        if (selectedFile.type !== 'application/pdf') {
+            setFileError('Please upload a PDF file to use the form builder');
+            return;
         }
+        setFileError('');
+        const url = URL.createObjectURL(selectedFile);
+        setDocumentUrl(url);
+        setCurrentStep(2);
     };
 
     // Go back to Step 1
@@ -430,18 +426,13 @@ export default function UploadTemplateDialog({
         setError('');
         setSuccess('');
 
-        if (!templateName.trim()) {
-            setError('Please enter a template name');
-            return false;
-        }
-        if (!selectedCategory) {
-            setError('Please select a category');
-            return false;
-        }
+        const valid = await trigger(['templateName', 'category']);
+        if (!valid) return false;
         if (!selectedFile) {
-            setError('Please upload a file');
+            setFileError('Please upload a file');
             return false;
         }
+        setFileError('');
 
         const currentUser = authService.getCurrentUser();
         if (!currentUser) {
@@ -586,13 +577,12 @@ export default function UploadTemplateDialog({
     const handleClose = () => {
         if (!uploading) {
             setCurrentStep(1);
-            setTemplateName('');
-            setDescription('');
-            setSelectedCategory(null);
+            reset();
             setSelectedFile(null);
             setNewCategory('');
             setShowNewCategoryInput(false);
             setError('');
+            setFileError('');
             setSuccess('');
             setPdfModified(false);
             setSavedTemplateId(null);
@@ -850,6 +840,11 @@ export default function UploadTemplateDialog({
                             </Box>
                         )}
                     </Box>
+                    {fileError && (
+                        <Typography variant="caption" color="error" sx={{ mt: -1, display: 'block' }}>
+                            {fileError}
+                        </Typography>
+                    )}
 
                     {/* Template Name */}
                     <Box>
@@ -863,27 +858,34 @@ export default function UploadTemplateDialog({
                         >
                             Template Name <span style={{ color: '#ef4444' }}>*</span>
                         </Typography>
-                        <TextField
-                            fullWidth
-                            placeholder="Enter template name"
-                            value={templateName}
-                            onChange={(e) => setTemplateName(e.target.value)}
-                            inputProps={{ maxLength: 50 }}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    '&:hover fieldset': {
-                                        borderColor: 'rgba(0, 0, 0, 0.3)',
-                                    },
-                                    '&.Mui-focused fieldset': {
-                                        borderWidth: 2,
-                                    },
-                                },
-                                '& .MuiOutlinedInput-input': {
-                                    py: 1.25,
-                                    px: 1.5,
-                                },
-                            }}
+                        <Controller
+                            name="templateName"
+                            control={control}
+                            render={({ field, fieldState }) => (
+                                <TextField
+                                    {...field}
+                                    fullWidth
+                                    placeholder="Enter template name"
+                                    error={!!fieldState.error}
+                                    helperText={fieldState.error?.message}
+                                    slotProps={{ htmlInput: { maxLength: 50 } }}
+                                    sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                            borderRadius: 2,
+                                            '&:hover fieldset': {
+                                                borderColor: 'rgba(0, 0, 0, 0.3)',
+                                            },
+                                            '&.Mui-focused fieldset': {
+                                                borderWidth: 2,
+                                            },
+                                        },
+                                        '& .MuiOutlinedInput-input': {
+                                            py: 1.25,
+                                            px: 1.5,
+                                        },
+                                    }}
+                                />
+                            )}
                         />
                     </Box>
 
@@ -899,25 +901,32 @@ export default function UploadTemplateDialog({
                         >
                             Description
                         </Typography>
-                        <TextField
-                            fullWidth
-                            multiline
-                            rows={2}
-                            placeholder="Enter template description (optional)"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            inputProps={{ maxLength: 200 }}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    '&:hover fieldset': {
-                                        borderColor: 'rgba(0, 0, 0, 0.3)',
-                                    },
-                                    '&.Mui-focused fieldset': {
-                                        borderWidth: 2,
-                                    },
-                                },
-                            }}
+                        <Controller
+                            name="description"
+                            control={control}
+                            render={({ field, fieldState }) => (
+                                <TextField
+                                    {...field}
+                                    fullWidth
+                                    multiline
+                                    rows={2}
+                                    placeholder="Enter template description (optional)"
+                                    error={!!fieldState.error}
+                                    helperText={fieldState.error?.message}
+                                    slotProps={{ htmlInput: { maxLength: 200 } }}
+                                    sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                            borderRadius: 2,
+                                            '&:hover fieldset': {
+                                                borderColor: 'rgba(0, 0, 0, 0.3)',
+                                            },
+                                            '&.Mui-focused fieldset': {
+                                                borderWidth: 2,
+                                            },
+                                        },
+                                    }}
+                                />
+                            )}
                         />
                     </Box>
 
@@ -940,8 +949,8 @@ export default function UploadTemplateDialog({
                                     fullWidth
                                     options={categories}
                                     value={categories.find(c => c.name === selectedCategory) || null}
-                                    onChange={(event, newValue) => {
-                                        setSelectedCategory(newValue ? (typeof newValue === 'string' ? newValue : (newValue as Category).name) : null);
+                                    onChange={(_event, newValue) => {
+                                        setValue('category', newValue ? (typeof newValue === 'string' ? newValue : (newValue as Category).name) : '');
                                     }}
                                     getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
                                     renderInput={(params) => (
@@ -1079,6 +1088,11 @@ export default function UploadTemplateDialog({
                                     Cancel
                                 </AppButton>
                             </Box>
+                        )}
+                        {fieldErrors.category && (
+                            <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
+                                {fieldErrors.category.message}
+                            </Typography>
                         )}
                     </Box>
                 </Box>

@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { contractStep1Schema, ContractStep1Form } from '@/schemas/contractSchema';
 
 import {
     Box,
@@ -71,10 +74,12 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(''); // Add success state
 
-    // Contract Information
-    const [contractTitle, setContractTitle] = useState('');
-    const [clientName, setClientName] = useState('');
-    const [description, setDescription] = useState('');
+    // Contract Information (RHF for validated fields)
+    const { control, reset, watch, trigger } = useForm<ContractStep1Form>({
+        resolver: zodResolver(contractStep1Schema),
+        defaultValues: { contractTitle: '', clientName: '', description: '' },
+    });
+    const { contractTitle, clientName, description } = watch();
     const [contractValue, setContractValue] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -248,15 +253,8 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             return null;
         }
 
-        if (!contractTitle.trim()) {
-            setError('Contract title is required');
-            return null;
-        }
-
-        if (!clientName.trim()) {
-            setError('Client name is required');
-            return null;
-        }
+        const valid = await trigger(['contractTitle', 'clientName']);
+        if (!valid) return null;
 
         if (!documentLoaded) {
             setError('Please wait for the document to load');
@@ -443,9 +441,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         setCurrentStep(1); // Reset to Step 1
         setSelectedTemplate(null);
         setSelectedTeam(null);
-        setContractTitle('');
-        setClientName('');
-        setDescription('');
+        reset();
         setContractValue('');
         setStartDate('');
         setEndDate('');
@@ -647,21 +643,13 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         }
     };
 
-    const handleNextStep = () => {
-        // Validation before proceeding to Step 2
+    const handleNextStep = async () => {
         if (!selectedTemplate) {
             setError('Please select a template');
             return;
         }
-        if (!contractTitle.trim()) {
-            setError('Contract title is required');
-            return;
-        }
-        if (!clientName.trim()) {
-            setError('Client name is required');
-            return;
-        }
-
+        const valid = await trigger(['contractTitle', 'clientName']);
+        if (!valid) return;
         setError('');
         setCurrentStep(2);
     };
@@ -967,60 +955,64 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                         </LocalizationProvider>
 
                         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mb: 2 }}>
-                            <TextField
-                                label="Contract Title"
-                                value={contractTitle}
-                                onChange={(e) => setContractTitle(e.target.value)}
-                                required
-                                placeholder="e.g., Software License Agreement"
-                                inputProps={{ maxLength: 50 }}
-                                sx={{
-                                    '& .MuiInputBase-input': {
-                                        padding: '10px 12px',
-                                    },
-                                    // Adjust floating label position when focused/filled
-                                    '& .MuiInputLabel-root': {
-                                        transform: 'translate(14px, 10px) scale(1)',
-                                    },
-                                    // Adjust floating label when shrunk (focused or has value)
-                                    '& .MuiInputLabel-root.MuiInputLabel-shrink': {
-                                        transform: 'translate(14px, -9px) scale(0.75)',
-                                    },
-                                }}
-
+                            <Controller
+                                name="contractTitle"
+                                control={control}
+                                render={({ field, fieldState }) => (
+                                    <TextField
+                                        {...field}
+                                        label="Contract Title"
+                                        required
+                                        placeholder="e.g., Software License Agreement"
+                                        error={!!fieldState.error}
+                                        helperText={fieldState.error?.message}
+                                        slotProps={{ htmlInput: { maxLength: 50 } }}
+                                        sx={{
+                                            '& .MuiInputBase-input': { padding: '10px 12px' },
+                                            '& .MuiInputLabel-root': { transform: 'translate(14px, 10px) scale(1)' },
+                                            '& .MuiInputLabel-root.MuiInputLabel-shrink': { transform: 'translate(14px, -9px) scale(0.75)' },
+                                        }}
+                                    />
+                                )}
                             />
-                            <TextField
-                                label="Client Name"
-                                value={clientName}
-                                onChange={(e) => setClientName(e.target.value)}
-                                required
-                                placeholder="e.g., ABC Corp"
-                                inputProps={{ maxLength: 50 }}
-                                sx={{
-                                    '& .MuiInputBase-input': {
-                                        padding: '10px 12px',
-                                    },
-                                    // Adjust floating label position when focused/filled
-                                    '& .MuiInputLabel-root': {
-                                        transform: 'translate(14px, 10px) scale(1)',
-                                    },
-                                    // Adjust floating label when shrunk (focused or has value)
-                                    '& .MuiInputLabel-root.MuiInputLabel-shrink': {
-                                        transform: 'translate(14px, -9px) scale(0.75)',
-                                    },
-                                }}
-
+                            <Controller
+                                name="clientName"
+                                control={control}
+                                render={({ field, fieldState }) => (
+                                    <TextField
+                                        {...field}
+                                        label="Client Name"
+                                        required
+                                        placeholder="e.g., ABC Corp"
+                                        error={!!fieldState.error}
+                                        helperText={fieldState.error?.message}
+                                        slotProps={{ htmlInput: { maxLength: 50 } }}
+                                        sx={{
+                                            '& .MuiInputBase-input': { padding: '10px 12px' },
+                                            '& .MuiInputLabel-root': { transform: 'translate(14px, 10px) scale(1)' },
+                                            '& .MuiInputLabel-root.MuiInputLabel-shrink': { transform: 'translate(14px, -9px) scale(0.75)' },
+                                        }}
+                                    />
+                                )}
                             />
                         </Box>
 
-                        <TextField
-                            label="Description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            multiline
-                            rows={3}
-                            placeholder="Optional description..."
-                            sx={{ mt: 2 }}
+                        <Controller
+                            name="description"
+                            control={control}
+                            render={({ field, fieldState }) => (
+                                <TextField
+                                    {...field}
+                                    label="Description"
+                                    multiline
+                                    rows={3}
+                                    placeholder="Optional description..."
+                                    error={!!fieldState.error}
+                                    helperText={fieldState.error?.message}
+                                    slotProps={{ htmlInput: { maxLength: 500 } }}
+                                    sx={{ mt: 2 }}
+                                />
+                            )}
                         />
                     </Box>
                 )}

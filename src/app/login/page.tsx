@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { makeLoginSchema, type LoginForm } from '@/schemas/loginSchema';
 import {
     Box,
     TextField,
@@ -27,38 +30,51 @@ export default function LoginPage() {
     const router = useRouter();
     const t = useTranslations('login');
 
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+    const [apiError, setApiError] = useState('');
     const [success, setSuccess] = useState('');
+
+    const loginSchema = useMemo(() => makeLoginSchema(t), [t]);
+
+    const { control, handleSubmit } = useForm<LoginForm>({
+        resolver: zodResolver(loginSchema),
+        defaultValues: { email: '', password: '' },
+    });
 
     // ── Pull every colour from the active theme ───────────────────────────────
     const loginTheme = theme.login;
     const isDark = theme.palette.mode === 'dark';
 
-    const handleSignIn = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
+    const onSubmit = async (data: LoginForm) => {
+        setApiError('');
         setSuccess('');
         setLoading(true);
-
         try {
-            const response = await authService.login({ email, password });
-
+            const response = await authService.login(data);
             if (response.success) {
                 setSuccess(response.message);
-                setTimeout(() => {
-                    router.push('/dashboard');
-                }, 800);
+                setTimeout(() => router.push('/dashboard'), 800);
             } else {
-                setError(response.message);
+                setApiError(response.message);
             }
-        } catch (err) {
-            setError(t('unexpectedError'));
+        } catch {
+            setApiError(t('unexpectedError'));
         } finally {
             setLoading(false);
         }
+    };
+
+    // Shared sx for both TextFields — preserves the login panel colour theming
+    const fieldSx = {
+        '& .MuiInputLabel-root': { color: `${loginTheme.rightPanelText}99` },
+        '& .MuiOutlinedInput-root': {
+            color: loginTheme.rightPanelText,
+            bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+            '& fieldset': { borderColor: `${loginTheme.rightPanelText}33` },
+            '&:hover fieldset': { borderColor: `${loginTheme.rightPanelText}66` },
+            '&.Mui-focused fieldset': { borderColor: loginTheme.buttonBackground },
+        },
+        '& .MuiSvgIcon-root': { color: `${loginTheme.rightPanelText}80` },
     };
 
     return (
@@ -138,7 +154,6 @@ export default function LoginPage() {
                     flexDirection: { xs: 'column', md: 'row' },
                     position: 'relative',
                     zIndex: 1,
-                    // Override MUI Paper background — the two panels handle their own bg
                     bgcolor: 'transparent',
                     background: 'transparent',
                     backdropFilter: 'none',
@@ -237,7 +252,6 @@ export default function LoginPage() {
                         justifyContent: 'center',
                         bgcolor: loginTheme.rightPanelBackground,
                         color: loginTheme.rightPanelText,
-                        // Force text colours for MUI Typography inside the panel
                         '& .MuiTypography-root': {
                             color: loginTheme.rightPanelText,
                         },
@@ -256,10 +270,10 @@ export default function LoginPage() {
                         </Typography>
                     </Box>
 
-                    <Box component="form" noValidate onSubmit={handleSignIn}>
-                        {error && (
+                    <Box component="form" noValidate onSubmit={handleSubmit(onSubmit)}>
+                        {apiError && (
                             <Alert severity="error" sx={{ mb: 2 }}>
-                                <Typography variant="body2" color="inherit">{error}</Typography>
+                                <Typography variant="body2" color="inherit">{apiError}</Typography>
                             </Alert>
                         )}
                         {success && (
@@ -269,61 +283,51 @@ export default function LoginPage() {
                         )}
 
                         <Stack spacing={2}>
-                            <TextField
-                                required
-                                fullWidth
-                                id="email"
-                                label={t('emailAddress')}
+                            <Controller
                                 name="email"
-                                autoComplete="email"
-                                autoFocus
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                disabled={loading}
-                                sx={{
-                                    '& .MuiInputLabel-root': { color: `${loginTheme.rightPanelText}99` },
-                                    '& .MuiOutlinedInput-root': {
-                                        color: loginTheme.rightPanelText,
-                                        bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                                        '& fieldset': { borderColor: `${loginTheme.rightPanelText}33` },
-                                        '&:hover fieldset': { borderColor: `${loginTheme.rightPanelText}66` },
-                                        '&.Mui-focused fieldset': { borderColor: loginTheme.buttonBackground },
-                                    },
-                                    '& .MuiSvgIcon-root': { color: `${loginTheme.rightPanelText}80` },
-                                }}
-                                slotProps={{ input: { startAdornment: (
-                                    <InputAdornment position="start">
-                                        <EmailOutlinedIcon />
-                                    </InputAdornment>
-                                ) } }}
+                                control={control}
+                                render={({ field, fieldState }) => (
+                                    <TextField
+                                        {...field}
+                                        required
+                                        fullWidth
+                                        label={t('emailAddress')}
+                                        autoComplete="email"
+                                        autoFocus
+                                        disabled={loading}
+                                        error={!!fieldState.error}
+                                        helperText={fieldState.error?.message}
+                                        sx={fieldSx}
+                                        slotProps={{ input: { startAdornment: (
+                                            <InputAdornment position="start">
+                                                <EmailOutlinedIcon />
+                                            </InputAdornment>
+                                        ) } }}
+                                    />
+                                )}
                             />
-                            <TextField
-                                required
-                                fullWidth
+                            <Controller
                                 name="password"
-                                label={t('password')}
-                                type="password"
-                                id="password"
-                                autoComplete="current-password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                disabled={loading}
-                                sx={{
-                                    '& .MuiInputLabel-root': { color: `${loginTheme.rightPanelText}99` },
-                                    '& .MuiOutlinedInput-root': {
-                                        color: loginTheme.rightPanelText,
-                                        bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                                        '& fieldset': { borderColor: `${loginTheme.rightPanelText}33` },
-                                        '&:hover fieldset': { borderColor: `${loginTheme.rightPanelText}66` },
-                                        '&.Mui-focused fieldset': { borderColor: loginTheme.buttonBackground },
-                                    },
-                                    '& .MuiSvgIcon-root': { color: `${loginTheme.rightPanelText}80` },
-                                }}
-                                slotProps={{ input: { startAdornment: (
-                                    <InputAdornment position="start">
-                                        <LockOutlinedIcon />
-                                    </InputAdornment>
-                                ) } }}
+                                control={control}
+                                render={({ field, fieldState }) => (
+                                    <TextField
+                                        {...field}
+                                        required
+                                        fullWidth
+                                        label={t('password')}
+                                        type="password"
+                                        autoComplete="current-password"
+                                        disabled={loading}
+                                        error={!!fieldState.error}
+                                        helperText={fieldState.error?.message}
+                                        sx={fieldSx}
+                                        slotProps={{ input: { startAdornment: (
+                                            <InputAdornment position="start">
+                                                <LockOutlinedIcon />
+                                            </InputAdornment>
+                                        ) } }}
+                                    />
+                                )}
                             />
                         </Stack>
 
