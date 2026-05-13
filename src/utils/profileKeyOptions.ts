@@ -1,11 +1,7 @@
 import { LoggedInUser } from '@/types/auth';
 
-// Keys that belong to the system/auth layer and must never appear in the profile mapping dropdown
-const PROFILE_SYSTEM_KEYS = new Set(['id', 'lastLogin', 'isAdmin', 'password']);
-
 // Human-readable labels for known profile keys.
-// Any key NOT listed here gets auto-formatted via formatKey() as a fallback.
-// When a new field is added to LoggedInUser, add its label here for a nicer display.
+// When a new field is added to LoggedInUser, add its label here too.
 const PROFILE_KEY_LABELS: Record<string, string> = {
     name: 'Full Name',
     email: 'Email',
@@ -18,15 +14,6 @@ const PROFILE_KEY_LABELS: Record<string, string> = {
     aadharCard: 'Aadhar Card Number',
 };
 
-// Converts a camelCase or snake_case key to "Title Case"
-// e.g. "phoneNumber" → "Phone Number", "job_title" → "Job Title"
-function formatKey(key: string): string {
-    return key
-        .replace(/_/g, ' ')
-        .replace(/([A-Z])/g, ' $1')
-        .replace(/^./, s => s.toUpperCase())
-        .trim();
-}
 
 export interface ProfileKeyOption {
     value: string; // the actual key name in LoggedInUser, e.g. 'name', 'department'
@@ -34,17 +21,12 @@ export interface ProfileKeyOption {
 }
 
 /**
- * Derives the list of mappable profile keys from the actual LoggedInUser object.
- * Excludes system/internal keys automatically via PROFILE_SYSTEM_KEYS.
- * Returns only keys that exist on the user object (so undefined optional fields are excluded).
+ * Returns the full list of mappable profile keys, derived from PROFILE_KEY_LABELS.
+ * Always returns all known keys so the mapping dropdown is complete regardless of
+ * whether the current user has filled in every profile field.
  */
-export function getProfileKeyOptions(user: LoggedInUser): ProfileKeyOption[] {
-    return Object.keys(user)
-        .filter(k => !PROFILE_SYSTEM_KEYS.has(k))
-        .map(k => ({
-            value: k,
-            label: PROFILE_KEY_LABELS[k] ?? formatKey(k),
-        }));
+export function getProfileKeyOptions(_user?: LoggedInUser): ProfileKeyOption[] {
+    return Object.entries(PROFILE_KEY_LABELS).map(([value, label]) => ({ value, label }));
 }
 
 /**

@@ -72,6 +72,7 @@ export default function RenewContractDialog({
     const inputBg = isDark ? alpha('#ffffff', 0.05) : '#f8fafc';
     const inputHoverBg = isDark ? alpha('#ffffff', 0.08) : '#f1f5f9';
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
+    const hasAutoFilledRef = useRef(false);
 
     const origEnd = dayjs(contractEndDate);
     const defaultStart = origEnd.add(1, 'day');
@@ -531,7 +532,7 @@ export default function RenewContractDialog({
         }
     };
 
-    const handleAutofillClick = () => {
+    const handleAutofillClick = (silent = false) => {
         const formFields = renewalContract?.formFields || [];
         const parties = effectiveParties;
 
@@ -543,7 +544,7 @@ export default function RenewContractDialog({
         const partiesWithFields = parties.filter((p: any) => getMappedFieldCount(p.id) > 0);
 
         if (partiesWithFields.length === 0) {
-            setSnackbar({ open: true, message: 'No fillable fields found in this document', severity: 'warning' });
+            if (!silent) setSnackbar({ open: true, message: 'No fillable fields found in this document', severity: 'warning' });
             return;
         }
 
@@ -557,6 +558,7 @@ export default function RenewContractDialog({
     // ── Close ─────────────────────────────────────────────────────────────────
     const handleClose = () => {
         pdfViewerRef.current?.dispose?.();
+        hasAutoFilledRef.current = false;
         // If a renewal draft was created but never saved, delete it so the
         // original contract's Renew button stays available.
         if (renewalId && !hasSaved) {
@@ -632,7 +634,7 @@ export default function RenewContractDialog({
                                 <span>
                                     <AppButton
                                         variant="outlined"
-                                        onClick={handleAutofillClick}
+                                        onClick={() => handleAutofillClick()}
                                         disabled={!documentLoaded || saving}
                                         size="small"
                                         sx={{ borderRadius: 2, py: 0.5 }}
@@ -840,7 +842,13 @@ export default function RenewContractDialog({
                                     toolbarMode="forms"
                                     defaultToolbar="view"
                                     onFieldChange={handleFieldChange}
-                                    onDocumentLoaded={() => setDocumentLoaded(true)}
+                                    onDocumentLoaded={() => {
+                                        setDocumentLoaded(true);
+                                        if (!hasAutoFilledRef.current) {
+                                            hasAutoFilledRef.current = true;
+                                            handleAutofillClick(true);
+                                        }
+                                    }}
                                     showAnnotationNavigation={true}
                                     onError={(err) => setStep2Error(err)}
                                     parties={effectiveParties}

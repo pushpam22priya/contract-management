@@ -58,6 +58,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
+    const hasAutoFilledRef = useRef(false);
 
     // Wizard State
     const [currentStep, setCurrentStep] = useState<1 | 2>(1);
@@ -451,6 +452,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         setFilledFieldValues({}); // Reset for next contract
         setValidationTriggered(false);
         setAutofillPartyDialogOpen(false);
+        hasAutoFilledRef.current = false;
 
         // Dispose PDF viewer
         pdfViewerRef.current?.dispose();
@@ -619,7 +621,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         }
     };
 
-    const handleAutofillClick = () => {
+    const handleAutofillClick = (silent = false) => {
         const parties = selectedTemplate?.parties || [];
         const formFields = selectedTemplate?.formFields || [];
 
@@ -632,7 +634,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         const partiesWithFields = parties.filter((p: any) => getTextFieldCount(p.id) > 0);
 
         if (partiesWithFields.length === 0) {
-            setSnackbar({ open: true, message: 'No fillable fields found in this document', severity: 'warning' });
+            if (!silent) setSnackbar({ open: true, message: 'No fillable fields found in this document', severity: 'warning' });
             return;
         }
 
@@ -700,7 +702,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                 <span>
                     <AppButton
                         variant="outlined"
-                        onClick={handleAutofillClick}
+                        onClick={() => handleAutofillClick()}
                         disabled={!documentLoaded || saving}
                         size="small"
                         sx={{ borderRadius: 2, py: 0.5 }}
@@ -1041,7 +1043,13 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                                     toolbarMode="forms"
                                     defaultToolbar="view"
                                     onFieldChange={handleFieldChange}
-                                    onDocumentLoaded={() => setDocumentLoaded(true)}
+                                    onDocumentLoaded={() => {
+                                        setDocumentLoaded(true);
+                                        if (!hasAutoFilledRef.current) {
+                                            hasAutoFilledRef.current = true;
+                                            handleAutofillClick(true);
+                                        }
+                                    }}
                                     showAnnotationNavigation={true}
                                     onError={(err) => setError(err)}
                                 />

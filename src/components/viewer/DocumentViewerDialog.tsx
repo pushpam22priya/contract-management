@@ -125,6 +125,7 @@ export default function DocumentViewerDialog({
 
 
     const pdfViewerRef = useRef<any>(null);
+    const hasAutoFilledRef = useRef(false);
     const [saving, setSaving] = useState(false);
     const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
     const [signatureCommitted, setSignatureCommitted] = useState(false);
@@ -247,6 +248,7 @@ export default function DocumentViewerDialog({
             setShowWrongPartyWarning(false);
             setShowUnsavedDialog(false);
             setValidationTriggered(false);
+            hasAutoFilledRef.current = false;
 
             // ✅ Initialise contractor committed party from pre-filled values
             // (the party the contractor filled when they created the contract)
@@ -678,15 +680,15 @@ export default function DocumentViewerDialog({
         runAutofill(partyId);
     };
 
-    const handleAutofill = () => {
+    const handleAutofill = (silent = false) => {
         const currentUser = authService.getCurrentUser();
         if (!currentUser) {
-            setSnackbar({ open: true, message: 'Please log in to use autofill', severity: 'warning' });
+            if (!silent) setSnackbar({ open: true, message: 'Please log in to use autofill', severity: 'warning' });
             return;
         }
         const profileData = buildProfileData(currentUser);
         if (Object.values(profileData).every(v => !v.trim())) {
-            setSnackbar({ open: true, message: 'Please complete your profile in Settings first', severity: 'warning' });
+            if (!silent) setSnackbar({ open: true, message: 'Please complete your profile in Settings first', severity: 'warning' });
             return;
         }
 
@@ -752,7 +754,7 @@ export default function DocumentViewerDialog({
                     <span>
                         <AppButton
                             variant="outlined"
-                            onClick={handleAutofill}
+                            onClick={() => handleAutofill()}
                             disabled={saving}
                             size="small"
                             sx={{ borderRadius: 2, py: 0.6 }}
@@ -858,11 +860,17 @@ export default function DocumentViewerDialog({
                         }
                         // ✅ For internal signer: Restrict editing to only assigned party's fields
                         editableParties={assignedPartyId ? [assignedPartyId] : undefined}
-                        // ✅ Auto-scroll to first assigned field after document loads (internal signers only)
-                        onDocumentLoaded={assignedPartyId ? () => {
-                            setTimeout(() => {
-                                pdfViewerRef.current?.navigateToFirstPartyField([assignedPartyId]);
-                            }, 500);
+                        // ✅ Auto-scroll to first assigned field + autofill on document load
+                        onDocumentLoaded={(!readOnly && (assignedPartyId || currentUserRole === 'contractor')) ? () => {
+                            if (assignedPartyId) {
+                                setTimeout(() => {
+                                    pdfViewerRef.current?.navigateToFirstPartyField([assignedPartyId]);
+                                }, 500);
+                            }
+                            if (!hasAutoFilledRef.current) {
+                                hasAutoFilledRef.current = true;
+                                handleAutofill(true);
+                            }
                         } : undefined}
                     />
 

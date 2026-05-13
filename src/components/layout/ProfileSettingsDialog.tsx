@@ -1,6 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs, { Dayjs } from 'dayjs';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { makeProfileSchema, type ProfileForm } from '@/schemas/profileSchema';
@@ -94,7 +98,7 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
     // Memoised so the schema (and its error messages) is only rebuilt when the locale changes
     const profileSchema = useMemo(() => makeProfileSchema(t), [t]);
 
-    const { control, handleSubmit, reset, watch } = useForm<ProfileForm>({
+    const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<ProfileForm>({
         resolver: zodResolver(profileSchema),
         defaultValues: {
             name: '', department: '', organization: '',
@@ -106,6 +110,8 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
     // Watched so the avatar banner reflects the name as the user types
     const watchedName = watch('name');
 
+    const [dobValue, setDobValue] = useState<Dayjs | null>(null);
+
     const [fetching, setFetching] = useState(false);
     const [saving, setSaving] = useState(false);
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
@@ -113,7 +119,10 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
     });
 
     useEffect(() => {
-        if (!open || !currentUser?.email) return;
+        if (!open || !currentUser?.email) {
+            if (!open) setDobValue(null);
+            return;
+        }
         const controller = new AbortController();
         setFetching(true);
         fetch(`/api/users/profile?email=${encodeURIComponent(currentUser.email)}`, { signal: controller.signal })
@@ -129,6 +138,7 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                     panCard: data.panCard || '',
                     aadharCard: data.aadharCard || '',
                 });
+                setDobValue(data.dateOfBirth ? dayjs(data.dateOfBirth) : null);
             })
             .catch((err) => {
                 if (err.name === 'AbortError') return;
@@ -142,6 +152,7 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                     panCard: currentUser.panCard || '',
                     aadharCard: currentUser.aadharCard || '',
                 });
+                setDobValue(currentUser.dateOfBirth ? dayjs(currentUser.dateOfBirth) : null);
             })
             .finally(() => { if (!controller.signal.aborted) setFetching(false); });
         return () => controller.abort();
@@ -309,31 +320,36 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                             <SectionBox>
                                 <SectionHeader icon={<PersonPinOutlinedIcon sx={{ fontSize: 15 }} />} label={t('sectionPersonal')} />
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                                    <Controller
-                                        name="dateOfBirth"
-                                        control={control}
-                                        render={({ field, fieldState }) => (
-                                            <TextField
-                                                {...field}
-                                                label={t('dateOfBirth')}
-                                                type="date"
-                                                size="small" fullWidth
-                                                error={!!fieldState.error}
-                                                helperText={fieldState.error?.message}
-                                                slotProps={{
-                                                    inputLabel: { shrink: true },
-                                                    input: {
+                                    <LocalizationProvider dateAdapter={AdapterDayjs}>
+                                        <DatePicker
+                                            label={t('dateOfBirth')}
+                                            value={dobValue}
+                                            onChange={(d) => {
+                                                setDobValue(d);
+                                                setValue('dateOfBirth', d ? d.format('YYYY-MM-DD') : '', { shouldValidate: true });
+                                            }}
+                                            disableFuture
+                                            format="DD/MM/YYYY"
+                                            slotProps={{
+                                                textField: {
+                                                    size: 'small',
+                                                    fullWidth: true,
+                                                    error: !!errors.dateOfBirth,
+                                                    helperText: errors.dateOfBirth?.message,
+                                                    sx: fieldSx,
+                                                    InputProps: {
                                                         startAdornment: (
                                                             <InputAdornment position="start">
-                                                                <CakeOutlinedIcon sx={{ fontSize: 18, color: fieldState.error ? 'error.main' : 'text.secondary' }} />
+                                                                <CakeOutlinedIcon sx={{ fontSize: 18, color: errors.dateOfBirth ? 'error.main' : 'text.secondary' }} />
                                                             </InputAdornment>
                                                         ),
                                                     },
-                                                }}
-                                                sx={fieldSx}
-                                            />
-                                        )}
-                                    />
+                                                },
+                                                desktopPaper: { sx: { maxHeight: '50vh', overflowY: 'auto' } },
+                                                popper: { modifiers: [{ name: 'preventOverflow', options: { padding: 8 } }, { name: 'flip', enabled: true }] },
+                                            }}
+                                        />
+                                    </LocalizationProvider>
                                     <Controller
                                         name="gender"
                                         control={control}
