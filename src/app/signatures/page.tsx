@@ -540,7 +540,7 @@ export default function SignaturesPage() {
                 />
 
                 {/* Contracts Grid */}
-                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 1 }}>
+                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 1, bgcolor: 'background.default' }}>
                 {filteredContracts.length === 0 && !loading ? (
                     <EmptyState
                         icon={<DrawIcon />}

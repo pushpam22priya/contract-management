@@ -1,5 +1,9 @@
 import { LoggedInUser } from '@/types/auth';
 
+// Reserved key used to map a form field to the current date at autofill time.
+// Never shown in the profile-key dropdown; handled separately in ProfileFieldMappingDialog.
+export const DATE_TODAY_KEY = '__date_today__';
+
 // Human-readable labels for known profile keys.
 // When a new field is added to LoggedInUser, add its label here too.
 const PROFILE_KEY_LABELS: Record<string, string> = {
@@ -41,5 +45,9 @@ export function buildProfileData(user: LoggedInUser): Record<string, string> {
         const raw = (user as unknown as Record<string, unknown>)[opt.value];
         data[opt.value] = raw != null ? String(raw).trim() : '';
     });
+    // Inject today's date so fields mapped to DATE_TODAY_KEY are filled at autofill time
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    data[DATE_TODAY_KEY] = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
     return data;
 }
