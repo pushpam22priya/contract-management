@@ -15,6 +15,7 @@ import {
     Tooltip,
 } from '@mui/material';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
+import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import DraftsIcon from '@mui/icons-material/Drafts';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
@@ -52,6 +53,7 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
 
     const menuItems: MenuItem[] = [
         { text: t('dashboard'), icon: <DashboardOutlinedIcon sx={{ fontSize: 20 }} />, path: '/dashboard' },
+        { text: t('overview'), icon: <GridViewOutlinedIcon sx={{ fontSize: 20 }} />, path: '/overview' },
         // { text: t('allContracts'), icon: <LayersOutlinedIcon sx={{ fontSize: 20 }} />, path: '/all-contracts' },
         { text: t('contracts'), icon: <ArticleOutlinedIcon sx={{ fontSize: 20 }} />, path: '/contracts' },
         // { text: t('signatures'), icon: <DrawIcon sx={{ fontSize: 20 }} />, path: '/signatures' },
