@@ -622,7 +622,14 @@ export default function RenewContractDialog({
                     ) : (
                         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
                             <AppButton
-                                onClick={() => setStep(1)}
+                                onClick={() => {
+                                    hasAutoFilledRef.current = false;
+                                    setFilledFieldValues({});
+                                    setValidationTriggered(false);
+                                    setShowWrongPartyWarning(false);
+                                    setDocumentLoaded(false);
+                                    setStep(1);
+                                }}
                                 variant="outlined"
                                 startIcon={<ArrowBack />}
                                 sx={{ px: 1.5, py: 0.5, borderRadius: 2 }}

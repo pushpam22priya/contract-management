@@ -687,7 +687,14 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     const step2Actions = (
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
             <AppButton
-                onClick={() => setCurrentStep(1)}
+                onClick={() => {
+                    hasAutoFilledRef.current = false;
+                    setFilledFieldValues({});
+                    setValidationTriggered(false);
+                    setShowWrongPartyWarning(false);
+                    setDocumentLoaded(false);
+                    setCurrentStep(1);
+                }}
                 startIcon={<ArrowBack />}
                 variant="outlined"
                 sx={{
