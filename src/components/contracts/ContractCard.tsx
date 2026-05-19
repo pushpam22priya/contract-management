@@ -1,11 +1,18 @@
-import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
+import { Box, Typography, Chip, IconButton, Tooltip, useTheme } from '@mui/material';
 import dayjs from 'dayjs';
-import { Visibility, Share, Download, FolderOutlined } from '@mui/icons-material';
+import { Visibility, Share, Download, FolderOutlined, AutorenewOutlined, Loop } from '@mui/icons-material';
+import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
+import HistoryIcon from '@mui/icons-material/History';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { Contract, ContractStatus } from '@/types/contract';
+import { useTranslations } from 'next-intl';
 
 /**
- * Unified ContractCard component that handles both draft and contract views.
- * Use `variant="draft"` for draft contracts and `variant="contract"` (default) for active contracts.
+ * Unified ContractCard component that handles draft, contract, and terminated views.
+ *
+ * variant='draft'       — Draft contracts (review/approval flow)
+ * variant='contract'    — Active/signed/expired contracts
+ * variant='terminated'  — Terminated contracts (read-only, History only)
  */
 
 interface ContractCardProps {
@@ -13,13 +20,18 @@ interface ContractCardProps {
     onView?: (id: string) => void;
     onShare?: (id: string) => void;
     onDownload?: (id: string) => void;
+    onRenew?: (id: string) => void;
+    onTerminate?: (id: string) => void;
+    onHistory?: (id: string, event: React.MouseEvent<HTMLButtonElement>) => void;
+    onDelete?: (id: string) => void;
     /**
      * Variant determines the card behavior:
      * - 'draft': Shows share button always (for review submission), handles "changes_requested" status
      * - 'contract': Shows share button only for APPROVED/WAITING_FOR_SIGNATURE (for signature requests)
+     * - 'terminated': Shows History button only (all other actions suppressed)
      */
-    variant?: 'draft' | 'contract';
-    /** Team name to display on draft cards (shown instead of Expires when variant="draft") */
+    variant?: 'draft' | 'contract' | 'terminated';
+    /** Team name to display on draft cards */
     teamName?: string;
 }
 
@@ -28,6 +40,10 @@ const ContractCard = ({
     onView,
     onShare,
     onDownload,
+    onRenew,
+    onTerminate,
+    onHistory,
+    onDelete,
     variant = 'contract',
     teamName,
 }: ContractCardProps) => {
@@ -38,6 +54,10 @@ const ContractCard = ({
      *  - only one unique order exists (no ordering UX needed)
      *  - currentSigningOrder is absent or not in the orders list
      */
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+    const tTooltips = useTranslations('tooltips');
+
     const getMultiPartySigningProgress = (): { orderIndex: number; totalOrders: number } | null => {
         const allSigners = [
             ...(contract.internalSigners || []),
@@ -54,11 +74,7 @@ const ContractCard = ({
         return { orderIndex, totalOrders: uniqueOrders.length };
     };
 
-    /**
-     * Format status for display
-     */
     const getStatusLabel = (status: Contract['status']): string => {
-        // Handle special case for draft variant with changes_requested
         if (variant === 'draft' && status === ContractStatus.DRAFT && contract.reviewStatus === 'changes_requested') {
             return 'Returned for Modification';
         }
@@ -70,6 +86,8 @@ const ContractCard = ({
                 return 'Expiring';
             case ContractStatus.EXPIRED:
                 return 'Expired';
+            case ContractStatus.TERMINATED:
+                return 'Terminated';
             case ContractStatus.IN_REVIEW:
                 return 'Under Review';
             case ContractStatus.IN_APPROVAL:
@@ -105,11 +123,50 @@ const ContractCard = ({
     };
 
     const getStatusColor = (status: Contract['status']) => {
-        // Handle special case for draft variant with changes_requested
+        if (isDark) {
+            if (variant === 'draft' && status === ContractStatus.DRAFT && contract.reviewStatus === 'changes_requested')
+                return { bg: 'rgba(234,88,12,0.15)', color: '#fb923c', border: 'rgba(251,146,60,0.40)' };
+            switch (status) {
+                case ContractStatus.ACTIVE:
+                case ContractStatus.SIGNED:
+                    return { bg: 'rgba(16,185,129,0.15)', color: '#4ade80bd', border: 'rgba(74,222,128,0.38)' };
+                case ContractStatus.EXPIRING:
+                    return { bg: 'rgba(245,158,11,0.14)', color: '#fbbe24bd', border: 'rgba(251,191,36,0.38)' };
+                case ContractStatus.EXPIRED:
+                case ContractStatus.REJECTED:
+                case ContractStatus.REJECTED_BY_REVIEWER:
+                case ContractStatus.REJECTED_BY_APPROVER:
+                    return { bg: 'rgba(239,68,68,0.14)', color: '#f87171bd', border: 'rgba(248,113,113,0.38)' };
+                case ContractStatus.TERMINATED:
+                    return { bg: 'rgba(120,113,108,0.18)', color: '#b5a99de6', border: 'rgba(168,162,158,0.40)' };
+                case ContractStatus.IN_REVIEW:
+                    return { bg: 'rgba(139,92,246,0.15)', color: '#a78bfabd', border: 'rgba(167,139,250,0.38)' };
+                case ContractStatus.IN_APPROVAL:
+                    return { bg: 'rgba(245,158,11,0.14)', color: '#fbbe24bd', border: 'rgba(251,191,36,0.38)' };
+                case ContractStatus.REVIEW_APPROVAL:
+                case ContractStatus.REVIEWED:
+                    return { bg: 'rgba(59,130,246,0.14)', color: '#60a5fabd', border: 'rgba(96,165,250,0.38)' };
+                case ContractStatus.APPROVED:
+                    return { bg: 'rgba(16,185,129,0.15)', color: '#34d399bd', border: 'rgba(52,211,153,0.38)' };
+                case ContractStatus.READY_FOR_SIGNATURE:
+                    return { bg: 'rgba(20,184,166,0.14)', color: '#2dd4bebd', border: 'rgba(45,212,191,0.38)' };
+                case ContractStatus.WAITING_FOR_SIGNATURE: {
+                    const progress = getMultiPartySigningProgress();
+                    if (progress && progress.orderIndex > 0)
+                        return { bg: 'rgba(20,184,166,0.14)', color: '#2dd4bebd', border: 'rgba(45,212,191,0.38)' };
+                    return { bg: 'rgba(245,158,11,0.14)', color: '#fbbe24bd', border: 'rgba(251,191,36,0.38)' };
+                }
+                case ContractStatus.SIGNED_BY_EVERYONE:
+                    return { bg: 'rgba(59,130,246,0.14)', color: '#60a5fabd', border: 'rgba(96,165,250,0.38)' };
+                case ContractStatus.DRAFT:
+                default:
+                    return { bg: 'rgba(148,163,184,0.11)', color: '#94a3b8bd', border: 'rgba(148,163,184,0.30)' };
+            }
+        }
+
         if (variant === 'draft' && status === ContractStatus.DRAFT && contract.reviewStatus === 'changes_requested') {
             return { bg: '#fff7ed', color: '#c2410c', border: '#fdba74' };
         }
-
         switch (status) {
             case ContractStatus.ACTIVE:
             case ContractStatus.SIGNED:
@@ -121,6 +178,8 @@ const ContractCard = ({
             case ContractStatus.REJECTED_BY_REVIEWER:
             case ContractStatus.REJECTED_BY_APPROVER:
                 return { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' };
+            case ContractStatus.TERMINATED:
+                return { bg: '#f1f5f9', color: '#334155', border: '#94a3b8' };
             case ContractStatus.IN_REVIEW:
                 return { bg: '#ede9fe', color: '#5b21b6', border: '#c4b5fd' };
             case ContractStatus.IN_APPROVAL:
@@ -131,14 +190,11 @@ const ContractCard = ({
             case ContractStatus.APPROVED:
                 return { bg: '#d1fae5', color: '#065f46', border: '#34d399' };
             case ContractStatus.READY_FOR_SIGNATURE:
-                // Teal/Cyan theme to differentiate from plain green approved
                 return { bg: '#e0f2f1', color: '#00695c', border: '#4db6ac' };
             case ContractStatus.WAITING_FOR_SIGNATURE: {
                 const progress = getMultiPartySigningProgress();
-                if (progress && progress.orderIndex > 0) {
-                    // Later orders: blue-teal to show signing is progressing
+                if (progress && progress.orderIndex > 0)
                     return { bg: '#e0f7fa', color: '#00695c', border: '#80cbc4' };
-                }
                 return { bg: '#fff9c4', color: '#f57f17', border: '#fff176' };
             }
             case ContractStatus.SIGNED_BY_EVERYONE:
@@ -150,11 +206,19 @@ const ContractCard = ({
     };
 
     const getExpiryDisplay = () => {
-        if (contract.endDate) {
-            return dayjs(contract.endDate).format('DD MMM YYYY');
+        // Terminated variant: show termination date
+        if (variant === 'terminated' && contract.terminatedAt) {
+            return dayjs(contract.terminatedAt).format('DD/MM/YYYY');
         }
-        // Fallback to calculating from expiresInDays if endDate is missing
-        return dayjs().add(contract.expiresInDays, 'day').format('DD MMM YYYY');
+        if (contract.endDate) {
+            return dayjs(contract.endDate).format('DD/MM/YYYY');
+        }
+        return dayjs().add(contract.expiresInDays, 'day').format('DD/MM/YYYY');
+    };
+
+    const getExpiryLabel = () => {
+        if (variant === 'terminated') return 'Terminated';
+        return 'Expires';
     };
 
     const truncateText = (text: string, maxLength: number) => {
@@ -162,34 +226,29 @@ const ContractCard = ({
         return `${text.substring(0, maxLength)}...`;
     };
 
-    /**
-     * Determine if share button should be visible based on variant
-     */
     const shouldShowShareButton = (): boolean => {
-        if (!onShare) return false;
+        if (!onShare || variant === 'terminated') return false;
 
-        if (variant === 'draft') {
-            // Draft variant: always show share button (for review submission)
-            return true;
-        }
+        if (variant === 'draft') return true;
 
-        // Contract variant: only show for APPROVED, READY_FOR_SIGNATURE, or WAITING_FOR_SIGNATURE
         return contract.status === ContractStatus.APPROVED ||
             contract.status === ContractStatus.READY_FOR_SIGNATURE ||
             contract.status === ContractStatus.WAITING_FOR_SIGNATURE ||
             contract.status === ContractStatus.SIGNED_BY_EVERYONE;
     };
 
-    /**
-     * Get tooltip text for share button based on variant
-     */
     const getShareTooltip = (): string => {
         return variant === 'draft'
-            ? 'Submit for review or approval'
-            : 'Submit for signature';
+            ? tTooltips('submitForReviewOrApproval')
+            : tTooltips('submitForSignature');
     };
 
     const statusColors = getStatusColor(contract.status);
+    const displayTitle = contract.title.replace(/\s*\(Renewal\d*\)$/i, '');
+
+    // Terminated cards use a subdued border/gradient
+    const cardBorderColor = variant === 'terminated' ? '#94a3b8' : statusColors.border;
+    const cardGradientColor = variant === 'terminated' ? '#94a3b8' : statusColors.color;
 
     return (
         <Box
@@ -198,15 +257,20 @@ const ContractCard = ({
                 borderRadius: 3,
                 p: 1,
                 border: '1px solid',
-                borderColor: 'rgba(0, 0, 0, 0.08)',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+                borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
+                boxShadow: variant === 'terminated'
+                    ? '0 1px 4px rgba(0, 0, 0, 0.06)'
+                    : '0 2px 8px rgba(0, 0, 0, 0.04)',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 position: 'relative',
                 overflow: 'hidden',
+                opacity: variant === 'terminated' ? 0.92 : 1,
                 '&:hover': {
-                    boxShadow: '0 12px 24px rgba(0,0,0,0.1)',
+                    boxShadow: variant === 'terminated'
+                        ? '0 6px 16px rgba(0,0,0,0.08)'
+                        : '0 12px 24px rgba(0,0,0,0.1)',
                     transform: 'translateY(-4px)',
-                    borderColor: statusColors.border,
+                    borderColor: cardBorderColor,
                     '& .action-buttons': {
                         opacity: 1,
                     },
@@ -218,7 +282,7 @@ const ContractCard = ({
                     left: 0,
                     right: 0,
                     height: '4px',
-                    background: `linear-gradient(90deg, ${statusColors.border}, ${statusColors.color})`,
+                    background: `linear-gradient(90deg, ${cardBorderColor}, ${cardGradientColor})`,
                     opacity: 0,
                     transition: 'opacity 0.3s ease',
                 },
@@ -227,7 +291,7 @@ const ContractCard = ({
                 },
             }}
         >
-             {/* Team badge — shown only on draft variant when contract belongs to a team */}
+            {/* Team badge — shown only on draft variant when contract belongs to a team */}
             {variant === 'draft' && teamName && (
                 <Box sx={{
                     display: 'inline-flex',
@@ -235,19 +299,19 @@ const ContractCard = ({
                     width: '100%',
                     gap: 0.5,
                     mb: 1,
-                    bgcolor: '#eef2ff',
-                    border: '1px solid #c7d2fe',
+                    bgcolor: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
+                    border: `1px solid ${isDark ? 'rgba(99,102,241,0.30)' : '#c7d2fe'}`,
                     px: 0.75,
                     py: 0.3,
                     borderRadius: 1,
                     maxWidth: '100%',
                 }}>
-                    <FolderOutlined sx={{ fontSize: '0.8rem', color: '#4338ca', flexShrink: 0 }} />
+                    <FolderOutlined sx={{ fontSize: '0.8rem', color: isDark ? '#a5b4fc' : '#4338ca', flexShrink: 0 }} />
                     <Tooltip title={teamName} arrow placement="top">
                         <Typography
                             variant="caption"
                             sx={{
-                                color: '#4338ca',
+                                color: isDark ? '#a5b4fc' : '#4338ca',
                                 fontWeight: 600,
                                 fontSize: '0.72rem',
                                 overflow: 'hidden',
@@ -260,26 +324,49 @@ const ContractCard = ({
                     </Tooltip>
                 </Box>
             )}
-            
-            {/* Header with Title and Status */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
-                <Tooltip title={contract.title} arrow placement="top">
+
+            {/* Renewal corner badge — zero layout impact, hidden when active/expiring/expired/terminated */}
+            {contract.renewedFromId &&
+                ![ContractStatus.ACTIVE, ContractStatus.EXPIRING, ContractStatus.EXPIRED, ContractStatus.TERMINATED]
+                    .includes(contract.status) && (
+                    <Tooltip title={tTooltips('renewalContract')} arrow placement="right">
+                        <Box sx={{
+                            position: 'absolute',
+                            bottom: 8,
+                            right: 8,
+                            width: 20,
+                            height: 20,
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 1px 5px rgba(217,119,6,0.45)',
+                            zIndex: 1,
+                        }}>
+                            <Loop sx={{ fontSize: '0.7rem', color: '#fff' }} />
+                        </Box>
+                    </Tooltip>
+                )}
+
+            {/* Header: Title + Status chip */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                <Tooltip title={displayTitle} arrow placement="top">
                     <Typography
-                        variant="h6"
+                        variant="subtitle2"
                         sx={{
-                            fontWeight: 500,
-                            fontSize: { xs: '1rem', sm: '1rem' },
-                            color: 'text.primary',
                             flex: 1,
+                            minWidth: 0,
+                            ...(variant === 'terminated' && { color: 'text.secondary' }),
                         }}
                     >
-                        {truncateText(contract.title, 20)}
+                        {truncateText(displayTitle, 16)}
                     </Typography>
                 </Tooltip>
 
                 <Tooltip title={getStatusLabel(contract.status)} arrow placement="top">
                     <Chip
-                        label={truncateText(getStatusLabel(contract.status), 18)}
+                        label={truncateText(getStatusLabel(contract.status), 14)}
                         size="small"
                         sx={{
                             bgcolor: statusColors.bg,
@@ -289,9 +376,8 @@ const ContractCard = ({
                             fontSize: '0.7rem',
                             height: '24px',
                             minWidth: '70px',
-                            '& .MuiChip-label': {
-                                px: 1.5,
-                            },
+                            flexShrink: 0,
+                            '& .MuiChip-label': { px: 1.5 },
                         }}
                     />
                 </Tooltip>
@@ -304,11 +390,6 @@ const ContractCard = ({
                     sx={{
                         color: 'text.secondary',
                         mb: 1,
-                        fontSize: '0.8rem',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
                     }}
                 >
                     {truncateText(contract.description || '', 35)}
@@ -326,29 +407,11 @@ const ContractCard = ({
             >
                 {/* Client */}
                 <Box>
-                    <Typography
-                        variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            fontSize: '0.75rem',
-                            fontWeight: 500,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            display: 'block',
-                            mb: 0.5,
-                        }}
-                    >
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, textTransform: 'uppercase', display: 'block', mb: 0.2 }}>
                         Client
                     </Typography>
                     <Tooltip title={contract.client} arrow placement="top">
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: 'text.primary',
-                                fontWeight: 500,
-                                fontSize: '0.75rem',
-                            }}
-                        >
+                        <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500 }}>
                             {truncateText(contract.client, 10)}
                         </Typography>
                     </Tooltip>
@@ -356,64 +419,40 @@ const ContractCard = ({
 
                 {/* Category */}
                 <Box>
-                    <Typography
-                        variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            fontSize: '0.75rem',
-                            fontWeight: 500,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            display: 'block',
-                            mb: 0.5,
-                        }}
-                    >
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, textTransform: 'uppercase', display: 'block', mb: 0.2 }}>
                         Category
                     </Typography>
                     <Tooltip title={contract.category} arrow placement="top">
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: 'text.primary',
-                                fontWeight: 500,
-                                fontSize: '0.75rem',
-                            }}
-                        >
+                        <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500}}>
                             {truncateText(contract.category, 15)}
                         </Typography>
                     </Tooltip>
                 </Box>
 
-                {/* Expires */}
+                {/* Expires / Terminated */}
                 <Box>
-                    <Typography
-                        variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            fontSize: '0.75rem',
-                            fontWeight: 500,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            display: 'block',
-                            mb: 0.5,
-                        }}
-                    >
-                        Expires
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, textTransform: 'uppercase', display: 'block', mb: 0.2 }}>
+                        {getExpiryLabel()}
                     </Typography>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: contract.expiresInDays < 30 ? 'error.main' : 'text.primary',
-                            fontWeight: 500,
-                            fontSize: '0.75rem',
-                        }}
-                    >
-                        {getExpiryDisplay()}
-                    </Typography>
+                    <Tooltip title={variant === 'terminated' && contract.terminatedAt ? `Terminated on ${dayjs(contract.terminatedAt).format('DD/MM/YYYY')}` : ''} arrow placement="top">
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: variant === 'terminated'
+                                    ? 'text.secondary'
+                                    : contract.expiresInDays < 30
+                                        ? (isDark ? '#f87171bd' : 'error.main')
+                                        : 'text.primary',
+                                fontWeight: 500,
+                            }}
+                        >
+                            {getExpiryDisplay()}
+                        </Typography>
+                    </Tooltip>
                 </Box>
             </Box>
 
-            {/* Action Buttons - Icon Only (Overlay) */}
+            {/* Action Buttons — overlay on hover */}
             <Box
                 className="action-buttons"
                 sx={{
@@ -423,40 +462,68 @@ const ContractCard = ({
                     right: 0,
                     display: 'flex',
                     gap: 1,
-                    p: 0.5,
-                    background: '#fff',
+                    px: 1,
+                    py: 0.5,
+                    background: isDark ? 'rgb(22,32,48)' : '#f8f8f8',
                     borderRadius: '0 0 12px 12px',
                     opacity: { xs: 1, md: 0 },
                     transition: 'opacity 0.2s ease-in-out',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
                 }}
             >
-                {[
+                {/* ── Standard action buttons (hidden for terminated variant) ── */}
+                {variant !== 'terminated' && [
                     {
-                        title: variant === 'draft' ? 'View' : 'View Contract',
-                        icon: <Visibility sx={{ fontSize: '1.1rem' }} />,
+                        title: variant === 'draft' ? tTooltips('view') : tTooltips('viewContract'),
+                        icon: <Visibility sx={{ fontSize: '0.9rem' }} />,
                         onClick: () => onView?.(contract.id),
                         color: 'primary.main',
                         shadow: 'rgba(15, 118, 110, 0.2)',
-                        show: true
+                        show: !!onView,
                     },
                     {
-                        title: 'Download PDF',
-                        icon: <Download sx={{ fontSize: '1.1rem' }} />,
+                        title: tTooltips('downloadPdf'),
+                        icon: <Download sx={{ fontSize: '0.9rem' }} />,
                         onClick: () => onDownload?.(contract.id),
                         color: 'primary.main',
                         shadow: 'rgba(15, 118, 110, 0.2)',
-                        show: !!onDownload
+                        show: !!onDownload,
                     },
                     {
                         title: getShareTooltip(),
-                        icon: <Share sx={{ fontSize: '1.1rem' }} />,
+                        icon: <Share sx={{ fontSize: '0.9rem' }} />,
                         onClick: () => onShare?.(contract.id),
                         color: 'primary.main',
                         shadow: 'rgba(15, 118, 110, 0.2)',
-                        show: shouldShowShareButton()
-                    }
-                ].map((action, idx) => (
-                    action.show && (
+                        show: shouldShowShareButton(),
+                    },
+                    {
+                        title: tTooltips('renewContract'),
+                        icon: <AutorenewOutlined sx={{ fontSize: '0.9rem' }} />,
+                        onClick: () => onRenew?.(contract.id),
+                        color: 'primary.main',
+                        shadow: 'rgba(22, 163, 74, 0.2)',
+                        // Renew available for both expiring AND expired
+                        show: variant === 'contract' &&
+                            !!onRenew &&
+                            (contract.status === ContractStatus.EXPIRING || contract.status === ContractStatus.EXPIRED) &&
+                            !contract.renewalStatus,
+                    },
+                    {
+                        title: tTooltips('terminateContract'),
+                        icon: <BlockOutlinedIcon sx={{ fontSize: '0.9rem' }} />,
+                        onClick: () => onTerminate?.(contract.id),
+                        color: '#dc2626',
+                        shadow: 'rgba(220, 38, 38, 0.2)',
+                        // Terminate only for expired, mutually exclusive with Renew
+                        show: variant === 'contract' &&
+                            !!onTerminate &&
+                            contract.status === ContractStatus.EXPIRED &&
+                            !contract.renewalStatus,
+                    },
+                ].map((action, idx) =>
+                    action.show ? (
                         <Tooltip key={idx} title={action.title} arrow>
                             <IconButton
                                 size="small"
@@ -480,8 +547,91 @@ const ContractCard = ({
                                 {action.icon}
                             </IconButton>
                         </Tooltip>
-                    )
-                ))}
+                    ) : null
+                )}
+
+                {/* ── History button: terminated variant OR any chain contract with onHistory ── */}
+                {!!onHistory && (variant === 'terminated' || !!(contract.renewedFromId || contract.renewedContractId)) && (
+                    <Tooltip title={tTooltips('viewContractHistory')} arrow>
+                        <IconButton
+                            size="small"
+                            onClick={(e) => onHistory(contract.id, e)}
+                            sx={{
+                                bgcolor: 'transparent',
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: 1.5,
+                                color: 'text.primary',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                    bgcolor: 'primary.main',
+                                    borderColor: 'primary.main',
+                                    color: 'white',
+                                    transform: 'translateY(-2px)',
+                                    boxShadow: '0 4px 8px rgba(15, 118, 110, 0.2)',
+                                },
+                            }}
+                        >
+                            <HistoryIcon sx={{ fontSize: '0.9rem' }} />
+                        </IconButton>
+                    </Tooltip>
+                )}
+
+                {/* ── Delete button: terminated variant only ── */}
+                {variant === 'terminated' && !!onDelete && (
+                    <Tooltip title={tTooltips('deletePermanently')} arrow>
+                        <IconButton
+                            size="small"
+                            onClick={() => onDelete(contract.id)}
+                            sx={{
+                                bgcolor: 'transparent',
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: 1.5,
+                                color: 'text.primary',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                    bgcolor: '#dc2626',
+                                    borderColor: '#dc2626',
+                                    color: 'white',
+                                    transform: 'translateY(-2px)',
+                                    boxShadow: '0 4px 8px rgba(220, 38, 38, 0.2)',
+                                },
+                            }}
+                        >
+                            <DeleteOutlineIcon sx={{ fontSize: '0.9rem' }} />
+                        </IconButton>
+                    </Tooltip>
+                )}
+
+                {/* Renewal in Progress badge — shown instead of Renew + Terminate buttons */}
+                {variant === 'contract' &&
+                    (contract.status === ContractStatus.EXPIRING || contract.status === ContractStatus.EXPIRED) &&
+                    contract.renewalStatus === 'in_progress' && (
+                        <Tooltip
+                            title={contract.renewalStartDate
+                                ? `Renewal starting on ${new Date(contract.renewalStartDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                                : 'A renewal contract is being prepared'}
+                            arrow
+                        >
+                            <Chip
+                                icon={<AutorenewOutlined sx={{ fontSize: '0.85rem !important' }} />}
+                                label="Renewal in Progress"
+                                size="small"
+                                sx={{
+                                    bgcolor: '#fef3c7',
+                                    color: '#92400e',
+                                    border: '1px solid #fcd34d',
+                                    fontWeight: 600,
+                                    fontSize: '0.72rem',
+                                    height: 26,
+                                    alignSelf: 'center',
+                                    cursor: 'default',
+                                    '& .MuiChip-icon': { color: '#92400e' },
+                                }}
+                            />
+                        </Tooltip>
+                    )}
             </Box>
         </Box>
     );

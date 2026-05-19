@@ -2,8 +2,9 @@
 
 
 import { useState, useEffect } from 'react';
-import { Box, Typography, Button, Tooltip, IconButton } from '@mui/material';
+import { Box, Typography, Tooltip, IconButton, useTheme } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
+import AppButton from '@/components/common/AppButton';
 import UploadIcon from '@mui/icons-material/Upload';
 import TemplateCard from '@/components/template/TemplateCard';
 import UploadTemplateDialog from '@/components/template/UploadTemplateDialog';
@@ -15,10 +16,16 @@ import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
 import { authService } from '@/services/authService';
 import { Template } from '@/types/template';
-import ReusableFilter from '@/components/common/ReusableFilter';
+// import ReusableFilter from '@/components/common/ReusableFilter';
+import CompactFilter from '@/components/common/CompactFilter';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
+import { useTranslations } from 'next-intl';
 
 export default function TemplatePage() {
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+    const t = useTranslations('template');
+    const tFilters = useTranslations('filters');
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -26,7 +33,7 @@ export default function TemplatePage() {
     const [selectedTemplateForUse, setSelectedTemplateForUse] = useState<string | undefined>(undefined);
     const [templates, setTemplates] = useState<Template[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState<{ label: string; value: string }[]>([{ label: 'All Categories', value: 'All Categories' }]);
+    const [selectedCategory, setSelectedCategory] = useState<{ label: string; value: string }[]>([{ label: tFilters('allCategories'), value: 'all' }]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -57,7 +64,7 @@ export default function TemplatePage() {
 
     const loadCategories = () => {
         const allCategories = categoryService.getAllCategories();
-        setCategories(['All Categories', ...allCategories.map(cat => cat.name)]);
+        setCategories(allCategories.map(cat => cat.name));
     };
 
     const checkAdminStatus = () => {
@@ -145,16 +152,16 @@ export default function TemplatePage() {
         }
     };
 
-    const hasActiveFilters = searchQuery !== '' || selectedCategory.every(f => f.value !== 'All Categories');
+    const hasActiveFilters = searchQuery !== '' || selectedCategory.every(f => f.value !== 'all');
 
     const handleClearFilters = () => {
         setSearchQuery('');
-        setSelectedCategory([{ label: 'All Categories', value: 'All Categories' }]);
+        setSelectedCategory([{ label: tFilters('allCategories'), value: 'all' }]);
     };
 
     // Filter templates
     const filteredTemplates = templates.filter(template => {
-        const matchesCategory = selectedCategory.some(f => f.value === 'All Categories') ||
+        const matchesCategory = selectedCategory.some(f => f.value === 'all') ||
             selectedCategory.some(f => f.value === template.category);
         const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             template.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -163,88 +170,65 @@ export default function TemplatePage() {
 
     return (
         <AppLayout>
-            <Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Header Section */}
-                <Box
-                    sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: { xs: 'flex-start', md: 'center' },
-                        flexDirection: { xs: 'column', md: 'row' },
-                        gap: { xs: 3, md: 2 },
-                        mb: 1,
-                    }}
-                >
-                    {/* Title and Subtitle */}
-                    <Box>
-                        <Typography
-                            // variant="h3"
-                            fontWeight={600}
-                            sx={{
-                                color: 'primary.main',
-                                fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' },
-                            }}
-                        >
-                            Contract Templates
+                <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    bgcolor: 'background.paper',
+                    px: 2,
+                    py: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="h5">
+                            {t('title')}
                         </Typography>
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: 'text.secondary',
-                                // fontSize: { xs: '0.95rem', sm: '1rem' },
-                            }}
-                        >
-                            Manage and create reusable contract templates
+                        <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
+                        <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
+                            {t('description')}
                         </Typography>
                     </Box>
 
                     {/* Action Buttons - Only show for admin */}
                     {isAdmin && (
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                gap: 1.5,
-                                width: { xs: '100%', sm: 'auto' },
-                                justifyContent: { xs: 'flex-end', sm: 'flex-start' },
-                            }}
-                        >
-                            <Tooltip title="Upload Template" arrow>
-                                <IconButton
-                                    onClick={() => setUploadDialogOpen(true)}
-                                    sx={{
-                                        bgcolor: 'white',
-                                        border: '1px solid',
-                                        borderColor: 'rgba(0, 0, 0, 0.23)',
-                                        color: 'text.primary',
-                                        width: 44,
-                                        height: 44,
-                                        transition: 'all 0.3s',
-                                        '&:hover': {
-                                            bgcolor: 'rgba(15, 118, 110, 0.04)',
-                                            borderColor: 'primary.main',
-                                            transform: 'translateY(-2px)',
-                                            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
-                                        },
-                                    }}
-                                >
-                                    <UploadIcon />
-                                </IconButton>
-                            </Tooltip>
-                        </Box>
+                        <Tooltip title={t('uploadTemplate')} arrow>
+                            <IconButton
+                                onClick={() => setUploadDialogOpen(true)}
+                                size="small"
+                                sx={{
+                                    p: 0.5,
+                                    borderRadius: 1,
+                                    bgcolor: 'primary.main',
+                                    color: 'white',
+                                    transition: 'all 0.2s',
+                                    '& svg': { fontSize: '1.1rem' },
+                                    '&:hover': {
+                                        bgcolor: 'primary.dark',
+                                        boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}4d`,
+                                    },
+                                }}
+                            >
+                                <UploadIcon />
+                            </IconButton>
+                        </Tooltip>
                     )}
                 </Box>
 
                 {/* Search and Filters Section */}
-                <ReusableFilter
+                {/* <ReusableFilter */}
+                <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search templates"
+                    searchPlaceholder={tFilters('searchTemplates')}
                     filters={[
                         {
-                            label: 'Category',
+                            label: tFilters('category'),
                             value: selectedCategory,
-                            onChange: (newValue) => setSelectedCategory(newValue || [{ label: 'All Categories', value: 'All Categories' }]),
-                            options: categories.map(c => ({ label: c, value: c })),
+                            onChange: (newValue) => setSelectedCategory(newValue || [{ label: tFilters('allCategories'), value: 'all' }]),
+                            options: [{ label: tFilters('allCategories'), value: 'all' }, ...categories.map(c => ({ label: c, value: c }))],
                             multiple: true,
                         }
                     ]}
@@ -254,6 +238,7 @@ export default function TemplatePage() {
                 />
 
                 {/* Template Cards Grid */}
+                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 1 }}>
                 <Box
                     sx={{
                         display: 'grid',
@@ -288,13 +273,14 @@ export default function TemplatePage() {
                     ) : (
                         <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
                             <Typography variant="h6" color="text.secondary">
-                                No templates found
+                                {t('noTemplates')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                {searchQuery ? 'Try adjusting your search or filters' : 'Upload a template to get started'}
+                                {searchQuery ? t('tryAdjusting') : t('uploadToStart')}
                             </Typography>
                         </Box>
                     )}
+                </Box>
                 </Box>
 
                 {/* Upload Template Dialog */}
@@ -340,31 +326,38 @@ export default function TemplatePage() {
                 <BaseDialog
                     open={deleteDialogOpen}
                     onClose={() => !deleting && setDeleteDialogOpen(false)}
-                    title="Delete Template"
+                    title={t('deleteTemplate')}
                     maxWidth="xs"
                     actions={
                         <>
-                            <Button
+                            <AppButton
+                                variant="outlined"
                                 onClick={() => setDeleteDialogOpen(false)}
                                 disabled={deleting}
                             >
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={confirmDelete}
+                                {t('cancel')}
+                            </AppButton>
+                            <AppButton
                                 variant="contained"
                                 color="error"
-                                disabled={deleting}
-                                sx={{ minWidth: 100 }}
+                                loading={deleting}
+                                onClick={confirmDelete}
+                                sx={{
+                                    minWidth: 100,
+                                    ...(isDark && {
+                                        bgcolor: '#7f1d1d',
+                                        '&:hover': { bgcolor: '#991b1b' },
+                                    }),
+                                }}
                             >
-                                {deleting ? 'Deleting...' : 'Delete'}
-                            </Button>
+                                {deleting ? t('deleting') : t('delete')}
+                            </AppButton>
                         </>
                     }
                 >
                     <Typography variant="body1" color="text.secondary">
-                        Are you sure you want to delete the template <strong>&quot;{templateToDelete?.name}&quot;</strong>?
-                        This action cannot be undone.
+                        {t('deleteConfirm')} <strong>&quot;{templateToDelete?.name}&quot;</strong>?
+                        {t('cannotUndo')}
                     </Typography>
                 </BaseDialog>
 

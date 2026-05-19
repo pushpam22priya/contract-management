@@ -34,6 +34,11 @@ export interface FormFieldDefinition {
     // Multi-party assignment (Phase 3)
     assignedParty?: string;    // Party ID: "party_1", "party_2", etc. or "unassigned"
     partyLabel?: string;       // Human-readable party label: "Buyer", "Seller", "Witness"
+
+    // Autofill mapping (Phase 4)
+    // The LoggedInUser key whose value should autofill this field (e.g. 'name', 'department').
+    // string (not a literal union) so future profile fields work without a type change here.
+    profileKey?: string | null;
 }
 
 /**

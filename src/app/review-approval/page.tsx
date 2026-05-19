@@ -1,6 +1,9 @@
 'use client';
 
-import { Box, Typography, Alert, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import { Box, Typography, Alert, Tabs, Tab } from '@mui/material';
+import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
+import HistoryIcon from '@mui/icons-material/History';
+import EmptyState from '@/components/common/EmptyState';
 import { AlertColor } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
 import { useState, useEffect } from 'react';
@@ -15,7 +18,9 @@ import FurtherReviewDialog from '@/components/contracts/FurtherReviewDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { useRouter } from 'next/navigation';
 import { ReviewApprovalShimmerGrid } from '@/components/common/ShimmerCard';
-import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+import { useTranslations } from 'next-intl';
+// import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 
@@ -24,6 +29,8 @@ import dayjs from 'dayjs';
  * Shows contracts assigned to the current user for review or approval
  */
 export default function ReviewApprovalPage() {
+    const t = useTranslations('reviewApproval');
+    const tFilters = useTranslations('filters');
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
     const [tabValue, setTabValue] = useState(0); // 0 = My Tasks, 1 = History
@@ -59,26 +66,26 @@ export default function ReviewApprovalPage() {
 
     // Role filter options
     const roleOptions: FilterOption[] = [
-        { label: 'All Roles', value: 'all' },
-        { label: 'As Reviewer', value: 'reviewer' },
-        { label: 'As Approver', value: 'approver' },
+        { label: tFilters('allRoles'), value: 'all' },
+        { label: tFilters('asReviewer'), value: 'reviewer' },
+        { label: tFilters('asApprover'), value: 'approver' },
     ];
 
     // Status filter options based on tab
     const getStatusOptions = (): FilterOption[] => {
         if (tabValue === 0) {
             return [
-                { label: 'All Status', value: 'all' },
-                { label: 'Pending Review', value: 'pending_review' },
-                { label: 'Ready for Approval', value: 'ready_approval' },
-                { label: 'Awaiting Reviews', value: 'awaiting_reviews' },
+                { label: tFilters('allStatus'), value: 'all' },
+                { label: tFilters('pendingReview'), value: 'pending_review' },
+                { label: tFilters('readyApproval'), value: 'ready_approval' },
+                { label: tFilters('awaitingReviews'), value: 'awaiting_reviews' },
             ];
         } else {
             return [
-                { label: 'All Status', value: 'all' },
-                { label: 'Reviewed', value: 'reviewed' },
-                { label: 'Approved', value: 'approved' },
-                { label: 'Rejected', value: 'rejected' },
+                { label: tFilters('allStatus'), value: 'all' },
+                { label: tFilters('reviewed'), value: 'reviewed' },
+                { label: tFilters('approved'), value: 'approved' },
+                { label: tFilters('rejectedByReviewer'), value: 'rejected' },
             ];
         }
     };
@@ -426,51 +433,51 @@ export default function ReviewApprovalPage() {
 
     return (
         <AppLayout>
-            <Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Header Section */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                    <Box>
-                        <Typography
-                            fontWeight={600}
-                            sx={{
-                                color: 'primary.main',
-                                fontSize: { xs: '1.75rem', sm: '2rem', md: '20px' },
-                                mb: 0.5,
-                            }}
-                        >
-                            Review & Approval
+                <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    bgcolor: 'background.paper',
+                    px: 2,
+                    py: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="h5">
+                            {t('title')}
                         </Typography>
-                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            Manage contracts assigned to you for review or approval
+                        <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
+                        <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
+                            {t('description')}
                         </Typography>
                     </Box>
 
                     {currentUser && (
-                        <ToggleButtonGroup
-                            value={tabValue === 0 ? 'tasks' : 'history'}
-                            exclusive
-                            onChange={(_, val) => { if (val !== null) handleTabChange(val === 'tasks' ? 0 : 1); }}
-                            size="small"
+                        <Tabs
+                            value={tabValue}
+                            onChange={(_, val) => handleTabChange(val)}
                             sx={{
-                                '& .MuiToggleButton-root': {
+                                minHeight: 0,
+                                '& .MuiTabs-indicator': { height: 2, borderRadius: 1 },
+                                '& .MuiTab-root': {
+                                    minHeight: 0,
+                                    minWidth: 0,
                                     textTransform: 'none',
-                                    fontWeight: 600,
-                                    fontSize: '0.875rem',
-                                    px: 2,
-                                    py: 0.6,
-                                    borderColor: 'divider',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 500,
+                                    px: 1.5,
+                                    py: 0.75,
                                     color: 'text.secondary',
-                                    '&.Mui-selected': {
-                                        bgcolor: 'primary.main',
-                                        color: 'white',
-                                        '&:hover': { bgcolor: 'primary.dark' },
-                                    },
+                                    '&.Mui-selected': { fontWeight: 600 },
                                 },
                             }}
                         >
-                            <ToggleButton value="tasks">My Tasks</ToggleButton>
-                            <ToggleButton value="history">History</ToggleButton>
-                        </ToggleButtonGroup>
+                            <Tab label={tFilters('myTasks')} />
+                            <Tab label={tFilters('history')} />
+                        </Tabs>
                     )}
                 </Box>
 
@@ -485,20 +492,21 @@ export default function ReviewApprovalPage() {
                     <>
 
                           {/* Filters */}
-                        <ReusableFilter
+                        {/* <ReusableFilter */}
+                        <CompactFilter
                             searchQuery={searchQuery}
                             onSearchChange={setSearchQuery}
-                            searchPlaceholder="Search by contract or client name"
+                            searchPlaceholder={tFilters('searchByContract')}
                             filters={[
                                 {
-                                    label: 'Role',
+                                    label: tFilters('role'),
                                     value: roleFilterValues,
                                     onChange: setRoleFilterValues,
                                     options: roleOptions.filter(o => o.value !== 'all'),
                                     multiple: true,
                                 },
                                 {
-                                    label: 'Status',
+                                    label: tFilters('status'),
                                     value: statusFilterValues,
                                     onChange: setStatusFilterValues,
                                     options: getStatusOptions().filter(o => o.value !== 'all'),
@@ -516,13 +524,14 @@ export default function ReviewApprovalPage() {
                             showCounts={true}
                             filteredCount={filteredContracts.length}
                             totalCount={tabContracts.length}
-                            countLabel={tabValue === 0 ? 'tasks' : 'items'}
+                            countLabel={tabValue === 0 ? tFilters('countTasks') : tFilters('countItems')}
                             hasActiveFilters={hasActiveFilters}
                             onClearFilters={handleClearFilters}
                         />
 
 
                         {/* Contracts Grid */}
+                        <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 1 }}>
                         {loading ? (
                             <Box
                                 sx={{
@@ -539,11 +548,16 @@ export default function ReviewApprovalPage() {
                                 <ReviewApprovalShimmerGrid count={6} />
                             </Box>
                         ) : filteredContracts.length === 0 ? (
-                            <Alert severity="info">
-                                {tabValue === 0
-                                    ? 'No pending contracts for review or approval.'
-                                    : 'No completed reviews or approvals yet.'}
-                            </Alert>
+                            <EmptyState
+                                icon={tabValue === 0 ? <AssignmentOutlinedIcon /> : <HistoryIcon />}
+                                title={tabValue === 0 ? 'No pending tasks' : 'No history yet'}
+                                description={
+                                    tabValue === 0
+                                        ? 'No contracts are currently assigned to you for review or approval.'
+                                        : 'Completed reviews and approvals will appear here.'
+                                }
+                                sx={{ minHeight: '55vh' }}
+                            />
                         ) : (
                             <Box
                                 sx={{
@@ -573,6 +587,7 @@ export default function ReviewApprovalPage() {
                                 ))}
                             </Box>
                         )}
+                        </Box>
                     </>
                 )}
 

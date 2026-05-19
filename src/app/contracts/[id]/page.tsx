@@ -8,24 +8,12 @@ import {
     IconButton,
     Tooltip,
     Chip,
-    Fade,
-    Button,
-    Paper,
-    Alert,
-    CircularProgress,
-    Divider,
+    useTheme,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
-import SendIcon from '@mui/icons-material/Send';
-import DoneAllIcon from '@mui/icons-material/DoneAll';
-import PersonIcon from '@mui/icons-material/Person';
-import EmailIcon from '@mui/icons-material/Email';
+import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import SignatureProgressTimeline from '@/components/contracts/SignatureProgressTimeline';
+import AppButton from '@/components/common/AppButton';
 import AppLayout from '@/components/layout/AppLayout';
 import ContractInformation from '@/components/contracts/ContractInformation';
 import ContractDetailsPanel from '@/components/contracts/ContractDetailsPanel';
@@ -38,6 +26,12 @@ import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { Document } from '@/components/contracts/ContractDetailsPanel';
 import { useContractPolling } from '@/hooks/useContractPolling';
 import { ContractDetailShimmer } from '@/components/common/ShimmerCard';
+import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
+import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog';
+import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
+import { ContractStatus } from '@/types/contract';
+import HistoryIcon from '@mui/icons-material/History';
+import { useTranslations } from 'next-intl';
 
 export default function ContractViewPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -52,10 +46,23 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const [viewerOpen, setViewerOpen] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
 
+    // History panel + dialog state
+    const [historyAnchorEl, setHistoryAnchorEl] = useState<HTMLElement | null>(null);
+    const historyPanelOpen = Boolean(historyAnchorEl);
+    const [historyDialogEntry, setHistoryDialogEntry] = useState<HistoryEntry | null>(null);
+
     // Multi-party finalization state
     const [finalizing, setFinalizing] = useState(false);
     const [finalizeError, setFinalizeError] = useState<string | null>(null);
     const [finalizeSuccess, setFinalizeSuccess] = useState(false);
+
+    const t = useTranslations('contractDetail');
+    const tStatus = useTranslations('contractStatus');
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+
+    // Strip all stacked "(Renewal)" suffixes for display — raw title kept in DB
+    const displayTitle = contract?.title?.replace(/\s*\(Renewal\d*\)$/i, '') ?? '';
 
     // --- ROBUST DATA FETCHING LOGIC ---
     useEffect(() => {
@@ -105,247 +112,213 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 // 4. Load extra details (from service or mock local)
                 // Build activities timeline from contract data
                 if (isMounted) {
-                    const activities: { id: string; title: string; user: string; date: string }[] = [];
+                    // Each entry carries a raw ISO timestamp for sorting + a formatted date for display
+                    const activities: { id: string; title: string; user: string; date: string; _ts: number }[] = [];
 
-                    // Helper function to safely format dates
+                    const toTs = (dateStr: string | undefined): number =>
+                        dateStr ? new Date(dateStr).getTime() : 0;
+
                     const formatDate = (dateStr: string | undefined): string => {
                         if (!dateStr) return 'Date not available';
                         try {
                             const date = new Date(dateStr);
                             if (isNaN(date.getTime())) return 'Date not available';
-                            return date.toLocaleDateString();
+                            return date.toLocaleDateString('en-GB');
                         } catch {
                             return 'Date not available';
                         }
                     };
 
-                    // 1. Contract Created
+                    const push = (id: string, title: string, user: string, dateStr: string | undefined) => {
+                        activities.push({ id, title, user, date: formatDate(dateStr), _ts: toTs(dateStr) });
+                    };
+
+                    // ── 1. Contract Created ──────────────────────────────────────────
                     if (found.createdAt) {
-                        activities.push({
-                            id: 'created',
-                            title: 'Contract Created',
-                            user: found.createdBy || 'System',
-                            date: formatDate(found.createdAt)
-                        });
+                        push('created', 'Contract Created', found.createdBy || 'System', found.createdAt);
                     }
 
-                    // 2. Submitted for Review (if reviewers exist)
+                    // ── 2. Submitted for Review ──────────────────────────────────────
+                    // One entry per reviewer showing who the request was sent to
                     if (found.reviewers && found.reviewers.length > 0) {
-                        activities.push({
-                            id: 'submitted-review',
-                            title: 'Submitted for Review',
-                            user: found.createdBy || 'System',
-                            date: formatDate(found.updatedAt || found.createdAt)
+                        found.reviewers.forEach((reviewer: any, idx: number) => {
+                            const sentAt = reviewer.sentAt;
+                            const sentBy = reviewer.sentBy || found.createdBy || 'System';
+                            push(
+                                `submitted-review-${idx}`,
+                                `Submitted for Review to ${reviewer.email}`,
+                                sentBy,
+                                sentAt || found.createdAt
+                            );
                         });
 
-                        // 3. Each Reviewer's Action
+                        // ── 3. Each Reviewer's Action ────────────────────────────────
                         found.reviewers.forEach((reviewer: any, idx: number) => {
                             if (reviewer.status === 'reviewed' && reviewer.reviewedAt) {
-                                activities.push({
-                                    id: `reviewed-${idx}`,
-                                    title: 'Reviewed',
-                                    user: reviewer.email || 'Reviewer',
-                                    date: formatDate(reviewer.reviewedAt)
-                                });
+                                push(`reviewed-${idx}`, 'Reviewed', reviewer.email, reviewer.reviewedAt);
                             } else if (reviewer.status === 'requested_changes') {
-                                activities.push({
-                                    id: `changes-requested-${idx}`,
-                                    title: 'Changes Requested',
-                                    user: reviewer.email || 'Reviewer',
-                                    date: formatDate(reviewer.reviewedAt || found.updatedAt)
-                                });
+                                push(`changes-requested-${idx}`, 'Changes Requested', reviewer.email, reviewer.reviewedAt);
+                            } else if (reviewer.status === 'rejected') {
+                                push(`review-rejected-${idx}`, 'Review Rejected', reviewer.email, reviewer.rejectedAt || reviewer.reviewedAt);
                             }
                         });
                     }
 
-                    // 4. Approver Action
+                    // ── 4. Submitted for Approval ────────────────────────────────────
                     if (found.approver) {
+                        const sentAt = found.approver.sentAt;
+                        const sentBy = found.approver.sentBy || found.createdBy || 'System';
+                        push(
+                            'submitted-approval',
+                            `Submitted for Approval to ${found.approver.email}`,
+                            sentBy,
+                            sentAt || found.createdAt
+                        );
+
+                        // ── 5. Approver Action ───────────────────────────────────────
                         if (found.approver.status === 'approved' && found.approver.approvedAt) {
-                            activities.push({
-                                id: 'approved',
-                                title: 'Approved',
-                                user: found.approver.email || 'Approver',
-                                date: formatDate(found.approver.approvedAt)
-                            });
+                            push('approved', 'Approved', found.approver.email, found.approver.approvedAt);
                         } else if (found.approver.status === 'rejected') {
-                            activities.push({
-                                id: 'rejected',
-                                title: 'Rejected',
-                                user: found.approver.email || 'Approver',
-                                date: formatDate(found.updatedAt || found.createdAt)
-                            });
+                            push('approval-rejected', 'Approval Rejected', found.approver.email, found.approver.approvedAt || found.updatedAt);
                         }
                     }
 
-                    // 5. Contractor filled party fields (multi-party)
-                    if (found.partyCompletions && found.partyCompletions.length > 0) {
-                        found.partyCompletions.forEach((completion: any, idx: number) => {
-                            if (completion.isContractor && completion.status === 'completed' && completion.completedAt) {
-                                activities.push({
-                                    id: `contractor-filled-${idx}`,
-                                    title: `Contractor filled ${completion.partyLabel || completion.partyId} fields`,
-                                    user: completion.completedByName || completion.completedBy || found.createdBy || 'Contractor',
-                                    date: formatDate(completion.completedAt)
-                                });
-                            }
-                        });
-                    }
-
-                    // 6. Signature Request Sent (legacy single-signer flow)
-                    if (found.signingRequest && !found.externalSigners?.length) {
-                        activities.push({
-                            id: 'signature-requested',
-                            title: 'Signature Request Sent',
-                            user: found.createdBy || 'System',
-                            date: formatDate(found.externalSigningSentAt || found.signingRequest?.createdAt)
-                        });
-                    }
-
-                    // 7. Multi-party: Internal signers assignments and completions
+                    // ── 6. Sent for Signature — all signers listed individually ───────
+                    // Internal signers
                     if (found.internalSigners && found.internalSigners.length > 0) {
                         found.internalSigners.forEach((signer: any, idx: number) => {
                             const partyLabel = signer.partyLabel || 'Party';
-
-                            // Internal signer assigned
-                            if (signer.assignedAt) {
-                                activities.push({
-                                    id: `internal-assigned-${idx}`,
-                                    title: `Internal signer assigned for ${partyLabel} (Order ${signer.order})`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.assignedAt)
-                                });
+                            const assignedAt = signer.assignedAt || signer.sentAt;
+                            if (assignedAt) {
+                                push(
+                                    `sent-internal-${idx}`,
+                                    `Sent for Signature — ${partyLabel} (Order ${signer.order})`,
+                                    signer.email,
+                                    assignedAt
+                                );
                             }
 
-                            // Internal signer unlocked
-                            if (signer.unlockedAt && signer.unlockedAt !== signer.assignedAt) {
-                                activities.push({
-                                    id: `internal-unlocked-${idx}`,
-                                    title: `Order ${signer.order} unlocked for ${partyLabel}`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.unlockedAt)
-                                });
+                            // Signer unlocked for signing (sequential flow)
+                            if (signer.unlockedAt && signer.unlockedAt !== assignedAt) {
+                                push(
+                                    `internal-unlocked-${idx}`,
+                                    `Signature unlocked — ${partyLabel} (Order ${signer.order})`,
+                                    signer.email,
+                                    signer.unlockedAt
+                                );
                             }
 
-                            // Internal signer completed
+                            // Signer submitted their signature
                             if (signer.status === 'completed' && signer.completedAt) {
-                                activities.push({
-                                    id: `internal-completed-${idx}`,
-                                    title: `Completed ${partyLabel} fields`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.completedAt)
-                                });
+                                push(
+                                    `internal-signed-${idx}`,
+                                    `Signed — ${partyLabel}`,
+                                    signer.email,
+                                    signer.completedAt
+                                );
                             }
                         });
                     }
 
-                    // 8. Multi-party: External signers requests sent
+                    // External signers
                     if (found.externalSigners && found.externalSigners.length > 0) {
                         found.externalSigners.forEach((signer: any, idx: number) => {
-                            // Get party label for display
                             const partyLabel = signer.partyLabel || 'Party';
-
-                            // External signer assigned
-                            if (signer.sentAt) {
-                                activities.push({
-                                    id: `external-assigned-${idx}`,
-                                    title: `External signer assigned for ${partyLabel} (Order ${signer.order})`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.sentAt)
-                                });
+                            const sentAt = signer.sentAt;
+                            if (sentAt) {
+                                push(
+                                    `sent-external-${idx}`,
+                                    `Sent for Signature — ${partyLabel} (Order ${signer.order})`,
+                                    signer.email,
+                                    sentAt
+                                );
                             }
 
-                            // External signer unlocked (email sent)
-                            if (signer.unlockedAt && signer.unlockedAt !== signer.sentAt) {
-                                activities.push({
-                                    id: `external-unlocked-${idx}`,
-                                    title: `Order ${signer.order} unlocked - email sent for ${partyLabel}`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.unlockedAt)
-                                });
+                            // External signer unlocked via auto-advance
+                            if (signer.unlockedAt && signer.unlockedAt !== sentAt) {
+                                push(
+                                    `external-unlocked-${idx}`,
+                                    `Signature unlocked — ${partyLabel} (Order ${signer.order})`,
+                                    signer.email,
+                                    signer.unlockedAt
+                                );
                             }
 
-                            // Signer viewed the contract
-                            if (signer.viewedAt) {
-                                activities.push({
-                                    id: `external-viewed-${idx}`,
-                                    title: `Viewed contract`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.viewedAt)
-                                });
-                            }
-
-                            // Signer completed their party fields
+                            // External signer submitted their signature
                             if (signer.status === 'completed' && signer.completedAt) {
-                                activities.push({
-                                    id: `external-completed-${idx}`,
-                                    title: `Completed ${partyLabel} fields`,
-                                    user: signer.name || signer.email,
-                                    date: formatDate(signer.completedAt)
-                                });
+                                push(
+                                    `external-signed-${idx}`,
+                                    `Signed — ${partyLabel}`,
+                                    signer.email,
+                                    signer.completedAt
+                                );
                             }
                         });
                     }
 
-                    // 8. Client party completions (from partyCompletions, non-contractor)
-                    if (found.partyCompletions && found.partyCompletions.length > 0) {
-                        found.partyCompletions.forEach((completion: any, idx: number) => {
-                            if (!completion.isContractor && completion.status === 'completed' && completion.completedAt) {
-                                activities.push({
-                                    id: `client-completed-${idx}`,
-                                    title: `Completed ${completion.partyLabel || completion.partyId} fields`,
-                                    user: completion.completedByName || completion.completedBy || 'Client',
-                                    date: formatDate(completion.completedAt)
-                                });
-                            }
-                        });
+                    // Legacy single-signer flow
+                    if (found.signingRequest && !found.externalSigners?.length && !found.internalSigners?.length) {
+                        push(
+                            'signature-requested',
+                            `Sent for Signature to ${found.signingRequest.signerEmail || found.signer?.email || 'Signer'}`,
+                            found.createdBy || 'System',
+                            found.externalSigningSentAt || found.signingRequest?.createdAt
+                        );
+                        if (found.signer?.status === 'signed' && found.signer?.signedAt) {
+                            push('signed', 'Signed', found.signer.email || 'Client', found.signer.signedAt);
+                        } else if (found.signingRequest?.status === 'signed' && found.signingRequest?.signedAt) {
+                            push('signed', 'Signed', found.signingRequest.signerEmail || 'Client', found.signingRequest.signedAt);
+                        }
                     }
 
-                    // 9. Signed (legacy single-signer flow)
-                    if (found.signer?.status === 'signed' && found.signer?.signedAt) {
-                        activities.push({
-                            id: 'signed',
-                            title: 'Contract Signed',
-                            user: found.signer.email || found.signer.name || 'Client',
-                            date: formatDate(found.signer.signedAt)
-                        });
-                    } else if (found.signingRequest?.status === 'signed' && found.signingRequest?.signedAt && !found.externalSigners?.length) {
-                        activities.push({
-                            id: 'signed',
-                            title: 'Contract Signed',
-                            user: found.signingRequest.signerEmail || 'Client',
-                            date: formatDate(found.signingRequest.signedAt)
-                        });
-                    }
-
-                    // 10. Contract Finalized (multi-party flow)
+                    // ── 7. Contract Finalized ────────────────────────────────────────
                     if (found.finalizedAt) {
-                        activities.push({
-                            id: 'finalized',
-                            title: 'Contract Finalized',
-                            user: found.finalizedBy || found.createdBy || 'System',
-                            date: formatDate(found.finalizedAt)
-                        });
+                        push('finalized', 'Contract Finalized', found.finalizedBy || found.createdBy || 'System', found.finalizedAt);
                     }
 
-                    // Sort activities by date (oldest first for chronological order)
-                    activities.sort((a, b) => {
-                        const dateA = new Date(a.date).getTime();
-                        const dateB = new Date(b.date).getTime();
-                        // Handle invalid dates
-                        if (isNaN(dateA)) return 1;
-                        if (isNaN(dateB)) return -1;
-                        return dateA - dateB;
-                    });
+                    // ── 8. Renewed ───────────────────────────────────────────────────
+                    // Show on the original contract when a renewal was created
+                    if (found.renewedContractId && found.renewalStatus) {
+                        push(
+                            'renewed',
+                            'Contract Renewed',
+                            found.createdBy || 'System',
+                            found.updatedAt || found.createdAt
+                        );
+                    }
+
+                    // Show on the renewal contract — link back to original
+                    if (found.renewedFromId) {
+                        push(
+                            'renewal-of',
+                            'Renewal Contract Created',
+                            found.createdBy || 'System',
+                            found.createdAt
+                        );
+                    }
+
+                    // ── 9. Terminated ────────────────────────────────────────────────
+                    if (found.terminatedAt) {
+                        push('terminated', 'Contract Terminated', found.terminatedBy || found.createdBy || 'System', found.terminatedAt);
+                    }
+
+                    // Sort by raw timestamp ascending (chronological), then strip _ts
+                    activities.sort((a, b) => a._ts - b._ts);
+                    const sortedActivities = activities.map(({ _ts: _ignored, ...rest }) => rest);
+
+                    // ── Build document list (current contract only) ────────────
+                    const contractId = found.id;
+                    const documents = [{
+                        id: contractId,
+                        name: `${found.title.replace(/\s*\(Renewal\d*\)$/i, '')}.pdf`,
+                        size: 'PDF',
+                        uploadDate: new Date(found.createdAt).toLocaleDateString('en-GB'),
+                        url: `/api/file/${contractId}?type=contract`,
+                    }];
 
                     setDetails({
-                        documents: [{
-                            id: 'main-contract',
-                            name: `${found.title}.pdf`,
-                            size: 'PDF',
-                            uploadDate: new Date(found.createdAt).toLocaleDateString(),
-                            url: found.fileUrl
-                        }],
-                        activities,
+                        documents,
+                        activities: sortedActivities,
                         ...found
                     });
                 }
@@ -373,25 +346,14 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
         console.log('🔄 [ContractViewPage] Auto-refresh triggered — updating UI');
         setContract(freshContract);
 
-        // Rebuild the details/activities from fresh data
-        // (same logic as in loadData, but simplified for the update path)
-        const formatDate = (dateStr: string | undefined): string => {
-            if (!dateStr) return 'Date not available';
-            try {
-                const date = new Date(dateStr);
-                if (isNaN(date.getTime())) return 'Date not available';
-                return date.toLocaleDateString();
-            } catch { return 'Date not available'; }
-        };
-
         setDetails((prev: any) => ({
             ...prev,
             ...freshContract,
             documents: [{
                 id: 'main-contract',
-                name: `${freshContract.title}.pdf`,
+                name: `${freshContract.title.replace(/\s*\(Renewal\d*\)$/i, '')}.pdf`,
                 size: 'PDF',
-                uploadDate: new Date(freshContract.createdAt).toLocaleDateString(),
+                uploadDate: new Date(freshContract.createdAt).toLocaleDateString('en-GB'),
                 url: freshContract.fileUrl
             }],
         }));
@@ -408,18 +370,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
     // Handlers
     const handleBack = () => router.back();
-    const handleEdit = () => console.log('Edit contract:', contract?.id);
-    const handleDownload = () => {
-        if (contract) {
-            handleDownloadDocument({
-                id: 'main-contract',
-                name: `${contract.title}.pdf`,
-                size: 'PDF',
-                uploadDate: new Date(contract.createdAt).toLocaleDateString(),
-                url: contract.fileUrl
-            });
-        }
-    };
 
     /**
      * Helper to download a document (PDF)
@@ -452,8 +402,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
             console.error('❌ [ContractViewPage] Download failed:', error);
         }
     };
-    const handleDelete = () => console.log('Delete contract:', contract?.id);
-
     /**
      * Handle finalizing the contract after all parties have completed
      */
@@ -591,31 +539,31 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     };
 
     // Helper: Status Color
-    const getStatusLabel = (status: string): string => {
-        switch (status) {
-            case 'active': return 'Active';
-            case 'expiring': return 'Expiring';
-            case 'expired': return 'Expired';
-            case 'draft': return 'Draft';
-            case 'in_review': return 'In Review';
-            case 'in_approval': return 'In Approval';
-            case 'reviewed': return 'Reviewed';
-            case 'approved': return 'Approved';
-            case 'waiting_for_signature': return 'Waiting for Signature';
-            case 'signed_by_everyone': return 'Signed by Assigned Parties';
-            case 'signed': return 'Signed';
-            case 'rejected': return 'Rejected';
-            case 'rejected_by_reviewer': return 'Rejected by Reviewer';
-            case 'rejected_by_approver': return 'Rejected by Approver';
-            default: return status;
-        }
-    };
-
     const getStatusColor = (status: string) => {
+        if (isDark) {
+            switch (status) {
+                case 'active':
+                case 'signed': return { bgcolor: 'rgba(16,185,129,0.08)', color: '#6bac8e' };
+                case 'expiring': return { bgcolor: 'rgba(245,158,11,0.08)', color: '#b8935a' };
+                case 'terminated': return { bgcolor: 'rgba(148,163,184,0.07)', color: '#6b7e90' };
+                case 'expired':
+                case 'rejected':
+                case 'rejected_by_reviewer':
+                case 'rejected_by_approver': return { bgcolor: 'rgba(239,68,68,0.08)', color: '#b07070' };
+                case 'in_review': return { bgcolor: 'rgba(139,92,246,0.08)', color: '#9080c0' };
+                case 'in_approval': return { bgcolor: 'rgba(245,158,11,0.08)', color: '#b8935a' };
+                case 'reviewed':
+                case 'approved': return { bgcolor: 'rgba(16,185,129,0.08)', color: '#6bac8e' };
+                case 'waiting_for_signature': return { bgcolor: 'rgba(245,158,11,0.08)', color: '#b8935a' };
+                case 'signed_by_everyone': return { bgcolor: 'rgba(59,130,246,0.08)', color: '#6888ac' };
+                default: return { bgcolor: 'rgba(148,163,184,0.07)', color: '#6b7e90' };
+            }
+        }
         switch (status) {
             case 'active':
             case 'signed': return { bgcolor: '#d1fae5', color: '#065f46' };
             case 'expiring': return { bgcolor: '#fef3c7', color: '#92400e' };
+            case 'terminated': return { bgcolor: '#f1f5f9', color: '#334155' };
             case 'expired':
             case 'rejected':
             case 'rejected_by_reviewer':
@@ -645,7 +593,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
         return (
             <AppLayout>
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 10, gap: 2 }}>
-                    <Typography variant="h6">Contract Not Found</Typography>
+                    <Typography variant="h6">{t('notFound')}</Typography>
                     <Typography color="text.secondary">ID: {id}</Typography>
                     <IconButton onClick={handleBack}><ArrowBackIcon /> Go Back</IconButton>
                 </Box>
@@ -666,77 +614,71 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
     return (
         <AppLayout>
-            <Fade in timeout={400}>
-                <Box>
-                    {/* Header Section */}
+            {/* Main content box */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 1 }}>
+                {/* Header Section */}
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexDirection: { xs: 'column', md: 'row' },
+                        gap: 1,
+                        py: 0.25,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                    }}
+                >
+                    {/* Left: Back Button + Title */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flex: 1 }}>
+                        <Tooltip title={t('goBack')} arrow>
+                            <IconButton
+                                size="small"
+                                onClick={handleBack}
+                                sx={{
+                                    color: 'text.secondary',
+                                    '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
+                                }}
+                            >
+                                <ArrowBackIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                        </Tooltip>
+
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            <Typography
+                                fontWeight={600}
+                                sx={{ color: 'text.primary', fontSize: '0.95rem' }}
+                            >
+                                {displayTitle}
+                            </Typography>
+                            <Chip
+                                label={tStatus(contract.status as Parameters<typeof tStatus>[0])}
+                                size="small"
+                                sx={{
+                                    bgcolor: statusColors.bgcolor,
+                                    color: statusColors.color,
+                                    fontWeight: 600,
+                                    fontSize: '0.68rem',
+                                    height: 20,
+                                    borderRadius: 1,
+                                }}
+                            />
+                        </Box>
+                    </Box>
+
+                    {/* Right: Action Buttons */}
                     <Box
                         sx={{
                             display: 'flex',
-                            alignItems: { xs: 'flex-start', md: 'center' },
-                            justifyContent: 'space-between',
-                            flexDirection: { xs: 'column', md: 'row' },
-                            gap: 2,
-                            // pb: 1,
-                            borderBottom: '1px solid',
-                            borderColor: 'divider',
+                            gap: 1,
+                            alignSelf: { xs: 'flex-end', md: 'center' },
                         }}
                     >
-                        {/* Left: Back Button + Title */}
-                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1 }}>
-                            <Tooltip title="Go back" arrow>
+                        {/* History button — shown whenever this contract is part of a renewal chain */}
+                        {(contract?.renewedFromId || contract?.renewedContractId) && (
+                            <Tooltip title={t('contractHistory')} arrow>
                                 <IconButton
-                                    onClick={handleBack}
-                                    sx={{
-                                        color: 'text.secondary',
-                                        '&:hover': {
-                                            bgcolor: 'action.hover',
-                                            color: 'primary.main',
-                                        },
-                                    }}
-                                >
-                                    <ArrowBackIcon />
-                                </IconButton>
-                            </Tooltip>
-
-                            <Box sx={{ flex: 1 }}>
-                                {/* Title and Badge */}
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                    <Typography
-                                        fontWeight={600}
-                                        sx={{
-                                            color: 'text.primary',
-                                            fontSize: { xs: '1rem', sm: '20px' },
-                                        }}
-                                    >
-                                        {contract.title}
-                                    </Typography>
-                                    <Chip
-                                        label={getStatusLabel(contract.status)}
-                                        size="small"
-                                        sx={{
-                                            bgcolor: statusColors.bgcolor,
-                                            color: statusColors.color,
-                                            fontWeight: 600,
-                                            fontSize: '0.75rem',
-                                            height: 24,
-                                            borderRadius: 1.5,
-                                        }}
-                                    />
-                                </Box>
-                            </Box>
-                        </Box>
-
-                        {/* Right: Action Buttons */}
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                gap: 1,
-                                alignSelf: { xs: 'flex-end', md: 'center' },
-                            }}
-                        >
-                            {/* <Tooltip title="Download Contract" arrow>
-                                <IconButton
-                                    onClick={handleDownload}
+                                    onClick={(e) => setHistoryAnchorEl(e.currentTarget)}
                                     sx={{
                                         bgcolor: 'transparent',
                                         border: '1px solid',
@@ -750,90 +692,127 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                                             borderColor: 'primary.main',
                                             color: 'white',
                                             transform: 'translateY(-2px)',
-                                            boxShadow: '0 4px 8px rgba(15, 118, 110, 0.2)',
+                                            boxShadow: (theme) => `0 4px 8px ${theme.palette.primary.main}33`,
                                         },
                                     }}
                                 >
-                                    <FileDownloadOutlinedIcon fontSize="small" />
+                                    <HistoryIcon fontSize="small" />
                                 </IconButton>
-                            </Tooltip> */}
-                        </Box>
+                            </Tooltip>
+                        )}
                     </Box>
+                </Box>
 
-                    {/* ═══════════════════════════════════════════════════════════════════════════ */}
-                    {/* MULTI-PARTY SIGNATURE STATUS */}
-                    {/* ═══════════════════════════════════════════════════════════════════════════ */}
-                    {isMultiPartyContract && (
-                        <SignatureProgressTimeline
-                            contract={contract}
-                            isFinalized={isFinalized}
-                            canFinalize={canFinalize}
-                            currentOrder={currentOrder}
-                            uniqueOrders={uniqueOrders}
-                            finalizing={finalizing}
-                            finalizeError={finalizeError}
-                            finalizeSuccess={finalizeSuccess}
-                            onFinalize={handleFinalize}
-                        />
-                    )}
+                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1, pb: 1 }}>
 
-                    {/* Content Grid: Contract Info + Details Panel */}
-                    <Box
-                        sx={{
-                            mt: 1.5,
-                            display: 'grid',
-                            gridTemplateColumns: { xs: '1fr', lg: '1.5fr 1fr' },
-                            gap: 2,
-                        }}
-                    >
-                        {/* Contract Information Section (Left) */}
-                        <Box>
-                            <ContractInformation
-                                client={contract.client || 'N/A'}
-                                contractValue={contract.value || 'N/A'}
-                                category={contract.category || 'N/A'}
-                                template={contract.templateName || 'Custom Template'}
-                                startDate={contract.startDate || 'N/A'}
-                                endDate={contract.endDate || 'N/A'}
-                                daysRemaining={contract.expiresInDays || 0}
-                                progressPercentage={(() => {
-                                    // Calculate REMAINING progress based on dates
-                                    // 100% = full duration remaining, 0% = expired
-                                    if (!contract.startDate || !contract.endDate) return 100;
+                        {/* Terminated Banner */}
+                        {contract.status === ContractStatus.TERMINATED && (
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1.5,
+                                    px: 2,
+                                    py: 1.25,
+                                    bgcolor: isDark ? 'rgba(239,68,68,0.08)' : '#fef2f2',
+                                    border: '1px solid',
+                                    borderColor: isDark ? 'rgba(239,68,68,0.22)' : '#fecaca',
+                                    borderRadius: 2,
+                                    flexWrap: 'wrap',
+                                }}
+                            >
+                                <BlockOutlinedIcon sx={{ color: isDark ? '#b07070' : '#dc2626', fontSize: '1.1rem', flexShrink: 0 }} />
+                                <Typography variant="body2" sx={{ color: isDark ? '#b07070' : '#7f1d1d', fontWeight: 500, flex: 1 }}>
+                                    {t('terminatedOn')}{' '}
+                                    <strong>
+                                        {contract.terminatedAt
+                                            ? new Date(contract.terminatedAt).toLocaleDateString('en-GB')
+                                            : '—'}
+                                    </strong>
+                                    {contract.terminatedBy && (
+                                        <> {t('terminatedBy')} <strong>{contract.terminatedBy}</strong></>
+                                    )}
+                                    . {t('noFurtherActions')}
+                                </Typography>
+                            </Box>
+                        )}
 
-                                    const start = new Date(contract.startDate).getTime();
-                                    const end = new Date(contract.endDate).getTime();
-                                    const now = new Date().getTime();
 
-                                    // If contract hasn't started yet - 100% remaining
-                                    if (now < start) return 100;
-                                    // If contract has ended - 0% remaining
-                                    if (now > end) return 0;
-
-                                    // Calculate percentage REMAINING (not elapsed)
-                                    const totalDuration = end - start;
-                                    const remaining = end - now;
-                                    const percentage = Math.round((remaining / totalDuration) * 100);
-
-                                    return Math.min(100, Math.max(0, percentage));
-                                })()}
-                                status={contract.status}
-                                description={displayDetails.description}
+                        {/* ═══════════════════════════════════════════════════════════════════════════ */}
+                        {/* MULTI-PARTY SIGNATURE STATUS */}
+                        {/* ═══════════════════════════════════════════════════════════════════════════ */}
+                        {isMultiPartyContract && (
+                            <SignatureProgressTimeline
+                                contract={contract}
+                                isFinalized={isFinalized}
+                                canFinalize={canFinalize}
+                                currentOrder={currentOrder}
+                                uniqueOrders={uniqueOrders}
+                                finalizing={finalizing}
+                                finalizeError={finalizeError}
+                                finalizeSuccess={finalizeSuccess}
+                                onFinalize={handleFinalize}
                             />
-                        </Box>
+                        )}
 
-                        {/* Contract Details Panel Section (Right) */}
-                        <Box>
-                            <ContractDetailsPanel
-                                documents={displayDetails.documents}
-                                activities={displayDetails.activities}
-                                onViewDocument={handleViewDocument}
-                                onDownloadDocument={handleDownloadDocument}
-                            />
+                        {/* Content Grid: Contract Info + Details Panel */}
+                        <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: { xs: '1fr', lg: '1.5fr 1fr' },
+                                gap: 1.5,
+                            }}
+                        >
+                            {/* Contract Information Section (Left) */}
+                            <Box>
+                                <ContractInformation
+                                    client={contract.client || 'N/A'}
+                                    contractValue={contract.value || 'N/A'}
+                                    category={contract.category || 'N/A'}
+                                    template={contract.templateName || 'Custom Template'}
+                                    startDate={contract.startDate ? new Date(contract.startDate).toLocaleDateString('en-GB') : 'N/A'}
+                                    endDate={contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-GB') : 'N/A'}
+                                    daysRemaining={contract.expiresInDays || 0}
+                                    progressPercentage={(() => {
+                                        // Calculate REMAINING progress based on dates
+                                        // 100% = full duration remaining, 0% = expired
+                                        if (!contract.startDate || !contract.endDate) return 100;
+
+                                        const start = new Date(contract.startDate).getTime();
+                                        const end = new Date(contract.endDate).getTime();
+                                        const now = new Date().getTime();
+
+                                        // If contract hasn't started yet - 100% remaining
+                                        if (now < start) return 100;
+                                        // If contract has ended - 0% remaining
+                                        if (now > end) return 0;
+
+                                        // Calculate percentage REMAINING (not elapsed)
+                                        const totalDuration = end - start;
+                                        const remaining = end - now;
+                                        const percentage = Math.round((remaining / totalDuration) * 100);
+
+                                        return Math.min(100, Math.max(0, percentage));
+                                    })()}
+                                    status={contract.status}
+                                    description={displayDetails.description}
+                                />
+                            </Box>
+
+                            {/* Contract Details Panel Section (Right) */}
+                            <Box>
+                                <ContractDetailsPanel
+                                    documents={displayDetails.documents}
+                                    activities={displayDetails.activities}
+                                    onViewDocument={handleViewDocument}
+                                    onDownloadDocument={handleDownloadDocument}
+                                />
+                            </Box>
                         </Box>
                     </Box>
                 </Box>
-            </Fade>
+            </Box>
 
             {/* Debug: Log what's being passed to viewer */}
             {viewerOpen && (() => {
@@ -852,8 +831,14 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 open={viewerOpen}
                 onClose={() => setViewerOpen(false)}
                 fileUrl={(() => {
-                    // 1. Signed PDF Base64 (highest priority if available locally)
-                    if (contract.signedPdfBase64) {
+                    // For chain docs (predecessor / renewal), always use their own URL directly
+                    const isChainDoc = !!selectedDoc && selectedDoc.id !== 'main-contract' && selectedDoc?.id !== contract?.id;
+                    if (isChainDoc && selectedDoc?.url) {
+                        return selectedDoc.url;
+                    }
+
+                    // 1. Signed PDF Base64 (highest priority for current contract)
+                    if (contract?.signedPdfBase64) {
                         console.log('📄 [ContractViewPage] Using signedPdfBase64');
                         return `data:application/pdf;base64,${contract.signedPdfBase64}`;
                     }
@@ -865,36 +850,62 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                     }
 
                     // 3. Contract's main file URL (points to saved PDF)
-                    if (contract.fileUrl) {
+                    if (contract?.fileUrl) {
                         console.log('📄 [ContractViewPage] Using contract.fileUrl');
                         return contract.fileUrl;
                     }
 
                     // 4. Fallback to Template (only if no contract file exists)
-                    if (contract.templateId && contractTemplate) {
+                    if (contract?.templateId && contractTemplate) {
                         console.log('📄 [ContractViewPage] Fallback: Using template URL');
                         return contractTemplate.fileData || contractTemplate.fileUrl || "";
                     }
 
                     return '';
                 })()}
-                fileName={selectedDoc?.name || contract.title}
-                title={selectedDoc?.name || contract.title}
-                contractId={contract.id}
-                // Always pass XFDF - the saved PDF may not embed form fields
-                initialXfdf={contract.xfdfData}
-                formFields={contract.formFields}
+                fileName={selectedDoc?.name || `${displayTitle}.pdf`}
+                title={selectedDoc?.name || displayTitle}
+                contractId={(() => {
+                    // For chain docs, use the chain doc's id; for main contract use contract.id
+                    if (selectedDoc && selectedDoc.id !== 'main-contract' && selectedDoc.id !== contract?.id) {
+                        return selectedDoc.id;
+                    }
+                    return contract?.id || '';
+                })()}
+                // Only pass XFDF/formFields for the main (current) contract — chain docs are read-only
+                initialXfdf={(!selectedDoc || selectedDoc.id === contract?.id) ? contract?.xfdfData : undefined}
+                formFields={(!selectedDoc || selectedDoc.id === contract?.id) ? contract?.formFields : undefined}
                 currentUserRole="contractor"
-                // ✅ Only allow saving if contract is NOT finalized
-                onSave={isFinalized ? undefined : handleSaveChanges}
-                readOnly={isFinalized}
-                editableFieldMode={isFinalized ? 'none' : 'empty-only'}
+                // Chain docs are always read-only; main contract is editable unless finalized
+                onSave={(!selectedDoc || selectedDoc.id === contract?.id) && !isFinalized ? handleSaveChanges : undefined}
+                readOnly={isFinalized || !!(selectedDoc && selectedDoc.id !== contract?.id)}
+                editableFieldMode={(!selectedDoc || selectedDoc.id === contract?.id) && !isFinalized ? 'empty-only' : 'none'}
                 showAnnotationNavigation={true}
-                parties={contract.parties}
+                parties={contract?.parties}
                 // ✅ Pass external signers info so contractor can't edit client party fields
-                externalSigners={contract.externalSigners}
+                externalSigners={contract?.externalSigners}
                 // ✅ Pass internal signers info so contractor can't edit internal client party fields
-                internalSigners={contract.internalSigners}
+                internalSigners={contract?.internalSigners}
+            />
+
+            {/* Contract History Panel (popover on desktop, drawer on mobile) */}
+            {contract && (
+                <ContractHistoryPanel
+                    open={historyPanelOpen}
+                    anchorEl={historyAnchorEl}
+                    onClose={() => setHistoryAnchorEl(null)}
+                    contractId={contract?.id}
+                    currentContractId={contract?.id}
+                    onSelectEntry={(entry) => setHistoryDialogEntry(entry)}
+                />
+            )}
+
+            {/* Contract History Detail Dialog */}
+            <ContractHistoryDialog
+                open={!!historyDialogEntry}
+                onClose={() => setHistoryDialogEntry(null)}
+                entry={historyDialogEntry}
+                currentContractId={contract?.id || ''}
             />
         </AppLayout>
     );

@@ -195,3 +195,48 @@ export async function GET(
         return NextResponse.json({ error: 'Failed to fetch contract' }, { status: 500 });
     }
 }
+
+/**
+ * DELETE /api/contracts/[id]
+ * Permanently delete a contract. Only terminated contracts may be deleted.
+ */
+export async function DELETE(
+    _request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const resolvedParams = await params;
+        const id = resolvedParams.id;
+
+        if (!id || !ObjectId.isValid(id)) {
+            return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+        }
+
+        const client = await clientPromise;
+        const db = client.db();
+
+        // Only terminated contracts can be permanently deleted
+        const contract = await db.collection('contracts').findOne(
+            { _id: new ObjectId(id) },
+            { projection: { status: 1 } }
+        );
+
+        if (!contract) {
+            return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
+        }
+
+        if (contract.status !== 'terminated' && contract.status !== 'draft') {
+            return NextResponse.json(
+                { error: 'Only draft or terminated contracts can be permanently deleted.' },
+                { status: 403 }
+            );
+        }
+
+        await db.collection('contracts').deleteOne({ _id: new ObjectId(id) });
+
+        return NextResponse.json({ success: true, message: 'Contract permanently deleted' });
+    } catch (e) {
+        console.error('Delete contract error:', e);
+        return NextResponse.json({ error: 'Failed to delete contract' }, { status: 500 });
+    }
+}

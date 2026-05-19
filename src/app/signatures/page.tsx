@@ -1,8 +1,9 @@
 'use client';
 
-import { Box, Typography, AlertColor, Paper } from '@mui/material';
+import { Box, Typography, AlertColor } from '@mui/material';
 import AppLayout from '@/components/layout/AppLayout';
-import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import EmptyState from '@/components/common/EmptyState';
+import { useState, useEffect, useMemo, useRef, Suspense, useCallback } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import { contractService } from '@/services/contractService';
 import { Contract, ContractStatus } from '@/types/contract';
@@ -14,16 +15,15 @@ import DrawIcon from '@mui/icons-material/Draw';
 import SignaturePadDialog from '@/components/contracts/SignaturePadDialog';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
 import { sendSignatureRequestEmail } from '@/services/emailService';
-import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+// import ReusableFilter, { FilterOption } from '@/components/common/ReusableFilter';
+import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { categoryService } from '@/services/categoryService';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import { useSearchParams } from 'next/navigation';
-
-const signingStatusOptions = [
-    { label: 'All Status', value: 'all' },
-    { label: 'Pending My Signature', value: 'pending' },
-    { label: 'Signed', value: 'completed' },
-];
+import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
+import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog';
+import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
+import { useTranslations } from 'next-intl';
 
 function SearchParamsReader({ onStatus }: { onStatus: (status: string) => void }) {
     const searchParams = useSearchParams();
@@ -40,18 +40,28 @@ function SearchParamsReader({ onStatus }: { onStatus: (status: string) => void }
  * Shows contracts assigned to the current user for signature
  */
 export default function SignaturesPage() {
+    const t = useTranslations('signatures');
+    const tFilters = useTranslations('filters');
+
+    const signingStatusOptions = [
+        { label: tFilters('allStatus'), value: 'all' },
+        { label: tFilters('pendingMySignature'), value: 'pending' },
+        { label: tFilters('signed'), value: 'completed' },
+        { label: tFilters('terminated'), value: 'terminated' },
+    ];
+
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Filter state
     const [searchQuery, setSearchQuery] = useState('');
     const [signingStatusFilter, setSigningStatusFilter] = useState<FilterOption[]>([signingStatusOptions[0]]);
-    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: 'All Categories', value: 'all' }]);
+    const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([
-        { label: 'All Categories', value: 'all' }
+        { label: tFilters('allCategories'), value: 'all' }
     ]);
 
     // Sync URL param → signing status filter on initial navigation (e.g. from dashboard)
@@ -84,6 +94,11 @@ export default function SignaturesPage() {
         return party || null;
     }, [currentUserInternalSigner, selectedContract]);
 
+    // History panel state
+    const [historyAnchorEl, setHistoryAnchorEl] = useState<HTMLElement | null>(null);
+    const [historyContractId, setHistoryContractId] = useState<string | null>(null);
+    const [historyDialogEntry, setHistoryDialogEntry] = useState<HistoryEntry | null>(null);
+
     // Signature Pad state
     const [signaturePadOpen, setSignaturePadOpen] = useState(false);
     const [contractToSign, setContractToSign] = useState<Contract | null>(null);
@@ -110,6 +125,8 @@ export default function SignaturesPage() {
         if (viewerOpen) return;
 
         pollIntervalRef.current = setInterval(() => {
+            // Close the history panel before refreshing so it doesn't shift during re-render
+            setHistoryAnchorEl(null);
             loadContracts();
         }, 12000); // Every 12 seconds
 
@@ -123,7 +140,7 @@ export default function SignaturesPage() {
     const loadCategories = () => {
         const categories = categoryService.getAllCategories();
         const options = [
-            { label: 'All Categories', value: 'all' },
+            { label: tFilters('allCategories'), value: 'all' },
             ...categories.map(cat => ({ label: cat.name, value: cat.name }))
         ];
         setCategoryOptions(options);
@@ -167,7 +184,17 @@ export default function SignaturesPage() {
             return false;
         });
 
-        setContracts(assignedContracts);
+        // Chain-head filtering: hide older versions when a newer version is also assigned.
+        // Terminated contracts are now included in the list so the natural check handles
+        // chains ending in termination too — the terminated entry IS in assignedIds.
+        const assignedIds = new Set(assignedContracts.map(c => c.id));
+        const headContracts = assignedContracts.filter(c => {
+            // If this contract's renewal is also assigned, this is an older version — hide it.
+            if (c.renewedContractId && assignedIds.has(c.renewedContractId)) return false;
+            return true;
+        });
+
+        setContracts(headContracts);
         setLoading(false);
     };
 
@@ -187,7 +214,9 @@ export default function SignaturesPage() {
             );
             const wantsPending = signingStatusFilter.some(f => f.value === 'pending');
             const wantsCompleted = signingStatusFilter.some(f => f.value === 'completed');
+            const wantsTerminated = signingStatusFilter.some(f => f.value === 'terminated');
             let passes = false;
+            if (wantsTerminated && contract.status === ContractStatus.TERMINATED) passes = true;
             if (wantsPending) {
                 const isPending =
                     (internalSigner?.status === 'unlocked') ||
@@ -438,40 +467,47 @@ export default function SignaturesPage() {
                     if (matched) setSigningStatusFilter([matched]);
                 }} />
             </Suspense>
-            <Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Header Section */}
-                <Box sx={{ mb: 1 }}>
-                    <Typography
-                        fontWeight={600}
-                        sx={{
-                            color: 'primary.main',
-                            fontSize: { xs: '1rem', sm: '1.5rem', md: '20px' },
-                        }}
-                    >
-                        Contracts for Signature
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        Review and sign contracts assigned to you
-                    </Typography>
+                <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    bgcolor: 'background.paper',
+                    px: 2,
+                    py: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="h5">
+                            {t('title')}
+                        </Typography>
+                        <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
+                        <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
+                            {t('description')}
+                        </Typography>
+                    </Box>
                 </Box>
 
                 {/* Filter Section */}
-                <ReusableFilter
+                {/* <ReusableFilter */}
+                <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search contracts or clients"
+                    searchPlaceholder={tFilters('searchContracts')}
                     filters={[
                         {
-                            label: 'Status',
+                            label: tFilters('status'),
                             value: signingStatusFilter,
                             onChange: (newValue) => setSigningStatusFilter(newValue || [signingStatusOptions[0]]),
                             options: signingStatusOptions,
                             multiple: true,
                         },
                         {
-                            label: 'Category',
+                            label: tFilters('category'),
                             value: categoryFilter,
-                            onChange: (newValue) => setCategoryFilter(newValue || [{ label: 'All Categories', value: 'all' }]),
+                            onChange: (newValue) => setCategoryFilter(newValue || [{ label: tFilters('allCategories'), value: 'all' }]),
                             options: categoryOptions,
                             multiple: true,
                         }
@@ -486,7 +522,7 @@ export default function SignaturesPage() {
                     dateFilterTitle="Filter by Contract Date Range"
                     filteredCount={filteredCount}
                     totalCount={totalContracts}
-                    countLabel="contracts"
+                    countLabel={tFilters('countContracts')}
                     hasActiveFilters={
                         searchQuery !== '' ||
                         signingStatusFilter.every(f => f.value !== 'all') ||
@@ -496,7 +532,7 @@ export default function SignaturesPage() {
                     onClearFilters={() => {
                         setSearchQuery('');
                         setSigningStatusFilter([signingStatusOptions[0]]);
-                        setCategoryFilter([{ label: 'All Categories', value: 'all' }]);
+                        setCategoryFilter([{ label: tFilters('allCategories'), value: 'all' }]);
                         setStartDate(null);
                         setEndDate(null);
                         setShowAdvancedFilters(false);
@@ -504,25 +540,14 @@ export default function SignaturesPage() {
                 />
 
                 {/* Contracts Grid */}
+                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 1, bgcolor: 'background.default' }}>
                 {filteredContracts.length === 0 && !loading ? (
-                    <Paper
-                        sx={{
-                            p: 4,
-                            textAlign: 'center',
-                            bgcolor: 'background.paper',
-                            borderRadius: 2,
-                            border: '1px dashed',
-                            borderColor: 'divider'
-                        }}
-                    >
-                        <DrawIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-                        <Typography variant="h6" color="text.secondary" gutterBottom>
-                            No Contracts to Sign
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            You don't have any contracts waiting for your signature at the moment.
-                        </Typography>
-                    </Paper>
+                    <EmptyState
+                        icon={<DrawIcon />}
+                        title="No Contracts to Sign"
+                        description="You don't have any contracts waiting for your signature at the moment."
+                        sx={{ minHeight: '55vh' }}
+                    />
                 ) : (
                     <Box
                         sx={{
@@ -544,11 +569,16 @@ export default function SignaturesPage() {
                                     contract={contract}
                                     onView={handleView}
                                     onDownload={handleDownload}
+                                    onHistory={(id, event) => {
+                                        setHistoryContractId(id);
+                                        setHistoryAnchorEl(event.currentTarget);
+                                    }}
                                 />
                             ))
                         )}
                     </Box>
                 )}
+                </Box>
 
                 {/* Viewer Dialog */}
                 {selectedContract && (
@@ -609,6 +639,24 @@ export default function SignaturesPage() {
                     />
                 )}
 
+
+                {/* Contract History Panel */}
+                <ContractHistoryPanel
+                    open={Boolean(historyAnchorEl)}
+                    anchorEl={historyAnchorEl}
+                    onClose={() => setHistoryAnchorEl(null)}
+                    contractId={historyContractId || ''}
+                    currentContractId={historyContractId || ''}
+                    onSelectEntry={(entry) => setHistoryDialogEntry(entry)}
+                />
+
+                {/* History detail dialog */}
+                <ContractHistoryDialog
+                    open={!!historyDialogEntry}
+                    onClose={() => setHistoryDialogEntry(null)}
+                    entry={historyDialogEntry}
+                    currentContractId={historyContractId || ''}
+                />
 
                 {/* Signature Pad Dialog */}
                 <SignaturePadDialog

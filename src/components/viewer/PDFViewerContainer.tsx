@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
-import { Box, CircularProgress } from '@mui/material';
+import { Box, CircularProgress, useTheme } from '@mui/material';
 
 interface PDFViewerContainerProps {
     documentUrl?: string;
@@ -85,12 +85,14 @@ export interface PDFViewerHandle {
     getFieldPartyAssignment: (fieldName: string) => { partyId: string; partyLabel: string } | null;
     getAllFieldPartyAssignments: () => Record<string, { partyId: string; partyLabel: string }>;
     highlightPartyFields: (partyId: string | null) => void;
+    autofillFields: (partyId: string | null, profileData: Record<string, string>) => number;
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
     ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole, currentUserEmail, canAddFormFields = false }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
+        const isDark = useTheme().palette.mode === 'dark';
         const [loading, setLoading] = useState(true);
         const [error, setError] = useState<string>('');
         const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1105,7 +1107,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 const fieldName = field.name || 'signed';
                                 field.setValue(fieldName);
                                 if (field.commit) {
-                                    try { field.commit(fieldName, widget); } catch (e) { /* ok */ }
+                                    try { field.commit(); } catch (e) { /* ok */ }
                                 }
                                 // ✅ Do NOT set ReadOnly — allows user to clear/remove signatures
 
@@ -1210,7 +1212,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                         const [r, g, b] = hexToRgb(partyColor);
                         widgetAnnotation.StrokeColor = new Core.Annotations.Color(r, g, b, 1);
-                        widgetAnnotation.StrokeThickness = 2;
+                        widgetAnnotation.StrokeThickness = 3;
                         annotationManager.redrawAnnotation(widgetAnnotation);
                         console.log(`🏷️ [PARTY ASSIGN] Updated visual indicator for "${fieldName}" with color ${partyColor}`);
                     } catch (colorError) {
@@ -1337,15 +1339,15 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         if (partyId === null) {
                             // Clear highlighting - restore original appearance
                             annot.Opacity = 1;
-                            annot.StrokeThickness = 1;
+                            annot.StrokeThickness = 2;
                         } else if (assignedParty === partyId) {
                             // Highlight this field
                             annot.Opacity = 1;
-                            annot.StrokeThickness = 3;
+                            annot.StrokeThickness = 4;
                         } else {
                             // Dim other fields
                             annot.Opacity = 0.4;
-                            annot.StrokeThickness = 1;
+                            annot.StrokeThickness = 2;
                         }
 
                         annotationManager.redrawAnnotation(annot);
@@ -1355,6 +1357,135 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                 } catch (error) {
                     console.error(`❌ [PARTY HIGHLIGHT] Error:`, error);
                 }
+            },
+
+            /**
+             * Autofill text fields for a given party using profile data.
+             * Skips signature fields, read-only fields, already-filled fields, and wrong-party fields.
+             * Returns the count of fields successfully filled.
+             */
+            autofillFields: (partyId: string | null, profileData: Record<string, string>): number => {
+                if (!viewerInstance.current) return 0;
+
+                let filledCount = 0;
+                let firstFilledWidget: any = null;
+
+                try {
+                    const { Core } = viewerInstance.current;
+                    const annotationManager = Core.annotationManager;
+                    const fieldManager = annotationManager.getFieldManager();
+                    const allFields = fieldManager.getFields() || [];
+                    const fieldsArray = Array.isArray(allFields) ? allFields : Array.from(allFields);
+
+                    fieldsArray.forEach((field: any) => {
+                        try {
+                            const fieldName: string = field.name;
+                            if (!fieldName) return;
+
+                            // Skip signature fields
+                            const widgets = field.widgets || [];
+                            const isSignature = field.type === 'Sig' ||
+                                (widgets[0] instanceof Core.Annotations.SignatureWidgetAnnotation);
+                            if (isSignature) return;
+
+                            // Skip read-only fields
+                            if (field.flags?.ReadOnly || field.isReadOnly?.()) return;
+
+                            // Skip if field already has a value
+                            const currentValue = field.getValue ? field.getValue() : '';
+                            if (currentValue && currentValue.toString().trim() !== '') return;
+
+                            // Check party assignment when partyId is specified
+                            if (partyId !== null) {
+                                const fieldDef = formFieldsRef.current?.find((f: any) => f.name === fieldName);
+                                const assignedParty =
+                                    fieldDef?.assignedParty ||
+                                    fieldPartyAssignmentsRef.current.get(fieldName)?.partyId ||
+                                    widgets[0]?.getCustomData?.('assignedParty');
+
+                                // Skip fields not assigned to the selected party
+                                if (!assignedParty || assignedParty !== partyId) return;
+                            }
+
+                            // Look up the explicit profileKey mapping for this field
+                            const fieldDef = formFieldsRef.current?.find((f: any) => f.name === fieldName);
+                            const profileKey: string | null =
+                                fieldDef?.profileKey ||
+                                widgets[0]?.getCustomData?.('profileKey') ||
+                                null;
+
+                            if (!profileKey) return;
+
+                            const matchedValue = profileData[profileKey]?.trim();
+
+                            if (!matchedValue) return;
+
+                            // Set value in the PDF field
+                            if (field.setValue && typeof field.setValue === 'function') {
+                                field.setValue(matchedValue);
+                                capturedFieldValuesRef.current.set(fieldName, matchedValue);
+
+                                // Redraw widget to show the new value visually
+                                if (widgets.length > 0) {
+                                    annotationManager.redrawAnnotation(widgets[0]);
+                                    
+                                    // Track the first filled widget for scrolling
+                                    if (!firstFilledWidget) {
+                                        firstFilledWidget = widgets[0];
+                                    } else {
+                                        // Update to the structurally first widget if multiple are filled
+                                        if (widgets[0].PageNumber < firstFilledWidget.PageNumber || 
+                                            (widgets[0].PageNumber === firstFilledWidget.PageNumber && widgets[0].Y < firstFilledWidget.Y)) {
+                                            firstFilledWidget = widgets[0];
+                                        }
+                                    }
+                                }
+
+                                // Notify parent (updates filledFieldValues state in CreateContractDialog / DocumentViewerDialog)
+                                if (onFieldChangeRef.current) {
+                                    onFieldChangeRef.current(fieldName, matchedValue);
+                                }
+
+                                filledCount++;
+                            }
+                        } catch (fieldError) {
+                            console.warn(`⚠️ [AUTOFILL] Skipping field due to error:`, fieldError);
+                        }
+                    });
+
+                    // Scroll to the first filled widget if we found any
+                    if (firstFilledWidget && filledCount > 0) {
+                        const { documentViewer } = Core;
+                        try {
+                            const scrollContainer = documentViewer.getScrollViewElement();
+                            if (scrollContainer) scrollContainer.style.scrollBehavior = 'smooth';
+                            
+                            annotationManager.deselectAllAnnotations();
+                            
+                            (async () => {
+                                if (documentViewer.getCurrentPage() !== firstFilledWidget.PageNumber) {
+                                    documentViewer.setCurrentPage(firstFilledWidget.PageNumber);
+                                    await new Promise(resolve => setTimeout(resolve, 250));
+                                }
+                                
+                                annotationManager.selectAnnotation(firstFilledWidget);
+                                await new Promise(resolve => setTimeout(resolve, 50));
+                                annotationManager.jumpToAnnotation(firstFilledWidget);
+                                flashHighlight(Core, firstFilledWidget);
+                                
+                                setTimeout(() => { if (scrollContainer) scrollContainer.style.scrollBehavior = 'auto'; }, 600);
+                            })();
+                        } catch (navError) {
+                            console.warn(`⚠️ [AUTOFILL] Failed to navigate to first filled field:`, navError);
+                        }
+                    }
+
+                    console.log(`✅ [AUTOFILL] Filled ${filledCount} fields for party: ${partyId || 'all'}`);
+                } catch (error) {
+                    console.error(`❌ [AUTOFILL] Unexpected error:`, error);
+                }
+
+                return filledCount;
             },
 
             /**
@@ -1702,6 +1833,14 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
             },
         }));
 
+        // Sync app theme → viewer theme whenever it changes
+        useEffect(() => {
+            if (!viewerInstance.current) return;
+            viewerInstance.current.UI.setTheme(
+                isDark ? viewerInstance.current.UI.Theme.DARK : viewerInstance.current.UI.Theme.LIGHT
+            );
+        }, [isDark]);
+
         // Initialize viewer once (on mount)
         useEffect(() => {
             if (!viewerDiv.current || viewerInstance.current) return;
@@ -1823,6 +1962,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         // ✅ Set default tool mode to Pan (View mode) instead of Insert
                         UI.setToolMode('Pan');
                         console.log('✅ Default tool mode set to Pan (View)');
+                        // Sync viewer theme with app theme on init
+                        UI.setTheme(isDark ? UI.Theme.DARK : UI.Theme.LIGHT);
                     } catch (e) {
                         console.error('Failed to enable features:', e);
                     }
@@ -1865,19 +2006,31 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             UI.setSelectedTab('signatureModal', 'textSignaturePanelButton');
                             console.log('✅ Default signature tab set to Type');
 
-                            // Pre-populate the "Type" signature input with the current user's email.
+                            // Pre-populate the "Type" signature input with the current user's name or email.
                             // External signers don't have a session, so the email is passed via the
                             // currentUserEmail prop. Internal users fall back to sessionStorage.
-                            const emailForSignature = currentUserEmail || (() => {
-                                try {
-                                    const raw = sessionStorage.getItem('cms_current_user');
-                                    return raw ? JSON.parse(raw)?.email : null;
-                                } catch { return null; }
-                            })();
-                            if (emailForSignature) {
-                               const nameFromEmail = emailForSignature.split('@')[0];
-                                Core.annotationManager.setCurrentUser(nameFromEmail);
-                                console.log('✅ Typed signature pre-populated with:', nameFromEmail);
+                            let signatureName = null;
+                            try {
+                                const raw = sessionStorage.getItem('cms_current_user');
+                                const parsedUser = raw ? JSON.parse(raw) : null;
+                                
+                                if (parsedUser?.name) {
+                                    signatureName = parsedUser.name;
+                                } else {
+                                    const emailForSignature = currentUserEmail || parsedUser?.email;
+                                    if (emailForSignature) {
+                                        signatureName = emailForSignature.split('@')[0];
+                                    }
+                                }
+                            } catch {
+                                if (currentUserEmail) {
+                                    signatureName = currentUserEmail.split('@')[0];
+                                }
+                            }
+
+                            if (signatureName) {
+                                Core.annotationManager.setCurrentUser(signatureName);
+                                console.log('✅ Typed signature pre-populated with:', signatureName);
                             }
                         } catch (tabErr) {
                             console.warn('⚠️ Could not reorder signature tabs:', tabErr);
@@ -2485,7 +2638,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                 };
                                                 const [r, g, b] = hexToRgb(partyColor);
                                                 (annot as any).StrokeColor = new Core.Annotations.Color(r, g, b, 1);
-                                                (annot as any).StrokeThickness = 1;
+                                                (annot as any).StrokeThickness = 3;
                                             } catch (e) {
                                                 // Ignore color errors
                                             }
@@ -3721,6 +3874,13 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                             console.log('✅ Setting loading to false');
                             setLoading(false);
+
+                            // Set initial zoom to fit-width so the document fills the editor width
+                            try {
+                                Core.documentViewer.setFitMode(Core.documentViewer.FitMode.FitWidth);
+                            } catch (e) {
+                                console.warn('⚠️ Could not set fit-width zoom:', e);
+                            }
 
                             // ✅ CRITICAL: Delay setting isLoadingInitialDocument to false
                             // This allows the widget rebuild process to complete first

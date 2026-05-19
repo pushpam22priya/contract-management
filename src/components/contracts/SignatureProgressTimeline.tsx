@@ -9,16 +9,18 @@
  */
 
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import {
     Box,
     Typography,
     Chip,
     Paper,
     Alert,
-    Button,
     Tooltip,
-    CircularProgress,
+    useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import AppButton from '@/components/common/AppButton';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
@@ -48,30 +50,60 @@ export default function SignatureProgressTimeline({
     finalizeSuccess,
     onFinalize,
 }: SignatureProgressTimelineProps) {
+    const t = useTranslations('contractDetail');
+    const theme = useTheme();
+    const primaryColor = theme.palette.primary.main;
+    const isDark = theme.palette.mode === 'dark';
+
+    // Theme palette tokens — no hardcoded hex
+    const successColor = theme.palette.success.main;
+    const successDark  = theme.palette.success.dark;
+    const warningColor = theme.palette.warning.main;
+    const infoColor    = theme.palette.info.main;
+
+    // Derive parties from formFields when contract.parties is empty (e.g. renewal contracts)
+    const effectiveParties: { id: string; color: string; label: string }[] = React.useMemo(() => {
+        if (contract.parties && contract.parties.length > 0) return contract.parties;
+        const seen = new Map<string, { id: string; color: string; label: string }>();
+        for (const f of (contract.formFields || [])) {
+            if (f.assignedParty && !seen.has(f.assignedParty)) {
+                seen.set(f.assignedParty, {
+                    id: f.assignedParty,
+                    label: f.partyLabel || f.assignedParty,
+                    color: f.partyColor || '#666',
+                });
+            }
+        }
+        return Array.from(seen.values());
+    }, [contract.parties, contract.formFields]);
+
     return (
         <Paper
             elevation={0}
             sx={{
-                mt: 2,
                 p: 1,
                 border: '1px solid',
-                borderColor: isFinalized ? '#a5d6a7' : 'divider',
+                borderColor: isFinalized
+                    ? alpha(successColor, isDark ? 0.28 : 0.5)
+                    : 'divider',
                 borderRadius: 2.5,
-                bgcolor: isFinalized ? '#f1f8e9' : 'background.paper',
+                bgcolor: isFinalized
+                    ? alpha(successColor, isDark ? 0.06 : 0.05)
+                    : isDark ? 'background.paper' : '#f8f9fb',
             }}
         >
             {/* Header row */}
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="subtitle2" fontWeight={700} sx={{ fontSize: '1rem' }}>
-                        {isFinalized ? 'Contract Finalized' : 'Signature Progress'}
+                    <Typography variant="h6">
+                        {isFinalized ? t('contractFinalized') : t('signatureProgress')}
                     </Typography>
                     {currentOrder && !isFinalized && (
                         <Chip
-                            label={`Order ${currentOrder} active`}
+                            label={t('orderActive', { order: currentOrder })}
                             size="small"
                             sx={{
-                                bgcolor: '#0f766e',
+                                bgcolor: primaryColor,
                                 color: '#fff',
                                 fontWeight: 600,
                                 fontSize: '0.65rem',
@@ -82,7 +114,7 @@ export default function SignatureProgressTimeline({
                 </Box>
                 {isFinalized && contract.finalizedAt && (
                     <Typography variant="caption" color="text.secondary">
-                        {new Date(contract.finalizedAt).toLocaleDateString()}
+                        {new Date(contract.finalizedAt).toLocaleDateString('en-GB')}
                     </Typography>
                 )}
             </Box>
@@ -95,7 +127,6 @@ export default function SignatureProgressTimeline({
                     const allAtOrder = [...internalAtOrder, ...externalAtOrder];
                     const allComplete = allAtOrder.every((s: any) => s.status === 'completed');
                     const isCurrentOrder = order === currentOrder;
-                    const isFutureOrder = currentOrder ? order > currentOrder : (!isFinalized && !allComplete);
                     const isLast = orderIdx === uniqueOrders.length - 1;
 
                     return (
@@ -107,7 +138,9 @@ export default function SignatureProgressTimeline({
                                     <Box sx={{
                                         flex: 1,
                                         height: 2,
-                                        bgcolor: allComplete ? '#a5d6a7' : '#e0e0e0',
+                                        bgcolor: allComplete
+                                            ? alpha(successColor, 0.40)
+                                            : alpha(theme.palette.divider, isDark ? 1 : 0.5),
                                     }} />
                                 ) : (
                                     <Box sx={{ flex: 1 }} />
@@ -123,9 +156,12 @@ export default function SignatureProgressTimeline({
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         flexShrink: 0,
-                                        bgcolor: allComplete ? '#2e7d32' : isCurrentOrder ? '#0f766e' : '#bdbdbd',
-                                        border: isCurrentOrder && !allComplete ? '2px solid #0f766e' : 'none',
-                                        boxShadow: isCurrentOrder ? '0 0 0 3px rgba(15,118,110,0.15)' : 'none',
+                                        bgcolor: allComplete
+                                            ? successDark
+                                            : isCurrentOrder ? primaryColor
+                                            : alpha(theme.palette.text.disabled, 0.3),
+                                        border: isCurrentOrder && !allComplete ? `2px solid ${primaryColor}` : 'none',
+                                        boxShadow: isCurrentOrder ? `0 0 0 3px ${alpha(primaryColor, 0.15)}` : 'none',
                                     }}
                                 >
                                     {allComplete ? (
@@ -142,15 +178,16 @@ export default function SignatureProgressTimeline({
                                     <Box sx={{
                                         flex: 1,
                                         height: 2,
-                                        // Color based on whether the NEXT order's signers are all complete
-                                        bgcolor: allComplete ? '#a5d6a7' : '#e0e0e0',
+                                        bgcolor: allComplete
+                                            ? alpha(successColor, 0.40)
+                                            : alpha(theme.palette.divider, isDark ? 1 : 0.5),
                                     }} />
                                 ) : (
                                     <Box sx={{ flex: 1 }} />
                                 )}
                             </Box>
 
-                            {/* Background card wrapping label + signer cards — color varies by state */}
+                            {/* Background card wrapping label + signer cards */}
                             <Box sx={{
                                 mt: 0.5,
                                 mx: 0.25,
@@ -159,118 +196,121 @@ export default function SignatureProgressTimeline({
                                 width: 'calc(100% - 4px)',
                                 border: '1px solid',
                                 bgcolor: allComplete
-                                    ? '#e8f5e9'
+                                    ? alpha(successColor, isDark ? 0.08 : 0.06)
                                     : isCurrentOrder
-                                        ? 'rgba(15,118,110,0.06)'
-                                        : '#f5f5f5',
+                                        ? alpha(primaryColor, 0.06)
+                                        : alpha(theme.palette.text.primary, isDark ? 0.03 : 0.02),
                                 borderColor: allComplete
-                                    ? '#c8e6c9'
+                                    ? alpha(successColor, isDark ? 0.22 : 0.30)
                                     : isCurrentOrder
-                                        ? 'rgba(15,118,110,0.22)'
-                                        : '#e0e0e0',
+                                        ? alpha(primaryColor, 0.22)
+                                        : 'divider',
                             }}>
-                            {/* Order label */}
-                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25, mb: 0.5 }}>
-                                {isCurrentOrder && !allComplete && (
-                                    <Typography variant="caption" sx={{
-                                        fontSize: '0.55rem',
-                                        color: '#0f766e',
-                                        fontWeight: 700,
-                                    }}>
-                                        In Progress
-                                    </Typography>
-                                )}
-                                {!isCurrentOrder && !allComplete && (
-                                    <Typography variant="caption" sx={{ fontSize: '0.55rem', color: 'text.disabled' }}>
-                                        Pending
-                                    </Typography>
-                                )}
-                                {allComplete && (
-                                    <Typography variant="caption" sx={{ fontSize: '0.55rem', color: '#2e7d32', fontWeight: 700 }}>
-                                        Done
-                                    </Typography>
-                                )}
-                            </Box>
+                                {/* Order label */}
+                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25, mb: 0.5 }}>
+                                    {isCurrentOrder && !allComplete && (
+                                        <Typography variant="caption" sx={{ fontSize: '0.55rem', color: primaryColor, fontWeight: 700 }}>
+                                            {t('inProgress')}
+                                        </Typography>
+                                    )}
+                                    {!isCurrentOrder && !allComplete && (
+                                        <Typography variant="caption" sx={{ fontSize: '0.55rem' }} color="text.disabled">
+                                            {t('pending')}
+                                        </Typography>
+                                    )}
+                                    {allComplete && (
+                                        <Typography variant="caption" sx={{ fontSize: '0.55rem', color: isDark ? alpha(successColor, 0.65) : successColor, fontWeight: 700 }}>
+                                            {t('done')}
+                                        </Typography>
+                                    )}
+                                </Box>
 
-                            {/* Signers cards — stacked below */}
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, width: '100%' }}>
-                                {allAtOrder.map((signer: any, index: number) => {
-                                    const isInternal = internalAtOrder.includes(signer);
-                                    const partyColor = contract.parties?.find((p: any) => p.id === signer.partyId)?.color || '#666';
-                                    const isCompleted = signer.status === 'completed';
-                                    const isUnlocked = signer.status === 'unlocked';
+                                {/* Signers cards */}
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, width: '100%' }}>
+                                    {allAtOrder.map((signer: any, index: number) => {
+                                        const isInternal = internalAtOrder.includes(signer);
+                                        const partyColor = effectiveParties.find((p: any) => p.id === signer.partyId)?.color || '#666';
+                                        const isCompleted = signer.status === 'completed';
+                                        const isUnlocked = signer.status === 'unlocked';
 
-                                    return (
-                                        <Box
-                                            key={signer.token || signer.email || index}
-                                            sx={{
-                                                display: 'flex',
-                                                alignItems: 'flex-start',
-                                                gap: 0.75,
-                                                py: 0.5,
-                                                px: 1,
-                                                borderRadius: 1.5,
-                                                bgcolor: isCompleted ? '#e8f5e9' : isUnlocked ? '#fff8e1' : '#fafafa',
-                                                border: '1px solid',
-                                                borderColor: isCompleted ? '#c8e6c9' : isUnlocked ? '#fff0b8' : '#eee',
-                                                transition: 'all 0.15s',
-                                            }}
-                                        >
-                                            {/* Signer info */}
-                                            <Box sx={{ minWidth: 0, flex: 1 }}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                    {/* Status icon — inline with name */}
-                                                    {isCompleted ? (
-                                                        <CheckCircleIcon sx={{ color: '#2e7d32', fontSize: 14, flexShrink: 0 }} />
-                                                    ) : isUnlocked ? (
-                                                        <HourglassEmptyIcon sx={{ color: '#f9a825', fontSize: 14, flexShrink: 0 }} />
-                                                    ) : (
-                                                        <Box sx={{
-                                                            width: 14,
-                                                            height: 14,
-                                                            borderRadius: '50%',
-                                                            border: '2px solid #ccc',
-                                                            flexShrink: 0,
-                                                        }} />
-                                                    )}
-                                                    {/* Party dot — always before name */}
-                                                    <Tooltip title={signer.partyLabel} arrow>
-                                                        <Box sx={{
-                                                            width: 8,
-                                                            height: 8,
-                                                            borderRadius: '50%',
-                                                            bgcolor: partyColor,
-                                                            flexShrink: 0,
-                                                        }} />
-                                                    </Tooltip>
-                                                    <Typography variant="caption" sx={{
-                                                        fontWeight: 600,
-                                                        fontSize: '0.65rem',
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
-                                                        whiteSpace: 'nowrap',
-                                                        color: isCompleted ? '#1b5e20' : 'text.primary',
-                                                    }}>
-                                                        {signer.name || signer.email}
-                                                    </Typography>
-                                                    {isInternal ? (
-                                                        <PersonIcon sx={{ fontSize: 11, color: '#64b5f6' }} />
-                                                    ) : (
-                                                        <EmailIcon sx={{ fontSize: 11, color: '#ffb74d' }} />
-                                                    )}
+                                        return (
+                                            <Box
+                                                key={signer.token || signer.email || index}
+                                                sx={{
+                                                    display: 'flex',
+                                                    alignItems: 'flex-start',
+                                                    gap: 0.75,
+                                                    py: 0.5,
+                                                    px: 1,
+                                                    borderRadius: 1.5,
+                                                    bgcolor: isCompleted
+                                                        ? alpha(successColor, isDark ? 0.08 : 0.06)
+                                                        : isUnlocked
+                                                            ? alpha(warningColor, isDark ? 0.08 : 0.06)
+                                                            : alpha(theme.palette.text.primary, isDark ? 0.03 : 0.02),
+                                                    border: '1px solid',
+                                                    borderColor: isCompleted
+                                                        ? alpha(successColor, isDark ? 0.22 : 0.30)
+                                                        : isUnlocked
+                                                            ? alpha(warningColor, isDark ? 0.22 : 0.25)
+                                                            : 'divider',
+                                                    transition: 'all 0.15s',
+                                                }}
+                                            >
+                                                {/* Signer info */}
+                                                <Box sx={{ minWidth: 0, flex: 1 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                        {/* Status icon */}
+                                                        {isCompleted ? (
+                                                            <CheckCircleIcon sx={{ color: successColor, fontSize: 14, flexShrink: 0 }} />
+                                                        ) : isUnlocked ? (
+                                                            <HourglassEmptyIcon sx={{ color: warningColor, fontSize: 14, flexShrink: 0 }} />
+                                                        ) : (
+                                                            <Box sx={{
+                                                                width: 14,
+                                                                height: 14,
+                                                                borderRadius: '50%',
+                                                                border: `2px solid ${alpha(theme.palette.text.disabled, 0.4)}`,
+                                                                flexShrink: 0,
+                                                            }} />
+                                                        )}
+                                                        {/* Party dot */}
+                                                        <Tooltip title={signer.partyLabel} arrow>
+                                                            <Box sx={{
+                                                                width: 8,
+                                                                height: 8,
+                                                                borderRadius: '50%',
+                                                                bgcolor: partyColor,
+                                                                flexShrink: 0,
+                                                            }} />
+                                                        </Tooltip>
+                                                        <Typography variant="caption" sx={{
+                                                            fontWeight: 600,
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                            color: isCompleted ? (isDark ? alpha(successColor, 0.65) : successColor) : 'text.primary',
+                                                        }}>
+                                                            {signer.name || signer.email}
+                                                        </Typography>
+                                                        {isInternal ? (
+                                                            <PersonIcon sx={{ fontSize: 11, color: infoColor }} />
+                                                        ) : (
+                                                            <EmailIcon sx={{ fontSize: 11, color: warningColor }} />
+                                                        )}
+                                                    </Box>
                                                 </Box>
+                                                {/* Completion date */}
+                                                {isCompleted && signer.completedAt && (
+                                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem', lineHeight: 1, flexShrink: 0, mt: 0.25 }}>
+                                                        {new Date(signer.completedAt).toLocaleDateString('en-GB')}
+                                                    </Typography>
+                                                )}
                                             </Box>
-                                            {/* Completion date — top-right corner */}
-                                            {isCompleted && signer.completedAt && (
-                                                <Typography variant="caption" sx={{ fontSize: '0.55rem', color: '#66bb6a', lineHeight: 1, flexShrink: 0, mt: 0.25 }}>
-                                                    {new Date(signer.completedAt).toLocaleDateString()}
-                                                </Typography>
-                                            )}
-                                        </Box>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </Box>
                             </Box>
-                            </Box>{/* end background card */}
                         </Box>
                     );
                 })}
@@ -281,48 +321,48 @@ export default function SignatureProgressTimeline({
                 <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                     {canFinalize ? (
                         <Box>
-                            <Alert severity="success" sx={{ mb: 1.5, py: 0.25, '& .MuiAlert-message': { fontSize: '0.8rem' } }}>
-                                <strong>All parties completed!</strong> Finalize to activate and notify signers.
+                            <Alert severity="success" sx={{ mb: 1.5, py: 0.25, '& .MuiAlert-message': { fontSize: '0.75rem' } }}>
+                                <Typography variant="body2" color="inherit">{t('allPartiesCompleted')}</Typography>
                             </Alert>
                             {finalizeError && (
-                                <Alert severity="error" sx={{ mb: 1, py: 0.25, '& .MuiAlert-message': { fontSize: '0.8rem' } }}>
-                                    {finalizeError}
+                                <Alert severity="error" sx={{ mb: 1, py: 0.25, '& .MuiAlert-message': { fontSize: '0.75rem' } }}>
+                                    <Typography variant="body2" color="inherit">{finalizeError}</Typography>
                                 </Alert>
                             )}
                             {finalizeSuccess && (
-                                <Alert severity="success" sx={{ mb: 1, py: 0.25, '& .MuiAlert-message': { fontSize: '0.8rem' } }}>
-                                    Contract finalized! Emails sent to all signers.
+                                <Alert severity="success" sx={{ mb: 1, py: 0.25, '& .MuiAlert-message': { fontSize: '0.75rem' } }}>
+                                    <Typography variant="body2" color="inherit">{t('finalizeSuccess')}</Typography>
                                 </Alert>
                             )}
-                            <Button
+                            <AppButton
                                 variant="contained"
                                 size="small"
                                 onClick={onFinalize}
-                                disabled={finalizing || finalizeSuccess}
-                                startIcon={finalizing ? <CircularProgress size={16} color="inherit" /> : <DoneAllIcon sx={{ fontSize: 16 }} />}
+                                disabled={finalizeSuccess}
+                                loading={finalizing}
+                                startIcon={<DoneAllIcon sx={{ fontSize: 16 }} />}
                                 sx={{
                                     fontWeight: 600,
                                     fontSize: '0.8rem',
-                                    textTransform: 'none',
                                     borderRadius: 1.5,
                                     px: 2,
                                 }}
                             >
-                                {finalizing ? 'Finalizing...' : 'Finalize Contract'}
-                            </Button>
+                                {finalizing ? t('finalizing') : t('finalizeContract')}
+                            </AppButton>
                         </Box>
                     ) : (
-                        <Alert severity="info" sx={{ py: 0.25, '& .MuiAlert-message': { fontSize: '0.8rem' } }}>
-                           Waiting for all parties to complete before finalization.
+                        <Alert severity="info" sx={{ py: 0.25, '& .MuiAlert-message': { fontSize: '0.75rem' } }}>
+                            <Typography variant="body2" color="inherit">{t('waitingForParties')}</Typography>
                         </Alert>
                     )}
                 </Box>
             )}
 
             {isFinalized && (
-                <Box sx={{ mt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
-                    <Alert severity="success" icon={<DoneAllIcon />} sx={{ py: 0.25, '& .MuiAlert-message': { fontSize: '0.8rem' } }}>
-                        Contract finalized — all signers have received a copy.
+                <Box sx={{ mt: 1, borderColor: 'divider'}}>
+                    <Alert icon={<DoneAllIcon />} sx={{ py: 0.25, '& .MuiAlert-message': { fontSize: '0.75rem' }, '& .MuiAlert-icon': { color: isDark ? alpha(successColor, 0.75) : successColor } }}>
+                        <Typography variant="body2" color="text.primary">{t('finalizedCopy')}</Typography>
                     </Alert>
                 </Box>
             )}

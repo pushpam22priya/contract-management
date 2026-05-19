@@ -1,11 +1,11 @@
 'use client';
 
+import AppButton from '@/components/common/AppButton';
 import {
     Dialog,
     DialogTitle,
     DialogContent,
-    DialogActions,
-    Button,
+    DialogActions, 
     Typography,
     Box,
 } from '@mui/material';
@@ -33,21 +33,20 @@ export default function SignAllDialog({ open, onClose, onSignAll, emptyFieldCoun
                 </Box>
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
-                <Button onClick={onClose} color="inherit">
+                <AppButton variant="outlined" onClick={onClose}>
                     No, Just This One
-                </Button>
-                <Button
+                </AppButton>
+                <AppButton
                     onClick={onSignAll}
                     variant="contained"
                     sx={{
                         bgcolor: '#115e59',
                         '&:hover': { bgcolor: '#0f4c47' },
-                        textTransform: 'none',
                         fontWeight: 600,
                     }}
                 >
                     Yes, Sign All ({emptyFieldCount})
-                </Button>
+                </AppButton>
             </DialogActions>
         </Dialog>
     );

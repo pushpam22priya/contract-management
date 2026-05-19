@@ -1,16 +1,17 @@
 'use client';
 
+import AppButton from '@/components/common/AppButton';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import {
     Box,
     Typography,
     CircularProgress,
-    Alert,
-    Button,
+    Alert, 
     Paper,
     Tooltip,
     Chip,
+    useTheme,
 } from '@mui/material';
 import { CheckCircle, Error, Save, Download } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
@@ -41,6 +42,7 @@ const PDFViewerContainer = dynamic(
 export default function PublicSigningPage() {
     const params = useParams();
     const token = params.token as string;
+    const isDark = useTheme().palette.mode === 'dark';
 
     // State
     const [loading, setLoading] = useState(true);
@@ -78,6 +80,27 @@ export default function PublicSigningPage() {
     // ✅ Track if validation has been triggered (by clicking submit)
     const [validationTriggered, setValidationTriggered] = useState(false);
 
+    // Derive parties from formFields when signatureRequest.parties is empty (renewal contracts)
+    const effectiveParties = useMemo((): PartyConfiguration[] => {
+        if (!signatureRequest) return [];
+        if (signatureRequest.parties && signatureRequest.parties.length > 0) {
+            return signatureRequest.parties as PartyConfiguration[];
+        }
+        // Fallback: derive from formFields assignedParty metadata
+        const seen = new Map<string, PartyConfiguration>();
+        for (const f of (signatureRequest.formFields || [])) {
+            if (f.assignedParty && !seen.has(f.assignedParty)) {
+                seen.set(f.assignedParty, {
+                    id: f.assignedParty,
+                    label: f.partyLabel || f.assignedParty,
+                    color: f.partyColor || '#888',
+                    order: seen.size + 1,
+                });
+            }
+        }
+        return Array.from(seen.values());
+    }, [signatureRequest]);
+
     // The current user's assigned party IDs (normalised to an array)
     const userPartyIds = useMemo(() => {
         if (!signatureRequest?.assignedParty) return [];
@@ -88,15 +111,15 @@ export default function PublicSigningPage() {
 
     // Get the user's assigned party label(s) for display
     const userPartyLabels = useMemo(() => {
-        if (!signatureRequest?.assignedParty || !signatureRequest?.parties) return '';
+        if (!signatureRequest?.assignedParty) return '';
         const partyIds = Array.isArray(signatureRequest.assignedParty)
             ? signatureRequest.assignedParty
             : [signatureRequest.assignedParty];
         const labels = partyIds
-            .map(id => signatureRequest.parties?.find((p: PartyConfiguration) => p.id === id)?.label)
+            .map(id => effectiveParties.find(p => p.id === id)?.label)
             .filter(Boolean);
         return labels.join(', ');
-    }, [signatureRequest]);
+    }, [signatureRequest, effectiveParties]);
 
     const handleFieldChange = (fieldName: string, value: any) => {
         const newValue = value?.toString() || '';
@@ -183,10 +206,9 @@ export default function PublicSigningPage() {
     // Note: Fields already filled by contractor are in signatureRequest.fieldValues and are read-only
     // MULTI-PARTY: If signer has an assignedParty, only validate that party
     const partyValidationWarning = useMemo(() => {
-        if (!signatureRequest?.formFields || !signatureRequest?.parties) return null;
+        if (!signatureRequest?.formFields || effectiveParties.length === 0) return null;
 
         const formFields = signatureRequest.formFields;
-        const allParties = signatureRequest.parties as PartyConfiguration[];
         const prefilledValues = signatureRequest.fieldValues || {};
 
         // MULTI-PARTY: If signer has assigned party/parties, only validate those
@@ -195,9 +217,9 @@ export default function PublicSigningPage() {
                 const ids = Array.isArray(signatureRequest.assignedParty)
                     ? signatureRequest.assignedParty
                     : [signatureRequest.assignedParty];
-                return allParties.filter(p => ids.includes(p.id));
+                return effectiveParties.filter(p => ids.includes(p.id));
             })()
-            : allParties;
+            : effectiveParties;
 
         const partialParties: { party: PartyConfiguration; filled: number; total: number; missing: string[] }[] = [];
 
@@ -434,12 +456,12 @@ export default function PublicSigningPage() {
      * These are all parties EXCEPT the client's assigned party
      */
     const protectedPartyIds = useMemo(() => {
-        if (!signatureRequest?.parties || !signatureRequest?.assignedParty) {
+        if (!signatureRequest?.assignedParty || effectiveParties.length === 0) {
             // Legacy mode - protect nothing (undefined means no restrictions)
             return undefined;
         }
 
-        const allPartyIds = (signatureRequest.parties as PartyConfiguration[]).map(p => p.id);
+        const allPartyIds = effectiveParties.map(p => p.id);
         const userPartyIds = Array.isArray(signatureRequest.assignedParty)
             ? signatureRequest.assignedParty
             : [signatureRequest.assignedParty];
@@ -448,13 +470,13 @@ export default function PublicSigningPage() {
         const protectedIds = allPartyIds.filter(id => !userPartyIds.includes(id));
         console.log(`🛡️ [PublicSigningPage] Protected party IDs (cannot modify signatures): ${protectedIds.join(', ')}`);
         return protectedIds;
-    }, [signatureRequest]);
+    }, [signatureRequest, effectiveParties]);
 
     /**
      * Get the assigned party configuration(s) for display
      */
     const assignedPartyConfigs = useMemo(() => {
-        if (!signatureRequest?.assignedParty || !signatureRequest?.parties) return [];
+        if (!signatureRequest?.assignedParty) return [];
 
         // Normalize to array
         const partyIds = Array.isArray(signatureRequest.assignedParty)
@@ -462,9 +484,9 @@ export default function PublicSigningPage() {
             : [signatureRequest.assignedParty];
 
         return partyIds
-            .map(pid => signatureRequest.parties?.find((p: PartyConfiguration) => p.id === pid))
+            .map(pid => effectiveParties.find(p => p.id === pid))
             .filter(Boolean) as PartyConfiguration[];
-    }, [signatureRequest]);
+    }, [signatureRequest, effectiveParties]);
 
     /**
      * Handle signature submission
@@ -620,18 +642,18 @@ export default function PublicSigningPage() {
     // Completed state
     if (completed) {
         return (
-            <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50', p: 3 }}>
-                <Paper sx={{ p: 4, maxWidth: 500, textAlign: 'center' }}>
-                    <CheckCircle sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
+            <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default', p: 3 }}>
+                <Paper elevation={0} sx={{ p: 4, maxWidth: 500, textAlign: 'center', border: '1px solid', borderColor: 'divider', borderRadius: 3 }}>
+                    <CheckCircle sx={{ fontSize: 56, color: 'success.main', mb: 2 }} />
                     <Typography variant="h5" gutterBottom>Document Signed Successfully!</Typography>
-                    <Typography color="text.secondary" sx={{ mb: 2 }}>
-                        Thank you for signing "{signatureRequest?.contractTitle}". The contract has been updated.
+                    <Typography variant="body2" color="text.primary" sx={{ mb: 1.5 }}>
+                        Thank you for signing <strong>{signatureRequest?.contractTitle}</strong>. The contract has been updated.
                     </Typography>
-                    <Typography color="text.secondary" sx={{ mb: 3 }}>
+                    <Typography variant="body2" sx={{ mb: 3 }}>
                         You will get the signed document by email, once everyone has signed.
                     </Typography>
                     {/* {signedPdfBlob && (
-                        <Button
+                        <AppButton
                             variant="contained"
                             startIcon={<Download />}
                             onClick={handleDownloadSignedPdf}
@@ -645,9 +667,9 @@ export default function PublicSigningPage() {
                             }}
                         >
                             Download
-                        </Button>
+                        </AppButton>
                     )} */}
-                    <Alert severity="success">You can close this window now.</Alert>
+                    <Alert severity="success" sx={{ color: isDark ? '#fefefe' : '#000' }}>You can close this window now.</Alert>
                 </Paper>
             </Box>
         );
@@ -703,23 +725,23 @@ export default function PublicSigningPage() {
                     arrow
                 >
                     <span>
-                        <Button
+                        <AppButton
                             variant="contained"
                             size="small"
+                            loading={submitting}
                             onClick={handleSubmitSignature}
-                            disabled={submitting || (validationTriggered && (!hasFilledAllAssignedFields || hasPartialParty)) || hasModifiedOtherPartyFields}
+                            disabled={(validationTriggered && (!hasFilledAllAssignedFields || hasPartialParty)) || hasModifiedOtherPartyFields}
                             sx={{
                                 bgcolor: 'white',
                                 color: 'primary.main',
                                 '&:hover': { bgcolor: 'grey.100' },
-                                '&:disabled': { bgcolor: 'grey.300', color: 'grey.500' },
-                                textTransform: 'none',
+                                '&.Mui-disabled': { bgcolor: 'grey.300', color: 'grey.500' },
                                 fontWeight: 600,
                                 py: 0.5
                             }}
                         >
                             {submitting ? 'Sending...' : 'Send'}
-                        </Button>
+                        </AppButton>
                     </span>
                 </Tooltip>
             </Box>

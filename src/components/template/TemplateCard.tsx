@@ -1,11 +1,13 @@
 'use client';
 
-import { Box, Typography, Paper, Button, IconButton, Chip, Grow, Tooltip } from '@mui/material';
+import { Box, Typography, Paper, IconButton, Grow, Tooltip, useTheme } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 interface TemplateCardProps {
     id: string;
@@ -42,6 +44,13 @@ export default function TemplateCard({
     onDelete,
 }: TemplateCardProps) {
     const [isHovered, setIsHovered] = useState(false);
+    const theme = useTheme();
+    const tTooltips = useTranslations('tooltips');
+    const primaryColor = theme.palette.primary.main;
+    const isDark = theme.palette.mode === 'dark';
+
+    const iconBtnBorderColor = alpha(theme.palette.text.secondary, 0.35);
+    const chipColor = isDark ? '#e5a07bff' : primaryColor;
 
     return (
         <Grow in timeout={600 + index * 100}>
@@ -53,8 +62,8 @@ export default function TemplateCard({
                     p: 1,
                     borderRadius: 2.5,
                     border: '1px solid',
-                    borderColor: isHovered ? 'primary.main' : 'rgba(0, 0, 0, 0.08)',
-                    bgcolor: 'white',
+                    borderColor: isHovered ? 'primary.main' : 'divider',
+                    bgcolor: 'background.paper',
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
@@ -64,7 +73,7 @@ export default function TemplateCard({
                     cursor: 'pointer',
                     transform: isHovered ? 'translateY(-4px)' : 'translateY(0)',
                     boxShadow: isHovered
-                        ? '0 12px 24px rgba(15, 118, 110, 0.15)'
+                        ? `0 12px 24px ${alpha(primaryColor, 0.15)}`
                         : '0 2px 8px rgba(0, 0, 0, 0.04)',
                     '&:hover': {
                         '& .action-buttons': {
@@ -73,21 +82,16 @@ export default function TemplateCard({
                     },
                 }}
             >
-                {/* Header with Icon and Category */}
-                <Box
-                    sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        mb: 1,
-                    }}
-                >
-                    <Box
+                {/* Row 1: Icon + Title */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 0.8 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, }}>
+                         <Box
                         sx={{
-                            width: 40,
-                            height: 40,
+                            width: 28,
+                            height: 28,
                             borderRadius: 1.5,
-                            bgcolor: '#9cece64a',
+                            flexShrink: 0,
+                            bgcolor: alpha(primaryColor, isDark ? 0.15 : 0.12),
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -95,52 +99,47 @@ export default function TemplateCard({
                             transform: isHovered ? 'scale(1.1)' : 'scale(1)',
                         }}
                     >
-                        <DescriptionOutlinedIcon
-                            sx={{
-                                fontSize: 20,
-                                color: '#0f766e',
-                            }}
-                        />
+                        <DescriptionOutlinedIcon sx={{ fontSize: 16, color: primaryColor }} />
                     </Box>
-
-                    <Tooltip title={category} arrow placement="top">
-                        <Chip
-                            label={truncateText(category, 15)}
-                            size="small"
-                            sx={{
-                                bgcolor: 'rgba(0, 0, 0, 0.04)',
-                                color: 'text.secondary',
-                                fontWeight: 500,
-                                fontSize: '0.75rem',
-                                height: 24,
-                            }}
-                        />
-                    </Tooltip>
-                </Box>
-
-                {/* Title and Description */}
-                <Box sx={{ flex: 1, mb:0.5}}>
                     <Tooltip title={title} arrow placement="top">
                         <Typography
-                            variant="h6"
-                            fontWeight={600}
-                            sx={{
-                                color: 'text.primary',
-                                mb: 0.5,
-                                fontSize: '0.95rem',
-                                lineHeight: 1.3,
-                            }}
+                            variant="subtitle2"
+                            sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         >
-                            {truncateText(title, 25)}
+                            {truncateText(title, 22)}
                         </Typography>
                     </Tooltip>
+                    </Box>
+                   
+                    
+                    <Tooltip title={category} arrow placement="top">
+                        <Box
+                            component="span"
+                            sx={{
+                                display: 'inline-block',
+                                px: 0.6,
+                                py: 0.2,
+                                borderRadius: '4px',
+                                bgcolor: alpha(chipColor, isDark ? 0.12 : 0.07),
+                                border: `1px solid ${alpha(chipColor, isDark ? 0.40 : 0.28)}`,
+                                color: chipColor,
+                                fontSize: '0.6rem',
+                                fontWeight: 500,
+                            }}
+                        >
+                            {truncateText(category, 18)}
+                        </Box>
+                    </Tooltip>
+                
+                </Box>
+
+                {/* Row 2: Description */}
+                <Box sx={{ flex: 1, mb: 0.5 }}>
                     <Tooltip title={description} arrow placement="top">
                         <Typography
                             variant="body2"
                             sx={{
                                 color: 'text.secondary',
-                                fontSize: '0.8rem',
-                                lineHeight: 1.5,
                             }}
                         >
                             {truncateText(description, 60)}
@@ -159,49 +158,41 @@ export default function TemplateCard({
                         display: 'flex',
                         gap: 1,
                         p: '4px 8px',
-                        background: '#fff',
+                        background: theme.card.actionOverlay,
                         borderRadius: '0 0 12px 12px',
                         opacity: { xs: 1, md: 0 },
                         transition: 'opacity 0.2s ease-in-out',
                     }}
                 >
                     {[
-                        // {
-                        //     title: 'Create Contract',
-                        //     icon: <DescriptionOutlinedIcon sx={{ fontSize: '1.1rem' }} />,
-                        //     onClick: () => onUse?.(),
-                        //     color: 'success.main',
-                        //     shadow: 'rgba(46, 125, 50, 0.2)',
-                        //     show: true
-                        // },
                         {
-                            title: 'View Template',
-                            icon: <VisibilityOutlinedIcon sx={{ fontSize: '1.1rem' }} />,
+                            title: tTooltips('viewTemplate'),
+                            icon: <VisibilityOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
                             onClick: () => onView?.(id),
-                            color: 'primary.main',
-                            shadow: 'rgba(15, 118, 110, 0.2)',
+                            color: primaryColor,
+                            shadow: alpha(primaryColor, 0.2),
                             show: true
                         },
                         {
-                            title: 'Edit Template',
-                            icon: <EditOutlinedIcon sx={{ fontSize: '1.1rem' }} />,
+                            title: tTooltips('editTemplate'),
+                            icon: <EditOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
                             onClick: (e: React.MouseEvent) => {
                                 e.stopPropagation();
                                 onEdit?.(id);
                             },
-                            color: 'info.main',
-                            shadow: 'rgba(2, 136, 209, 0.2)',
+                            color: primaryColor,
+                            shadow: alpha(primaryColor, 0.2),
                             show: isAdmin
                         },
                         {
-                            title: 'Delete Template',
-                            icon: <DeleteOutlineIcon sx={{ fontSize: '1.1rem' }} />,
+                            title: tTooltips('deleteTemplate'),
+                            icon: <DeleteOutlineIcon sx={{ fontSize: '0.8rem' }} />,
                             onClick: (e: React.MouseEvent) => {
                                 e.stopPropagation();
                                 onDelete?.(id);
                             },
-                            color: 'error.main',
-                            shadow: 'rgba(211, 47, 47, 0.2)',
+                            color: isDark ? '#a95151ff' : '#d32f2f',
+                            shadow: isDark ? 'rgba(239,68,68,0.2)' : 'rgba(211,47,47,0.2)',
                             show: isAdmin
                         }
                     ].map((action, idx) => (
@@ -213,9 +204,9 @@ export default function TemplateCard({
                                     sx={{
                                         bgcolor: 'transparent',
                                         border: '1px solid',
-                                        borderColor: 'divider',
+                                        borderColor: iconBtnBorderColor,
                                         borderRadius: 1.5,
-                                        color: 'text.primary',
+                                        color: 'text.secondary',
                                         transition: 'all 0.2s ease',
                                         '&:hover': {
                                             bgcolor: action.color,

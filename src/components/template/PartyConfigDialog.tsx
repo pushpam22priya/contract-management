@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import {
-    Button,
     TextField,
     Box,
     Typography,
@@ -22,6 +21,7 @@ import {
 } from '@mui/icons-material';
 import { PartyConfiguration } from '@/types/template';
 import BaseDialog from '@/components/common/BaseDialog';
+import AppButton from '@/components/common/AppButton';
 
 // Debug logging
 const LOG_PREFIX = '[PARTY-CONFIG]';
@@ -147,14 +147,14 @@ export default function PartyConfigDialog({
 
     const dialogActions = (
         <>
-            <Button onClick={onClose}>Cancel</Button>
-            <Button
+            <AppButton variant="outlined" onClick={onClose}>Cancel</AppButton>
+            <AppButton
                 variant="contained"
                 onClick={handleSave}
                 disabled={parties.length === 0}
             >
                 Save Parties
-            </Button>
+            </AppButton>
         </>
     );
 
@@ -330,7 +330,7 @@ export default function PartyConfigDialog({
                     }}
                 />
 
-                <Button
+                <AppButton
                     variant="contained"
                     onClick={handleAddParty}
                     disabled={!newPartyLabel.trim()}
@@ -338,7 +338,7 @@ export default function PartyConfigDialog({
                     sx={{ flexShrink: 0 }}
                 >
                     Add
-                </Button>
+                </AppButton>
             </Box>
         </BaseDialog>
     );

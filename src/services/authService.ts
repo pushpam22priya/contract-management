@@ -82,6 +82,42 @@ class AuthService {
     }
  
     /**
+     * Update the current user's session data (e.g. after profile save)
+     */
+    updateSessionUser(updates: Partial<LoggedInUser>): void {
+        const currentUser = this.getCurrentUser();
+        if (!currentUser) return;
+        this.saveCurrentUser({ ...currentUser, ...updates });
+    }
+
+    /**
+     * Update user profile (name, department, organization) in DB and session
+     */
+    async updateProfile(profile: { name: string; department: string; organization: string; dateOfBirth?: string; gender?: string; permanentAddress?: string; panCard?: string; aadharCard?: string }): Promise<{ success: boolean; message: string }> {
+        const currentUser = this.getCurrentUser();
+        if (!currentUser) return { success: false, message: 'Not authenticated' };
+
+        try {
+            const res = await fetch('/api/users/profile', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: currentUser.email, ...profile }),
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                this.updateSessionUser(profile);
+            }
+
+            return { success: data.success, message: data.message };
+        } catch (error) {
+            console.error('Failed to update profile:', error);
+            return { success: false, message: 'Failed to update profile' };
+        }
+    }
+
+    /**
      * Get all registered users from MongoDB (without passwords)
      */
     async getAllRegisteredUsers(): Promise<Omit<User, 'password'>[]> {

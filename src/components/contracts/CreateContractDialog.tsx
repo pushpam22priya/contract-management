@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { contractStep1Schema, ContractStep1Form } from '@/schemas/contractSchema';
+
 import {
     Box,
     Typography,
-    Button,
     Autocomplete,
     TextField,
     Alert,
@@ -14,14 +16,17 @@ import {
     Divider,
     AlertColor,
     Tooltip,
+    useTheme,
 } from '@mui/material';
 import { Save, ArrowBack, ArrowForward } from '@mui/icons-material';
+import AppButton from '@/components/common/AppButton';
 import BaseDialog from '@/components/common/BaseDialog';
 import ConfirmationDialog from '@/components/common/ConfirmationDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import RequestReviewDialog from '@/components/contracts/RequestReviewDialog';
 import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
 import MultiPartySignatureDialog from '@/components/contracts/MultiPartySignatureDialog';
+import AutofillPartyDialog from '@/components/contracts/AutofillPartyDialog';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import PartyValidationWarningPopup from '@/components/viewer/pdfViewer/PartyValidationWarningPopup';
 import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
@@ -31,10 +36,15 @@ import { contractService } from '@/services/contractService';
 import { apiService } from '@/services/apiService';
 import { authService } from '@/services/authService';
 import { Template, PartyConfiguration } from '@/types/template';
+import { Team } from '@/types/team';
 import { validatePartyFields } from '@/utils/partyValidation';
-import dayjs from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { ContractStatus } from '@/types/contract';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
+import { buildProfileData } from '@/utils/profileKeyOptions';
 
 interface CreateContractDialogProps {
     open: boolean;
@@ -45,8 +55,10 @@ interface CreateContractDialogProps {
 }
 
 const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, teamId }: CreateContractDialogProps) => {
-    const router = useRouter();
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
+    const hasAutoFilledRef = useRef(false);
 
     // Wizard State
     const [currentStep, setCurrentStep] = useState<1 | 2>(1);
@@ -55,14 +67,20 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     const [templates, setTemplates] = useState<Template[]>([]);
     const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
+
+    // Team selection (only used when teamId prop is not provided)
+    const [teams, setTeams] = useState<Team[]>([]);
+    const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
     const [documentLoaded, setDocumentLoaded] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(''); // Add success state
 
-    // Contract Information
-    const [contractTitle, setContractTitle] = useState('');
-    const [clientName, setClientName] = useState('');
-    const [description, setDescription] = useState('');
+    // Contract Information (RHF for validated fields)
+    const { control, reset, watch, trigger } = useForm<ContractStep1Form>({
+        resolver: zodResolver(contractStep1Schema),
+        defaultValues: { contractTitle: '', clientName: '', description: '' },
+    });
+    const { contractTitle, clientName, description } = watch();
     const [contractValue, setContractValue] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -90,6 +108,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
     const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
     const [multiPartyDialogOpen, setMultiPartyDialogOpen] = useState(false);
+    const [autofillPartyDialogOpen, setAutofillPartyDialogOpen] = useState(false);
 
     // Track filled field values
     // Explanation: This stores the values user enters in form fields (e.g., {"client_name": "John Doe"})
@@ -117,12 +136,24 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     useEffect(() => { filledFieldValuesRef.current = filledFieldValues; }, [filledFieldValues]);
 
 
-    // Load templates when dialog opens
+    // Load templates (and teams when no teamId prop) when dialog opens
     useEffect(() => {
         if (open) {
             loadTemplates();
+            if (!teamId) loadTeams();
         }
     }, [open]);
+
+    const loadTeams = async () => {
+        try {
+            const currentUser = authService.getCurrentUser();
+            if (!currentUser) return;
+            const res = await fetch(`/api/teams?createdBy=${encodeURIComponent(currentUser.email)}`);
+            if (res.ok) setTeams(await res.json());
+        } catch {
+            // non-critical — team selector stays empty
+        }
+    };
 
     const loadTemplates = async () => {
         setLoadingTemplates(true);
@@ -223,15 +254,8 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             return null;
         }
 
-        if (!contractTitle.trim()) {
-            setError('Contract title is required');
-            return null;
-        }
-
-        if (!clientName.trim()) {
-            setError('Client name is required');
-            return null;
-        }
+        const valid = await trigger(['contractTitle', 'clientName']);
+        if (!valid) return null;
 
         if (!documentLoaded) {
             setError('Please wait for the document to load');
@@ -309,10 +333,12 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                     return {
                         ...field,
                         value: filledFieldValues[field.name] || field.value || '',
-                        // ✅ Preserve party assignment from template
+                        // Preserve party assignment from template
                         assignedParty: templateField?.assignedParty || field.assignedParty,
                         partyLabel: templateField?.partyLabel || field.partyLabel,
                         partyColor: templateField?.partyColor || field.partyColor,
+                        // Preserve profileKey mapping from template
+                        profileKey: templateField?.profileKey ?? field.profileKey ?? null,
                     };
                 });
                 console.log('📝 [Contract Creation] Form fields with party assignments:',
@@ -350,7 +376,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                 formFields: exportedFormFields, // Save field definitions
                 hasFormFields: (exportedFormFields?.length ?? 0) > 0 || selectedTemplate.hasFormFields || false, // ✅ Use template flag or check fields
                 parties: selectedTemplate.parties,  // ✅ Include parties for external signer validation
-                teamId: teamId || null,              // Which team this contract belongs to
+                teamId: teamId || selectedTeam?._id || null, // Which team this contract belongs to
             };
 
             let activeContractId = contractId;
@@ -400,6 +426,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             console.log('Contract saved successfully with PDF!');
 
             setSnackbar({ open: true, message: 'Contract Saved successfully!', severity: 'success' });
+            onSuccess?.();
             return activeContractId;
         } catch (err) {
             console.error('❌ Error creating contract:', err);
@@ -414,9 +441,8 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         // Reset all state
         setCurrentStep(1); // Reset to Step 1
         setSelectedTemplate(null);
-        setContractTitle('');
-        setClientName('');
-        setDescription('');
+        setSelectedTeam(null);
+        reset();
         setContractValue('');
         setStartDate('');
         setEndDate('');
@@ -425,6 +451,8 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         setContractId(null); // Reset so next dialog creates a new contract
         setFilledFieldValues({}); // Reset for next contract
         setValidationTriggered(false);
+        setAutofillPartyDialogOpen(false);
+        hasAutoFilledRef.current = false;
 
         // Dispose PDF viewer
         pdfViewerRef.current?.dispose();
@@ -490,7 +518,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
 
         if (pendingAction === 'close') {
             handleClose();
-            router.push('/draft');
+            onSuccess?.();
         } else if (pendingAction === 'review') {
             setReviewDialogOpen(true);
         } else if (pendingAction === 'signature') {
@@ -550,11 +578,10 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             if (result.success) {
                 setSnackbar({ open: true, message: 'Mixed signature assignments created successfully', severity: 'success' });
                 setMultiPartyDialogOpen(false);
-                // After submitting for signature, close dialog and redirect
+                // After submitting for signature, close dialog
                 setTimeout(() => {
                     handleClose();
                     onSuccess?.(); // Trigger refresh if provided
-                    router.push('/contracts');
                 }, 1500);
                 return { success: true };
             } else {
@@ -568,21 +595,63 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         }
     };
 
-    const handleNextStep = () => {
-        // Validation before proceeding to Step 2
+    const handleAutofillConfirm = (partyId: string) => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) {
+            setSnackbar({ open: true, message: 'Please log in to use autofill', severity: 'warning' });
+            return;
+        }
+
+        const profileData = buildProfileData(currentUser);
+
+        if (Object.values(profileData).every(v => !v.trim())) {
+            setSnackbar({ open: true, message: 'Please complete your profile in Settings first', severity: 'warning' });
+            return;
+        }
+
+        try {
+            const count = pdfViewerRef.current?.autofillFields(partyId, profileData) ?? 0;
+            if (count === 0) {
+                setSnackbar({ open: true, message: 'No matching fields found for your profile data', severity: 'warning' });
+            } else {
+                setSnackbar({ open: true, message: `${count} field${count !== 1 ? 's' : ''} filled from your profile`, severity: 'success' });
+            }
+        } catch {
+            setSnackbar({ open: true, message: 'Something went wrong during autofill. Please try manually.', severity: 'error' });
+        }
+    };
+
+    const handleAutofillClick = (silent = false) => {
+        const parties = selectedTemplate?.parties || [];
+        const formFields = selectedTemplate?.formFields || [];
+
+        // Only count fields that have a profileKey mapping (those can actually be autofilled)
+        const getTextFieldCount = (partyId: string) =>
+            (formFields as any[]).filter(
+                (f) => f.assignedParty === partyId && f.type !== 'Sig' && f.type !== 'signature' && !!f.profileKey
+            ).length;
+
+        const partiesWithFields = parties.filter((p: any) => getTextFieldCount(p.id) > 0);
+
+        if (partiesWithFields.length === 0) {
+            if (!silent) setSnackbar({ open: true, message: 'No fillable fields found in this document', severity: 'warning' });
+            return;
+        }
+
+        if (partiesWithFields.length === 1) {
+            handleAutofillConfirm(partiesWithFields[0].id);
+        } else {
+            setAutofillPartyDialogOpen(true);
+        }
+    };
+
+    const handleNextStep = async () => {
         if (!selectedTemplate) {
             setError('Please select a template');
             return;
         }
-        if (!contractTitle.trim()) {
-            setError('Contract title is required');
-            return;
-        }
-        if (!clientName.trim()) {
-            setError('Client name is required');
-            return;
-        }
-
+        const valid = await trigger(['contractTitle', 'clientName']);
+        if (!valid) return;
         setError('');
         setCurrentStep(2);
     };
@@ -592,25 +661,24 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     // Step 1: Contract Details Actions
     const step1Actions = (
         <>
-            <Button
+            <AppButton
                 onClick={handleNextStep}
                 endIcon={<ArrowForward />}
                 variant="contained"
                 disabled={!selectedTemplate || !contractTitle.trim() || !clientName.trim()}
                 sx={{
-                    textTransform: 'none',
                     fontWeight: 600,
                     borderRadius: 2,
                     bgcolor: 'primary.main',
-                    boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
+                    boxShadow: (theme) => `0 2px 8px ${theme.palette.primary.main}40`,
                     '&:hover': {
                         bgcolor: 'primary.dark',
-                        boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
+                        boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}59`,
                     },
                 }}
             >
                 Next: Edit Document
-            </Button>
+            </AppButton>
         </>
     );
 
@@ -618,48 +686,69 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     // Step 2: PDF Editing Actions
     const step2Actions = (
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-            <Button
-                onClick={() => setCurrentStep(1)}
+            <AppButton
+                onClick={() => {
+                    hasAutoFilledRef.current = false;
+                    setFilledFieldValues({});
+                    setValidationTriggered(false);
+                    setShowWrongPartyWarning(false);
+                    setDocumentLoaded(false);
+                    setCurrentStep(1);
+                }}
                 startIcon={<ArrowBack />}
-                // variant="outlined"
+                variant="outlined"
                 sx={{
                     padding: '4px 10px',
                     borderRadius: 2,
                 }}
             >
                 Back to Details
-            </Button>
+            </AppButton>
+
+            <Tooltip title="Fill fields from your profile" arrow>
+                <span>
+                    <AppButton
+                        variant="outlined"
+                        onClick={() => handleAutofillClick()}
+                        disabled={!documentLoaded || saving}
+                        size="small"
+                        sx={{ borderRadius: 2, py: 0.5 }}
+                    >
+                        Autofill
+                    </AppButton>
+                </span>
+            </Tooltip>
 
             <Tooltip title={hasPartialParty ? 'Complete all fields for the party you started' : ''} arrow>
                 <span>
-                    <Button
+                    <AppButton
                         onClick={handleSave}
                         variant="contained"
-                        disabled={!canSave || saving}
+                        loading={saving}
+                        disabled={!canSave}
                         sx={{
                             px: 2,
                             py: 0.5,
                             borderRadius: 2,
                             minWidth: 150,
                             bgcolor: 'primary.main',
-                            boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
+                            boxShadow: (theme) => `0 2px 8px ${theme.palette.primary.main}40`,
                             '&:hover': {
                                 bgcolor: 'primary.dark',
-                                boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
+                                boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}59`,
                             },
                         }}
                     >
                         {saving ? 'Saving...' : 'Save Contract'}
-                    </Button>
+                    </AppButton>
                 </span>
             </Tooltip>
 
-            <Button
+            <AppButton
                 variant="contained"
                 onClick={handleReviewClick}
                 disabled={saving || !canSave}
                 sx={{
-                    textTransform: 'none',
                     fontWeight: 600,
                     px: 2,
                     py: 0.5,
@@ -674,13 +763,12 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                 }}
             >
                 Review & Approve
-            </Button>
-            <Button
+            </AppButton>
+            <AppButton
                 variant="contained"
                 onClick={handleSignatureClick}
                 disabled={saving || !canSave}
                 sx={{
-                    textTransform: 'none',
                     fontWeight: 600,
                     px: 2,
                     py: 0.5,
@@ -695,7 +783,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                 }}
             >
                 Signature
-            </Button>
+            </AppButton>
         </Box>
     );
 
@@ -749,12 +837,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                                         label="Select Template"
                                         placeholder="Choose a template..."
                                         required
-                                        sx={{
-                                            '& .MuiOutlinedInput-root': {
-                                                padding: '4px',
-                                            },
-
-                                        }}
+                                        sx={{ '& .MuiOutlinedInput-root': { padding: '4px' } }}
                                     />
                                 )}
                                 renderOption={(props, option) => {
@@ -763,140 +846,182 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                                         <li key={key} {...otherProps}>
                                             <Box>
                                                 <Typography variant="body2" fontWeight={600}>{option.name}</Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {option.category}
-                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">{option.category}</Typography>
                                             </Box>
                                         </li>
                                     );
                                 }}
                             />
 
-                            {/* Selected Template Info */}
-                            {selectedTemplate && (
-                                <Box
-                                    sx={{
-                                        p: 0.5,
-                                        px: 1,
-                                        bgcolor: alpha('#0f766e', 0.05),
-                                        borderRadius: 2,
-                                        border: '1px solid',
-                                        borderColor: alpha('#0f766e', 0.2),
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                    }}
-                                >
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                                        <Typography variant="body1" fontWeight={600} color="primary">
-                                            {selectedTemplate.name}
-                                        </Typography>
-                                        <Chip
-                                            label={selectedTemplate.category}
-                                            size="small"
-                                            sx={{
-                                                bgcolor: 'primary.main',
-                                                color: 'white',
-                                            }}
+                            {/* Second column: Team selector (when outside a team) OR Template info (when inside a team) */}
+                            {!teamId ? (
+                                <Autocomplete
+                                    value={selectedTeam}
+                                    onChange={(_event, newValue) => setSelectedTeam(newValue)}
+                                    options={teams}
+                                    getOptionLabel={(option) => option.name}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Assign to Team"
+                                            placeholder="Select a team (optional)"
+                                            sx={{ '& .MuiOutlinedInput-root': { padding: '4px' } }}
                                         />
+                                    )}
+                                    renderOption={(props, option) => {
+                                        const { key, ...otherProps } = props as any;
+                                        return (
+                                            <li key={key} {...otherProps}>
+                                                <Typography variant="body2">{option.name}</Typography>
+                                            </li>
+                                        );
+                                    }}
+                                />
+                            ) : (
+                                selectedTemplate && (
+                                    <Box
+                                        sx={{
+                                            p: 0.5,
+                                            px: 1,
+                                            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
+                                            borderRadius: 2,
+                                            border: '1px solid',
+                                            borderColor: (theme) => alpha(theme.palette.primary.main, 0.2),
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Typography variant="body1" fontWeight={600} color="primary">
+                                                {selectedTemplate.name}
+                                            </Typography>
+                                            <Chip
+                                                label={selectedTemplate.category}
+                                                size="small"
+                                                sx={{ bgcolor: 'primary.main', color: 'white' }}
+                                            />
+                                        </Box>
                                     </Box>
-                                </Box>
+                                )
                             )}
                         </Box>
+
+                        {/* Template info row shown below when team selector is in second column */}
+                        {!teamId && selectedTemplate && (
+                            <Box
+                                sx={{
+                                    mt: 1,
+                                    px: 1.5,
+                                    py: 0.75,
+                                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
+                                    borderRadius: 2,
+                                    border: '1px solid',
+                                    borderColor: (theme) => alpha(theme.palette.primary.main, 0.2),
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                }}
+                            >
+                                <Typography variant="body2" fontWeight={600} color="primary">
+                                    {selectedTemplate.name}
+                                </Typography>
+                                <Chip
+                                    label={selectedTemplate.category}
+                                    size="small"
+                                    sx={{ bgcolor: 'primary.main', color: 'white' }}
+                                />
+                            </Box>
+                        )}
 
                         <Divider sx={{ my: 1 }} />
 
                         <Typography variant="h6" gutterBottom>Contract Information</Typography>
 
+                        <LocalizationProvider dateAdapter={AdapterDayjs}>
+                            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mb: 2 }}>
+                                <DatePicker
+                                    label="Start Date"
+                                    value={startDate ? dayjs(startDate) : null}
+                                    onChange={(date: Dayjs | null) => {
+                                        const val = date ? date.format('YYYY-MM-DD') : '';
+                                        setStartDate(val);
+                                        if (val) {
+                                            setEndDate(dayjs(val).add(1, 'year').format('YYYY-MM-DD'));
+                                        }
+                                    }}
+                                    format="DD/MM/YYYY"
+                                    slotProps={{ textField: { size: 'small', fullWidth: true }, desktopPaper: { sx: { maxHeight: '50vh', overflowY: 'auto' } }, popper: { modifiers: [{ name: 'preventOverflow', options: { padding: 8 } }, { name: 'flip', enabled: true }] } }}
+                                />
+                                <DatePicker
+                                    label="End Date"
+                                    value={endDate ? dayjs(endDate) : null}
+                                    onChange={(date: Dayjs | null) => setEndDate(date ? date.format('YYYY-MM-DD') : '')}
+                                    minDate={startDate ? dayjs(startDate) : undefined}
+                                    format="DD/MM/YYYY"
+                                    slotProps={{ textField: { size: 'small', fullWidth: true }, desktopPaper: { sx: { maxHeight: '50vh', overflowY: 'auto' } }, popper: { modifiers: [{ name: 'preventOverflow', options: { padding: 8 } }, { name: 'flip', enabled: true }] } }}
+                                />
+                            </Box>
+                        </LocalizationProvider>
+
                         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mb: 2 }}>
-                            <TextField
-                                label="Contract Title"
-                                value={contractTitle}
-                                onChange={(e) => setContractTitle(e.target.value)}
-                                required
-                                placeholder="e.g., Software License Agreement"
-                                inputProps={{ maxLength: 50 }}
-                                sx={{
-                                    '& .MuiInputBase-input': {
-                                        padding: '10px 12px',
-                                    },
-                                    // Adjust floating label position when focused/filled
-                                    '& .MuiInputLabel-root': {
-                                        transform: 'translate(14px, 10px) scale(1)',
-                                    },
-                                    // Adjust floating label when shrunk (focused or has value)
-                                    '& .MuiInputLabel-root.MuiInputLabel-shrink': {
-                                        transform: 'translate(14px, -9px) scale(0.75)',
-                                    },
-                                }}
-
+                            <Controller
+                                name="contractTitle"
+                                control={control}
+                                render={({ field, fieldState }) => (
+                                    <TextField
+                                        {...field}
+                                        label="Contract Title"
+                                        required
+                                        placeholder="e.g., Software License Agreement"
+                                        error={!!fieldState.error}
+                                        helperText={fieldState.error?.message}
+                                        slotProps={{ htmlInput: { maxLength: 50 } }}
+                                        sx={{
+                                            '& .MuiInputBase-input': { padding: '10px 12px' },
+                                            '& .MuiInputLabel-root': { transform: 'translate(14px, 10px) scale(1)' },
+                                            '& .MuiInputLabel-root.MuiInputLabel-shrink': { transform: 'translate(14px, -9px) scale(0.75)' },
+                                        }}
+                                    />
+                                )}
                             />
-                            <TextField
-                                label="Client Name"
-                                value={clientName}
-                                onChange={(e) => setClientName(e.target.value)}
-                                required
-                                placeholder="e.g., ABC Corp"
-                                inputProps={{ maxLength: 50 }}
-                                sx={{
-                                    '& .MuiInputBase-input': {
-                                        padding: '10px 12px',
-                                    },
-                                    // Adjust floating label position when focused/filled
-                                    '& .MuiInputLabel-root': {
-                                        transform: 'translate(14px, 10px) scale(1)',
-                                    },
-                                    // Adjust floating label when shrunk (focused or has value)
-                                    '& .MuiInputLabel-root.MuiInputLabel-shrink': {
-                                        transform: 'translate(14px, -9px) scale(0.75)',
-                                    },
-                                }}
-
+                            <Controller
+                                name="clientName"
+                                control={control}
+                                render={({ field, fieldState }) => (
+                                    <TextField
+                                        {...field}
+                                        label="Client Name"
+                                        required
+                                        placeholder="e.g., ABC Corp"
+                                        error={!!fieldState.error}
+                                        helperText={fieldState.error?.message}
+                                        slotProps={{ htmlInput: { maxLength: 50 } }}
+                                        sx={{
+                                            '& .MuiInputBase-input': { padding: '10px 12px' },
+                                            '& .MuiInputLabel-root': { transform: 'translate(14px, 10px) scale(1)' },
+                                            '& .MuiInputLabel-root.MuiInputLabel-shrink': { transform: 'translate(14px, -9px) scale(0.75)' },
+                                        }}
+                                    />
+                                )}
                             />
                         </Box>
 
-                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
-                            <TextField
-                                label="Start Date"
-                                type="date"
-                                value={startDate}
-                                onChange={(e) => {
-                                    const newStartDate = e.target.value;
-                                    setStartDate(newStartDate);
-                                    if (newStartDate) {
-                                        // Auto-set End Date to 1 year from Start Date
-                                        setEndDate(dayjs(newStartDate).add(1, 'year').format('YYYY-MM-DD'));
-                                    }
-                                }}
-                                InputLabelProps={{ shrink: true }}
-                                sx={{
-                                    '& .MuiInputBase-input': {
-                                        padding: '10px 12px',
-                                    }
-                                }}
-                            />
-                            <TextField
-                                label="End Date"
-                                type="date"
-                                value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
-                                InputLabelProps={{ shrink: true }}
-                                sx={{
-                                    '& .MuiInputBase-input': {
-                                        padding: '10px 12px',
-                                    }
-                                }}
-                            />
-                        </Box>
-
-                        <TextField
-                            label="Description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            multiline
-                            rows={3}
-                            placeholder="Optional description..."
-                            sx={{ mt: 2 }}
+                        <Controller
+                            name="description"
+                            control={control}
+                            render={({ field, fieldState }) => (
+                                <TextField
+                                    {...field}
+                                    label="Description"
+                                    multiline
+                                    rows={3}
+                                    placeholder="Optional description..."
+                                    error={!!fieldState.error}
+                                    helperText={fieldState.error?.message}
+                                    slotProps={{ htmlInput: { maxLength: 500 } }}
+                                    sx={{ mt: 2 }}
+                                />
+                            )}
                         />
                     </Box>
                 )}
@@ -925,7 +1050,13 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                                     toolbarMode="forms"
                                     defaultToolbar="view"
                                     onFieldChange={handleFieldChange}
-                                    onDocumentLoaded={() => setDocumentLoaded(true)}
+                                    onDocumentLoaded={() => {
+                                        setDocumentLoaded(true);
+                                        if (!hasAutoFilledRef.current) {
+                                            hasAutoFilledRef.current = true;
+                                            handleAutofillClick(true);
+                                        }
+                                    }}
                                     showAnnotationNavigation={true}
                                     onError={(err) => setError(err)}
                                 />
@@ -1002,12 +1133,10 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                         if (result.success) {
                             setSnackbar({ open: true, message: result.message, severity: 'success' });
                             setReviewDialogOpen(false);
-                            // After submitting for review, we should close the create dialog 
-                            // as the contract is no longer in "Edit/Draft" mode
+                            // After submitting for review, close the dialog
                             setTimeout(() => {
                                 handleClose();
                                 onSuccess?.(); // Trigger refresh if provided
-                                router.push('/draft');
                             }, 1500);
                         } else {
                             setSnackbar({ open: true, message: result.message, severity: 'error' });
@@ -1032,11 +1161,10 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                         if (result.success) {
                             setSnackbar({ open: true, message: result.message, severity: 'success' });
                             setSignatureDialogOpen(false);
-                            // After submitting for signature, close dialog and redirect
+                            // After submitting for signature, close dialog
                             setTimeout(() => {
                                 handleClose();
                                 onSuccess?.(); // Trigger refresh if provided
-                                router.push('/contracts');
                             }, 1500);
                         }
                         return result;
@@ -1056,6 +1184,18 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                     fieldValues={filledFieldValues}
                 />
             )}
+
+            {/* Autofill Party Selection Dialog */}
+            <AutofillPartyDialog
+                open={autofillPartyDialogOpen}
+                onClose={() => setAutofillPartyDialogOpen(false)}
+                onConfirm={(partyId) => {
+                    setAutofillPartyDialogOpen(false);
+                    handleAutofillConfirm(partyId);
+                }}
+                parties={selectedTemplate?.parties || []}
+                formFields={selectedTemplate?.formFields || []}
+            />
 
             {/* Notification Snackbar */}
             <NotificationSnackbar

@@ -11,6 +11,14 @@ export interface LoggedInUser {
     email: string;
     lastLogin: string;
     isAdmin: boolean;
+    name?: string;
+    department?: string;
+    organization?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    permanentAddress?: string;
+    panCard?: string;
+    aadharCard?: string;
 }
 
 export interface LoginCredentials {

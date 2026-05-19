@@ -1,11 +1,11 @@
 'use client';
 
+import AppButton from '@/components/common/AppButton';
 import { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
-    Chip,
-    Button,
+    Chip, 
     Alert,
     Autocomplete,
     TextField,
@@ -129,34 +129,31 @@ export default function FurtherReviewDialog({
 
     const dialogActions = (
         <>
-            <Button
+            <AppButton
+                variant="outlined"
                 onClick={handleClose}
                 disabled={submitting}
-                sx={{
-                    textTransform: 'none',
-                    color: 'text.secondary',
-                }}
             >
                 Cancel
-            </Button>
-            <Button
+            </AppButton>
+            <AppButton
                 onClick={handleSubmit}
                 variant="contained"
-                disabled={submitting || selectedReviewers.length === 0}
+                loading={submitting}
+                disabled={selectedReviewers.length === 0}
                 sx={{
-                    textTransform: 'none',
                     fontWeight: 600,
                     px: 3,
                     bgcolor: 'primary.main',
-                    boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
+                    boxShadow: (theme) => `0 2px 8px ${theme.palette.primary.main}40`,
                     '&:hover': {
                         bgcolor: 'primary.dark',
-                        boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
+                        boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}59`,
                     },
                 }}
             >
                 {submitting ? 'Submitting...' : 'Submit for Further Review'}
-            </Button>
+            </AppButton>
         </>
     );
 

@@ -1,20 +1,23 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { templateStep1Schema, TemplateStep1Form } from '@/schemas/templateSchema';
 import {
     Box,
-    Button,
     TextField,
     Autocomplete,
     Typography,
     IconButton,
     Chip,
     alpha,
-    CircularProgress,
     Alert,
     AlertColor,
+    useTheme,
 } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
+import AppButton from '@/components/common/AppButton';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import CloseIcon from '@mui/icons-material/Close';
@@ -29,8 +32,10 @@ import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import PDFViewerContainer, { PDFViewerHandle, FormFieldDefinitionWithParty } from '@/components/viewer/PDFViewerContainer';
 import PartyConfigDialog from '@/components/template/PartyConfigDialog';
 import PartyAssignmentPanel from '@/components/template/PartyAssignmentPanel';
+import ProfileFieldMappingDialog from '@/components/template/ProfileFieldMappingDialog';
 import { PartyConfiguration, FormFieldDefinition, Category } from '@/types/template';
 import { createDefaultParties, groupFieldsByParty } from '@/utils/partyValidation';
+import { getProfileKeyOptions, ProfileKeyOption } from '@/utils/profileKeyOptions';
 import GroupIcon from '@mui/icons-material/Group';
 import DeleteIcon from '@mui/icons-material/Delete';
 
@@ -45,12 +50,18 @@ export default function UploadTemplateDialog({
     onClose,
     onSuccess,
 }: UploadTemplateDialogProps) {
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+
     // Wizard state
     const [currentStep, setCurrentStep] = useState<1 | 2>(1);
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
-    const [templateName, setTemplateName] = useState('');
-    const [description, setDescription] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const { control, reset, watch, setValue, trigger, formState: { errors: fieldErrors } } = useForm<TemplateStep1Form>({
+        resolver: zodResolver(templateStep1Schema),
+        defaultValues: { templateName: '', description: '', category: '' },
+    });
+    const { templateName, description, category: selectedCategory } = watch();
+    const [fileError, setFileError] = useState('');
     const [categories, setCategories] = useState<Category[]>([]);
     const [newCategory, setNewCategory] = useState('');
     const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
@@ -69,11 +80,19 @@ export default function UploadTemplateDialog({
     const [selectedFieldName, setSelectedFieldName] = useState<string | null>(null);
     const [showPartyPanel, setShowPartyPanel] = useState(true);
 
-    // Load categories on mount
+    // Profile mapping state
+    const [showMappingDialog, setShowMappingDialog] = useState(false);
+    const [profileKeyOptions, setProfileKeyOptions] = useState<ProfileKeyOption[]>([]);
+    const pendingExportRef = useRef<{ exportedFormFields: any[]; xfdfData: string; fileToUpload: File | Blob } | null>(null);
+    const closePendingRef = useRef(false);
+
+    // Load categories and profileKeyOptions on mount
     useEffect(() => {
         if (open) {
             const allCategories = categoryService.getAllCategories();
             setCategories(allCategories);
+            const user = authService.getCurrentUser();
+            if (user) setProfileKeyOptions(getProfileKeyOptions(user));
         }
     }, [open]);
 
@@ -82,7 +101,7 @@ export default function UploadTemplateDialog({
         const file = event.target.files?.[0];
         if (file) {
             setSelectedFile(file);
-            setError('');
+            setFileError('');
         }
     };
 
@@ -136,7 +155,7 @@ export default function UploadTemplateDialog({
         if (result.success && result.category) {
             const updatedCategories = [...categories, result.category];
             setCategories(updatedCategories);
-            setSelectedCategory(result.category.name);
+            setValue('category', result.category.name);
             setNewCategory('');
             setShowNewCategoryInput(false);
         } else {
@@ -153,7 +172,7 @@ export default function UploadTemplateDialog({
         if (result.success) {
             const categoryToDelete = categories.find(c => c.id === categoryId);
             if (categoryToDelete && selectedCategory === categoryToDelete.name) {
-                setSelectedCategory(null);
+                setValue('category', '');
             }
             setCategories(prev => prev.filter(c => c.id !== categoryId));
         } else {
@@ -162,31 +181,21 @@ export default function UploadTemplateDialog({
     };
 
     // Navigate to Step 2
-    const handleNext = () => {
-        // Validate Step 1
-        if (!templateName.trim()) {
-            setError('Please enter a template name');
-            return;
-        }
-        if (!selectedCategory) {
-            setError('Please select a category');
-            return;
-        }
+    const handleNext = async () => {
+        const valid = await trigger(['templateName', 'category']);
+        if (!valid) return;
         if (!selectedFile) {
-            setError('Please upload a file');
+            setFileError('Please upload a file');
             return;
         }
-
-        // Only proceed to Step 2 if it's a PDF
-        if (selectedFile.type === 'application/pdf') {
-            // Create blob URL for PDFViewerContainer
-            const url = URL.createObjectURL(selectedFile);
-            setDocumentUrl(url);
-            setCurrentStep(2);
-            setError('');
-        } else {
-            setError('Please upload a PDF file to use the form builder');
+        if (selectedFile.type !== 'application/pdf') {
+            setFileError('Please upload a PDF file to use the form builder');
+            return;
         }
+        setFileError('');
+        const url = URL.createObjectURL(selectedFile);
+        setDocumentUrl(url);
+        setCurrentStep(2);
     };
 
     // Go back to Step 1
@@ -289,13 +298,23 @@ export default function UploadTemplateDialog({
         }
     };
 
-    // Refresh form fields list from viewer
+    // Refresh form fields list from viewer — preserves profileKey, skips 0-field results
     const refreshFormFields = async () => {
         if (pdfViewerRef.current) {
             try {
                 const fields = await pdfViewerRef.current.exportFormFieldsWithParty();
-                setFormFields(fields as FormFieldDefinition[]);
-                console.log(`[UPLOAD-TEMPLATE] Refreshed ${fields.length} form fields`);
+                console.log(`[UPLOAD-TEMPLATE] refreshFormFields: got ${fields.length} fields from PDF`);
+                if (fields.length === 0) {
+                    console.log('[UPLOAD-TEMPLATE] refreshFormFields: skipping update (0 fields returned)');
+                    return;
+                }
+                setFormFields(prev => {
+                    const prevMap = new Map(prev.map((f: any) => [f.name, f]));
+                    return (fields as FormFieldDefinition[]).map((f: any) => ({
+                        ...f,
+                        profileKey: prevMap.get(f.name)?.profileKey ?? f.profileKey ?? null,
+                    }));
+                });
             } catch (e) {
                 console.warn('[UPLOAD-TEMPLATE] Failed to refresh form fields:', e);
             }
@@ -327,24 +346,93 @@ export default function UploadTemplateDialog({
         // 3. This avoids race conditions with debounced auto-save
     };
 
+    // executeSave: performs the actual upload/update with resolved form fields
+    const executeSave = async (resolvedFormFields: any[], xfdfData: string, fileToUpload: File | Blob): Promise<boolean> => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) {
+            setError('You must be logged in to upload templates');
+            setUploading(false);
+            return false;
+        }
+
+        try {
+            let templateId = savedTemplateId;
+
+            if (templateId) {
+                console.log('💾 Updating existing template via Service (re-save)...', templateId);
+                const updateData: any = {
+                    name: templateName.trim(),
+                    description: description.trim(),
+                    category: selectedCategory,
+                    formFields: resolvedFormFields,
+                    hasFormFields: resolvedFormFields.length > 0,
+                    xfdfData: xfdfData,
+                    parties: parties.length > 0 ? parties : undefined,
+                };
+                if (fileToUpload !== selectedFile || pdfModified) {
+                    updateData.file = fileToUpload;
+                    updateData.fileName = selectedFile!.name;
+                    updateData.fileType = 'pdf';
+                }
+                const result = await templateService.updateTemplate(templateId, updateData, currentUser.email);
+                if (!result.success) {
+                    setError(result.message || 'Failed to update template. Please try again.');
+                    return false;
+                }
+                console.log('✅ Template updated successfully!', templateId);
+            } else {
+                console.log('💾 Saving template via Service...');
+                console.log(`  - Parties: ${parties.length}`);
+                console.log(`  - Form fields: ${resolvedFormFields.length}`);
+                const savedTemplate = await templateService.saveTemplate({
+                    name: templateName.trim(),
+                    description: description.trim(),
+                    category: selectedCategory!,
+                    fileName: selectedFile!.name,
+                    file: fileToUpload,
+                    xfdfData: xfdfData,
+                    formFields: resolvedFormFields,
+                    parties: parties.length > 0 ? parties : undefined,
+                }, currentUser.email);
+                templateId = (savedTemplate as any).id || null;
+                setSavedTemplateId(templateId);
+                console.log('✅ Template saved successfully!', templateId);
+            }
+
+            if (pdfViewerRef.current && pdfViewerRef.current.setToolbarGroup) {
+                pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
+            }
+
+            setSnackbar({ open: true, message: 'Template saved successfully!', severity: 'success' });
+            onSuccess?.();
+
+            if (closePendingRef.current) {
+                closePendingRef.current = false;
+                handleClose();
+            }
+
+            return true;
+        } catch (err: any) {
+            console.error('❌ Error uploading template:', err);
+            setError(err.message || 'Failed to upload template. Please try again.');
+            return false;
+        } finally {
+            setUploading(false);
+        }
+    };
+
     // Handle submit
     const handleSubmit = async (): Promise<boolean> => {
         setError('');
         setSuccess('');
 
-        // Validate form
-        if (!templateName.trim()) {
-            setError('Please enter a template name');
-            return false;
-        }
-        if (!selectedCategory) {
-            setError('Please select a category');
-            return false;
-        }
+        const valid = await trigger(['templateName', 'category']);
+        if (!valid) return false;
         if (!selectedFile) {
-            setError('Please upload a file');
+            setFileError('Please upload a file');
             return false;
         }
+        setFileError('');
 
         const currentUser = authService.getCurrentUser();
         if (!currentUser) {
@@ -354,10 +442,7 @@ export default function UploadTemplateDialog({
 
         setUploading(true);
 
-
-
         try {
-
             if (pdfViewerRef.current) {
                 console.log('🔧 [SUBMIT] Switching to View mode and Pan tool before export...');
                 const switched = await pdfViewerRef.current.switchToViewMode();
@@ -371,7 +456,7 @@ export default function UploadTemplateDialog({
             }
 
             let xfdfData = '';
-            let formFields: any[] = [];
+            let exportedFormFields: any[] = [];
             let fileToUpload: File | Blob = selectedFile;
 
             // IF on step 2 (Designer) and viewer is active
@@ -381,19 +466,10 @@ export default function UploadTemplateDialog({
                 console.log('✅ [UploadTemplateDialog] Commit process will run in exportAnnotations');
                 console.log('═══════════════════════════════════════════════════════════════════');
 
-                // ✅ CRITICAL FIX: Always export fresh data on submit
-                // Don't rely on cached auto-save data as it may be stale or incomplete
-                // The exportAnnotations() call includes the full pre-export commit process
                 console.log('📋 [UploadTemplateDialog] Performing fresh export on submit');
 
-                // 1. Export XFDF (annotations/data)
-                // ✅ IMPORTANT: exportAnnotations() will COMMIT all pending changes before exporting
-                // This includes: deselecting annotations, switching tools, calling field.commit(),
-                // refreshing viewer, and redrawing annotations
-                // We use exportAnnotations() which returns both blob and xfdf string.
                 try {
                     const exportResult = await pdfViewerRef.current.exportAnnotations(undefined, { skipToolbarSwitch: true });
-
                     if (exportResult) {
                         xfdfData = exportResult.xfdfString;
                         console.log(`  ✓ Extracted XFDF (${xfdfData.length} chars)`);
@@ -403,30 +479,24 @@ export default function UploadTemplateDialog({
                     throw new Error('Failed to prepare document for upload.');
                 }
 
-                // 2. Export form field metadata (including party assignments)
                 try {
                     const exportedFields = await pdfViewerRef.current.exportFormFieldsWithParty();
-                    formFields = exportedFields;
-                    console.log(`  ✓ Extracted ${formFields.length} form field definitions with party assignments`);
-
-                    // Log party assignments for debugging
+                    exportedFormFields = exportedFields;
+                    console.log(`  ✓ Extracted ${exportedFormFields.length} form field definitions with party assignments`);
                     const partyAssignments = pdfViewerRef.current.getAllFieldPartyAssignments();
                     console.log('  ✓ Party assignments:', partyAssignments);
                 } catch (e) {
                     console.warn('Failed to export form fields metadata:', e);
-                    // Fallback to basic export
                     try {
-                        formFields = await pdfViewerRef.current.exportFormFields();
-                        console.log(`  ✓ Fallback: Extracted ${formFields.length} form field definitions`);
+                        exportedFormFields = await pdfViewerRef.current.exportFormFields();
+                        console.log(`  ✓ Fallback: Extracted ${exportedFormFields.length} form field definitions`);
                     } catch (e2) {
                         console.warn('Fallback export also failed:', e2);
                     }
                 }
 
-                // 3. If PDF was modified, use the blob from the export
                 if (pdfModified) {
                     console.log('  ⚠️ PDF was modified, using exported binary Blob...');
-                    // We already have the exportResult from above
                     try {
                         const exportResult = await pdfViewerRef.current.exportAnnotations(undefined, { skipToolbarSwitch: true });
                         if (exportResult) {
@@ -442,72 +512,35 @@ export default function UploadTemplateDialog({
                 }
             }
 
-            // At this point:
-            // - fileToUpload is either original File (step 1 or unmodified step 2) OR dynamic Blob (modified step 2)
-            // - xfdfData is populated from fresh export
-            // - formFields is populated from fresh export
-
-
-            let templateId = savedTemplateId;
-
-            if (templateId) {
-                // Already saved once — update instead of creating a new template
-                console.log('💾 Updating existing template via Service (re-save)...', templateId);
-                const updateData: any = {
-                    name: templateName.trim(),
-                    description: description.trim(),
-                    category: selectedCategory,
-                    formFields: formFields,
-                    hasFormFields: formFields.length > 0,
-                    xfdfData: xfdfData,
-                    parties: parties.length > 0 ? parties : undefined,
-                };
-                if (fileToUpload !== selectedFile || pdfModified) {
-                    updateData.file = fileToUpload;
-                    updateData.fileName = selectedFile.name;
-                    updateData.fileType = 'pdf';
-                }
-                const result = await templateService.updateTemplate(templateId, updateData, currentUser.email);
-                if (!result.success) {
-                    setError(result.message || 'Failed to update template. Please try again.');
-                    return false;
-                }
-                console.log('✅ Template updated successfully!', templateId);
-            } else {
-                // First save — create new template
-                console.log('💾 Saving template via Service...');
-                console.log(`  - Parties: ${parties.length}`);
-                console.log(`  - Form fields: ${formFields.length}`);
-                const savedTemplate = await templateService.saveTemplate({
-                    name: templateName.trim(),
-                    description: description.trim(),
-                    category: selectedCategory,
-                    fileName: selectedFile.name,
-                    file: fileToUpload,
-                    xfdfData: xfdfData,
-                    formFields: formFields,
-                    parties: parties.length > 0 ? parties : undefined,
-                }, currentUser.email);
-                templateId = (savedTemplate as any).id || null;
-                setSavedTemplateId(templateId);
-                console.log('✅ Template saved successfully!', templateId);
+            // Merge profileKey from component state formFields into exportedFormFields
+            // (profileKey is not stored in PDF/XFDF — it lives only in our state)
+            if (exportedFormFields.length > 0 && formFields.length > 0) {
+                exportedFormFields = exportedFormFields.map((ef: any) => {
+                    const stateField = formFields.find((sf) => sf.name === ef.name);
+                    return stateField?.profileKey != null
+                        ? { ...ef, profileKey: stateField.profileKey }
+                        : ef;
+                });
             }
 
-            // ✅ Set toolbar to View mode after success
-            if (pdfViewerRef.current && pdfViewerRef.current.setToolbarGroup) {
-                console.log('✅ Setting toolbar to View mode');
-                pdfViewerRef.current.setToolbarGroup('toolbarGroup-View');
+            // If there are mappable (non-signature) fields, show mapping dialog first
+            const mappableCount = exportedFormFields.filter(
+                (f: any) => f.type !== 'Sig' && f.type !== 'signature'
+            ).length;
+
+            if (mappableCount > 0) {
+                pendingExportRef.current = { exportedFormFields, xfdfData, fileToUpload };
+                setUploading(false);
+                setShowMappingDialog(true);
+                return false;
             }
 
-            setSnackbar({ open: true, message: 'Template saved successfully!', severity: 'success' });
-            onSuccess?.();
-            return true;
+            return await executeSave(exportedFormFields, xfdfData, fileToUpload);
         } catch (err: any) {
             console.error('❌ Error uploading template:', err);
             setError(err.message || 'Failed to upload template. Please try again.');
-            return false;
-        } finally {
             setUploading(false);
+            return false;
         }
     };
 
@@ -525,8 +558,10 @@ export default function UploadTemplateDialog({
 
     const handleUnsavedYes = async () => {
         setShowUnsavedDialog(false);
-        const saved = await handleSubmit();
-        if (saved) handleClose();
+        closePendingRef.current = true;
+        await handleSubmit();
+        // If handleSubmit returned false because of the mapping dialog,
+        // executeSave will call handleClose() via closePendingRef after the user saves mappings.
     };
 
     const handleUnsavedNo = () => {
@@ -541,22 +576,23 @@ export default function UploadTemplateDialog({
     // Handle close
     const handleClose = () => {
         if (!uploading) {
-            setCurrentStep(1); // Reset to step 1
-            setTemplateName('');
-            setDescription('');
-            setSelectedCategory(null);
+            setCurrentStep(1);
+            reset();
             setSelectedFile(null);
             setNewCategory('');
             setShowNewCategoryInput(false);
             setError('');
+            setFileError('');
             setSuccess('');
             setPdfModified(false);
-            setSavedTemplateId(null); // Reset so next open starts fresh
-            // Reset party state
+            setSavedTemplateId(null);
             setParties([]);
             setFormFields([]);
             setSelectedFieldName(null);
             setShowPartyPanel(true);
+            setShowMappingDialog(false);
+            pendingExportRef.current = null;
+            closePendingRef.current = false;
             if (documentUrl) {
                 URL.revokeObjectURL(documentUrl);
                 setDocumentUrl('');
@@ -568,36 +604,36 @@ export default function UploadTemplateDialog({
 
     // Dialog actions - Step based
     const step1Actions = (
-        <Button
+        <AppButton
             onClick={handleNext}
             variant="contained"
             endIcon={<ArrowForward />}
             disabled={!templateName || !selectedCategory || !selectedFile}
             sx={{
-                textTransform: 'none',
                 fontWeight: 600,
                 px: 3,
                 py: 1,
                 borderRadius: 2,
                 bgcolor: 'primary.main',
-                boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
+                boxShadow: (theme) => `0 2px 8px ${theme.palette.primary.main}40`,
                 '&:hover': {
                     bgcolor: 'primary.dark',
-                    boxShadow: '0 4px 12px rgba(15, 118, 110, 0.35)',
+                    boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}59`,
                 },
-                '&:disabled': {
-                    bgcolor: 'rgba(0, 0, 0, 0.12)',
-                    color: 'rgba(0, 0, 0, 0.26)',
+                '&.Mui-disabled': {
+                    bgcolor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)',
+                    color: isDark ? 'rgba(255,255,255,0.32)' : 'rgba(0,0,0,0.26)',
                 },
             }}
         >
             Next: Add Form Fields
-        </Button>
+        </AppButton>
     );
 
     const step2Actions = (
         <>
-            <Button
+            <AppButton
+                variant="outlined"
                 onClick={handleBack}
                 startIcon={<ArrowBack />}
                 sx={{
@@ -606,8 +642,8 @@ export default function UploadTemplateDialog({
                 }}
             >
                 Back
-            </Button>
-            <Button
+            </AppButton>
+            <AppButton
                 onClick={() => setShowPartyConfigDialog(true)}
                 variant="outlined"
                 sx={{
@@ -617,12 +653,11 @@ export default function UploadTemplateDialog({
                 }}
             >
                 {parties.length > 0 ? `${parties.length} Parties` : 'Configure Parties'}
-            </Button>
-            <Button
+            </AppButton>
+            <AppButton
                 onClick={handleSubmit}
                 variant="contained"
-                disabled={uploading}
-                startIcon={uploading ? <CircularProgress size={20} color="inherit" /> : null}
+                loading={uploading}
                 sx={{
                     px: 2,
                     py: 0.5,
@@ -636,7 +671,7 @@ export default function UploadTemplateDialog({
                 }}
             >
                 {uploading ? 'Uploading...' : 'Upload Template'}
-            </Button>
+            </AppButton>
         </>
     );
 
@@ -690,18 +725,18 @@ export default function UploadTemplateDialog({
                                 onDrop={handleDrop}
                                 sx={{
                                     border: '2px dashed',
-                                    borderColor: dragActive ? 'primary.main' : 'rgba(0, 0, 0, 0.12)',
+                                    borderColor: dragActive ? 'primary.main' : (isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)'),
                                     borderRadius: 2,
                                     p: 1,
                                     textAlign: 'center',
                                     bgcolor: dragActive
-                                        ? alpha('#0f766e', 0.04)
-                                        : 'rgba(0, 0, 0, 0.02)',
+                                        ? (t: any) => alpha(t.palette.primary.main, 0.06)
+                                        : (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'),
                                     transition: 'all 0.3s',
                                     cursor: 'pointer',
                                     '&:hover': {
                                         borderColor: 'primary.main',
-                                        bgcolor: alpha('#0f766e', 0.04),
+                                        bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
                                     },
                                 }}
                                 onClick={() => document.getElementById('file-upload-input')?.click()}
@@ -709,7 +744,7 @@ export default function UploadTemplateDialog({
                                 <CloudUploadIcon
                                     sx={{
                                         fontSize: 48,
-                                        color: dragActive ? 'primary.main' : 'rgba(0, 0, 0, 0.3)',
+                                        color: dragActive ? 'primary.main' : (isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.3)'),
                                         mb: 2,
                                     }}
                                 />
@@ -744,13 +779,13 @@ export default function UploadTemplateDialog({
                             <Box
                                 sx={{
                                     border: '1px solid',
-                                    borderColor: 'rgba(0, 0, 0, 0.12)',
+                                    borderColor: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)',
                                     borderRadius: 2,
                                     p: 1,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
-                                    bgcolor: alpha('#0f766e', 0.04),
+                                    bgcolor: (t: any) => alpha(t.palette.primary.main, 0.06),
                                 }}
                             >
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -805,6 +840,11 @@ export default function UploadTemplateDialog({
                             </Box>
                         )}
                     </Box>
+                    {fileError && (
+                        <Typography variant="caption" color="error" sx={{ mt: -1, display: 'block' }}>
+                            {fileError}
+                        </Typography>
+                    )}
 
                     {/* Template Name */}
                     <Box>
@@ -818,27 +858,34 @@ export default function UploadTemplateDialog({
                         >
                             Template Name <span style={{ color: '#ef4444' }}>*</span>
                         </Typography>
-                        <TextField
-                            fullWidth
-                            placeholder="Enter template name"
-                            value={templateName}
-                            onChange={(e) => setTemplateName(e.target.value)}
-                            inputProps={{ maxLength: 50 }}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    '&:hover fieldset': {
-                                        borderColor: 'rgba(0, 0, 0, 0.3)',
-                                    },
-                                    '&.Mui-focused fieldset': {
-                                        borderWidth: 2,
-                                    },
-                                },
-                                '& .MuiOutlinedInput-input': {
-                                    py: 1.25,
-                                    px: 1.5,
-                                },
-                            }}
+                        <Controller
+                            name="templateName"
+                            control={control}
+                            render={({ field, fieldState }) => (
+                                <TextField
+                                    {...field}
+                                    fullWidth
+                                    placeholder="Enter template name"
+                                    error={!!fieldState.error}
+                                    helperText={fieldState.error?.message}
+                                    slotProps={{ htmlInput: { maxLength: 50 } }}
+                                    sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                            borderRadius: 2,
+                                            '&:hover fieldset': {
+                                                borderColor: 'rgba(0, 0, 0, 0.3)',
+                                            },
+                                            '&.Mui-focused fieldset': {
+                                                borderWidth: 2,
+                                            },
+                                        },
+                                        '& .MuiOutlinedInput-input': {
+                                            py: 1.25,
+                                            px: 1.5,
+                                        },
+                                    }}
+                                />
+                            )}
                         />
                     </Box>
 
@@ -854,25 +901,32 @@ export default function UploadTemplateDialog({
                         >
                             Description
                         </Typography>
-                        <TextField
-                            fullWidth
-                            multiline
-                            rows={2}
-                            placeholder="Enter template description (optional)"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            inputProps={{ maxLength: 200 }}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    '&:hover fieldset': {
-                                        borderColor: 'rgba(0, 0, 0, 0.3)',
-                                    },
-                                    '&.Mui-focused fieldset': {
-                                        borderWidth: 2,
-                                    },
-                                },
-                            }}
+                        <Controller
+                            name="description"
+                            control={control}
+                            render={({ field, fieldState }) => (
+                                <TextField
+                                    {...field}
+                                    fullWidth
+                                    multiline
+                                    rows={2}
+                                    placeholder="Enter template description (optional)"
+                                    error={!!fieldState.error}
+                                    helperText={fieldState.error?.message}
+                                    slotProps={{ htmlInput: { maxLength: 200 } }}
+                                    sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                            borderRadius: 2,
+                                            '&:hover fieldset': {
+                                                borderColor: 'rgba(0, 0, 0, 0.3)',
+                                            },
+                                            '&.Mui-focused fieldset': {
+                                                borderWidth: 2,
+                                            },
+                                        },
+                                    }}
+                                />
+                            )}
                         />
                     </Box>
 
@@ -895,8 +949,8 @@ export default function UploadTemplateDialog({
                                     fullWidth
                                     options={categories}
                                     value={categories.find(c => c.name === selectedCategory) || null}
-                                    onChange={(event, newValue) => {
-                                        setSelectedCategory(newValue ? (typeof newValue === 'string' ? newValue : (newValue as Category).name) : null);
+                                    onChange={(_event, newValue) => {
+                                        setValue('category', newValue ? (typeof newValue === 'string' ? newValue : (newValue as Category).name) : '');
                                     }}
                                     getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
                                     renderInput={(params) => (
@@ -925,7 +979,7 @@ export default function UploadTemplateDialog({
                                                     label={option.name}
                                                     size="small"
                                                     sx={{
-                                                        bgcolor: 'rgba(15, 118, 110, 0.08)',
+                                                        bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.08),
                                                         color: 'primary.main',
                                                         fontWeight: 500,
                                                     }}
@@ -948,12 +1002,11 @@ export default function UploadTemplateDialog({
                                         );
                                     }}
                                 />
-                                <Button
+                                <AppButton
                                     variant="outlined"
                                     startIcon={<AddCircleOutlineIcon />}
                                     onClick={() => setShowNewCategoryInput(true)}
                                     sx={{
-                                        textTransform: 'none',
                                         fontWeight: 600,
                                         // px: 2,
                                         // py: 1.75,
@@ -963,12 +1016,12 @@ export default function UploadTemplateDialog({
                                         color: 'text.primary',
                                         '&:hover': {
                                             borderColor: 'primary.main',
-                                            bgcolor: alpha('#0f766e', 0.04),
+                                            bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
                                         },
                                     }}
                                 >
                                     New
-                                </Button>
+                                </AppButton>
                             </Box>
                         ) : (
                             <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -999,12 +1052,11 @@ export default function UploadTemplateDialog({
                                         },
                                     }}
                                 />
-                                <Button
+                                <AppButton
                                     variant="contained"
                                     onClick={handleAddNewCategory}
                                     disabled={!newCategory.trim()}
                                     sx={{
-                                        textTransform: 'none',
                                         fontWeight: 600,
                                         borderRadius: 2,
                                         whiteSpace: 'nowrap',
@@ -1015,15 +1067,14 @@ export default function UploadTemplateDialog({
                                     }}
                                 >
                                     Add
-                                </Button>
-                                <Button
+                                </AppButton>
+                                <AppButton
                                     variant="outlined"
                                     onClick={() => {
                                         setShowNewCategoryInput(false);
                                         setNewCategory('');
                                     }}
                                     sx={{
-                                        textTransform: 'none',
                                         fontWeight: 600,
                                         borderRadius: 2,
                                         borderColor: 'rgba(0, 0, 0, 0.23)',
@@ -1035,8 +1086,13 @@ export default function UploadTemplateDialog({
                                     }}
                                 >
                                     Cancel
-                                </Button>
+                                </AppButton>
                             </Box>
+                        )}
+                        {fieldErrors.category && (
+                            <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
+                                {fieldErrors.category.message}
+                            </Typography>
                         )}
                     </Box>
                 </Box>
@@ -1086,7 +1142,18 @@ export default function UploadTemplateDialog({
                                         refreshFormFields();
                                     }}
                                     onFieldsWithPartyExported={(fields) => {
-                                        setFormFields(fields as FormFieldDefinition[]);
+                                        console.log(`[UPLOAD-TEMPLATE] onFieldsWithPartyExported: got ${fields.length} fields from PDF`);
+                                        if (fields.length === 0) {
+                                            console.log('[UPLOAD-TEMPLATE] onFieldsWithPartyExported: skipping update (0 fields returned)');
+                                            return;
+                                        }
+                                        setFormFields(prev => {
+                                            const prevMap = new Map(prev.map((f: any) => [f.name, f]));
+                                            return (fields as FormFieldDefinition[]).map((f: any) => ({
+                                                ...f,
+                                                profileKey: prevMap.get(f.name)?.profileKey ?? f.profileKey ?? null,
+                                            }));
+                                        });
                                     }}
                                 />
                             </Box>
@@ -1146,6 +1213,35 @@ export default function UploadTemplateDialog({
             onClose={handleUnsavedCancel}
             loading={uploading}
         />
+
+        {/* Profile Field Mapping Dialog */}
+        <ProfileFieldMappingDialog
+            open={showMappingDialog}
+            onClose={() => {
+                // Skip mapping — save with whatever mappings exist
+                setShowMappingDialog(false);
+                if (pendingExportRef.current) {
+                    const { exportedFormFields, xfdfData, fileToUpload } = pendingExportRef.current;
+                    pendingExportRef.current = null;
+                    setUploading(true);
+                    executeSave(exportedFormFields, xfdfData, fileToUpload);
+                }
+            }}
+            onSave={(updatedFields) => {
+                setShowMappingDialog(false);
+                setFormFields(updatedFields);
+                if (pendingExportRef.current) {
+                    const { xfdfData, fileToUpload } = pendingExportRef.current;
+                    pendingExportRef.current = null;
+                    setUploading(true);
+                    executeSave(updatedFields, xfdfData, fileToUpload);
+                }
+            }}
+            formFields={pendingExportRef.current?.exportedFormFields ?? formFields}
+            parties={parties}
+            profileKeyOptions={profileKeyOptions}
+        />
+
         <NotificationSnackbar
             open={snackbar.open}
             message={snackbar.message}

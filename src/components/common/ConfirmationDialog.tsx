@@ -1,7 +1,8 @@
 'use client';
 
-import { Button, Typography, Box, Tooltip } from '@mui/material';
+import { Typography, Box, Tooltip } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
+import AppButton from '@/components/common/AppButton';
 
 interface ConfirmationDialogProps {
     open: boolean;
@@ -34,14 +35,14 @@ export default function ConfirmationDialog({
             maxWidth="xs"
             actions={
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button onClick={onNo} disabled={loading}>
+                    <AppButton variant="outlined" onClick={onNo} disabled={loading}>
                         No
-                    </Button>
+                    </AppButton>
                     <Tooltip title={disableYes ? yesTooltip : ''} arrow>
                         <span>
-                            <Button variant="contained" onClick={onYes} disabled={loading || disableYes}>
+                            <AppButton variant="contained" loading={loading} onClick={onYes} disabled={disableYes}>
                                 {loading ? 'Saving...' : 'Yes'}
-                            </Button>
+                            </AppButton>
                         </span>
                     </Tooltip>
                 </Box>

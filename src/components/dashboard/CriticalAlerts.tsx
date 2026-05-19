@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Typography, Button, Paper, Fade, Grow } from '@mui/material';
+import AppButton from '@/components/common/AppButton';
+import { Box, Typography,  Paper, Fade, Grow } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useState, useEffect } from 'react';
@@ -57,7 +58,7 @@ export default function CriticalAlerts() {
                 const timeDiff = endDate.getTime() - today.getTime();
                 const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
 
-                const expiryDate = endDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                const expiryDate = endDate.toLocaleDateString('en-GB');
 
                 return {
                     id: c.id,
@@ -163,20 +164,20 @@ export default function CriticalAlerts() {
                         </Typography>
                     </Box>
                     {alerts.length > 2 && (
-                        <Button
+                        <AppButton
+                            variant="text"
                             size="small"
                             onClick={handleViewAll}
                             sx={{
                                 color: '#92400e',
                                 fontWeight: 600,
-                                textTransform: 'none',
                                 '&:hover': {
                                     bgcolor: 'rgba(245, 158, 11, 0.1)',
                                 },
                             }}
                         >
                             View All
-                        </Button>
+                        </AppButton>
                     )}
                 </Box>
 
@@ -234,7 +235,7 @@ export default function CriticalAlerts() {
                                     </Typography>
                                 </Box>
 
-                                <Button
+                                <AppButton
                                     variant={hoveredId === alert.id ? 'contained' : 'outlined'}
                                     size="small"
                                     onClick={() => handleView(alert)}
@@ -256,7 +257,6 @@ export default function CriticalAlerts() {
                                         px: 3,
                                         py: 1,
                                         borderRadius: 2,
-                                        textTransform: 'none',
                                         transition: 'all 0.3s',
                                         '&:hover': {
                                             bgcolor: '#f59e0b',
@@ -268,7 +268,7 @@ export default function CriticalAlerts() {
                                     }}
                                 >
                                     View
-                                </Button>
+                                </AppButton>
                             </Box>
                         </Grow>
                     ))}

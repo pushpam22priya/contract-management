@@ -106,7 +106,18 @@ export async function POST(
 
         console.log(`✅ [Finalize] Contract status updated to '${finalStatus}'`);
 
-        // 4. Collect email recipients for the response
+        // 5. If this is a renewal contract, clear the in_progress marker on the original.
+        // Visibility of the original (expired) card is now driven purely by the renewal's
+        // status on the client side — no renewalStatus flag needed after activation.
+        if (contract.renewedFromId) {
+            await db.collection('contracts').updateOne(
+                { _id: new ObjectId(contract.renewedFromId) },
+                { $set: { updatedAt: now } }
+            );
+            console.log(`🔗 [Finalize] Renewal finalized; original contract ${contract.renewedFromId} updated`);
+        }
+
+        // 6. Collect email recipients for the response
         // (Actual email sending will be handled by the frontend using emailService)
         const emailRecipients = externalSigners.map((signer: any) => ({
             email: signer.email,

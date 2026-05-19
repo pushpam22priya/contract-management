@@ -1,7 +1,9 @@
 'use client';
 
-import { Box, Typography, Paper, LinearProgress } from '@mui/material';
+import { Box, Typography, Paper, LinearProgress, useTheme } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
+import { useTranslations } from 'next-intl';
 
 interface ContractInformationProps {
     client: string;
@@ -28,11 +30,15 @@ const ContractInformation = ({
     status,
     description,
 }: ContractInformationProps) => {
+    const t = useTranslations('contractDetail');
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
+
     // Get progress bar color based on status
     const getProgressBarColor = () => {
         switch (status) {
             case 'active':
-                return '#0f766e'; // Teal - healthy/active
+                return theme.palette.primary.main;
             case 'signed':
                 return '#6366f1'; // Indigo - signed but not started
             case 'expiring':
@@ -46,41 +52,46 @@ const ContractInformation = ({
 
     // Get progress bar background color
     const getProgressBarBgColor = () => {
+        if (isDark) {
+            switch (status) {
+                case 'active':   return alpha('#10b981', 0.12);
+                case 'signed':   return alpha('#6366f1', 0.12);
+                case 'expiring': return alpha('#f59e0b', 0.12);
+                case 'expired':  return alpha('#ef4444', 0.12);
+                default:         return alpha('#6b7280', 0.12);
+            }
+        }
         switch (status) {
-            case 'active':
-                return '#d1fae5'; // Light teal
-            case 'signed':
-                return '#e0e7ff'; // Light indigo
-            case 'expiring':
-                return '#fef3c7'; // Light amber
-            case 'expired':
-                return '#fee2e2'; // Light red
-            default:
-                return '#e5e7eb'; // Light gray
+            case 'active':   return '#d1fae5';
+            case 'signed':   return '#e0e7ff';
+            case 'expiring': return '#fef3c7';
+            case 'expired':  return '#fee2e2';
+            default:         return '#e5e7eb';
         }
     };
 
     // Get status-specific text for days remaining
     const getDaysText = () => {
         if (status === 'signed' && daysRemaining > 0) {
-            return `Starts in ${daysRemaining} days`;
+            return t('startsIn', { days: daysRemaining });
         }
         if (status === 'expired' || daysRemaining < 0) {
-            return `Expired ${Math.abs(daysRemaining)} days ago`;
+            return t('expiredDaysAgo', { days: Math.abs(daysRemaining) });
         }
         if (daysRemaining === 0) {
-            return 'Ends today';
+            return t('endsToday');
         }
-        return `${daysRemaining} days remaining`;
+        return t('daysRemaining', { days: daysRemaining });
     };
     return (
         <Paper
             elevation={0}
             sx={{
-                p: { xs: 1, sm: 2 },
+                p: { xs: 1, sm: 1.5 },
                 borderRadius: 3,
                 border: '1px solid',
                 borderColor: 'divider',
+                bgcolor: isDark ? 'background.paper' : '#f8f9fb',
                 transition: 'box-shadow 0.3s ease',
                 '&:hover': {
                     boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
@@ -88,16 +99,8 @@ const ContractInformation = ({
             }}
         >
             {/* Title */}
-            <Typography
-                variant="h6"
-                fontWeight={700}
-                sx={{
-                    mb: 1,
-                    color: 'text.primary',
-                    fontSize: { xs: '1.1rem', sm: '1.25rem' },
-                }}
-            >
-                Contract Information
+            <Typography variant="h6" sx={{ mb: 0.75 }}>
+                {t('contractInformation')}
             </Typography>
 
             {/* Info Grid - First Section */}
@@ -105,30 +108,20 @@ const ContractInformation = ({
                 sx={{
                     display: 'grid',
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2,
-                    mb: 1,
+                    gap: 1.25,
+                    mb: 0.75,
                 }}
             >
                 {/* Client */}
                 <Box>
                     <Typography
                         variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            display: 'block',
-                            // mb: 0.5,
-                            fontSize: '0.875rem',
-                        }}
+                        sx={{ display: 'block' }}
                     >
-                        Client
+                        {t('client')}
                     </Typography>
                     <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        sx={{
-                            color: 'text.primary',
-                            fontSize: { xs: '1rem', sm: '1rem' },
-                        }}
+                        variant="subtitle2"
                     >
                         {client}
                     </Typography>
@@ -138,22 +131,12 @@ const ContractInformation = ({
                 <Box>
                     <Typography
                         variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            display: 'block',
-                            // mb: 0.5,
-                            fontSize: '0.875rem',
-                        }}
+                        sx={{ display: 'block' }}
                     >
-                        Contract Value
+                        {t('contractValue')}
                     </Typography>
                     <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        sx={{
-                            color: 'text.primary',
-                            fontSize: { xs: '1rem', sm: '1rem' },
-                        }}
+                        variant="subtitle2"
                     >
                         {contractValue}
                     </Typography>
@@ -163,22 +146,12 @@ const ContractInformation = ({
                 <Box>
                     <Typography
                         variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            display: 'block',
-                            // mb: 0.5,
-                            fontSize: '0.875rem',
-                        }}
+                        sx={{ display: 'block' }}
                     >
-                        Category
+                        {t('category')}
                     </Typography>
                     <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        sx={{
-                            color: 'text.primary',
-                            fontSize: { xs: '1rem', sm: '1rem' },
-                        }}
+                        variant="subtitle2"
                     >
                         {category}
                     </Typography>
@@ -188,22 +161,12 @@ const ContractInformation = ({
                 <Box>
                     <Typography
                         variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            display: 'block',
-                            // mb: 0.5,
-                            fontSize: '0.875rem',
-                        }}
+                        sx={{ display: 'block' }}
                     >
-                        Template
+                        {t('template')}
                     </Typography>
                     <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        sx={{
-                            color: 'text.primary',
-                            fontSize: { xs: '1rem', sm: '1rem' },
-                        }}
+                        variant="subtitle2"
                     >
                         {template}
                     </Typography>
@@ -232,30 +195,18 @@ const ContractInformation = ({
                 <Box>
                     <Typography
                         variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            display: 'block',
-                            // mb: 0.5,
-                            fontSize: '0.875rem',
-                        }}
+                        sx={{ display: 'block' }}
                     >
-                        Start Date
+                        {t('startDate')}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <CalendarTodayOutlinedIcon
                             sx={{
-                                fontSize: '1rem',
+                                fontSize: '0.9rem',
                                 color: 'text.secondary',
                             }}
                         />
-                        <Typography
-                            variant="body2"
-                            fontWeight={600}
-                            sx={{
-                                color: 'text.primary',
-                                fontSize: { xs: '1rem', sm: '1rem' },
-                            }}
-                        >
+                        <Typography variant="subtitle2">
                             {startDate}
                         </Typography>
                     </Box>
@@ -265,30 +216,18 @@ const ContractInformation = ({
                 <Box>
                     <Typography
                         variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            display: 'block',
-                            // mb: 0.5,
-                            fontSize: '0.875rem',
-                        }}
+                        sx={{ display: 'block' }}
                     >
-                        End Date
+                        {t('endDate')}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <CalendarTodayOutlinedIcon
                             sx={{
-                                fontSize: '1rem',
+                                fontSize: '0.9rem',
                                 color: 'text.secondary',
                             }}
                         />
-                        <Typography
-                            variant="body2"
-                            fontWeight={600}
-                            sx={{
-                                color: 'text.primary',
-                                fontSize: { xs: '1rem', sm: '1rem' },
-                            }}
-                        >
+                        <Typography variant="subtitle2">
                             {endDate}
                         </Typography>
                     </Box>
@@ -313,19 +252,12 @@ const ContractInformation = ({
                             color: 'text.secondary',
                             display: 'block',
                             mb: 0.5,
-                            fontSize: '0.875rem',
+                            fontSize: '0.75rem',
                         }}
                     >
-                        Description
+                        {t('description')}
                     </Typography>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: 'text.primary',
-                            fontSize: { xs: '0.95rem', sm: '1rem' },
-                            // lineHeight: 1.5,
-                        }}
-                    >
+                    <Typography variant="subtitle2" sx={{ fontWeight: 400 }}>
                         {description}
                     </Typography>
                     {/* Divider inside if exists */}
@@ -344,13 +276,11 @@ const ContractInformation = ({
                 <Typography
                     variant="caption"
                     sx={{
-                        color: 'text.secondary',
                         display: 'block',
                         mb: 0.5,
-                        fontSize: '0.875rem',
                     }}
                 >
-                    Contract Progress
+                    {t('contractProgress')}
                 </Typography>
 
                 {/* Progress Info */}
@@ -378,7 +308,7 @@ const ContractInformation = ({
                             fontWeight: 600,
                         }}
                     >
-                        {progressPercentage}% remaining
+                        {t('percentRemaining', { pct: progressPercentage })}
                     </Typography>
                 </Box>
 

@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Typography, TextField, InputAdornment, Autocomplete, Collapse, Button, Tooltip } from '@mui/material';
+import AppButton from '@/components/common/AppButton';
+import { Box, Typography, TextField, InputAdornment, Autocomplete, Collapse,  Tooltip } from '@mui/material';
 import { Search, FilterList, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -137,12 +138,12 @@ const DraftFilters = ({
 
                     {/* More Filters Button */}
                     <Tooltip title={showAdvancedFilters ? "Hide date filters" : "Show date filters"} arrow>
-                        <Button
+                        <AppButton
+                            variant="text"
                             startIcon={<FilterList />}
                             endIcon={showAdvancedFilters ? <ExpandLess /> : <ExpandMore />}
                             onClick={onAdvancedFiltersToggle}
                             sx={{
-                                textTransform: 'none',
                                 color: 'primary.main',
                                 fontWeight: 500,
                                 fontSize: '0.95rem',
@@ -160,7 +161,7 @@ const DraftFilters = ({
                             }}
                         >
                             More Filters
-                        </Button>
+                        </AppButton>
                     </Tooltip>
                 </Box>
 
@@ -205,6 +206,7 @@ const DraftFilters = ({
                                 label="Start Date"
                                 value={startDate}
                                 onChange={onStartDateChange}
+                                format="DD/MM/YYYY"
                                 slotProps={{
                                     textField: {
                                         fullWidth: true,
@@ -250,6 +252,7 @@ const DraftFilters = ({
                                 value={endDate}
                                 onChange={onEndDateChange}
                                 minDate={startDate || undefined}
+                                format="DD/MM/YYYY"
                                 slotProps={{
                                     textField: {
                                         fullWidth: true,

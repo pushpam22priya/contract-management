@@ -109,6 +109,7 @@ export default function PartyValidationWarningPopup({
                     boxShadow: 3,
                     borderRadius: 2,
                     pr: 5,
+                    bgcolor: (theme) => theme.palette.mode === 'dark' ? '#2d1f00' : '#fff4e5',
                     cursor: isDragging ? 'grabbing' : 'grab',
                     userSelect: 'none',
                 }}

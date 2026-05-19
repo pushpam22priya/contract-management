@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Box, Button, TextField, Typography, LinearProgress } from '@mui/material';
-import FolderIcon from '@mui/icons-material/FolderOutlined';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Box, TextField, Typography, LinearProgress } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
+import AppButton from '@/components/common/AppButton';
 import { Team } from '@/types/team';
 import { authService } from '@/services/authService';
 
@@ -15,61 +18,64 @@ interface CreateTeamDialogProps {
 
 const MAX_LENGTH = 50;
 
+const teamSchema = z.object({
+    name: z.string()
+        .min(1, 'Team name is required')
+        .max(MAX_LENGTH, `Team name must be ${MAX_LENGTH} characters or less`),
+});
+
+type TeamForm = z.infer<typeof teamSchema>;
+
 export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTeamDialogProps) {
-    const [name, setName] = useState('');
-    const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [apiError, setApiError] = useState('');
+
+    const { control, handleSubmit, reset, watch } = useForm<TeamForm>({
+        resolver: zodResolver(teamSchema),
+        defaultValues: { name: '' },
+    });
+
+    const watchedName = watch('name');
+    const remaining = MAX_LENGTH - watchedName.length;
+    const isNearLimit = watchedName.length >= MAX_LENGTH - 10;
 
     const handleClose = () => {
-        setName('');
-        setError('');
+        reset();
+        setApiError('');
         onClose();
     };
 
-    const handleCreate = async () => {
-        const trimmed = name.trim();
-        if (!trimmed) {
-            setError('Team name is required');
-            return;
-        }
-        if (trimmed.length > MAX_LENGTH) {
-            setError(`Team name must be ${MAX_LENGTH} characters or less`);
-            return;
-        }
-
+    const onSubmit = async (data: TeamForm) => {
         const currentUser = authService.getCurrentUser();
         if (!currentUser) {
-            setError('You must be logged in to create a team');
+            setApiError('You must be logged in to create a team');
             return;
         }
 
         setLoading(true);
-        setError('');
+        setApiError('');
 
         try {
             const res = await fetch('/api/teams', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: trimmed, createdBy: currentUser.email }),
+                body: JSON.stringify({ name: data.name.trim(), createdBy: currentUser.email }),
             });
 
-            const data = await res.json();
+            const json = await res.json();
             if (!res.ok) {
-                setError(data.error || 'Failed to create team');
+                setApiError(json.error || 'Failed to create team');
                 return;
             }
 
-            onCreated(data.team);
+            onCreated(json.team);
             handleClose();
         } catch {
-            setError('An unexpected error occurred');
+            setApiError('An unexpected error occurred');
         } finally {
             setLoading(false);
         }
     };
-
-    const remaining = MAX_LENGTH - name.length;
-    const isNearLimit = name.length >= MAX_LENGTH - 10;
 
     return (
         <BaseDialog
@@ -80,17 +86,17 @@ export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTea
             disableBackdropClick={loading}
             actions={
                 <Box sx={{ display: 'flex', gap: 1, px: 0.5 }}>
-                    <Button onClick={handleClose} disabled={loading} variant="outlined" color="inherit">
+                    <AppButton variant="outlined" onClick={handleClose} disabled={loading}>
                         Cancel
-                    </Button>
-                    <Button
-                        onClick={handleCreate}
-                        disabled={loading || !name.trim()}
+                    </AppButton>
+                    <AppButton
                         variant="contained"
-                        // size="small"
+                        onClick={handleSubmit(onSubmit)}
+                        loading={loading}
+                        disabled={!watchedName.trim()}
                     >
                         {loading ? 'Creating…' : 'Create Team'}
-                    </Button>
+                    </AppButton>
                 </Box>
             }
         >
@@ -98,52 +104,40 @@ export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTea
                 <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0, borderRadius: '16px 16px 0 0' }} />
             )}
 
-            {/* Icon + description */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
-                {/* <Box
-                    sx={{
-                        // width: 44,
-                        // height: 44,
-                        borderRadius: 2,
-                        bgcolor: 'primary.main',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                    }}
-                >
-                    <FolderIcon sx={{ color: 'white', fontSize: 'medium' }} />
-                </Box> */}
                 <Typography variant="body2" color="text.secondary">
                     Create team to group contracts together.
                 </Typography>
             </Box>
 
-            <TextField
-                label="Team Name"
-                placeholder="e.g. Legal, HR, Client Projects…"
-                value={name}
-                onChange={e => {
-                    setName(e.target.value.slice(0, MAX_LENGTH));
-                    if (error) setError('');
-                }}
-                onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
-                error={!!error}
-                helperText={
-                    error || (
-                        <Typography
-                            component="span"
-                            variant="caption"
-                            sx={{ color: isNearLimit ? 'warning.main' : 'text.secondary' }}
-                        >
-                            {remaining} / {MAX_LENGTH} characters remaining
-                        </Typography>
-                    )
-                }
-                fullWidth
-                autoFocus
-                size="small"
-                inputProps={{ maxLength: MAX_LENGTH }}
+            <Controller
+                name="name"
+                control={control}
+                render={({ field, fieldState }) => (
+                    <TextField
+                        {...field}
+                        onChange={e => field.onChange(e.target.value.slice(0, MAX_LENGTH))}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSubmit(onSubmit)(); }}
+                        label="Team Name"
+                        placeholder="e.g. Legal, HR, Client Projects…"
+                        fullWidth
+                        autoFocus
+                        size="small"
+                        error={!!fieldState.error || !!apiError}
+                        helperText={
+                            fieldState.error?.message || apiError || (
+                                <Typography
+                                    component="span"
+                                    variant="caption"
+                                    sx={{ color: isNearLimit ? 'warning.main' : 'text.secondary' }}
+                                >
+                                    {remaining} / {MAX_LENGTH} characters remaining
+                                </Typography>
+                            )
+                        }
+                        slotProps={{ htmlInput: { maxLength: MAX_LENGTH } }}
+                    />
+                )}
             />
         </BaseDialog>
     );
