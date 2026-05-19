@@ -52,10 +52,10 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
     };
 
     const menuItems: MenuItem[] = [
-        { text: t('dashboard'), icon: <DashboardOutlinedIcon sx={{ fontSize: 20 }} />, path: '/dashboard' },
+        // { text: t('dashboard'), icon: <DashboardOutlinedIcon sx={{ fontSize: 20 }} />, path: '/dashboard' },
         { text: t('overview'), icon: <GridViewOutlinedIcon sx={{ fontSize: 20 }} />, path: '/overview' },
         // { text: t('allContracts'), icon: <LayersOutlinedIcon sx={{ fontSize: 20 }} />, path: '/all-contracts' },
-        { text: t('contracts'), icon: <ArticleOutlinedIcon sx={{ fontSize: 20 }} />, path: '/contracts' },
+        // { text: t('contracts'), icon: <ArticleOutlinedIcon sx={{ fontSize: 20 }} />, path: '/contracts' },
         // { text: t('signatures'), icon: <DrawIcon sx={{ fontSize: 20 }} />, path: '/signatures' },
         // { text: t('reviewApproval'), icon: <DraftsIcon sx={{ fontSize: 20 }} />, path: '/review-approval' },
         { text: t('inbox'), icon: <DraftsIcon sx={{ fontSize: 20 }} />, path: '/inbox' },
