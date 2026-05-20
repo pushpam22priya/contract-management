@@ -1,25 +1,26 @@
-import { User, LoggedInUser, LoginCredentials, AuthResponse } from '@/types/auth';
- 
+import { User, LoggedInUser, LoginCredentials, AuthResponse, StoredSession, BackendLoginResponse } from '@/types/auth';
+import { httpClient } from '@/lib/httpClient';
+
 const CURRENT_USER_STORAGE_KEY = 'cms_current_user';
- 
+
 class AuthService {
-    /**
-     * Save logged-in user to sessionStorage
-     */
-    private saveCurrentUser(user: LoggedInUser): void {
+    private saveSession(user: LoggedInUser, token: string): void {
         if (typeof window === 'undefined') return;
- 
-        sessionStorage.setItem(CURRENT_USER_STORAGE_KEY, JSON.stringify(user));
+        const session: StoredSession = { user, token };
+        sessionStorage.setItem(CURRENT_USER_STORAGE_KEY, JSON.stringify(session));
     }
- 
-    /**
-     * Get current logged-in user from sessionStorage
-     */
+
     getCurrentUser(): LoggedInUser | null {
         if (typeof window === 'undefined') return null;
- 
-        const userData = sessionStorage.getItem(CURRENT_USER_STORAGE_KEY);
-        return userData ? JSON.parse(userData) : null;
+        const raw = sessionStorage.getItem(CURRENT_USER_STORAGE_KEY);
+        if (!raw) return null;
+        try {
+            const parsed = JSON.parse(raw);
+            // Support both old flat shape and new { user, token } shape
+            return parsed.user ?? parsed;
+        } catch {
+            return null;
+        }
     }
  
     /**
@@ -29,47 +30,29 @@ class AuthService {
         return this.getCurrentUser() !== null;
     }
  
-    /**
-     * Login user - calls the /api/users endpoint
-     * Creates new user if email doesn't exist, validates password if exists
-     */
     async login(credentials: LoginCredentials): Promise<AuthResponse> {
         if (!credentials.email || !credentials.password) {
-            return {
-                success: false,
-                message: 'Email and password are required',
-            };
+            return { success: false, message: 'Email and password are required' };
         }
- 
-        try {
-            const res = await fetch('/api/users', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: credentials.email,
-                    password: credentials.password,
-                }),
-            });
- 
-            const data = await res.json();
- 
-            if (data.success && data.user) {
-                // Save to sessionStorage
-                this.saveCurrentUser(data.user);
-            }
- 
-            return {
-                success: data.success,
-                message: data.message,
-                user: data.user,
+
+        const response = await httpClient.post<BackendLoginResponse>(
+            '/auth/login',
+            { email: credentials.email, password: credentials.password },
+            { skipAuth: true }
+        );
+
+        if (response.ok && response.data) {
+            const { token, email, role } = response.data;
+            const user: LoggedInUser = {
+                email,
+                isAdmin: role === 'ADMIN',
+                lastLogin: new Date().toISOString(),
             };
-        } catch (error) {
-            console.error('Login failed:', error);
-            return {
-                success: false,
-                message: 'An unexpected error occurred. Please try again.',
-            };
+            this.saveSession(user, token);
+            return { success: true, message: 'Login successful', user };
         }
+
+        return { success: false, message: response.message };
     }
  
     /**
@@ -81,13 +64,17 @@ class AuthService {
         sessionStorage.removeItem(CURRENT_USER_STORAGE_KEY);
     }
  
-    /**
-     * Update the current user's session data (e.g. after profile save)
-     */
     updateSessionUser(updates: Partial<LoggedInUser>): void {
-        const currentUser = this.getCurrentUser();
-        if (!currentUser) return;
-        this.saveCurrentUser({ ...currentUser, ...updates });
+        if (typeof window === 'undefined') return;
+        const raw = sessionStorage.getItem(CURRENT_USER_STORAGE_KEY);
+        if (!raw) return;
+        try {
+            const parsed: StoredSession = JSON.parse(raw);
+            const updated: StoredSession = { ...parsed, user: { ...parsed.user, ...updates } };
+            sessionStorage.setItem(CURRENT_USER_STORAGE_KEY, JSON.stringify(updated));
+        } catch {
+            // nothing
+        }
     }
 
     /**

@@ -7,7 +7,7 @@ export interface User {
 }
 
 export interface LoggedInUser {
-    id: string;
+    id?: string;
     email: string;
     lastLogin: string;
     isAdmin: boolean;
@@ -30,4 +30,18 @@ export interface AuthResponse {
     success: boolean;
     message: string;
     user?: LoggedInUser;
+}
+
+// Shape stored in sessionStorage under cms_current_user
+export interface StoredSession {
+    token: string;
+    user: LoggedInUser;
+}
+
+// Raw response from POST /auth/login on the backend
+export interface BackendLoginResponse {
+    token: string;
+    email: string;
+    role: string;
+    newUser: boolean;
 }
