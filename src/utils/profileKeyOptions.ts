@@ -7,15 +7,15 @@ export const DATE_TODAY_KEY = '__date_today__';
 // Human-readable labels for known profile keys.
 // When a new field is added to LoggedInUser, add its label here too.
 const PROFILE_KEY_LABELS: Record<string, string> = {
-    name: 'Full Name',
+    fullName: 'Full Name',
     email: 'Email',
     department: 'Department',
     organization: 'Organization',
     dateOfBirth: 'Date of Birth',
     gender: 'Gender',
     permanentAddress: 'Permanent Address',
-    panCard: 'PAN Card Number',
-    aadharCard: 'Aadhar Card Number',
+    panCardNumber: 'PAN Card Number',
+    aadharCardNumber: 'Aadhar Card Number',
 };
 
 

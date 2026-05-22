@@ -38,6 +38,7 @@ import BaseDialog from '@/components/common/BaseDialog';
 import AppButton from '@/components/common/AppButton';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import { authService } from '@/services/authService';
+import { profileService } from '@/services/profileService';
 import { useTranslations } from 'next-intl';
 
 interface ProfileSettingsDialogProps {
@@ -101,14 +102,14 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
     const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<ProfileForm>({
         resolver: zodResolver(profileSchema),
         defaultValues: {
-            name: '', department: '', organization: '',
+            fullName: '', department: '', organization: '',
             dateOfBirth: '', gender: '', permanentAddress: '',
-            panCard: '', aadharCard: '',
+            panCardNumber: '', aadharCardNumber: '',
         },
     });
 
     // Watched so the avatar banner reflects the name as the user types
-    const watchedName = watch('name');
+    const watchedName = watch('fullName');
 
     const [dobValue, setDobValue] = useState<Dayjs | null>(null);
 
@@ -119,43 +120,29 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
     });
 
     useEffect(() => {
-        if (!open || !currentUser?.email) {
-            if (!open) setDobValue(null);
+        if (!open) {
+            setDobValue(null);
             return;
         }
-        const controller = new AbortController();
+
         setFetching(true);
-        fetch(`/api/users/profile?email=${encodeURIComponent(currentUser.email)}`, { signal: controller.signal })
-            .then((r) => r.json())
-            .then((data) => {
-                reset({
-                    name: data.name || '',
-                    department: data.department || '',
-                    organization: data.organization || '',
-                    dateOfBirth: data.dateOfBirth || '',
-                    gender: data.gender || '',
-                    permanentAddress: data.permanentAddress || '',
-                    panCard: data.panCard || '',
-                    aadharCard: data.aadharCard || '',
-                });
-                setDobValue(data.dateOfBirth ? dayjs(data.dateOfBirth) : null);
+        profileService.getProfile()
+            .then(({ success, data }) => {
+                const fallback: ProfileForm = {
+                    fullName:         currentUser?.fullName         || '',
+                    department:       currentUser?.department       || '',
+                    organization:     currentUser?.organization     || '',
+                    dateOfBirth:      currentUser?.dateOfBirth      || '',
+                    gender:           (currentUser?.gender as ProfileForm['gender']) || '',
+                    permanentAddress: currentUser?.permanentAddress || '',
+                    panCardNumber:    currentUser?.panCardNumber    || '',
+                    aadharCardNumber: currentUser?.aadharCardNumber || '',
+                };
+                const values: ProfileForm = (success && data) ? data : fallback;
+                reset(values);
+                setDobValue(values.dateOfBirth ? dayjs(values.dateOfBirth) : null);
             })
-            .catch((err) => {
-                if (err.name === 'AbortError') return;
-                reset({
-                    name: currentUser.name || '',
-                    department: currentUser.department || '',
-                    organization: currentUser.organization || '',
-                    dateOfBirth: currentUser.dateOfBirth || '',
-                    gender: currentUser.gender || '',
-                    permanentAddress: currentUser.permanentAddress || '',
-                    panCard: currentUser.panCard || '',
-                    aadharCard: currentUser.aadharCard || '',
-                });
-                setDobValue(currentUser.dateOfBirth ? dayjs(currentUser.dateOfBirth) : null);
-            })
-            .finally(() => { if (!controller.signal.aborted) setFetching(false); });
-        return () => controller.abort();
+            .finally(() => setFetching(false));
     }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const getInitials = (email: string) => {
@@ -168,9 +155,9 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
 
     const onSubmit = async (data: ProfileForm) => {
         setSaving(true);
-        const result = await authService.updateProfile({
+        const result = await profileService.updateProfile({
             ...data,
-            panCard: data.panCard.toUpperCase(),
+            panCardNumber: data.panCardNumber.toUpperCase(),
         });
         setSaving(false);
         setSnackbar({
@@ -261,7 +248,7 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                                     sx={fieldSx}
                                 />
                                 <Controller
-                                    name="name"
+                                    name="fullName"
                                     control={control}
                                     render={({ field, fieldState }) => (
                                         <TextField
@@ -364,10 +351,9 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                                                     startAdornment={<InputAdornment position="start"><WcOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary', ml: 0.5 }} /></InputAdornment>}
                                                 >
                                                     <MenuItem value=""><em style={{ color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.38)' }}>Select</em></MenuItem>
-                                                    <MenuItem value="Male">{t('genderMale')}</MenuItem>
-                                                    <MenuItem value="Female">{t('genderFemale')}</MenuItem>
-                                                    <MenuItem value="Other">{t('genderOther')}</MenuItem>
-                                                    <MenuItem value="Prefer not to say">{t('genderPreferNot')}</MenuItem>
+                                                    <MenuItem value="MALE">{t('genderMale')}</MenuItem>
+                                                    <MenuItem value="FEMALE">{t('genderFemale')}</MenuItem>
+                                                    <MenuItem value="OTHER">{t('genderOther')}</MenuItem>
                                                 </Select>
                                             </FormControl>
                                         )}
@@ -394,7 +380,7 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                                 <SectionHeader icon={<BadgeOutlinedIcon sx={{ fontSize: 15 }} />} label={t('sectionIdentity')} />
                                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
                                     <Controller
-                                        name="panCard"
+                                        name="panCardNumber"
                                         control={control}
                                         render={({ field, fieldState }) => (
                                             <TextField
@@ -420,7 +406,7 @@ export default function ProfileSettingsDialog({ open, onClose }: ProfileSettings
                                         )}
                                     />
                                     <Controller
-                                        name="aadharCard"
+                                        name="aadharCardNumber"
                                         control={control}
                                         render={({ field, fieldState }) => (
                                             <TextField
