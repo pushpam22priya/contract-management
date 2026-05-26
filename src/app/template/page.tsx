@@ -62,9 +62,15 @@ export default function TemplatePage() {
         }
     };
 
-    const loadCategories = () => {
-        const allCategories = categoryService.getAllCategories();
-        setCategories(allCategories.map(cat => cat.name));
+    const loadCategories = async () => {
+        console.log('[TemplatePage] Loading categories from backend');
+        try {
+            const allCategories = await categoryService.getAllCategories();
+            setCategories(allCategories.map(cat => cat.name));
+            console.log(`[TemplatePage] Categories loaded: ${allCategories.length}`);
+        } catch (err) {
+            console.error('[TemplatePage] Failed to load categories:', err);
+        }
     };
 
     const checkAdminStatus = () => {

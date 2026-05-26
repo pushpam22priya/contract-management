@@ -52,13 +52,12 @@ export default function DraftPage() {
     ]);
     const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
 
-    const loadCategories = () => {
-        const categories = categoryService.getAllCategories();
-        const options = [
+    const loadCategories = async () => {
+        const categories = await categoryService.getAllCategories();
+        setCategoryOptions([
             { label: tFilters('allCategories'), value: 'all' },
-            ...categories.map(cat => ({ label: cat.name, value: cat.name }))
-        ];
-        setCategoryOptions(options);
+            ...categories.map(cat => ({ label: cat.name, value: cat.name })),
+        ]);
     };
 
     const loadTeams = useCallback(async () => {

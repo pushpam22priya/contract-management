@@ -88,32 +88,44 @@ export default function EditTemplateDialog({
     const pendingExportRef = useRef<{ exportedFormFields: any[]; xfdfData: string; fileToUpload: File | Blob | null } | null>(null);
     const closePendingRef = useRef(false);
 
-    // Load categories and pre-fill form on mount
+    // Load categories from backend + pre-fill form on mount
     useEffect(() => {
-        if (open) {
-            const allCategories = categoryService.getAllCategories();
-            setCategories(allCategories);
+        if (!open) return;
 
-            // Pre-fill form with template data
-            reset({ templateName: template.name, description: template.description || '', category: template.category });
-            setSelectedFile(null);
-            setError('');
-            setSuccess('');
-            setShowNewCategoryInput(false);
-            setCurrentStep(1);
-            setDocumentUrl('');
+        // Async: fetch categories from backend
+        const loadCategories = async () => {
+            console.log('[EditTemplateDialog] Loading categories from backend');
+            try {
+                const allCategories = await categoryService.getAllCategories();
+                setCategories(allCategories);
+                console.log(`[EditTemplateDialog] Categories loaded: ${allCategories.length}`);
+            } catch (err) {
+                console.error('[EditTemplateDialog] Failed to load categories:', err);
+                setError('Failed to load categories. Please try again.');
+            }
+        };
 
-            // Load existing parties and form fields
-            setParties(template.parties || []);
-            const loadedFields = template.formFields || [];
-            console.log(`[EDIT-TEMPLATE] INIT: loading ${loadedFields.length} fields from template. ProfileKeys:`, loadedFields.map((f: any) => `${f.name}=${f.profileKey ?? 'null'}`));
-            setFormFields(loadedFields);
-            setSelectedFieldName(null);
-            setShowPartyPanel(true);
+        loadCategories();
 
-            const user = authService.getCurrentUser();
-            if (user) setProfileKeyOptions(getProfileKeyOptions(user));
-        }
+        // Sync: pre-fill form with existing template data
+        reset({ templateName: template.name, description: template.description || '', category: template.category });
+        setSelectedFile(null);
+        setError('');
+        setSuccess('');
+        setShowNewCategoryInput(false);
+        setCurrentStep(1);
+        setDocumentUrl('');
+
+        // Load existing parties and form fields
+        setParties(template.parties || []);
+        const loadedFields = template.formFields || [];
+        console.log(`[EditTemplateDialog] INIT: loading ${loadedFields.length} fields from template. ProfileKeys:`, loadedFields.map((f: any) => `${f.name}=${f.profileKey ?? 'null'}`));
+        setFormFields(loadedFields);
+        setSelectedFieldName(null);
+        setShowPartyPanel(true);
+
+        const user = authService.getCurrentUser();
+        if (user) setProfileKeyOptions(getProfileKeyOptions(user));
     }, [open, template, reset]);
 
     // Handle file upload
@@ -163,14 +175,16 @@ export default function EditTemplateDialog({
             return;
         }
 
+        console.log(`[EditTemplateDialog] Creating category: "${newCategory.trim()}"`);
+
         const result = await categoryService.createCategory(
             { name: newCategory.trim() },
             currentUser.email
         );
 
         if (result.success && result.category) {
-            const updatedCategories = [...categories, result.category];
-            setCategories(updatedCategories);
+            console.log('[EditTemplateDialog] Category created, updating list:', result.category);
+            setCategories(prev => [...prev, result.category!]);
             setValue('category', result.category.name);
             setNewCategory('');
             setShowNewCategoryInput(false);

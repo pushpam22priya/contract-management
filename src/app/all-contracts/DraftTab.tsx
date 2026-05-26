@@ -65,9 +65,12 @@ export default function DraftTab({ headerLeft }: { headerLeft?: React.ReactNode 
         setSnackbar({ open: true, message, severity });
     };
 
-    const loadCategories = () => {
-        const categories = categoryService.getAllCategories();
-        setCategoryOptions([{ label: tFilters('allCategories'), value: 'all' }, ...categories.map(cat => ({ label: cat.name, value: cat.name }))]);
+    const loadCategories = async () => {
+        const categories = await categoryService.getAllCategories();
+        setCategoryOptions([
+            { label: tFilters('allCategories'), value: 'all' },
+            ...categories.map(cat => ({ label: cat.name, value: cat.name })),
+        ]);
     };
 
     const loadTeams = useCallback(async () => {

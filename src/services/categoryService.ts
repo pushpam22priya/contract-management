@@ -1,143 +1,97 @@
+import { httpClient } from '@/lib/httpClient';
 import { Category, CreateCategoryData } from '@/types/template';
 
-const CATEGORIES_STORAGE_KEY = 'cms_categories';
-
 class CategoryService {
-    /**
-     * Initialize categories if not exists
-     */
-    private initializeCategories(): void {
-        if (typeof window === 'undefined') return;
-
-        const existing = localStorage.getItem(CATEGORIES_STORAGE_KEY);
-        if (!existing) {
-            localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify([]));
-        }
-    }
 
     /**
-     * Get all categories from localStorage
+     * Fetch all categories from the backend.
+     * Returns an empty array on failure — callers always get a safe value.
      */
-    getAllCategories(): Category[] {
-        if (typeof window === 'undefined') return [];
+    async getAllCategories(): Promise<Category[]> {
+        console.log('[CategoryService] getAllCategories → GET /categories');
 
-        this.initializeCategories();
-        const categoriesData = localStorage.getItem(CATEGORIES_STORAGE_KEY);
-        return categoriesData ? JSON.parse(categoriesData) : [];
-    }
+        const response = await httpClient.get<Category[]>('/categories');
 
-    /**
-     * Save all categories to localStorage
-     */
-    private saveCategories(categories: Category[]): void {
-        if (typeof window === 'undefined') return;
-
-        localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
-    }
-
-    /**
-     * Generate unique category ID
-     */
-    private generateCategoryId(): string {
-        return `cat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    }
-
-    /**
-     * Create new category
-     */
-    async createCategory(data: CreateCategoryData, userEmail: string): Promise<{ success: boolean; message: string; category?: Category }> {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        if (!data.name || data.name.trim().length === 0) {
-            return {
-                success: false,
-                message: 'Category name is required',
-            };
+        if (response.ok && Array.isArray(response.data)) {
+            console.log(`[CategoryService] getAllCategories ✓ received ${response.data.length} categories`);
+            return response.data;
         }
 
-        const categories = this.getAllCategories();
+        console.error('[CategoryService] getAllCategories ✗', response.status, response.message);
+        return [];
+    }
 
-        // Check if category already exists
-        const existingCategory = categories.find(
-            cat => cat.name.toLowerCase() === data.name.trim().toLowerCase()
-        );
+    /**
+     * Create a new category on the backend.
+     * Backend enforces uniqueness (case-insensitive) and returns HTTP 401 for duplicates.
+     */
+    async createCategory(
+        data: CreateCategoryData,
+        userEmail: string,
+    ): Promise<{ success: boolean; message: string; category?: Category }> {
+        const name = data.name?.trim();
 
-        if (existingCategory) {
-            return {
-                success: false,
-                message: 'Category already exists',
-            };
+        if (!name) {
+            console.warn('[CategoryService] createCategory called with empty name');
+            return { success: false, message: 'Category name is required' };
         }
 
-        const newCategory: Category = {
-            id: this.generateCategoryId(),
-            name: data.name.trim(),
-            createdAt: new Date().toISOString(),
-            createdBy: userEmail,
-        };
+        console.log(`[CategoryService] createCategory → POST /categories  name="${name}"  by=${userEmail}`);
 
-        categories.push(newCategory);
-        this.saveCategories(categories);
+        const response = await httpClient.post<Category>('/categories', { name });
 
-        return {
-            success: true,
-            message: 'Category created successfully',
-            category: newCategory,
-        };
+        if (response.ok && response.data) {
+            console.log('[CategoryService] createCategory ✓', response.data);
+            return { success: true, message: 'Category created successfully', category: response.data };
+        }
+
+        // Backend returns 401 for duplicate category names (API quirk documented in spec §5.2)
+        if (response.status === 401) {
+            console.warn(`[CategoryService] createCategory ✗ duplicate name "${name}"`);
+            return { success: false, message: 'Category already exists' };
+        }
+
+        console.error('[CategoryService] createCategory ✗', response.status, response.message);
+        return { success: false, message: response.message || 'Failed to create category' };
     }
 
     /**
-     * Get category by ID
-     */
-    getCategoryById(id: string): Category | undefined {
-        const categories = this.getAllCategories();
-        return categories.find(cat => cat.id === id);
-    }
-
-    /**
-     * Get category by name
-     */
-    getCategoryByName(name: string): Category | undefined {
-        const categories = this.getAllCategories();
-        return categories.find(cat => cat.name.toLowerCase() === name.toLowerCase());
-    }
-
-    /**
-     * Delete category
+     * Delete a category by ID.
      */
     async deleteCategory(id: string): Promise<{ success: boolean; message: string }> {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 300));
+        console.log(`[CategoryService] deleteCategory → DELETE /categories/${id}`);
 
-        const categories = this.getAllCategories();
-        const categoryIndex = categories.findIndex(cat => cat.id === id);
+        const response = await httpClient.delete(`/categories/${id}`);
 
-        if (categoryIndex === -1) {
-            return {
-                success: false,
-                message: 'Category not found',
-            };
+        if (response.ok) {
+            console.log(`[CategoryService] deleteCategory ✓ id=${id}`);
+            return { success: true, message: 'Category deleted successfully' };
         }
 
-        categories.splice(categoryIndex, 1);
-        this.saveCategories(categories);
+        // Backend returns 401 when ID does not exist (API quirk documented in spec §5.3)
+        if (response.status === 401) {
+            console.warn(`[CategoryService] deleteCategory ✗ not found id=${id}`);
+            return { success: false, message: 'Category not found' };
+        }
 
-        return {
-            success: true,
-            message: 'Category deleted successfully',
-        };
+        console.error('[CategoryService] deleteCategory ✗', response.status, response.message);
+        return { success: false, message: response.message || 'Failed to delete category' };
     }
 
     /**
-     * Clear all categories (for testing)
+     * Find a category by ID within a pre-fetched list.
+     * Does not make a network call — pass the list you already have.
      */
-    clearAllCategories(): void {
-        if (typeof window === 'undefined') return;
+    getCategoryById(id: string, categories: Category[]): Category | undefined {
+        return categories.find(c => c.id === id);
+    }
 
-        localStorage.removeItem(CATEGORIES_STORAGE_KEY);
+    /**
+     * Find a category by name (case-insensitive) within a pre-fetched list.
+     */
+    getCategoryByName(name: string, categories: Category[]): Category | undefined {
+        return categories.find(c => c.name.toLowerCase() === name.toLowerCase());
     }
 }
 
-// Export singleton instance
 export const categoryService = new CategoryService();

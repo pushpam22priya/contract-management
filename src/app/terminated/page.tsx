@@ -75,11 +75,12 @@ export default function TerminatedContractsPage() {
 
     useEffect(() => {
         loadContracts();
-        const cats = categoryService.getAllCategories();
-        setCategoryOptions([
-            { label: tFilters('allCategories'), value: 'all' },
-            ...cats.map(c => ({ label: c.name, value: c.name })),
-        ]);
+        categoryService.getAllCategories().then(cats => {
+            setCategoryOptions([
+                { label: tFilters('allCategories'), value: 'all' },
+                ...cats.map(c => ({ label: c.name, value: c.name })),
+            ]);
+        }).catch(err => console.error('[TerminatedPage] Failed to load categories:', err));
     }, [loadContracts]);
 
     const filteredContracts = contracts.filter(contract => {

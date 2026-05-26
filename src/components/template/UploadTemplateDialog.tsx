@@ -86,14 +86,26 @@ export default function UploadTemplateDialog({
     const pendingExportRef = useRef<{ exportedFormFields: any[]; xfdfData: string; fileToUpload: File | Blob } | null>(null);
     const closePendingRef = useRef(false);
 
-    // Load categories and profileKeyOptions on mount
+    // Load categories from backend and profileKeyOptions on mount
     useEffect(() => {
-        if (open) {
-            const allCategories = categoryService.getAllCategories();
-            setCategories(allCategories);
-            const user = authService.getCurrentUser();
-            if (user) setProfileKeyOptions(getProfileKeyOptions(user));
-        }
+        if (!open) return;
+
+        const loadCategories = async () => {
+            console.log('[UploadTemplateDialog] Loading categories from backend');
+            try {
+                const allCategories = await categoryService.getAllCategories();
+                setCategories(allCategories);
+                console.log(`[UploadTemplateDialog] Categories loaded: ${allCategories.length}`);
+            } catch (err) {
+                console.error('[UploadTemplateDialog] Failed to load categories:', err);
+                setError('Failed to load categories. Please try again.');
+            }
+        };
+
+        loadCategories();
+
+        const user = authService.getCurrentUser();
+        if (user) setProfileKeyOptions(getProfileKeyOptions(user));
     }, [open]);
 
     // Handle file upload
@@ -147,18 +159,21 @@ export default function UploadTemplateDialog({
             return;
         }
 
+        console.log(`[UploadTemplateDialog] Creating category: "${newCategory.trim()}"`);
+
         const result = await categoryService.createCategory(
             { name: newCategory.trim() },
             currentUser.email
         );
 
         if (result.success && result.category) {
-            const updatedCategories = [...categories, result.category];
-            setCategories(updatedCategories);
+            console.log('[UploadTemplateDialog] Category created, updating list:', result.category);
+            setCategories(prev => [...prev, result.category!]);
             setValue('category', result.category.name);
             setNewCategory('');
             setShowNewCategoryInput(false);
         } else {
+            console.warn('[UploadTemplateDialog] Category creation failed:', result.message);
             setError(result.message);
         }
     };

@@ -152,8 +152,8 @@ export default function ContractsPage() {
         setSnackbar({ open: true, message, severity });
 
     // ─── Data loading ──────────────────────────────────────────────────────────
-    const loadCategories = () => {
-        const categories = categoryService.getAllCategories();
+    const loadCategories = async () => {
+        const categories = await categoryService.getAllCategories();
         setCategoryOptions([
             { label: tFilters('allCategories'), value: 'all' },
             ...categories.map(cat => ({ label: cat.name, value: cat.name })),
