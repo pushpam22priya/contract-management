@@ -111,4 +111,96 @@ export const httpClient = {
 
     delete: <T>(path: string, options?: RequestOptions) =>
         request<T>('DELETE', path, undefined, options),
+
+    /**
+     * Upload raw binary (File | Blob) with JWT auth.
+     * Cannot use request() because it always JSON.stringifies the body.
+     */
+    putFile: async (path: string, file: Blob | File, contentType = 'application/pdf'): Promise<ApiResponse<unknown>> => {
+        console.log(`[httpClient.putFile] PUT ${path} | size=${file.size} | type=${contentType}`);
+        const headers: Record<string, string> = { 'Content-Type': contentType };
+        const token = getToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        try {
+            const res = await fetch(`${BACKEND_URL}${path}`, { method: 'PUT', headers, body: file });
+            let data: any = null;
+            if (res.headers.get('content-type')?.includes('application/json')) data = await res.json();
+            if (res.status === 401) {
+                console.warn(`[httpClient.putFile] 401 on ${path} — redirecting to login`);
+                handleUnauthorized();
+                return { data: null, ok: false, status: 401, message: data?.message || 'Unauthorized' };
+            }
+            if (!res.ok) {
+                console.error(`[httpClient.putFile] ✗ ${res.status} on ${path}:`, data?.message);
+                return { data: null, ok: false, status: res.status, message: data?.message || `Request failed with status ${res.status}` };
+            }
+            console.log(`[httpClient.putFile] ✓ ${res.status} on ${path}`);
+            return { data, ok: true, status: res.status, message: data?.message || 'Success' };
+        } catch (e) {
+            console.error(`[httpClient.putFile] Network error on ${path}:`, e);
+            return { data: null, ok: false, status: 0, message: e instanceof Error ? e.message : 'Network error' };
+        }
+    },
+
+    /**
+     * Upload a file as multipart/form-data with JWT auth.
+     * Spring Boot controllers annotated with @RequestParam MultipartFile expect this format.
+     * IMPORTANT: Do NOT set Content-Type manually — the browser must set it to include the
+     * multipart boundary (e.g. "multipart/form-data; boundary=----abc123").
+     * Setting it manually breaks the boundary and causes the backend to fail parsing.
+     */
+    putFormData: async (path: string, formData: FormData): Promise<ApiResponse<unknown>> => {
+        console.log(`[httpClient.putFormData] PUT ${path} (multipart/form-data)`);
+        // Auth header only — NO Content-Type, browser sets it with the boundary
+        const headers: Record<string, string> = {};
+        const token = getToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        try {
+            const res = await fetch(`${BACKEND_URL}${path}`, { method: 'PUT', headers, body: formData });
+            let data: any = null;
+            if (res.headers.get('content-type')?.includes('application/json')) data = await res.json();
+            if (res.status === 401) {
+                console.warn(`[httpClient.putFormData] 401 on ${path} — redirecting to login`);
+                handleUnauthorized();
+                return { data: null, ok: false, status: 401, message: data?.message || 'Unauthorized' };
+            }
+            if (!res.ok) {
+                console.error(`[httpClient.putFormData] ✗ ${res.status} on ${path}:`, data?.message || data);
+                return { data: null, ok: false, status: res.status, message: data?.message || `Request failed with status ${res.status}` };
+            }
+            console.log(`[httpClient.putFormData] ✓ ${res.status} on ${path}`);
+            return { data, ok: true, status: res.status, message: data?.message || 'Success' };
+        } catch (e) {
+            console.error(`[httpClient.putFormData] Network error on ${path}:`, e);
+            return { data: null, ok: false, status: 0, message: e instanceof Error ? e.message : 'Network error' };
+        }
+    },
+
+    /**
+     * Fetch a resource with JWT auth and return the raw Response (for .blob() / .arrayBuffer()).
+     * Cannot use request() because it always parses JSON.
+     */
+    getRaw: async (path: string): Promise<Response | null> => {
+        console.log(`[httpClient.getRaw] GET ${path}`);
+        const headers: Record<string, string> = {};
+        const token = getToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        try {
+            const res = await fetch(`${BACKEND_URL}${path}`, { method: 'GET', headers });
+            if (res.status === 401) {
+                console.warn(`[httpClient.getRaw] 401 on ${path} — redirecting to login`);
+                handleUnauthorized();
+                return null;
+            }
+            if (!res.ok) {
+                console.error(`[httpClient.getRaw] ✗ ${res.status} on ${path}`);
+                return null;
+            }
+            console.log(`[httpClient.getRaw] ✓ ${res.status} on ${path}`);
+            return res;
+        } catch (e) {
+            console.error(`[httpClient.getRaw] Network error on ${path}:`, e);
+            return null;
+        }
+    },
 };

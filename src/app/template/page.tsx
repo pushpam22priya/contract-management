@@ -20,6 +20,7 @@ import { Template } from '@/types/template';
 import CompactFilter from '@/components/common/CompactFilter';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import { useTranslations } from 'next-intl';
+import { fetchTemplateBlobUrl } from '@/utils/fetchTemplateBlobUrl';
 
 export default function TemplatePage() {
     const theme = useTheme();
@@ -44,6 +45,10 @@ export default function TemplatePage() {
     const [templateToEdit, setTemplateToEdit] = useState<Template | null>(null);
     const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null);
     const [deleting, setDeleting] = useState(false);
+
+    // Blob URL for the viewer — fetched from MinIO with JWT, passed to Apryse
+    const [viewerBlobUrl, setViewerBlobUrl] = useState<string | null>(null);
+    const [fetchingViewerPdf, setFetchingViewerPdf] = useState(false);
 
     // Load data on mount
     useEffect(() => {
@@ -94,27 +99,51 @@ export default function TemplatePage() {
     };
 
     const handleViewTemplate = async (templateId: string) => {
-        console.log('👁️  Viewing template:', templateId);
+        console.log('[TemplatePage] handleViewTemplate → id:', templateId);
+        setFetchingViewerPdf(true);
 
         try {
-            // Use real service instead of mock
             const fetchedTemplate = await templateService.getTemplateById(templateId);
-
-            if (fetchedTemplate) {
-                console.log('✅ Template fetched via templateService');
-                setTemplateToView(fetchedTemplate);
-                setViewerOpen(true);
-            } else {
-                console.error('❌ Failed to fetch template');
+            if (!fetchedTemplate) {
+                console.error('[TemplatePage] handleViewTemplate ✗ template not found');
+                return;
             }
+            console.log(`[TemplatePage] handleViewTemplate ✓ name="${fetchedTemplate.name}" | fileUploaded=${fetchedTemplate.fileUploaded}`);
+
+            if (fetchedTemplate.fileUploaded) {
+                // Template binary is in MinIO — fetch with JWT → blob URL for Apryse
+                console.log('[TemplatePage] handleViewTemplate: fetching blob URL from MinIO...');
+                const url = await fetchTemplateBlobUrl(fetchedTemplate.id);
+                if (!url) {
+                    console.error('[TemplatePage] handleViewTemplate ✗ failed to get blob URL');
+                    return;
+                }
+                setViewerBlobUrl(url);
+            } else {
+                // Legacy path: template was saved before MinIO migration
+                const legacyUrl = fetchedTemplate.fileData || fetchedTemplate.fileUrl || null;
+                console.log(`[TemplatePage] handleViewTemplate: using legacy URL (fileUploaded=false)`);
+                setViewerBlobUrl(legacyUrl);
+            }
+
+            setTemplateToView(fetchedTemplate);
+            setViewerOpen(true);
         } catch (error) {
-            console.error('❌ Error fetching template:', error);
+            console.error('[TemplatePage] handleViewTemplate ✗ unexpected error:', error);
+        } finally {
+            setFetchingViewerPdf(false);
         }
     };
 
     const handleCloseViewer = () => {
         setViewerOpen(false);
         setTemplateToView(null);
+        // Revoke blob URL to free browser memory
+        if (viewerBlobUrl?.startsWith('blob:')) {
+            console.log('[TemplatePage] handleCloseViewer: revoking blob URL');
+            URL.revokeObjectURL(viewerBlobUrl);
+        }
+        setViewerBlobUrl(null);
     };
 
     const handleEditTemplate = (templateId: string) => {
@@ -297,18 +326,15 @@ export default function TemplatePage() {
                 />
 
                 {/* Document Viewer Dialog */}
-                {templateToView && (
+                {templateToView && viewerBlobUrl && (
                     <DocumentViewerDialog
                         open={viewerOpen}
                         onClose={handleCloseViewer}
-                        fileUrl={templateToView.fileData || templateToView.fileUrl}
+                        fileUrl={viewerBlobUrl}
                         fileName={templateToView.fileName}
                         title={templateToView.name}
                         readOnly={true}
                         formFields={templateToView.formFields}
-                        // ✅ CRITICAL FIX: ALWAYS import XFDF for templates
-                        // Templates are saved with flatten=false, so form fields exist ONLY in XFDF
-                        // Unlike signed contracts (which are flattened), templates need XFDF to show fields
                         initialXfdf={templateToView.xfdfData}
                     />
                 )}

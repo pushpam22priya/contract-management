@@ -14,6 +14,7 @@ import {
     alpha,
     Alert,
     AlertColor,
+    LinearProgress,
     useTheme,
 } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
@@ -345,6 +346,9 @@ export default function UploadTemplateDialog({
     // State for modification tracking
     const [pdfModified, setPdfModified] = useState(false);
 
+    // Upload progress: -1 = idle, 0-100 = uploading (only active during chunked uploads ≥50MB)
+    const [uploadProgress, setUploadProgress] = useState<number>(-1);
+
     // ✅ AUTO-SAVE: Handle change notifications during template editing
     // Note: For NEW templates, we don't save to JSONBin until final submit
     // (because template doesn't exist yet). This handler just logs changes.
@@ -375,6 +379,7 @@ export default function UploadTemplateDialog({
 
             if (templateId) {
                 console.log('💾 Updating existing template via Service (re-save)...', templateId);
+                const hasNewBinary = fileToUpload !== selectedFile || pdfModified;
                 const updateData: any = {
                     name: templateName.trim(),
                     description: description.trim(),
@@ -384,12 +389,19 @@ export default function UploadTemplateDialog({
                     xfdfData: xfdfData,
                     parties: parties.length > 0 ? parties : undefined,
                 };
-                if (fileToUpload !== selectedFile || pdfModified) {
+                if (hasNewBinary) {
                     updateData.file = fileToUpload;
                     updateData.fileName = selectedFile!.name;
                     updateData.fileType = 'pdf';
+                    console.log(`  - Replacing binary: ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
+                    setUploadProgress(0);
+                    updateData.onProgress = (progress: number) => {
+                        console.log(`[UploadTemplateDialog] Update progress: ${progress}%`);
+                        setUploadProgress(progress);
+                    };
                 }
                 const result = await templateService.updateTemplate(templateId, updateData, currentUser.email);
+                if (hasNewBinary) setUploadProgress(-1);
                 if (!result.success) {
                     setError(result.message || 'Failed to update template. Please try again.');
                     return false;
@@ -399,6 +411,8 @@ export default function UploadTemplateDialog({
                 console.log('💾 Saving template via Service...');
                 console.log(`  - Parties: ${parties.length}`);
                 console.log(`  - Form fields: ${resolvedFormFields.length}`);
+                console.log(`  - File size: ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
+                setUploadProgress(0);
                 const savedTemplate = await templateService.saveTemplate({
                     name: templateName.trim(),
                     description: description.trim(),
@@ -408,7 +422,12 @@ export default function UploadTemplateDialog({
                     xfdfData: xfdfData,
                     formFields: resolvedFormFields,
                     parties: parties.length > 0 ? parties : undefined,
+                    onProgress: (progress) => {
+                        console.log(`[UploadTemplateDialog] Upload progress: ${progress}%`);
+                        setUploadProgress(progress);
+                    },
                 }, currentUser.email);
+                setUploadProgress(-1);
                 templateId = (savedTemplate as any).id || null;
                 setSavedTemplateId(templateId);
                 console.log('✅ Template saved successfully!', templateId);
@@ -601,6 +620,7 @@ export default function UploadTemplateDialog({
             setSuccess('');
             setPdfModified(false);
             setSavedTemplateId(null);
+            setUploadProgress(-1);
             setParties([]);
             setFormFields([]);
             setSelectedFieldName(null);
@@ -1121,6 +1141,16 @@ export default function UploadTemplateDialog({
                         <Alert severity="error" sx={{ mb: 1, mx: 1 }} onClose={() => setError('')}>
                             {error}
                         </Alert>
+                    )}
+
+                    {/* Upload progress bar — shown only during chunked uploads (≥50MB files) */}
+                    {uploadProgress >= 0 && (
+                        <Box sx={{ px: 1, pb: 0.5 }}>
+                            <LinearProgress variant="determinate" value={uploadProgress} />
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                                Uploading... {uploadProgress}%
+                            </Typography>
+                        </Box>
                     )}
 
                     {/* Main content area with PDF Viewer and Party Panel */}

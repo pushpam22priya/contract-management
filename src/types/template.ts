@@ -87,6 +87,9 @@ export interface Template {
 
     // Multi-party configuration
     parties?: PartyConfiguration[];  // Defined parties for this template
+
+    // Set client-side after migration: true = binary lives in MinIO, use fetchTemplateBlobUrl()
+    fileUploaded?: boolean;
 }
 
 export interface Category {
@@ -107,6 +110,8 @@ export interface UploadTemplateData {
     formFields?: any[];
     // Multi-party configuration
     parties?: PartyConfiguration[];
+    // Progress callback — called with 0-100 during chunked uploads
+    onProgress?: (progress: number) => void;
 }
 
 export interface CreateCategoryData {

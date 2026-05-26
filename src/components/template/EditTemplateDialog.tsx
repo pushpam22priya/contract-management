@@ -37,6 +37,7 @@ import ProfileFieldMappingDialog from '@/components/template/ProfileFieldMapping
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Category } from '@/types/template';
 import { getProfileKeyOptions, ProfileKeyOption } from '@/utils/profileKeyOptions';
+import { fetchTemplateBlobUrl } from '@/utils/fetchTemplateBlobUrl';
 
 interface EditTemplateDialogProps {
     open: boolean;
@@ -74,6 +75,10 @@ export default function EditTemplateDialog({
     // Document URL for PDF Viewer (either new file blob or existing template URL)
     const [documentUrl, setDocumentUrl] = useState('');
     const [documentLoaded, setDocumentLoaded] = useState(false);
+
+    // Blob URL fetched from MinIO for existing templates (fileUploaded = true)
+    const [fetchingPdf, setFetchingPdf] = useState(false);
+    const [existingBlobUrl, setExistingBlobUrl] = useState<string | null>(null);
 
     // Multi-party configuration state
     const [parties, setParties] = useState<PartyConfiguration[]>([]);
@@ -126,7 +131,28 @@ export default function EditTemplateDialog({
 
         const user = authService.getCurrentUser();
         if (user) setProfileKeyOptions(getProfileKeyOptions(user));
+
+        // Reset blob URL when dialog reopens (a new template may be edited)
+        setExistingBlobUrl(prev => {
+            if (prev?.startsWith('blob:')) {
+                console.log('[EditTemplateDialog] Revoking stale blob URL on reopen');
+                URL.revokeObjectURL(prev);
+            }
+            return null;
+        });
+        setFetchingPdf(false);
     }, [open, template, reset]);
+
+    // Revoke blob URL when component unmounts
+    useEffect(() => {
+        return () => {
+            if (existingBlobUrl?.startsWith('blob:')) {
+                console.log('[EditTemplateDialog] Revoking blob URL on unmount');
+                URL.revokeObjectURL(existingBlobUrl);
+            }
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [existingBlobUrl]);
 
     // Handle file upload
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -330,27 +356,57 @@ export default function EditTemplateDialog({
         const valid = await trigger(['templateName', 'category']);
         if (!valid) return;
 
-        // Determine which file to use
         if (selectedFile) {
-            // New file selected
-            if (selectedFile.type === 'application/pdf') {
-                const url = URL.createObjectURL(selectedFile);
+            // User selected a new replacement file
+            if (selectedFile.type !== 'application/pdf') {
+                setError('Please upload a PDF file to use the form builder');
+                return;
+            }
+            console.log(`[EditTemplateDialog] handleNext: using new file blob (${(selectedFile.size / 1024).toFixed(0)}KB)`);
+            const url = URL.createObjectURL(selectedFile);
+            setDocumentUrl(url);
+            setCurrentStep(2);
+            setError('');
+            return;
+        }
+
+        // No new file — load existing template PDF
+        if (template.fileType !== 'pdf') {
+            setError('Only PDF templates support the form builder');
+            return;
+        }
+
+        if (template.fileUploaded) {
+            // Template binary is in MinIO — fetch with JWT and create a blob URL for Apryse
+            console.log(`[EditTemplateDialog] handleNext: fetching blob URL for template "${template.id}" from MinIO`);
+            setFetchingPdf(true);
+            setError('');
+            try {
+                const url = await fetchTemplateBlobUrl(template.id);
+                if (!url) {
+                    setError('Failed to load template PDF. Please try again.');
+                    return;
+                }
+                console.log(`[EditTemplateDialog] handleNext: blob URL ready, navigating to Step 2`);
+                setExistingBlobUrl(url);
                 setDocumentUrl(url);
                 setCurrentStep(2);
-                setError('');
-            } else {
-                setError('Please upload a PDF file to use the form builder');
+            } catch (e) {
+                console.error('[EditTemplateDialog] handleNext: blob fetch error:', e);
+                setError('Failed to load template PDF. Please try again.');
+            } finally {
+                setFetchingPdf(false);
             }
         } else {
-            // No new file, use existing template file
-            // Prefer fileData (new architecture) over fileUrl (legacy)
-            const existingFileUrl = template.fileData || template.fileUrl;
-            if (template.fileType === 'pdf' && existingFileUrl) {
-                setDocumentUrl(existingFileUrl);
+            // Legacy path: template was saved before MinIO migration (has fileData or direct fileUrl)
+            const legacyUrl = template.fileData || template.fileUrl;
+            if (legacyUrl) {
+                console.log(`[EditTemplateDialog] handleNext: using legacy fileUrl/fileData for template "${template.id}"`);
+                setDocumentUrl(legacyUrl);
                 setCurrentStep(2);
                 setError('');
             } else {
-                setError('Only PDF templates support the form builder');
+                setError('No file found for this template. Please upload a replacement file.');
             }
         }
     };
@@ -358,15 +414,17 @@ export default function EditTemplateDialog({
     // Go back to Step 1
     const handleBack = () => {
         setCurrentStep(1);
-        // Clean up blob URL if it was created from a new file
         if (selectedFile && documentUrl) {
+            // Blob URL was created from a new selected file — revoke it
+            console.log('[EditTemplateDialog] handleBack: revoking blob URL from selected file');
             URL.revokeObjectURL(documentUrl);
-            setDocumentUrl('');
+        } else if (existingBlobUrl && documentUrl === existingBlobUrl) {
+            // Blob URL was fetched from MinIO — revoke it
+            console.log('[EditTemplateDialog] handleBack: revoking MinIO blob URL');
+            URL.revokeObjectURL(existingBlobUrl);
+            setExistingBlobUrl(null);
         }
-        // If using existing fileUrl, we don't revoke it
-        if (!selectedFile) {
-            setDocumentUrl('');
-        }
+        setDocumentUrl('');
         setDocumentLoaded(false);
     };
 
@@ -582,9 +640,15 @@ export default function EditTemplateDialog({
             pendingExportRef.current = null;
             closePendingRef.current = false;
             if (selectedFile && documentUrl) {
+                console.log('[EditTemplateDialog] handleClose: revoking blob URL from selected file');
                 URL.revokeObjectURL(documentUrl);
             }
+            if (existingBlobUrl?.startsWith('blob:') && !selectedFile) {
+                console.log('[EditTemplateDialog] handleClose: revoking MinIO blob URL');
+                URL.revokeObjectURL(existingBlobUrl);
+            }
             setDocumentUrl('');
+            setExistingBlobUrl(null);
             setDocumentLoaded(false);
             setCurrentStep(1);
             onClose();
@@ -596,8 +660,9 @@ export default function EditTemplateDialog({
         <AppButton
             onClick={handleNext}
             variant="contained"
-            endIcon={<ArrowForward />}
-            disabled={!templateName || !selectedCategory}
+            endIcon={fetchingPdf ? undefined : <ArrowForward />}
+            loading={fetchingPdf}
+            disabled={!templateName || !selectedCategory || fetchingPdf}
             sx={{
                 fontWeight: 600,
                 px: 3,
