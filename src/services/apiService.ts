@@ -24,9 +24,9 @@ async function chunkedUpload(
     console.log(`[ChunkedUpload] File size=${(totalSize / 1024 / 1024).toFixed(2)}MB | parts=${totalParts} | chunkSize=10MB`);
 
     // 1. Initiate multipart upload — backend returns an uploadId
-    console.log(`[ChunkedUpload] Step 1: POST /templates/${templateId}/upload/initiate`);
+    console.log(`[ChunkedUpload] Step 1: POST /templates/${templateId}/file/initiate`);
     const initRes = await httpClient.post<{ uploadId: string }>(
-        `/templates/${templateId}/upload/initiate`,
+        `/templates/${templateId}/file/initiate`,
         {}
     );
     if (!initRes.ok || !initRes.data?.uploadId) {
@@ -38,47 +38,71 @@ async function chunkedUpload(
     // 2. Upload each part
     const parts: { partNumber: number; eTag: string }[] = [];
 
-    for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
-        const start = (partNumber - 1) * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, totalSize);
-        const chunk = file.slice(start, end);
+    try {
+        for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+            const start = (partNumber - 1) * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, totalSize);
+            const chunk = file.slice(start, end);
 
-        console.log(
-            `[ChunkedUpload] Step 2.${partNumber}: Requesting presigned URL for part ${partNumber}/${totalParts}` +
-            ` (bytes ${start}-${end - 1}, size=${(chunk.size / 1024).toFixed(0)}KB)`
-        );
+            console.log(
+                `[ChunkedUpload] Step 2.${partNumber}: Requesting presigned URL for part ${partNumber}/${totalParts}` +
+                ` (bytes ${start}-${end - 1}, size=${(chunk.size / 1024).toFixed(0)}KB)`
+            );
 
-        // Get presigned URL for this part from backend
-        const presignRes = await httpClient.get<{ presignedUrl: string }>(
-            `/templates/${templateId}/upload/presign?uploadId=${encodeURIComponent(uploadId)}&partNumber=${partNumber}`
-        );
-        if (!presignRes.ok || !presignRes.data?.presignedUrl) {
-            throw new Error(`[ChunkedUpload] ✗ Failed to get presigned URL for part ${partNumber}: ${presignRes.message}`);
+            // Get presigned URL for this part from backend
+            // Backend returns { url, partNumber } — field is "url" not "presignedUrl"
+            const presignRes = await httpClient.get<{ url: string; partNumber: number }>(
+                `/templates/${templateId}/file/presign?uploadId=${encodeURIComponent(uploadId)}&partNumber=${partNumber}`
+            );
+            if (!presignRes.ok || !presignRes.data?.url) {
+                throw new Error(`[ChunkedUpload] ✗ Failed to get presigned URL for part ${partNumber}: ${presignRes.message}`);
+            }
+            const presignedUrl = presignRes.data.url;
+            console.log(`[ChunkedUpload] ✓ Presigned URL received for part ${partNumber}: ${presignedUrl.slice(0, 60)}...`);
+
+            // PUT chunk directly to MinIO — presigned URL has credentials baked in.
+            // IMPORTANT: Do NOT add Authorization header — MinIO will reject a pre-signed
+            // request that also has an Authorization header.
+            // Content-Type must be application/octet-stream as per MinIO requirements.
+            console.log(`[ChunkedUpload] Uploading part ${partNumber}/${totalParts} directly to MinIO (${(chunk.size / 1024).toFixed(0)}KB)...`);
+            const partRes = await fetch(presignedUrl, {
+                method: 'PUT',
+                body: chunk,
+                headers: { 'Content-Type': 'application/octet-stream' },
+            });
+            if (!partRes.ok) {
+                throw new Error(`[ChunkedUpload] ✗ Part ${partNumber} MinIO upload failed: HTTP ${partRes.status}`);
+            }
+
+            // ETag is returned by MinIO in the response header — strip surrounding quotes
+            const rawETag = partRes.headers.get('ETag') || '';
+            const eTag = rawETag.replace(/"/g, '');
+            if (!eTag) {
+                console.warn(`[ChunkedUpload] ⚠ No ETag in MinIO response for part ${partNumber} — CORS may be blocking the header`);
+            }
+            parts.push({ partNumber, eTag });
+
+            const progress = Math.round((partNumber / totalParts) * 100);
+            onProgress?.(progress);
+            console.log(`[ChunkedUpload] ✓ Part ${partNumber}/${totalParts} complete | eTag="${eTag}" | progress=${progress}%`);
         }
-        const { presignedUrl } = presignRes.data;
-        console.log(`[ChunkedUpload] ✓ Presigned URL received for part ${partNumber}`);
-
-        // PUT chunk directly to MinIO — presigned URL has credentials baked in, no auth header needed
-        console.log(`[ChunkedUpload] Uploading part ${partNumber}/${totalParts} directly to MinIO...`);
-        const partRes = await fetch(presignedUrl, { method: 'PUT', body: chunk });
-        if (!partRes.ok) {
-            throw new Error(`[ChunkedUpload] ✗ Part ${partNumber} upload failed: HTTP ${partRes.status}`);
+    } catch (err) {
+        // Abort the multipart upload on any failure to free orphaned MinIO resources
+        console.error(`[ChunkedUpload] ✗ Error during part upload — aborting upload uploadId="${uploadId}"`, err);
+        try {
+            await httpClient.post(`/templates/${templateId}/file/abort?uploadId=${encodeURIComponent(uploadId)}`, {});
+            console.log(`[ChunkedUpload] ✓ Abort sent for uploadId="${uploadId}"`);
+        } catch (abortErr) {
+            console.warn('[ChunkedUpload] Failed to send abort — orphaned parts may remain in MinIO:', abortErr);
         }
-
-        // ETag is returned by MinIO — strip surrounding quotes if present
-        const rawETag = partRes.headers.get('ETag') || '';
-        const eTag = rawETag.replace(/"/g, '');
-        parts.push({ partNumber, eTag });
-
-        const progress = Math.round((partNumber / totalParts) * 100);
-        onProgress?.(progress);
-        console.log(`[ChunkedUpload] ✓ Part ${partNumber}/${totalParts} complete | eTag="${eTag}" | progress=${progress}%`);
+        throw err; // re-throw so uploadTemplate reports failure
     }
 
     // 3. Complete multipart upload — backend assembles the parts in MinIO
-    console.log(`[ChunkedUpload] Step 3: POST /templates/${templateId}/upload/complete with ${parts.length} parts`);
+    console.log(`[ChunkedUpload] Step 3: POST /templates/${templateId}/file/complete with ${parts.length} parts`);
+    console.log(`[ChunkedUpload] Parts:`, parts.map(p => `#${p.partNumber} eTag="${p.eTag}"`).join(', '));
     const completeRes = await httpClient.post(
-        `/templates/${templateId}/upload/complete`,
+        `/templates/${templateId}/file/complete`,
         { uploadId, parts }
     );
     if (!completeRes.ok) {
@@ -129,8 +153,10 @@ export const apiService = {
 
         const templates = response.data.map((t: any) => ({
             ...t,
-            id: t.id || t._id,      // backend may return _id (MongoDB) or id (mapped)
-            fileUploaded: true,      // signals: binary lives in MinIO, use fetchTemplateBlobUrl()
+            id: t.id || t._id,
+            // Use backend's actual fileUploaded value — do NOT force true.
+            // Chunked uploads that failed the complete step will have fileUploaded=false.
+            fileUploaded: t.fileUploaded === true,
         }));
 
         console.log(`[ApiService] getTemplates ✓ received ${templates.length} templates`);
@@ -150,8 +176,12 @@ export const apiService = {
             return null;
         }
 
-        const template = { ...response.data, id: response.data.id || response.data._id, fileUploaded: true };
-        console.log(`[ApiService] getTemplateById ✓ name="${template.name}"`);
+        const template = {
+            ...response.data,
+            id: response.data.id || response.data._id,
+            fileUploaded: response.data.fileUploaded === true,
+        };
+        console.log(`[ApiService] getTemplateById ✓ name="${template.name}" | fileUploaded=${template.fileUploaded}`);
         return template;
     },
 
@@ -198,7 +228,7 @@ export const apiService = {
         console.log(`[ApiService] uploadTemplate Step 1 ✓ id="${id}"`);
 
         // Step 2 — Upload binary (size-gated)
-        const CHUNKED_THRESHOLD = 50 * 1024 * 1024; // 50 MB
+        const CHUNKED_THRESHOLD = 30 * 1024 * 1024; // 30 MB threshold for chunked upload
         console.log(
             `[ApiService] uploadTemplate Step 2: ${data.file.size >= CHUNKED_THRESHOLD ? 'CHUNKED' : 'single-shot'} upload`
         );

@@ -428,6 +428,11 @@ export default function UploadTemplateDialog({
                     },
                 }, currentUser.email);
                 setUploadProgress(-1);
+                if (!savedTemplate.success) {
+                    console.error('❌ Template save failed:', savedTemplate.message);
+                    setError(savedTemplate.message || 'Failed to upload template. Please try again.');
+                    return false;
+                }
                 templateId = (savedTemplate as any).id || null;
                 setSavedTemplateId(templateId);
                 console.log('✅ Template saved successfully!', templateId);

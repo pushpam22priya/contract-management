@@ -88,7 +88,7 @@ export interface Template {
     // Multi-party configuration
     parties?: PartyConfiguration[];  // Defined parties for this template
 
-    // Set client-side after migration: true = binary lives in MinIO, use fetchTemplateBlobUrl()
+    // Set client-side after migration: true = binary lives in MinIO, use getTemplateViewUrl()
     fileUploaded?: boolean;
 }
 

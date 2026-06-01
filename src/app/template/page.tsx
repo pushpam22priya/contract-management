@@ -20,7 +20,9 @@ import { Template } from '@/types/template';
 import CompactFilter from '@/components/common/CompactFilter';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import { useTranslations } from 'next-intl';
-import { fetchTemplateBlobUrl } from '@/utils/fetchTemplateBlobUrl';
+import { getTemplateViewUrl } from '@/utils/getTemplateViewUrl';
+import NotificationSnackbar from '@/components/common/NotificationSnackbar';
+import { AlertColor } from '@mui/material';
 
 export default function TemplatePage() {
     const theme = useTheme();
@@ -46,9 +48,15 @@ export default function TemplatePage() {
     const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null);
     const [deleting, setDeleting] = useState(false);
 
-    // Blob URL for the viewer — fetched from MinIO with JWT, passed to Apryse
-    const [viewerBlobUrl, setViewerBlobUrl] = useState<string | null>(null);
-    const [fetchingViewerPdf, setFetchingViewerPdf] = useState(false);
+    // Presigned MinIO URL for the viewer — passed directly to Apryse (supports range requests)
+    const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+    const [fetchingViewerUrl, setFetchingViewerUrl] = useState(false);
+
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: AlertColor }>({
+        open: false, message: '', severity: 'error',
+    });
+    const showNotification = (message: string, severity: AlertColor = 'error') =>
+        setSnackbar({ open: true, message, severity });
 
     // Load data on mount
     useEffect(() => {
@@ -100,50 +108,49 @@ export default function TemplatePage() {
 
     const handleViewTemplate = async (templateId: string) => {
         console.log('[TemplatePage] handleViewTemplate → id:', templateId);
-        setFetchingViewerPdf(true);
+        setFetchingViewerUrl(true);
 
         try {
             const fetchedTemplate = await templateService.getTemplateById(templateId);
             if (!fetchedTemplate) {
                 console.error('[TemplatePage] handleViewTemplate ✗ template not found');
+                showNotification('Template not found. It may have been deleted.');
                 return;
             }
             console.log(`[TemplatePage] handleViewTemplate ✓ name="${fetchedTemplate.name}" | fileUploaded=${fetchedTemplate.fileUploaded}`);
 
-            if (fetchedTemplate.fileUploaded) {
-                // Template binary is in MinIO — fetch with JWT → blob URL for Apryse
-                console.log('[TemplatePage] handleViewTemplate: fetching blob URL from MinIO...');
-                const url = await fetchTemplateBlobUrl(fetchedTemplate.id);
-                if (!url) {
-                    console.error('[TemplatePage] handleViewTemplate ✗ failed to get blob URL');
-                    return;
-                }
-                setViewerBlobUrl(url);
-            } else {
-                // Legacy path: template was saved before MinIO migration
-                const legacyUrl = fetchedTemplate.fileData || fetchedTemplate.fileUrl || null;
-                console.log(`[TemplatePage] handleViewTemplate: using legacy URL (fileUploaded=false)`);
-                setViewerBlobUrl(legacyUrl);
+            if (!fetchedTemplate.fileUploaded) {
+                console.warn(`[TemplatePage] handleViewTemplate: fileUploaded=false — PDF not yet in MinIO`);
+                showNotification('PDF not available for this template. Please re-upload the file.', 'warning');
+                return;
             }
 
+            // Get a short-lived MinIO presigned URL — Apryse uses it directly with range requests
+            console.log('[TemplatePage] handleViewTemplate: fetching presigned view URL...');
+            const url = await getTemplateViewUrl(fetchedTemplate.id);
+            if (!url) {
+                console.error('[TemplatePage] handleViewTemplate ✗ getTemplateViewUrl returned null');
+                showNotification('Failed to load template PDF. Please try again.', 'error');
+                return;
+            }
+
+            console.log('[TemplatePage] handleViewTemplate ✓ presigned URL ready, opening viewer');
+            setViewerUrl(url);
             setTemplateToView(fetchedTemplate);
             setViewerOpen(true);
         } catch (error) {
             console.error('[TemplatePage] handleViewTemplate ✗ unexpected error:', error);
+            showNotification('An unexpected error occurred while loading the template.');
         } finally {
-            setFetchingViewerPdf(false);
+            setFetchingViewerUrl(false);
         }
     };
 
     const handleCloseViewer = () => {
         setViewerOpen(false);
         setTemplateToView(null);
-        // Revoke blob URL to free browser memory
-        if (viewerBlobUrl?.startsWith('blob:')) {
-            console.log('[TemplatePage] handleCloseViewer: revoking blob URL');
-            URL.revokeObjectURL(viewerBlobUrl);
-        }
-        setViewerBlobUrl(null);
+        // Presigned URLs are plain strings — no revocation needed (unlike blob URLs)
+        setViewerUrl(null);
     };
 
     const handleEditTemplate = (templateId: string) => {
@@ -326,11 +333,11 @@ export default function TemplatePage() {
                 />
 
                 {/* Document Viewer Dialog */}
-                {templateToView && viewerBlobUrl && (
+                {templateToView && viewerUrl && (
                     <DocumentViewerDialog
                         open={viewerOpen}
                         onClose={handleCloseViewer}
-                        fileUrl={viewerBlobUrl}
+                        fileUrl={viewerUrl}
                         fileName={templateToView.fileName}
                         title={templateToView.name}
                         readOnly={true}
@@ -400,6 +407,13 @@ export default function TemplatePage() {
                     initialTemplateName={selectedTemplateForUse}
                 />
             </Box>
+
+            <NotificationSnackbar
+                open={snackbar.open}
+                message={snackbar.message}
+                severity={snackbar.severity}
+                onClose={() => setSnackbar(s => ({ ...s, open: false }))}
+            />
         </AppLayout>
     );
 }
