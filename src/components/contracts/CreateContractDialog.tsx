@@ -376,7 +376,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                 formFields: exportedFormFields, // Save field definitions
                 hasFormFields: (exportedFormFields?.length ?? 0) > 0 || selectedTemplate.hasFormFields || false, // ✅ Use template flag or check fields
                 parties: selectedTemplate.parties,  // ✅ Include parties for external signer validation
-                teamId: teamId || selectedTeam?._id || null, // Which team this contract belongs to
+                teamId: teamId || selectedTeam?.id || null, // Which team this contract belongs to
             };
 
             let activeContractId = contractId;

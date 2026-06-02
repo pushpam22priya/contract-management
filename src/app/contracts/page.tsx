@@ -38,7 +38,9 @@ import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
 import TeamCard from '@/components/teams/TeamCard';
 import CreateTeamDialog from '@/components/teams/CreateTeamDialog';
 import RenameTeamDialog from '@/components/teams/RenameTeamDialog';
+import ConfirmationDialog from '@/components/common/ConfirmationDialog';
 import { Team } from '@/types/team';
+import { httpClient } from '@/lib/httpClient';
 import { useTranslations } from 'next-intl';
 import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
 
@@ -99,6 +101,9 @@ export default function ContractsPage() {
     const [createTeamOpen, setCreateTeamOpen] = useState(false);
     const [renameTeamOpen, setRenameTeamOpen] = useState(false);
     const [teamToRename, setTeamToRename] = useState<Team | null>(null);
+    const [deleteTeamOpen, setDeleteTeamOpen] = useState(false);
+    const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
+    const [deletingTeam, setDeletingTeam] = useState(false);
 
     // ─── Filter state ──────────────────────────────────────────────────────────
     const [searchQuery, setSearchQuery] = useState('');
@@ -161,14 +166,13 @@ export default function ContractsPage() {
     };
 
     const loadTeams = useCallback(async () => {
-        const currentUser = authService.getCurrentUser();
-        if (!currentUser) { setTeamsLoading(false); return; }
         setTeamsLoading(true);
-        try {
-            const res = await fetch(`/api/teams?createdBy=${encodeURIComponent(currentUser.email)}`);
-            if (res.ok) setTeams(await res.json());
-        } catch { /* silently fail */ }
-        finally { setTeamsLoading(false); }
+        // Backend derives the user from the JWT token — no query params needed
+        const response = await httpClient.get<Team[]>('/teams');
+        if (response.ok && Array.isArray(response.data)) {
+            setTeams(response.data);
+        }
+        setTeamsLoading(false);
     }, []);
 
     const loadContracts = useCallback(async () => {
@@ -244,7 +248,7 @@ export default function ContractsPage() {
     }, [activeTeamId]);
 
     // ─── Derived data ──────────────────────────────────────────────────────────
-    const activeTeam = teams.find(t => t._id === activeTeamId) ?? null;
+    const activeTeam = teams.find(t => t.id === activeTeamId) ?? null;
 
     const statusLabelMap: Record<string, string> = {
         [ContractStatus.ACTIVE]: 'Active Contracts',
@@ -266,12 +270,12 @@ export default function ContractsPage() {
 
     const teamFilterOptions: FilterOption[] = [
         { label: tFilters('allTeams'), value: 'all' },
-        ...teams.map(t => ({ label: t.name, value: t._id })),
+        ...teams.map(t => ({ label: t.name, value: t.id })),
     ];
 
     const filteredTeams = teams.filter(t => {
         const matchesSearch = searchQuery === '' || t.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesFilter = teamFilterValue.some(f => f.value === 'all') || teamFilterValue.some(f => f.value === t._id);
+        const matchesFilter = teamFilterValue.some(f => f.value === 'all') || teamFilterValue.some(f => f.value === t.id);
         let matchesDate = true;
         if (startDate || endDate) {
             const d = dayjs(t.createdAt);
@@ -525,13 +529,33 @@ export default function ContractsPage() {
     };
 
     const handleTeamRenamed = (updated: Team) => {
-        setTeams(prev => prev.map(t => t._id === updated._id ? updated : t));
+        setTeams(prev => prev.map(t => t.id === updated.id ? updated : t));
         showNotification(`Team renamed to "${updated.name}"`, 'success');
     };
 
     const handleTeamCreated = (team: Team) => {
         setTeams(prev => [team, ...prev]);
         showNotification(`Team "${team.name}" created`, 'success');
+    };
+
+    const handleDeleteTeamClick = (team: Team) => {
+        setTeamToDelete(team);
+        setDeleteTeamOpen(true);
+    };
+
+    const handleConfirmDeleteTeam = async () => {
+        if (!teamToDelete) return;
+        setDeletingTeam(true);
+        const response = await httpClient.delete(`/teams/${teamToDelete.id}`);
+        setDeletingTeam(false);
+        if (response.ok || response.status === 204) {
+            setTeams(prev => prev.filter(t => t.id !== teamToDelete.id));
+            showNotification(`Team "${teamToDelete.name}" deleted`, 'success');
+        } else {
+            showNotification(response.message || 'Failed to delete team', 'error');
+        }
+        setDeleteTeamOpen(false);
+        setTeamToDelete(null);
     };
 
     // ─── Render ────────────────────────────────────────────────────────────────
@@ -807,11 +831,12 @@ export default function ContractsPage() {
                                 ) : (
                                     filteredTeams.map(team => (
                                         <TeamCard
-                                            key={team._id}
+                                            key={team.id}
                                             team={team}
-                                            contractCount={contractCountByTeam(team._id)}
+                                            contractCount={contractCountByTeam(team.id)}
                                             onClick={handleTeamClick}
                                             onRename={handleRenameTeam}
+                                            onDelete={handleDeleteTeamClick}
                                         />
                                     ))
                                 )
@@ -840,6 +865,16 @@ export default function ContractsPage() {
                     team={teamToRename}
                     onClose={() => setRenameTeamOpen(false)}
                     onRenamed={handleTeamRenamed}
+                />
+
+                <ConfirmationDialog
+                    open={deleteTeamOpen}
+                    title="Delete Team"
+                    message={`Are you sure you want to delete "${teamToDelete?.name}"? This action cannot be undone.`}
+                    onYes={handleConfirmDeleteTeam}
+                    onNo={() => { setDeleteTeamOpen(false); setTeamToDelete(null); }}
+                    onClose={() => { setDeleteTeamOpen(false); setTeamToDelete(null); }}
+                    loading={deletingTeam}
                 />
 
                 {/* Draft: PDF editor */}

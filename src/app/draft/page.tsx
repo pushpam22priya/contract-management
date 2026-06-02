@@ -295,7 +295,7 @@ export default function DraftPage() {
     }, [searchParams]);
 
     const teamNameById: Record<string, string> = Object.fromEntries(
-        teams.map(t => [t._id, t.name])
+        teams.map(t => [t.id, t.name])
     );
 
     const draftStatusLabelMap: Record<string, string> = {
@@ -313,7 +313,7 @@ export default function DraftPage() {
 
     const teamFilterOptions: FilterOption[] = [
         { label: tFilters('allTeams'), value: 'all' },
-        ...teams.map(t => ({ label: t.name, value: t._id })),
+        ...teams.map(t => ({ label: t.name, value: t.id })),
     ];
 
     const filteredDrafts = draftContracts.filter(contract => {

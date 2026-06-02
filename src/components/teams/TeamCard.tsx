@@ -5,6 +5,7 @@ import { alpha } from '@mui/material/styles';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { Team } from '@/types/team';
 import dayjs from 'dayjs';
 import { useTranslations } from 'next-intl';
@@ -14,18 +15,44 @@ interface TeamCardProps {
     contractCount: number;
     onClick: (teamId: string) => void;
     onRename: (team: Team) => void;
+    onDelete?: (team: Team) => void;
 }
 
-export default function TeamCard({ team, contractCount, onClick, onRename }: TeamCardProps) {
+export default function TeamCard({ team, contractCount, onClick, onRename, onDelete }: TeamCardProps) {
     const theme = useTheme();
     const primaryColor = theme.palette.primary.main;
     const isDark = theme.palette.mode === 'dark';
     const tTooltips = useTranslations('tooltips');
     const chipColor = isDark ? '#e8ce7aff' : primaryColor;
     const iconBtnBorder = alpha(theme.palette.text.secondary, 0.35);
+
+    const actions = [
+        {
+            title: tTooltips('openTeam'),
+            icon: <VisibilityOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
+            onClick: () => onClick(team.id),
+            hoverColor: 'primary.main',
+        },
+        {
+            title: tTooltips('renameTeam'),
+            icon: <EditOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
+            onClick: () => onRename(team),
+            hoverColor: 'primary.main',
+        },
+        // Delete button — only when team is empty (contractCount === 0)
+        ...(contractCount === 0 && onDelete ? [{
+            title: 'Delete team',
+            icon: <DeleteOutlineIcon sx={{ fontSize: '0.8rem' }} />,
+            onClick: () => onDelete(team),
+            hoverColor: 'error.main',
+            hoverBorder: theme.palette.error.main,
+            hoverShadow: alpha(theme.palette.error.main, 0.2),
+        }] : []),
+    ];
+
     return (
         <Box
-            onClick={() => onClick(team._id)}
+            onClick={() => onClick(team.id)}
             sx={{
                 bgcolor: 'background.paper',
                 borderRadius: 3,
@@ -115,18 +142,7 @@ export default function TeamCard({ team, contractCount, onClick, onRename }: Tea
                     transition: 'opacity 0.2s ease-in-out',
                 }}
             >
-                {[
-                    {
-                        title: tTooltips('openTeam'),
-                        icon: <VisibilityOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
-                        onClick: () => onClick(team._id),
-                    },
-                    {
-                        title: tTooltips('renameTeam'),
-                        icon: <EditOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
-                        onClick: () => onRename(team),
-                    },
-                ].map((action, idx) => (
+                {actions.map((action, idx) => (
                     <Tooltip key={idx} title={action.title} arrow>
                         <IconButton
                             size="small"
@@ -139,11 +155,11 @@ export default function TeamCard({ team, contractCount, onClick, onRename }: Tea
                                 color: 'text.primary',
                                 transition: 'all 0.2s ease',
                                 '&:hover': {
-                                    bgcolor: 'primary.main',
-                                    borderColor: 'primary.main',
+                                    bgcolor: action.hoverColor,
+                                    borderColor: action.hoverBorder ?? action.hoverColor,
                                     color: 'white',
                                     transform: 'translateY(-2px)',
-                                    boxShadow: `0 4px 8px ${alpha(primaryColor, 0.2)}`,
+                                    boxShadow: `0 4px 8px ${action.hoverShadow ?? alpha(primaryColor, 0.2)}`,
                                 },
                             }}
                         >

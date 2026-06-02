@@ -8,7 +8,7 @@ import { Box, TextField, Typography, LinearProgress } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
 import AppButton from '@/components/common/AppButton';
 import { Team } from '@/types/team';
-import { authService } from '@/services/authService';
+import { httpClient } from '@/lib/httpClient';
 
 interface CreateTeamDialogProps {
     open: boolean;
@@ -46,35 +46,23 @@ export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTea
     };
 
     const onSubmit = async (data: TeamForm) => {
-        const currentUser = authService.getCurrentUser();
-        if (!currentUser) {
-            setApiError('You must be logged in to create a team');
-            return;
-        }
-
         setLoading(true);
         setApiError('');
 
-        try {
-            const res = await fetch('/api/teams', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: data.name.trim(), createdBy: currentUser.email }),
-            });
+        // createdBy is derived from the JWT token on the backend — not sent in the body
+        const response = await httpClient.post<Team>('/teams', {
+            name: data.name.trim(),
+        });
 
-            const json = await res.json();
-            if (!res.ok) {
-                setApiError(json.error || 'Failed to create team');
-                return;
-            }
+        setLoading(false);
 
-            onCreated(json.team);
-            handleClose();
-        } catch {
-            setApiError('An unexpected error occurred');
-        } finally {
-            setLoading(false);
+        if (!response.ok || !response.data) {
+            setApiError(response.message || 'Failed to create team');
+            return;
         }
+
+        onCreated(response.data);
+        handleClose();
     };
 
     return (

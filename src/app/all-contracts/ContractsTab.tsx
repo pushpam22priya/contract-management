@@ -151,11 +151,11 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
     // Derived data
     const teamFilterOptions: FilterOption[] = [
         { label: tFilters('allTeams'), value: 'all' },
-        ...teams.map(t => ({ label: t.name, value: t._id })),
+        ...teams.map(t => ({ label: t.name, value: t.id })),
     ];
     const filteredTeams = teams.filter(t => {
         const matchesSearch = searchQuery === '' || t.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesFilter = teamFilterValue.some(f => f.value === 'all') || teamFilterValue.some(f => f.value === t._id);
+        const matchesFilter = teamFilterValue.some(f => f.value === 'all') || teamFilterValue.some(f => f.value === t.id);
         let matchesDate = true;
         if (startDate || endDate) {
             const d = dayjs(t.createdAt);
@@ -245,7 +245,7 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
 
     const handleTeamClick = (teamId: string) => router.push(`/contracts?team=${teamId}`);
     const handleRenameTeam = (team: Team) => { setTeamToRename(team); setRenameTeamOpen(true); };
-    const handleTeamRenamed = (updated: Team) => { setTeams(prev => prev.map(t => t._id === updated._id ? updated : t)); showNotification(`Team renamed to "${updated.name}"`, 'success'); };
+    const handleTeamRenamed = (updated: Team) => { setTeams(prev => prev.map(t => t.id === updated.id ? updated : t)); showNotification(`Team renamed to "${updated.name}"`, 'success'); };
     const handleTeamCreated = (team: Team) => { setTeams(prev => [team, ...prev]); showNotification(`Team "${team.name}" created`, 'success'); };
 
     return (
@@ -347,7 +347,7 @@ export default function ContractsTab({ headerLeft }: { headerLeft?: React.ReactN
                         </Box>
                     ) : (
                         filteredTeams.map(team => (
-                            <TeamCard key={team._id} team={team} contractCount={contractCountByTeam(team._id)} onClick={handleTeamClick} onRename={handleRenameTeam} />
+                            <TeamCard key={team.id} team={team} contractCount={contractCountByTeam(team.id)} onClick={handleTeamClick} onRename={handleRenameTeam} />
                         ))
                     )}
                     </Box>

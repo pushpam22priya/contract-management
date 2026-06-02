@@ -165,8 +165,8 @@ export default function DraftTab({ headerLeft }: { headerLeft?: React.ReactNode 
     };
 
     // Derived data
-    const teamNameById: Record<string, string> = Object.fromEntries(teams.map(t => [t._id, t.name]));
-    const teamFilterOptions: FilterOption[] = [{ label: 'All Teams', value: 'all' }, ...teams.map(t => ({ label: t.name, value: t._id }))];
+    const teamNameById: Record<string, string> = Object.fromEntries(teams.map(t => [t.id, t.name]));
+    const teamFilterOptions: FilterOption[] = [{ label: 'All Teams', value: 'all' }, ...teams.map(t => ({ label: t.name, value: t.id }))];
 
     const filteredDrafts = draftContracts.filter(contract => {
         const matchesStatus = statusFilter.some(f => f.value === 'all') || statusFilter.some(f => contract.status === f.value);

@@ -8,7 +8,7 @@ import { Box, TextField, Typography, LinearProgress } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
 import AppButton from '@/components/common/AppButton';
 import { Team } from '@/types/team';
-import { authService } from '@/services/authService';
+import { httpClient } from '@/lib/httpClient';
 
 interface RenameTeamDialogProps {
     open: boolean;
@@ -55,36 +55,25 @@ export default function RenameTeamDialog({ open, team, onClose, onRenamed }: Ren
     const onSubmit = async (data: RenameTeamForm) => {
         if (!team) return;
 
-        const currentUser = authService.getCurrentUser();
-        if (!currentUser) {
-            setApiError('You must be logged in');
-            return;
-        }
-
         setLoading(true);
         setApiError('');
 
-        try {
-            const trimmed = data.name.trim();
-            const res = await fetch(`/api/teams/${team._id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: trimmed, createdBy: currentUser.email }),
-            });
+        // createdBy is derived from JWT on the backend — not sent in the body
+        const response = await httpClient.put<Team>(`/teams/${team.id}`, {
+            name: data.name.trim(),
+        });
 
-            const json = await res.json();
-            if (!res.ok) {
-                setApiError(json.error || 'Failed to rename team');
-                return;
-            }
+        setLoading(false);
 
-            onRenamed({ ...team, name: trimmed });
-            handleClose();
-        } catch {
-            setApiError('An unexpected error occurred');
-        } finally {
-            setLoading(false);
+        if (!response.ok) {
+            setApiError(response.message || 'Failed to rename team');
+            return;
         }
+
+        // Backend returns the full updated team object
+        const updatedTeam = response.data ?? { ...team, name: data.name.trim() };
+        onRenamed(updatedTeam);
+        handleClose();
     };
 
     return (
