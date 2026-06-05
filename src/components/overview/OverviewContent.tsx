@@ -27,7 +27,7 @@ export default function OverviewContent() {
         >
             {/* Contracts layer — full width by default, shrinks when drawer opens */}
             <Box sx={{ flex: 1, overflow: 'hidden', minWidth: 0, position: 'relative' }}>
-                <ContractsContent basePath="/overview" />
+                <ContractsContent />
 
                 {/* Tab buttons overlay — inside the contracts area, no layout shift */}
                 {!isDrawerOpen && (

@@ -14,14 +14,9 @@ import {
     useMediaQuery,
     Tooltip,
 } from '@mui/material';
-import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import DraftsIcon from '@mui/icons-material/Drafts';
-import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
-import DrawIcon from '@mui/icons-material/Draw';
-import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
-import AllInboxIcon from '@mui/icons-material/AllInbox';
 import MenuIcon from '@mui/icons-material/Menu';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import { useTranslations } from 'next-intl';
@@ -80,17 +75,10 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
     const drawerWidth = open ? 220 : 56;
     const showExpanded = isMobile ? true : open;
 
-    // Dashboard uses a lighter sidebar variant; all other pages use the full sidebar style.
-    // In dark mode this distinction is removed — always use sidebar tokens for consistency.
-    const isDashboard = pathname === '/dashboard';
-
-    // ── Dashboard mode: derive from palette tokens (adapts to all themes) ──────
-    // ── Sidebar mode:   derive from theme.sidebar tokens ──────────────────────
     const { sidebar, palette } = theme;
     const primary = palette.primary.main;
     const isDarkMode = palette.mode === 'dark';
-    // In dark mode use the dashboard-style (translucent violet) for all pages
-    const effectiveIsDashboard = isDashboard || isDarkMode;
+    const effectiveIsDashboard = isDarkMode;
 
     const sidebarBg = effectiveIsDashboard ? palette.background.default : sidebar.background;
     // Mobile drawer overlays content — needs a solid background in light mode (many themes use transparent background.default)
@@ -126,7 +114,7 @@ export default function Sidebar({ open, onToggle, mobileOpen, onMobileToggle }: 
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 mx: open ? 0 : 'auto',
-                                '&:hover': { bgcolor: toggleHoverBg, color: isDashboard ? primary : sidebar.selected },
+                                '&:hover': { bgcolor: toggleHoverBg, color: effectiveIsDashboard ? primary : sidebar.selected },
                             }}
                         >
                             {open ? <MenuOpenIcon sx={{ fontSize: 18 }} /> : <MenuIcon sx={{ fontSize: 18 }} />}

@@ -64,11 +64,8 @@ const CONTRACT_PAGE_STATUSES: ContractStatus[] = [
     ContractStatus.EXPIRED,
 ];
 
-interface ContractsContentProps {
-    basePath?: string;
-}
-
-export default function ContractsContent({ basePath = '/contracts' }: ContractsContentProps) {
+export default function ContractsContent() {
+    const basePath = '/overview';
     const router = useRouter();
     const searchParams = useSearchParams();
     const tTooltips = useTranslations('tooltips');

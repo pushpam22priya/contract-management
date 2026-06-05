@@ -53,7 +53,7 @@ export default function LoginPage() {
             const response = await authService.login(data);
             if (response.success) {
                 setSuccess(response.message);
-                setTimeout(() => router.push('/dashboard'), 800);
+                setTimeout(() => router.push('/overview'), 500);
             } else {
                 setApiError(response.message);
             }
