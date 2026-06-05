@@ -768,7 +768,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                             <Box>
                                 <ContractInformation
                                     client={contract.client || 'N/A'}
-                                    contractValue={contract.value || 'N/A'}
                                     category={contract.category || 'N/A'}
                                     template={contract.templateName || 'Custom Template'}
                                     startDate={contract.startDate ? new Date(contract.startDate).toLocaleDateString('en-GB') : 'N/A'}

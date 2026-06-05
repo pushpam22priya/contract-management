@@ -78,7 +78,7 @@ export default function NotificationsPage() {
 
     const handleViewContract = (contractId: string) => {
         console.log('Viewing contract:', contractId);
-        router.push(`/contracts`);
+        router.push(`/overview`);
     };
 
     return (

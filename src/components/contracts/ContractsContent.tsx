@@ -170,8 +170,6 @@ export default function ContractsContent({ basePath = '/contracts' }: ContractsC
 
     const loadContracts = useCallback(async () => {
         setLoading(true);
-        const currentUser = authService.getCurrentUser();
-        if (!currentUser) { setContracts([]); setLoading(false); return; }
 
         try {
             const allContracts = await contractService.getAllContracts();
@@ -179,13 +177,10 @@ export default function ContractsContent({ basePath = '/contracts' }: ContractsC
 
             const statusById = new Map(allContracts.map(c => [c.id, c.status]));
 
+            // Spring Boot already filters contracts server-side by JWT — all returned
+            // contracts belong to the current user. We only apply renewal/termination
+            // chain filters here to hide superseded contracts from the list.
             const relevantContracts = allContracts.filter(c => {
-                const isCreator = c.createdBy === currentUser.email;
-                const isSigner = c.signer?.email === currentUser.email;
-                const isValidSignerStatus = ['signed', 'active', 'expiring', 'expired'].includes(c.status);
-
-                if (!isCreator && !(isSigner && isValidSignerStatus)) return false;
-
                 if ((c.status === ContractStatus.EXPIRED || c.status === ContractStatus.EXPIRING) && c.renewedContractId) {
                     const renewalStatus = statusById.get(c.renewedContractId);
                     if (renewalStatus && (
@@ -329,31 +324,62 @@ export default function ContractsContent({ basePath = '/contracts' }: ContractsC
         let initialXfdf: string | undefined;
         let formFields: any[] | undefined;
 
-        if (contract.fileUrl) {
-            fileUrl = contract.fileUrl;
-            initialXfdf = contract.xfdfData;
-            formFields = contract.formFields;
-        } else if (contract.fileData) {
-            fileUrl = `data:application/pdf;base64,${contract.fileData}`;
-            initialXfdf = contract.xfdfData;
-            formFields = contract.formFields;
-        } else if (contract.signedPdfBase64) {
-            fileUrl = `data:application/pdf;base64,${contract.signedPdfBase64}`;
-            initialXfdf = contract.xfdfData;
-            formFields = contract.formFields;
-        } else if (contract.templateId) {
-            try {
-                const template = await templateService.getTemplateById(contract.templateId);
-                if (template) {
-                    fileUrl = template.fileData || template.fileUrl || '';
-                    initialXfdf = contract.xfdfData || template.xfdfData;
-                    formFields = contract.formFields || template.formFields;
-                }
-            } catch {
-                showNotification('Failed to load document template', 'error');
+        // ── Primary path: contract file is in MinIO (Spring Boot integration) ──
+        // fileUploaded is set to true by the backend after a successful upload.
+        // The presigned URL is valid for 15 minutes and passed directly to
+        // Apryse WebViewer — no Authorization header required on that URL.
+        if (contract.fileUploaded) {
+            console.log(`[handleView] id="${id}" | fileUploaded=true → fetching MinIO presigned URL`);
+            const viewUrl = await apiService.getContractViewUrl(id);
+            if (viewUrl) {
+                fileUrl     = viewUrl;
+                initialXfdf = contract.xfdfData;
+                formFields  = contract.formFields;
+                console.log(`[handleView] ✓ MinIO presigned URL ready for id="${id}"`);
+            } else {
+                console.warn(`[handleView] ⚠ Could not get MinIO URL for id="${id}" — falling through to legacy paths`);
             }
         }
 
+        // ── Legacy fallback paths (contracts created before MinIO migration) ──
+        if (!fileUrl) {
+            if (contract.fileUrl) {
+                console.log(`[handleView] id="${id}" | using contract.fileUrl`);
+                fileUrl     = contract.fileUrl;
+                initialXfdf = contract.xfdfData;
+                formFields  = contract.formFields;
+            } else if (contract.fileData) {
+                console.log(`[handleView] id="${id}" | using contract.fileData (base64)`);
+                fileUrl     = `data:application/pdf;base64,${contract.fileData}`;
+                initialXfdf = contract.xfdfData;
+                formFields  = contract.formFields;
+            } else if (contract.signedPdfBase64) {
+                console.log(`[handleView] id="${id}" | using contract.signedPdfBase64`);
+                fileUrl     = `data:application/pdf;base64,${contract.signedPdfBase64}`;
+                initialXfdf = contract.xfdfData;
+                formFields  = contract.formFields;
+            } else if (contract.templateId) {
+                console.log(`[handleView] id="${id}" | loading from templateId="${contract.templateId}"`);
+                try {
+                    const template = await templateService.getTemplateById(contract.templateId);
+                    if (template) {
+                        fileUrl     = template.fileData || template.fileUrl || '';
+                        initialXfdf = contract.xfdfData || template.xfdfData;
+                        formFields  = contract.formFields || template.formFields;
+                        console.log(`[handleView] ✓ Template loaded for id="${id}"`);
+                    }
+                } catch {
+                    showNotification('Failed to load document template', 'error');
+                }
+            }
+        }
+
+        if (!fileUrl) {
+            console.warn(`[handleView] ⚠ No file source found for contract id="${id}"`);
+        }
+
+        // fileUrl is passed to DocumentViewerDialog → PDFViewerContainer as documentUrl.
+        // All Apryse/WebViewer logic is unchanged.
         setViewerData({ fileUrl, initialXfdf, formFields });
         setViewerOpen(true);
     };
@@ -374,16 +400,20 @@ export default function ContractsContent({ basePath = '/contracts' }: ContractsC
 
             const result = await contractService.updateContractSignedPdf(selectedContract.id, pdfBase64, xfdfString);
             if (result.success) {
-                const metadataUpdates: Record<string, any> = {};
+                // fieldValues and formFields are document-level fields — must go to
+                // Spring Boot PATCH, not the internal Next.js route, because the contract
+                // was created by Spring Boot and the internal route returns 404 for it.
+                const docUpdates: Record<string, any> = {};
                 if (fieldValues && Object.keys(fieldValues).length > 0) {
-                    metadataUpdates.fieldValues = { ...(selectedContract.fieldValues || {}), ...fieldValues };
+                    docUpdates.fieldValues = { ...(selectedContract.fieldValues || {}), ...fieldValues };
                 }
                 if (formFields && formFields.length > 0) {
-                    metadataUpdates.formFields = formFields;
-                    metadataUpdates.hasFormFields = formFields.length > 0;
+                    docUpdates.formFields = formFields;
+                    docUpdates.hasFormFields = formFields.length > 0;
                 }
-                if (Object.keys(metadataUpdates).length > 0) {
-                    await apiService.updateContractMetadata(selectedContract.id, metadataUpdates);
+                if (Object.keys(docUpdates).length > 0) {
+                    console.log(`[handleSaveChanges] updating document fields via Spring Boot | id="${selectedContract.id}" | fields=[${Object.keys(docUpdates).join(', ')}]`);
+                    await apiService.updateContractDocument(selectedContract.id, docUpdates);
                 }
                 showNotification('Changes saved successfully!', 'success');
             } else {

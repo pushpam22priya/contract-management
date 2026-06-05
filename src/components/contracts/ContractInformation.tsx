@@ -7,7 +7,6 @@ import { useTranslations } from 'next-intl';
 
 interface ContractInformationProps {
     client: string;
-    contractValue: string;
     category: string;
     template: string;
     startDate: string;
@@ -20,7 +19,6 @@ interface ContractInformationProps {
 
 const ContractInformation = ({
     client,
-    contractValue,
     category,
     template,
     startDate,
@@ -124,21 +122,6 @@ const ContractInformation = ({
                         variant="subtitle2"
                     >
                         {client}
-                    </Typography>
-                </Box>
-
-                {/* Contract Value */}
-                <Box>
-                    <Typography
-                        variant="caption"
-                        sx={{ display: 'block' }}
-                    >
-                        {t('contractValue')}
-                    </Typography>
-                    <Typography
-                        variant="subtitle2"
-                    >
-                        {contractValue}
                     </Typography>
                 </Box>
 

@@ -495,7 +495,7 @@ export default function RenewContractDialog({
                 setTimeout(() => {
                     handleClose();
                     onSuccess?.(renewalId);
-                    router.push('/contracts');
+                    router.push('/overview');
                 }, 1000);
                 return { success: true };
             }
@@ -925,7 +925,7 @@ export default function RenewContractDialog({
                             setTimeout(() => {
                                 handleClose();
                                 onSuccess?.(renewalId);
-                                router.push('/draft');
+                                router.push('/overview');
                             }, 1000);
                         } else {
                             setSnackbar({ open: true, message: result.message, severity: 'error' });
@@ -948,7 +948,7 @@ export default function RenewContractDialog({
                         setTimeout(() => {
                             handleClose();
                             onSuccess?.(renewalId);
-                            router.push('/contracts');
+                            router.push('/overview');
                         }, 1000);
                         return { success: true, signingUrl: result.signingUrl };
                     }

@@ -40,11 +40,18 @@ class ContractService {
         if (result.success) {
             return { success: true, message: 'Contract created', contract: { ...data, id: result.id! } as Contract };
         }
-        return { success: false, message: 'Failed to create contract' };
+        return { success: false, message: result.message || 'Failed to create contract' };
     }
 
     /**
-     * Update contract signed PDF
+     * Update contract signed PDF — uploads to MinIO via Spring Boot, then persists XFDF.
+     *
+     * Upload path: < 30 MB → single-shot PUT /contracts/{id}/file
+     *              ≥ 30 MB → chunked multipart (initiate → presign → PUT → complete)
+     *
+     * XFDF is always saved via internal PATCH so annotations survive when the
+     * document is reopened. Without this the binary is stored but the XFDF
+     * sidecar (signature appearances, field values) would be silently dropped.
      */
     async updateContractSignedPdf(id: string, pdfData: Blob | string, xfdfData?: string): Promise<{
         success: boolean;
@@ -52,35 +59,47 @@ class ContractService {
         contract?: Contract;
     }> {
         try {
+            // ── 1. Normalise to Blob ──────────────────────────────────────────
             let blob: Blob;
             if (typeof pdfData === 'string') {
-                // Fallback for string input - try to avoid if possible
-                // But if caller sends base64, we must convert to Blob to send to API
+                console.log(`[ContractService] updateContractSignedPdf | id="${id}" | input=base64 string — converting to Blob`);
                 const byteCharacters = atob(pdfData);
-                const byteNumbers = new Array(byteCharacters.length);
+                const byteArray = new Uint8Array(byteCharacters.length);
                 for (let i = 0; i < byteCharacters.length; i++) {
-                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    byteArray[i] = byteCharacters.charCodeAt(i);
                 }
-                const byteArray = new Uint8Array(byteNumbers);
                 blob = new Blob([byteArray], { type: 'application/pdf' });
             } else {
                 blob = pdfData;
             }
+            console.log(`[ContractService] updateContractSignedPdf | id="${id}" | blob=${(blob.size / 1024).toFixed(0)}KB | hasXfdf=${!!xfdfData}`);
 
-            await apiService.saveContractPdf(id, blob);
+            // ── 2. Upload PDF to MinIO ────────────────────────────────────────
+            const uploadResult = await apiService.saveContractPdf(id, blob);
+            if (!uploadResult.success) {
+                console.error(`[ContractService] updateContractSignedPdf ✗ PDF upload failed | id="${id}"`, uploadResult.message);
+                return { success: false, message: uploadResult.message || 'Failed to upload PDF' };
+            }
+            console.log(`[ContractService] updateContractSignedPdf ✓ PDF uploaded to MinIO | id="${id}"`);
 
-            // CRITICAL: Also persist XFDF data so annotations survive when
-            // the document is reopened. Without this, the PDF binary is saved
-            // but the XFDF sidecar (containing signature appearances and
-            // field values) is silently dropped.
+            // ── 3. Persist XFDF sidecar via Spring Boot PATCH ────────────────
+            // Must use updateContractDocument (Spring Boot) — NOT updateContractMetadata
+            // (internal Next.js). Contracts created via Spring Boot live in its DB
+            // context; the internal route returns 404 for them.
             if (xfdfData) {
-                await apiService.updateContractMetadata(id, { xfdfData });
+                console.log(`[ContractService] updateContractSignedPdf | persisting XFDF via Spring Boot | id="${id}" | length=${xfdfData.length}`);
+                const xfdfResult = await apiService.updateContractDocument(id, { xfdfData });
+                if (!xfdfResult.success) {
+                    console.warn(`[ContractService] updateContractSignedPdf ⚠ XFDF persist failed | id="${id}"`, xfdfResult.message);
+                } else {
+                    console.log(`[ContractService] updateContractSignedPdf ✓ XFDF persisted | id="${id}"`);
+                }
             }
 
             return { success: true, message: 'PDF saved' };
-        } catch (e) {
-            console.error(e);
-            return { success: false, message: 'Failed to save PDF' };
+        } catch (e: any) {
+            console.error(`[ContractService] updateContractSignedPdf ✗ unexpected error | id="${id}"`, e);
+            return { success: false, message: e?.message || 'Failed to save PDF' };
         }
     }
 

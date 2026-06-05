@@ -160,12 +160,12 @@ export interface Contract {
     title: string;
     description: string;
     client: string;
-    value: string;
     category: string;
     expiresInDays: number;
     status: ContractStatus;
-    fileData?: string;           // Base64-encoded PDF with filled values
+    fileData?: string;           // Base64-encoded PDF with filled values (legacy MongoDB storage)
     fileUrl?: string;            // URL to fetch PDF from API (e.g., /api/file/[id])
+    fileUploaded?: boolean;      // true once PDF has been successfully uploaded to MinIO (Spring Boot)
     xfdfData?: string;           // XFDF annotation data with field values
     // Review & Approval Workflow tracking
     reviewers?: ReviewerInfo[];      // Multiple reviewers can be assigned

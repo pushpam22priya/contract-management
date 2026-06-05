@@ -49,6 +49,28 @@ class AuthService {
                 lastLogin: new Date().toISOString(),
             };
             this.saveSession(user, token);
+
+            // Eagerly cache profile fields so autofill works immediately after
+            // login without requiring the user to open the profile dialog first.
+            try {
+                const profileRes = await httpClient.get<any>('/profile');
+                if (profileRes.ok && profileRes.data) {
+                    const d = profileRes.data;
+                    this.updateSessionUser({
+                        fullName:         d.fullName         || '',
+                        department:       d.department       || '',
+                        organization:     d.organization     || '',
+                        dateOfBirth:      d.dateOfBirth      || '',
+                        gender:           d.gender           || '',
+                        permanentAddress: d.permanentAddress || '',
+                        panCardNumber:    d.panCardNumber    || '',
+                        aadharCardNumber: d.aadharCardNumber || '',
+                    });
+                }
+            } catch {
+                // Profile fetch failure must not block login
+            }
+
             return { success: true, message: 'Login successful', user };
         }
 

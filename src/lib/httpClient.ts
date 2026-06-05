@@ -1,4 +1,8 @@
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080';
+// Route all Spring Boot calls through the Next.js rewrite proxy (/api/backend/*).
+// The browser calls localhost:3000/api/backend/... (same origin, no CORS).
+// Next.js rewrites forward the request to the Spring Boot server server-to-server.
+// This eliminates all CORS issues regardless of Spring Boot's allowed-origins config.
+const BACKEND_URL = '/api/backend';
 const SESSION_KEY = 'cms_current_user';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

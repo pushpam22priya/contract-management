@@ -2009,11 +2009,17 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             // Pre-populate the "Type" signature input with the current user's name or email.
                             // External signers don't have a session, so the email is passed via the
                             // currentUserEmail prop. Internal users fall back to sessionStorage.
+                            //
+                            // Session shape: new format is { user: { email, ... }, token }
+                            //               old format was flat { email, ... }
+                            // Mirror the same unwrap that authService.getCurrentUser() uses.
                             let signatureName = null;
                             try {
                                 const raw = sessionStorage.getItem('cms_current_user');
-                                const parsedUser = raw ? JSON.parse(raw) : null;
-                                
+                                const parsedSession = raw ? JSON.parse(raw) : null;
+                                // Support both shapes: new { user, token } and old flat { email, ... }
+                                const parsedUser = parsedSession?.user ?? parsedSession;
+
                                 if (parsedUser?.name) {
                                     signatureName = parsedUser.name;
                                 } else {

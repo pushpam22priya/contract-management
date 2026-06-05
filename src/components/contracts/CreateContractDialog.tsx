@@ -35,6 +35,7 @@ import { templateService } from '@/services/templateService';
 import { contractService } from '@/services/contractService';
 import { apiService } from '@/services/apiService';
 import { authService } from '@/services/authService';
+import { httpClient } from '@/lib/httpClient';
 import { Template, PartyConfiguration } from '@/types/template';
 import { Team } from '@/types/team';
 import { validatePartyFields } from '@/utils/partyValidation';
@@ -45,6 +46,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { ContractStatus } from '@/types/contract';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
 import { buildProfileData } from '@/utils/profileKeyOptions';
+import { getTemplateViewUrl } from '@/utils/getTemplateViewUrl';
 
 interface CreateContractDialogProps {
     open: boolean;
@@ -66,6 +68,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     // State
     const [templates, setTemplates] = useState<Template[]>([]);
     const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+    const [templateViewUrl, setTemplateViewUrl] = useState<string | null>(null);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
 
     // Team selection (only used when teamId prop is not provided)
@@ -81,7 +84,6 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         defaultValues: { contractTitle: '', clientName: '', description: '' },
     });
     const { contractTitle, clientName, description } = watch();
-    const [contractValue, setContractValue] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
 
@@ -146,10 +148,8 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
 
     const loadTeams = async () => {
         try {
-            const currentUser = authService.getCurrentUser();
-            if (!currentUser) return;
-            const res = await fetch(`/api/teams?createdBy=${encodeURIComponent(currentUser.email)}`);
-            if (res.ok) setTeams(await res.json());
+            const res = await httpClient.get<Team[]>('/teams');
+            if (res.ok && res.data) setTeams(res.data);
         } catch {
             // non-critical — team selector stays empty
         }
@@ -254,7 +254,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             return null;
         }
 
-        const valid = await trigger(['contractTitle', 'clientName']);
+        const valid = await trigger(['contractTitle', 'clientName', 'description']);
         if (!valid) return null;
 
         if (!documentLoaded) {
@@ -355,11 +355,10 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             console.log('📝 Creating contract metadata...');
             // Exclude signedPdfBase64 from initial creation to avoid JSON overhead/violation
             const contractData = {
-                name: contractTitle,
-                title: contractTitle,
-                client: clientName,
+                name: contractTitle.trim(),
+                title: contractTitle.trim(),
+                client: clientName.trim(),
                 description: description || `Contract based on ${selectedTemplate.name}`,
-                value: contractValue || 'N/A',
                 category: selectedTemplate.category,
                 expiresInDays: expiresInDays,
                 status: ContractStatus.DRAFT,
@@ -382,14 +381,16 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             let activeContractId = contractId;
 
             if (contractId) {
-                // Subsequent save: UPDATE existing contract
-                console.log('📝 Updating existing contract, ID:', contractId);
-                const updateResult = await apiService.updateContractMetadata(contractId, contractData);
+                // Subsequent save: UPDATE existing contract via Spring Boot PATCH.
+                // The contract was created by Spring Boot — the internal Next.js PATCH
+                // route would return 404 because it queries a different DB context.
+                console.log(`📝 Updating existing contract via Spring Boot | id="${contractId}"`);
+                const updateResult = await apiService.updateContractDocument(contractId, contractData);
                 if (!updateResult.success) {
                     setError(updateResult.message || 'Failed to update contract');
                     return null;
                 }
-                console.log('✅ Contract metadata updated');
+                console.log('✅ Contract document updated');
             } else {
                 // First save: CREATE new contract
                 const result = await contractService.createContract(contractData);
@@ -443,7 +444,6 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         setSelectedTemplate(null);
         setSelectedTeam(null);
         reset();
-        setContractValue('');
         setStartDate('');
         setEndDate('');
         setDocumentLoaded(false);
@@ -465,7 +465,6 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             contractTitle !== '' ||
             clientName !== '' ||
             description !== '' ||
-            contractValue !== '' ||
             startDate !== '' ||
             endDate !== '' ||
             Object.keys(filledFieldValues).length > 0 ||
@@ -650,9 +649,43 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
             setError('Please select a template');
             return;
         }
-        const valid = await trigger(['contractTitle', 'clientName']);
+        const valid = await trigger(['contractTitle', 'clientName', 'description']);
         if (!valid) return;
         setError('');
+
+        // Fetch full template detail and presigned URL in parallel.
+        //
+        // WHY full detail: getAllTemplates() uses the Spring Boot list endpoint which
+        // omits heavy fields (formFields, parties, xfdfData) to keep responses fast.
+        // Step 2 needs formFields[].assignedParty for party restriction, autofill, and
+        // party validation. Without it the guard on handleFieldChange never fires and
+        // the contractor can fill any party's fields unchecked.
+        //
+        // WHY presigned URL: template.fileUrl is a relative Spring Boot path that the
+        // browser resolves to localhost:3000 (Next.js), which has no file handler → 404.
+        // The presigned URL hits MinIO directly with credentials baked in.
+        console.log(`[CreateContractDialog] handleNextStep: fetching full template + presigned URL | templateId="${selectedTemplate.id}"`);
+
+        const [fullTemplate, viewUrl] = await Promise.all([
+            templateService.getTemplateById(selectedTemplate.id),
+            getTemplateViewUrl(selectedTemplate.id),
+        ]);
+
+        if (fullTemplate) {
+            console.log(`[CreateContractDialog] ✓ Full template loaded | formFields=${fullTemplate.formFields?.length ?? 0} | parties=${fullTemplate.parties?.length ?? 0}`);
+            setSelectedTemplate(fullTemplate);
+        } else {
+            console.warn(`[CreateContractDialog] ⚠ Could not load full template detail — party restriction and autofill may not work`);
+        }
+
+        if (viewUrl) {
+            console.log(`[CreateContractDialog] ✓ Presigned URL ready for template "${selectedTemplate.id}"`);
+            setTemplateViewUrl(viewUrl);
+        } else {
+            console.warn(`[CreateContractDialog] ⚠ Could not fetch presigned URL — falling back to template.fileData / fileUrl`);
+            setTemplateViewUrl(null);
+        }
+
         setCurrentStep(2);
     };
 
@@ -1041,7 +1074,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                             <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
                                 <PDFViewerContainer
                                     ref={pdfViewerRef}
-                                    documentUrl={selectedTemplate.fileData || selectedTemplate.fileUrl}
+                                    documentUrl={templateViewUrl || selectedTemplate.fileData || selectedTemplate.fileUrl}
                                     initialXfdf={selectedTemplate?.xfdfData}
                                     formFields={selectedTemplate?.formFields}
                                     readOnly={false}
