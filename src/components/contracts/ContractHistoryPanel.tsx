@@ -98,10 +98,10 @@ function classifyEntry(
     // mark it as current — it represents the definitive final state.
     const isChainHead = !entry.renewedContractId ||
         !chain.some(e => e.id === entry.renewedContractId);
-    if (isChainHead && entry.status === 'terminated') return 'current';
+    if (isChainHead && entry.status === 'TERMINATED') return 'current';
 
-    const upcomingStatuses = ['draft', 'in_review', 'in_approval', 'approved',
-        'ready_for_signature', 'waiting_for_signature', 'signed', 'signed_by_everyone'];
+    const upcomingStatuses = ['DRAFT', 'IN_REVIEW', 'IN_APPROVAL', 'APPROVED',
+        'READY_FOR_SIGNATURE', 'WAITING_FOR_SIGNATURE', 'SIGNED', 'SIGNED_BY_EVERYONE'];
     if (upcomingStatuses.includes(entry.status)) return 'upcoming';
     const today = dayjs().startOf('day');
     if (entry.startDate && dayjs(entry.startDate).isAfter(today)) return 'upcoming';

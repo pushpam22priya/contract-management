@@ -134,23 +134,23 @@ export interface SigningRequest {
 }
 
 export enum ContractStatus {
-    DRAFT = 'draft',
-    IN_REVIEW = 'in_review',         // Submitted for review (reviewer(s) assigned)
-    IN_APPROVAL = 'in_approval',     // All reviews done, waiting for approver action
-    REVIEW_APPROVAL = 'review_approval', // Legacy: kept for backward compatibility
-    REVIEWED = 'reviewed',           // Legacy: kept for backward compatibility
-    APPROVED = 'approved',       // Gate: Approved, ready for signature
-    READY_FOR_SIGNATURE = 'ready_for_signature', // Transition: Approved, waiting for contractor action
-    WAITING_FOR_SIGNATURE = 'waiting_for_signature',
-    SIGNED_BY_EVERYONE = 'signed_by_everyone', // All external signers completed
-    SIGNED = 'signed',           // Signed (future start date)
-    ACTIVE = 'active',           // Signed + Started
-    EXPIRING = 'expiring',       // Active + fading
-    EXPIRED = 'expired',
-    TERMINATED = 'terminated',
-    REJECTED = 'rejected',
-    REJECTED_BY_REVIEWER = 'rejected_by_reviewer',
-    REJECTED_BY_APPROVER = 'rejected_by_approver'
+    DRAFT = 'DRAFT',
+    IN_REVIEW = 'IN_REVIEW',
+    IN_APPROVAL = 'IN_APPROVAL',
+    REVIEW_APPROVAL = 'REVIEW_APPROVAL',
+    REVIEWED = 'REVIEWED',
+    APPROVED = 'APPROVED',
+    READY_FOR_SIGNATURE = 'READY_FOR_SIGNATURE',
+    WAITING_FOR_SIGNATURE = 'WAITING_FOR_SIGNATURE',
+    SIGNED_BY_EVERYONE = 'SIGNED_BY_EVERYONE',
+    SIGNED = 'SIGNED',
+    ACTIVE = 'ACTIVE',
+    EXPIRING = 'EXPIRING',
+    EXPIRED = 'EXPIRED',
+    TERMINATED = 'TERMINATED',
+    REJECTED = 'REJECTED',
+    REJECTED_BY_REVIEWER = 'REJECTED_BY_REVIEWER',
+    REJECTED_BY_APPROVER = 'REJECTED_BY_APPROVER'
 }
 
 export interface Contract {

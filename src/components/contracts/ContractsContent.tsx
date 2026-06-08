@@ -13,6 +13,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs, { Dayjs } from 'dayjs';
 import ContractCard from '@/components/contracts/ContractCard';
 import CreateContractDialog from '@/components/contracts/CreateContractDialog';
+import EditContractDialog from '@/components/contracts/EditContractDialog';
 import RenewContractDialog from '@/components/contracts/RenewContractDialog';
 import TerminateContractDialog from '@/components/contracts/TerminateContractDialog';
 import RequestReviewDialog from '@/components/contracts/RequestReviewDialog';
@@ -113,6 +114,8 @@ export default function ContractsContent() {
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
     const [wizardOpen, setWizardOpen] = useState(false);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [contractForEdit, setContractForEdit] = useState<Contract | null>(null);
 
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
@@ -420,6 +423,13 @@ export default function ContractsContent() {
         } catch {
             showNotification('Failed to save changes', 'error');
         }
+    };
+
+    const handleEdit = (id: string) => {
+        const contract = contracts.find(c => c.id === id);
+        if (!contract) return;
+        setContractForEdit(contract);
+        setEditDialogOpen(true);
     };
 
     const handleShare = (id: string) => {
@@ -765,6 +775,7 @@ export default function ContractsContent() {
                                             variant={cardVariant}
                                             contract={contract}
                                             onView={cardVariant !== 'terminated' ? handleView : undefined}
+                                            onEdit={cardVariant === 'draft' ? handleEdit : undefined}
                                             onShare={cardVariant === 'draft' ? handleShare : cardVariant === 'contract' ? handleShareContract : undefined}
                                             onRenew={cardVariant === 'contract' ? handleRenewContract : undefined}
                                             onTerminate={cardVariant === 'contract' ? handleTerminateContract : undefined}
@@ -795,6 +806,7 @@ export default function ContractsContent() {
                                             variant={cardVariant}
                                             contract={contract}
                                             onView={cardVariant !== 'terminated' ? handleView : undefined}
+                                            onEdit={cardVariant === 'draft' ? handleEdit : undefined}
                                             onShare={cardVariant === 'draft' ? handleShare : cardVariant === 'contract' ? handleShareContract : undefined}
                                             onRenew={cardVariant === 'contract' ? handleRenewContract : undefined}
                                             onTerminate={cardVariant === 'contract' ? handleTerminateContract : undefined}
@@ -854,6 +866,15 @@ export default function ContractsContent() {
                 onSuccess={loadContracts}
                 teamId={activeTeamId}
             />
+
+            {contractForEdit && (
+                <EditContractDialog
+                    open={editDialogOpen}
+                    onClose={() => { setEditDialogOpen(false); setContractForEdit(null); }}
+                    onSuccess={loadContracts}
+                    contract={contractForEdit}
+                />
+            )}
 
             <CreateTeamDialog
                 open={createTeamOpen}

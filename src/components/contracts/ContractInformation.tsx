@@ -70,10 +70,10 @@ const ContractInformation = ({
 
     // Get status-specific text for days remaining
     const getDaysText = () => {
-        if (status === 'signed' && daysRemaining > 0) {
+        if (status === 'SIGNED' && daysRemaining > 0) {
             return t('startsIn', { days: daysRemaining });
         }
-        if (status === 'expired' || daysRemaining < 0) {
+        if (status === 'EXPIRED' || daysRemaining < 0) {
             return t('expiredDaysAgo', { days: Math.abs(daysRemaining) });
         }
         if (daysRemaining === 0) {
@@ -278,7 +278,7 @@ const ContractInformation = ({
                     <Typography
                         variant="body2"
                         sx={{
-                            color: status === 'expiring' ? '#f59e0b' : status === 'expired' ? '#ef4444' : 'text.primary',
+                            color: status === 'EXPIRING' ? '#f59e0b' : status === 'EXPIRED' ? '#ef4444' : 'text.primary',
                             fontWeight: 500,
                         }}
                     >

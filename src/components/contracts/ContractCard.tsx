@@ -1,6 +1,7 @@
 import { Box, Typography, Chip, IconButton, Tooltip, useTheme } from '@mui/material';
 import dayjs from 'dayjs';
 import { Visibility, Share, Download, FolderOutlined, AutorenewOutlined, Loop } from '@mui/icons-material';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -18,6 +19,7 @@ import { useTranslations } from 'next-intl';
 interface ContractCardProps {
     contract: Contract;
     onView?: (id: string) => void;
+    onEdit?: (id: string) => void;
     onShare?: (id: string) => void;
     onDownload?: (id: string) => void;
     onRenew?: (id: string) => void;
@@ -38,6 +40,7 @@ interface ContractCardProps {
 const ContractCard = ({
     contract,
     onView,
+    onEdit,
     onShare,
     onDownload,
     onRenew,
@@ -481,6 +484,14 @@ const ContractCard = ({
                         color: 'primary.main',
                         shadow: 'rgba(15, 118, 110, 0.2)',
                         show: !!onView,
+                    },
+                    {
+                        title: tTooltips('editContract'),
+                        icon: <EditOutlinedIcon sx={{ fontSize: '0.9rem' }} />,
+                        onClick: () => onEdit?.(contract.id),
+                        color: 'primary.main',
+                        shadow: 'rgba(15, 118, 110, 0.2)',
+                        show: variant === 'draft' && !!onEdit,
                     },
                     {
                         title: tTooltips('downloadPdf'),

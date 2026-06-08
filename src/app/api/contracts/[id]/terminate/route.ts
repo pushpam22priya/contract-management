@@ -36,7 +36,7 @@ export async function POST(
         }
 
         // Rule 4: Idempotent — already terminated
-        if (contract.status === 'terminated') {
+        if (contract.status === 'TERMINATED') {
             return NextResponse.json({ success: true, alreadyTerminated: true }, { status: 200 });
         }
 
