@@ -1,5 +1,6 @@
-import { Contract, ReviewerInfo, ApproverInfo, ModificationRequest, ContractStatus } from '@/types/contract';
+import { Contract, ContractStatus, WorkflowMode } from '@/types/contract';
 import { apiService } from './apiService';
+import { httpClient } from '@/lib/httpClient';
 import { submitForExternalSignature } from './externalSignatureService';
 
 class ContractService {
@@ -17,6 +18,13 @@ class ContractService {
     async getContractById(id: string): Promise<Contract | undefined> {
         const contracts = await this.getAllContracts();
         return contracts.find(c => c.id === id);
+    }
+
+    /**
+     * Get contracts where current user is assigned as reviewer or approver (inbox).
+     */
+    async getInboxContracts(): Promise<Contract[]> {
+        return apiService.getInboxContracts();
     }
 
     /**
@@ -106,305 +114,74 @@ class ContractService {
     // ... Workflow methods ...
 
     /**
-     * Submit contract for review and approval
-     * - Preserves existing reviewers with their data (messages, status)
-     * - Only adds NEW reviewers with the new message
-     * - Does NOT update approver if one already exists
+     * Submit contract for review and/or approval workflow via Spring Boot backend.
+     * Handles both initial submission and resubmission after rejection.
+     * Supports three workflow modes: ONLY_REVIEW, ONLY_APPROVE, or REVIEW_AND_APPROVE.
      */
-    async submitForReview(
+    async submitForWorkflow(
         contractId: string,
-        newReviewerEmails: string[],
-        approver: string,
+        mode: WorkflowMode,
+        reviewerEmails: string[],
+        approverEmail: string,
         reviewerMessage?: string,
         approverMessage?: string,
-        senderEmail?: string
-    ): Promise<{
-        success: boolean;
-        message: string;
-    }> {
+    ): Promise<{ success: boolean; message: string }> {
         try {
-            // Fetch existing contract to preserve data
-            const contract = await this.getContractById(contractId);
-            if (!contract) {
-                return { success: false, message: 'Contract not found' };
+            const body: Record<string, any> = { mode };
+            if (reviewerEmails.length > 0) body.reviewerEmails = reviewerEmails;
+            if (approverEmail) body.approverEmail = approverEmail;
+            if (reviewerMessage) body.reviewerMessage = reviewerMessage;
+            if (approverMessage) body.approverMessage = approverMessage;
+
+            const res = await httpClient.post<any>(`/contracts/${contractId}/submit`, body);
+            if (res.ok) {
+                return { success: true, message: res.message || 'Contract submitted successfully' };
             }
-
-            // Use provided sender email or fallback to contract creator
-            const sentBy = senderEmail || contract.createdBy;
-            const sentAt = new Date().toISOString();
-
-            // Get existing reviewers (preserve their data)
-            const existingReviewers = contract.reviewers || [];
-            const existingReviewerEmails = new Set(existingReviewers.map(r => r.email));
-
-            // Only create new reviewer objects for emails that don't already exist
-            const newReviewerInfos: ReviewerInfo[] = newReviewerEmails
-                .filter(email => !existingReviewerEmails.has(email))
-                .map(email => ({
-                    email,
-                    status: 'pending' as const,
-                    sentAt,
-                    sentBy,
-                    ...(reviewerMessage && { submissionMessage: reviewerMessage })
-                }));
-
-            // Merge: keep existing reviewers unchanged + add new ones
-            const mergedReviewers = [...existingReviewers, ...newReviewerInfos];
-
-            // Determine if an approver will be set after this submission
-            const willHaveApprover = (contract.approver && contract.approver.email)
-                || (approver && approver !== '');
-
-            // Determine correct status:
-            // - Has reviewer(s) → IN_REVIEW
-            // - No reviewers, has approver → IN_APPROVAL
-            // - Neither → DRAFT (validation should prevent this)
-            const willHaveReviewers = mergedReviewers.length > 0;
-            let newStatus: ContractStatus;
-            if (willHaveReviewers) {
-                newStatus = ContractStatus.IN_REVIEW;
-            } else if (willHaveApprover) {
-                newStatus = ContractStatus.IN_APPROVAL;
-            } else {
-                newStatus = ContractStatus.DRAFT;
-            }
-
-            // Build update data
-            const updateData: Record<string, any> = {
-                reviewers: mergedReviewers,
-                status: newStatus,
-                reviewStatus: 'pending' as const,
-            };
-
-            // Only set approver if one doesn't already exist AND a valid email is provided
-            if (!contract.approver && approver && approver !== '') {
-                updateData.approver = {
-                    email: approver,
-                    status: 'pending' as const,
-                    sentAt,
-                    sentBy,
-                    ...(approverMessage && { submissionMessage: approverMessage })
-                } as ApproverInfo;
-                updateData.approvalStatus = 'pending' as const;
-            }
-
-            const result = await apiService.updateContractMetadata(contractId, updateData);
-
-            if (result.success) {
-                const message = newReviewerInfos.length > 0
-                    ? `Added ${newReviewerInfos.length} new reviewer(s)`
-                    : 'Contract submitted for review and approval';
-                return { success: true, message };
-            } else {
-                return { success: false, message: result.message || 'Failed to submit for review' };
-            }
+            return { success: false, message: res.message || 'Failed to submit contract' };
         } catch (error) {
             console.error('Submit for review failed:', error);
-            return { success: false, message: 'Failed to submit for review' };
+            return { success: false, message: 'Failed to submit contract' };
         }
     }
 
     /**
-     * Remove a reviewer from a contract
+     * Forward contract to additional reviewers — POST /contracts/{id}/review/forward
+     * Marks the caller as "forwarded" and adds new reviewers in one step.
      */
-    async removeReviewer(contractId: string, reviewerEmail: string): Promise<{
+    async addAdditionalReviewers(contractId: string, additionalReviewerEmails: string[], message?: string): Promise<{
         success: boolean;
         message: string;
     }> {
         try {
-            const contract = await this.getContractById(contractId);
-            if (!contract) return { success: false, message: 'Contract not found' };
-
-            const existingReviewers = contract.reviewers || [];
-            const updatedReviewers = existingReviewers.filter(r => r.email !== reviewerEmail);
-
-            if (updatedReviewers.length === existingReviewers.length) {
-                return { success: false, message: 'Reviewer not found' };
-            }
-
-            const updateData: Record<string, any> = {
-                reviewers: updatedReviewers,
-            };
-
-            // If no reviewers left, clear reviewStatus
-            if (updatedReviewers.length === 0) {
-                updateData.reviewStatus = null; // Use null to actually clear the field
-
-                // If no approver either, reset to draft status and clear approvalStatus
-                if (!contract.approver) {
-                    updateData.status = ContractStatus.DRAFT;
-                    updateData.approvalStatus = null;
-                }
-            }
-
-            const result = await apiService.updateContractMetadata(contractId, updateData);
-
-            if (result.success) {
-                return { success: true, message: 'Reviewer removed successfully' };
-            } else {
-                return { success: false, message: result.message || 'Failed to remove reviewer' };
-            }
-        } catch (error) {
-            console.error('Remove reviewer failed:', error);
-            return { success: false, message: 'Failed to remove reviewer' };
+            const body: Record<string, any> = { additionalReviewerEmails };
+            if (message) body.message = message;
+            const res = await httpClient.post<any>(`/contracts/${contractId}/review/forward`, body);
+            return res.ok
+                ? { success: true, message: `Forwarded to ${additionalReviewerEmails.length} additional reviewer(s)` }
+                : { success: false, message: res.message || 'Failed to forward for review' };
+        } catch {
+            return { success: false, message: 'Failed to forward for review' };
         }
     }
 
     /**
-     * Remove the approver from a contract
+     * Mark contract as reviewed — POST /contracts/{id}/review/complete
+     * Actor identity is resolved from JWT; no email needed.
      */
-    async removeApprover(contractId: string): Promise<{
-        success: boolean;
-        message: string;
-    }> {
+    async markAsReviewed(contractId: string, _email: string, comments?: string): Promise<{ success: boolean; message: string; contract?: any }> {
         try {
-            const contract = await this.getContractById(contractId);
-            if (!contract) return { success: false, message: 'Contract not found' };
-
-            if (!contract.approver) {
-                return { success: false, message: 'No approver assigned' };
-            }
-
-            const updateData: Record<string, any> = {
-                approver: null,
-                approvalStatus: null, // Use null to actually clear the field
-            };
-
-            // If no reviewers either, reset to draft status and clear reviewStatus
-            if (!contract.reviewers || contract.reviewers.length === 0) {
-                updateData.status = ContractStatus.DRAFT;
-                updateData.reviewStatus = null;
-            }
-
-            const result = await apiService.updateContractMetadata(contractId, updateData);
-
-            if (result.success) {
-                return { success: true, message: 'Approver removed successfully' };
-            } else {
-                return { success: false, message: result.message || 'Failed to remove approver' };
-            }
-        } catch (error) {
-            console.error('Remove approver failed:', error);
-            return { success: false, message: 'Failed to remove approver' };
-        }
-    }
-
-    /**
-     * Add additional reviewers to a contract (for "Send for Further Review" flow)
-     * Preserves existing reviewer statuses and keeps the existing approver
-     */
-    async addAdditionalReviewers(contractId: string, additionalReviewerEmails: string[], senderEmail?: string): Promise<{
-        success: boolean;
-        message: string;
-    }> {
-        try {
-            const contract = await this.getContractById(contractId);
-            if (!contract) return { success: false, message: 'Contract not found' };
-
-            // Use provided sender email or fallback to contract creator
-            const sentBy = senderEmail || contract.createdBy;
-            const sentAt = new Date().toISOString();
-
-            // Get existing reviewers (preserve their statuses)
-            const existingReviewers = contract.reviewers || [];
-            const existingEmails = new Set(existingReviewers.map(r => r.email));
-
-            // Only add reviewers that don't already exist
-            const newReviewerInfos: ReviewerInfo[] = additionalReviewerEmails
-                .filter(email => !existingEmails.has(email))
-                .map(email => ({
-                    email,
-                    status: 'pending' as const,
-                    sentAt,
-                    sentBy
-                }));
-
-            if (newReviewerInfos.length === 0) {
-                return { success: false, message: 'All selected reviewers are already assigned' };
-            }
-
-            // Merge: keep existing reviewers with their statuses + add new ones as pending
-            const mergedReviewers = [...existingReviewers, ...newReviewerInfos];
-
-            const updateData: Record<string, any> = {
-                reviewers: mergedReviewers,
-                status: ContractStatus.IN_REVIEW,
-                reviewStatus: 'pending' as const,
-                // Keep existing approver unchanged
-            };
-
-            const result = await apiService.updateContractMetadata(contractId, updateData);
-
-            if (result.success) {
-                return { success: true, message: `Added ${newReviewerInfos.length} additional reviewer(s)` };
-            } else {
-                return { success: false, message: result.message || 'Failed to add reviewers' };
-            }
-        } catch (error) {
-            console.error('Add additional reviewers failed:', error);
-            return { success: false, message: 'Failed to add additional reviewers' };
-        }
-    }
-
-    /**
-     * Mark contract as reviewed by a specific reviewer
-     */
-    async markAsReviewed(contractId: string, email: string): Promise<{ success: boolean; message: string }> {
-        try {
-            const contract = await this.getContractById(contractId);
-            if (!contract) return { success: false, message: 'Contract not found' };
-
-            // Find reviewer
-            if (!contract.reviewers) return { success: false, message: 'No reviewers assigned' };
-
-            const reviewerIndex = contract.reviewers.findIndex(r => r.email === email);
-            if (reviewerIndex === -1) return { success: false, message: 'Reviewer not found in this contract' };
-
-            // Update reviewer status
-            const updatedReviewers = [...contract.reviewers];
-            updatedReviewers[reviewerIndex] = {
-                ...updatedReviewers[reviewerIndex],
-                status: 'reviewed',
-                reviewedAt: new Date().toISOString()
-            };
-
-            // Check if all reviewers have reviewed
-            const allReviewed = updatedReviewers.every(r => r.status === 'reviewed');
-
-            // Build update object
-            const updates: any = {
-                reviewers: updatedReviewers
-            };
-
-            // If all reviewed, auto-transition to the correct next status
-            if (allReviewed) {
-                updates.reviewStatus = 'reviewed';
-                if (contract.approver && contract.approver.email) {
-                    // Case 3: Has approver — auto-transition to IN_APPROVAL
-                    updates.status = ContractStatus.IN_APPROVAL;
-                } else {
-                    // Case 1: No approver — auto-transition directly to READY_FOR_SIGNATURE
-                    updates.status = ContractStatus.READY_FOR_SIGNATURE;
-                    updates.approvalStatus = 'approved';
-                }
-            }
-
-            // Save updates
-            const result = await apiService.updateContractMetadata(contractId, updates);
-
-            if (result.success) {
-                return { success: true, message: 'Marked as reviewed successfully' };
-            } else {
-                return { success: false, message: result.message || 'Failed to update contract' };
-            }
-
-        } catch (error) {
-            console.error('Mark as reviewed error:', error);
-            return { success: false, message: 'An error occurred' };
+            const res = await httpClient.post<any>(`/contracts/${contractId}/review/complete`, { comments });
+            return res.ok
+                ? { success: true, message: 'Marked as reviewed successfully', contract: res.data }
+                : { success: false, message: res.message || 'Failed to mark as reviewed' };
+        } catch {
+            return { success: false, message: 'Failed to mark as reviewed' };
         }
     }
     /**
-     * Request modification
+     * Request modification — delegates to the appropriate reject endpoint.
+     * On the backend, rejection and "request modification" are the same operation:
+     * reject with a message, which gets recorded in modificationRequests[].
      */
     async requestModification(
         contractId: string,
@@ -412,179 +189,52 @@ class ContractService {
         role: 'reviewer' | 'approver',
         comments: string
     ): Promise<{ success: boolean; message: string }> {
+        return role === 'reviewer'
+            ? this.rejectByReviewer(contractId, email, comments)
+            : this.rejectByApprover(contractId, email, comments);
+    }
+
+    /**
+     * Approve contract — POST /contracts/{id}/approval/approve
+     * Actor identity resolved from JWT; no email needed.
+     */
+    async approveContract(contractId: string, _email: string, comments?: string): Promise<{ success: boolean; message: string; contract?: any }> {
         try {
-            const contract = await this.getContractById(contractId);
-            if (!contract) return { success: false, message: 'Contract not found' };
-
-            const updates: any = {};
-
-            // Add new modification request
-            const newRequest: ModificationRequest = {
-                requestedBy: email,
-                role,
-                comments,
-                requestedAt: new Date().toISOString()
-            };
-            const modRequests = contract.modificationRequests || [];
-            updates.modificationRequests = [...modRequests, newRequest];
-
-            // Update individual status
-            if (role === 'reviewer') {
-                if (!contract.reviewers) return { success: false, message: 'No reviewers found' };
-                const idx = contract.reviewers.findIndex(r => r.email === email);
-                if (idx === -1) return { success: false, message: 'Reviewer not found' };
-
-                const updatedReviewers = [...contract.reviewers];
-                updatedReviewers[idx] = {
-                    ...updatedReviewers[idx],
-                    status: 'requested_changes',
-                    comments
-                };
-                updates.reviewers = updatedReviewers;
-                updates.reviewStatus = 'changes_requested';
-
-            } else {
-                // Approver
-                if (contract.approver?.email !== email) return { success: false, message: 'Approver mismatch' };
-                updates.approver = {
-                    ...contract.approver,
-                    status: 'rejected',
-                    comments
-                };
-                updates.approvalStatus = 'rejected';
-            }
-
-            const result = await apiService.updateContractMetadata(contractId, updates);
-            if (result.success) {
-                return { success: true, message: 'Modification requested' };
-            } else {
-                return { success: false, message: result.message || 'Failed to request modification' };
-            }
-
-        } catch (error) {
-            console.error('Request modification error:', error);
-            return { success: false, message: 'An error occurred' };
+            const res = await httpClient.post<any>(`/contracts/${contractId}/approval/approve`, { comments });
+            return res.ok
+                ? { success: true, message: 'Contract approved successfully', contract: res.data }
+                : { success: false, message: res.message || 'Failed to approve contract' };
+        } catch {
+            return { success: false, message: 'Failed to approve contract' };
+        }
+    }
+    /**
+     * Reject contract as reviewer — POST /contracts/{id}/review/reject
+     * message is required by the backend (400 if blank).
+     */
+    async rejectByReviewer(contractId: string, _email: string, message: string): Promise<{ success: boolean; message: string; contract?: any }> {
+        try {
+            const res = await httpClient.post<any>(`/contracts/${contractId}/review/reject`, { message });
+            return res.ok
+                ? { success: true, message: 'Contract rejected', contract: res.data }
+                : { success: false, message: res.message || 'Failed to reject contract' };
+        } catch {
+            return { success: false, message: 'Failed to reject contract' };
         }
     }
 
     /**
-     * Approve contract
+     * Reject contract as approver — POST /contracts/{id}/approval/reject
+     * message is required by the backend (400 if blank).
      */
-    async approveContract(contractId: string, email: string): Promise<{ success: boolean; message: string }> {
+    async rejectByApprover(contractId: string, _email: string, message: string): Promise<{ success: boolean; message: string; contract?: any }> {
         try {
-            const contract = await this.getContractById(contractId);
-            if (!contract) return { success: false, message: 'Contract not found' };
-
-            // Check if user is the approver
-            if (contract.approver?.email !== email) {
-                return { success: false, message: 'You are not the assigned approver' };
-            }
-
-            // Update approver status
-            const approverUpdate: ApproverInfo = {
-                ...contract.approver,
-                status: 'approved',
-                approvedAt: new Date().toISOString()
-            };
-
-            const updates = {
-                approver: approverUpdate,
-                approvalStatus: 'approved',
-                status: ContractStatus.READY_FOR_SIGNATURE
-            };
-
-            const result = await apiService.updateContractMetadata(contractId, updates);
-            if (result.success) {
-                return { success: true, message: 'Contract approved successfully' };
-            } else {
-                return { success: false, message: result.message || 'Failed to approve contract' };
-            }
-
-        } catch (error) {
-            console.error('Approve error:', error);
-            return { success: false, message: 'An error occurred' };
-        }
-    }
-    /**
-     * Reject contract by reviewer
-     */
-    async rejectByReviewer(contractId: string, email: string): Promise<{ success: boolean; message: string }> {
-        try {
-            const contract = await this.getContractById(contractId);
-            if (!contract) return { success: false, message: 'Contract not found' };
-
-            // Find reviewer
-            if (!contract.reviewers) return { success: false, message: 'No reviewers assigned' };
-
-            const reviewerIndex = contract.reviewers.findIndex(r => r.email === email);
-            if (reviewerIndex === -1) return { success: false, message: 'Reviewer not found in this contract' };
-
-            // Update reviewer status to rejected
-            const updatedReviewers = [...contract.reviewers];
-            updatedReviewers[reviewerIndex] = {
-                ...updatedReviewers[reviewerIndex],
-                status: 'rejected',
-                rejectedAt: new Date().toISOString()
-            };
-
-            // Build update object - contract status changes to REJECTED_BY_REVIEWER
-            const updates: any = {
-                reviewers: updatedReviewers,
-                status: ContractStatus.REJECTED_BY_REVIEWER,
-                reviewStatus: 'rejected'
-            };
-
-            // Save updates
-            const result = await apiService.updateContractMetadata(contractId, updates);
-
-            if (result.success) {
-                return { success: true, message: 'Contract rejected by reviewer' };
-            } else {
-                return { success: false, message: result.message || 'Failed to reject contract' };
-            }
-
-        } catch (error) {
-            console.error('Reject by reviewer error:', error);
-            return { success: false, message: 'An error occurred' };
-        }
-    }
-
-    /**
-     * Reject contract by approver
-     */
-    async rejectByApprover(contractId: string, email: string): Promise<{ success: boolean; message: string }> {
-        try {
-            const contract = await this.getContractById(contractId);
-            if (!contract) return { success: false, message: 'Contract not found' };
-
-            // Check if user is the approver
-            if (contract.approver?.email !== email) {
-                return { success: false, message: 'You are not the assigned approver' };
-            }
-
-            // Update approver status to rejected
-            const approverUpdate: ApproverInfo = {
-                ...contract.approver,
-                status: 'rejected',
-                approvedAt: new Date().toISOString() // Using approvedAt for rejection timestamp
-            };
-
-            const updates = {
-                approver: approverUpdate,
-                approvalStatus: 'rejected',
-                status: ContractStatus.REJECTED_BY_APPROVER
-            };
-
-            const result = await apiService.updateContractMetadata(contractId, updates);
-            if (result.success) {
-                return { success: true, message: 'Contract rejected by approver' };
-            } else {
-                return { success: false, message: result.message || 'Failed to reject contract' };
-            }
-
-        } catch (error) {
-            console.error('Reject by approver error:', error);
-            return { success: false, message: 'An error occurred' };
+            const res = await httpClient.post<any>(`/contracts/${contractId}/approval/reject`, { message });
+            return res.ok
+                ? { success: true, message: 'Contract rejected', contract: res.data }
+                : { success: false, message: res.message || 'Failed to reject contract' };
+        } catch {
+            return { success: false, message: 'Failed to reject contract' };
         }
     }
 
@@ -610,13 +260,10 @@ class ContractService {
             const result = await submitForExternalSignature(contract, signerEmail, finalSenderName);
 
             if (result.success) {
-                // 4. Update contract status to WAITING_FOR_SIGNATURE locally if needed
-                // The service might not update the contract status automatically? 
-                // externalSignatureService creates a request but doesn't explicitly update contract status to WAITING_FOR_SIGNATURE
-                // We should probably do that here.
+                // 4. Update contract status to IN_SIGNATURE
 
                 const updateData = {
-                    status: ContractStatus.WAITING_FOR_SIGNATURE,
+                    status: ContractStatus.IN_SIGNATURE,
                     externalSigningToken: result.token,
                     externalSigningUrl: result.signingUrl,
                     externalSigningSentAt: new Date().toISOString(),
@@ -644,7 +291,7 @@ class ContractService {
         }
     }
 
-    async signContract(id: string, email: string, signatureImage?: string) {
+    async signContract(_id: string, _email: string, _signatureImage?: string) {
         // Logic handled by updateContractSignedPdf mostly
         return { success: true, message: "Mock signed" };
     }

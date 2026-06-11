@@ -154,7 +154,7 @@ export default function OverviewDrawer({ activeTab, stats, onClose, onTabChange 
             value: stats.requestedCount,
             icon: <SendOutlinedIcon sx={{ fontSize: 14 }} />,
             color: '#7c3aed',
-            path: '/overview?status=WAITING_FOR_SIGNATURE',
+            path: '/overview?status=IN_SIGNATURE',
         },
         {
             label: t('waitingForMySignature'),

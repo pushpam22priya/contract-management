@@ -70,7 +70,6 @@ export default function RecentContracts() {
                         ContractStatus.DRAFT,
                         ContractStatus.IN_REVIEW,
                         ContractStatus.IN_APPROVAL,
-                        ContractStatus.REVIEW_APPROVAL,
                         ContractStatus.REJECTED_BY_REVIEWER,
                         ContractStatus.REJECTED_BY_APPROVER,
                     ];

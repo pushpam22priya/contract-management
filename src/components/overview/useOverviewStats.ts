@@ -69,8 +69,8 @@ export function useOverviewStats(): OverviewStats {
 
                     if (isCreator) {
                         if (c.status === ContractStatus.DRAFT) draft++;
-                        if (c.status === ContractStatus.IN_REVIEW || c.status === ContractStatus.REVIEW_APPROVAL) underReview++;
-                        if (c.status === ContractStatus.IN_APPROVAL || c.status === ContractStatus.REVIEWED) underApproval++;
+                        if (c.status === ContractStatus.IN_REVIEW) underReview++;
+                        if (c.status === ContractStatus.IN_APPROVAL) underApproval++;
                         if (c.status === ContractStatus.ACTIVE) active++;
                         if (c.status === ContractStatus.EXPIRING) expiring++;
                         if (c.status === ContractStatus.EXPIRED) {
@@ -78,8 +78,8 @@ export function useOverviewStats(): OverviewStats {
                             if (c.renewedContractId) {
                                 const renewalStatus = statusById.get(c.renewedContractId);
                                 const hidden = new Set([
-                                    ContractStatus.APPROVED, ContractStatus.READY_FOR_SIGNATURE,
-                                    ContractStatus.WAITING_FOR_SIGNATURE, ContractStatus.SIGNED_BY_EVERYONE,
+                                    ContractStatus.READY_FOR_SIGNATURE,
+                                    ContractStatus.IN_SIGNATURE, ContractStatus.SIGNED_BY_EVERYONE,
                                     ContractStatus.SIGNED, ContractStatus.ACTIVE, ContractStatus.EXPIRING,
                                     ContractStatus.EXPIRED, ContractStatus.TERMINATED,
                                 ]);
@@ -87,10 +87,10 @@ export function useOverviewStats(): OverviewStats {
                             }
                             if (!superseded) expired++;
                         }
-                        if (c.status === ContractStatus.WAITING_FOR_SIGNATURE) requested++;
+                        if (c.status === ContractStatus.IN_SIGNATURE) requested++;
                         if (c.status === ContractStatus.SIGNED_BY_EVERYONE) receivedSigned++;
                     }
-                    if (isInternalSignerPending || (isLegacySigner && c.status === ContractStatus.WAITING_FOR_SIGNATURE)) {
+                    if (isInternalSignerPending || (isLegacySigner && c.status === ContractStatus.IN_SIGNATURE)) {
                         waitingForSig++;
                     }
                 });

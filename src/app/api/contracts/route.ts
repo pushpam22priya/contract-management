@@ -17,12 +17,13 @@ import { ContractStatus } from '@/types/contract';
 function calculateDynamicStatus(contract: any): { status: ContractStatus; expiresInDays: number } {
     const workflowStatuses = [
         ContractStatus.DRAFT,
-        ContractStatus.REVIEW_APPROVAL,
-        ContractStatus.REVIEWED,
-        ContractStatus.APPROVED,
+        ContractStatus.IN_REVIEW,
+        ContractStatus.IN_APPROVAL,
         ContractStatus.READY_FOR_SIGNATURE,
-        ContractStatus.WAITING_FOR_SIGNATURE,
-        ContractStatus.REJECTED
+        ContractStatus.IN_SIGNATURE,
+        ContractStatus.REJECTED,
+        ContractStatus.REJECTED_BY_REVIEWER,
+        ContractStatus.REJECTED_BY_APPROVER,
     ];
 
     // If contract has been sent for signatures, override status dynamically
@@ -37,7 +38,7 @@ function calculateDynamicStatus(contract: any): { status: ContractStatus; expire
         }
         const dynamicStatus = contract.signatureFlowStatus === 'all_completed'
             ? ContractStatus.SIGNED_BY_EVERYONE
-            : ContractStatus.WAITING_FOR_SIGNATURE;
+            : ContractStatus.IN_SIGNATURE;
         return { status: dynamicStatus, expiresInDays };
     }
 

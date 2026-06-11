@@ -1,7 +1,8 @@
-'use client';
+ 'use client';
 
 import AppButton from '@/components/common/AppButton';
-import { Box,  Typography, useTheme } from '@mui/material';
+import { Box,  Typography, useTheme, TextField } from '@mui/material';
+import { useState } from 'react';
 import { alpha } from '@mui/material/styles';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import SendIcon from '@mui/icons-material/Send';
@@ -11,8 +12,8 @@ interface ReviewConfirmationDialogProps {
     open: boolean;
     onClose: () => void;
     contractTitle: string;
-    onMarkAsReviewed: () => void;
-    onMarkAndSendForFurtherReview: () => void;
+    onMarkAsReviewed: (comments?: string) => void;
+    onMarkAndSendForFurtherReview: (comments?: string) => void;
 }
 
 export default function ReviewConfirmationDialog({
@@ -25,8 +26,10 @@ export default function ReviewConfirmationDialog({
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
 
-    const handleMarkAsReviewed = () => { onMarkAsReviewed(); onClose(); };
-    const handleMarkAndSendForFurtherReview = () => { onMarkAndSendForFurtherReview(); onClose(); };
+    const [comments, setComments] = useState('');
+
+    const handleMarkAsReviewed = () => { onMarkAsReviewed(comments.trim() || undefined); onClose(); };
+    const handleMarkAndSendForFurtherReview = () => { onMarkAndSendForFurtherReview(comments.trim() || undefined); onClose(); };
 
     const dialogActions = (
         <AppButton variant="outlined" onClick={onClose}>
@@ -83,6 +86,28 @@ export default function ReviewConfirmationDialog({
                         {contractTitle}
                     </Typography>
                 </Box>
+
+                {/* Optional message input for reviewer (moved below contract info for better layout) */}
+                <TextField
+                    label="Message (optional)"
+                    placeholder="Add a brief message to reviewers"
+                    value={comments}
+                    onChange={(e) => setComments(e.target.value)}
+                    multiline
+                    minRows={3}
+                    maxRows={6}
+                    size="small"
+                    fullWidth
+                    variant="outlined"
+                    inputProps={{ maxLength: 500 }}
+                    helperText={`${comments.length}/500`}
+                    sx={{
+                        bgcolor: isDark ? 'rgba(255,255,255,0.02)' : '#ffffff',
+                        borderRadius: 1,
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
+                        boxShadow: (theme) => theme.palette.mode === 'dark' ? 'none' : '0 1px 4px rgba(16,24,40,0.04)'
+                    }}
+                />
 
                 {/* Option 1 */}
                 <Box onClick={handleMarkAsReviewed} sx={optionSx(primaryColor)}>

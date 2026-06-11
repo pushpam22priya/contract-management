@@ -100,8 +100,8 @@ function classifyEntry(
         !chain.some(e => e.id === entry.renewedContractId);
     if (isChainHead && entry.status === 'TERMINATED') return 'current';
 
-    const upcomingStatuses = ['DRAFT', 'IN_REVIEW', 'IN_APPROVAL', 'APPROVED',
-        'READY_FOR_SIGNATURE', 'WAITING_FOR_SIGNATURE', 'SIGNED', 'SIGNED_BY_EVERYONE'];
+    const upcomingStatuses = ['DRAFT', 'IN_REVIEW', 'IN_APPROVAL',
+        'READY_FOR_SIGNATURE', 'IN_SIGNATURE', 'SIGNED', 'SIGNED_BY_EVERYONE'];
     if (upcomingStatuses.includes(entry.status)) return 'upcoming';
     const today = dayjs().startOf('day');
     if (entry.startDate && dayjs(entry.startDate).isAfter(today)) return 'upcoming';

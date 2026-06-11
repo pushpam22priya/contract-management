@@ -100,13 +100,16 @@ class AuthService {
     }
 
     /**
-     * Get all registered users from MongoDB (without passwords)
+     * Get all registered users from Spring Boot backend.
      */
     async getAllRegisteredUsers(): Promise<Omit<User, 'password'>[]> {
         try {
-            const res = await fetch('/api/users', { cache: 'no-store' });
-            if (!res.ok) throw new Error('Failed to fetch users');
-            return res.json();
+            const response = await httpClient.get<any[]>('/users');
+            if (!response.ok || !Array.isArray(response.data)) {
+                console.error('[AuthService] getAllRegisteredUsers ✗', response.status, response.message);
+                return [];
+            }
+            return response.data;
         } catch (error) {
             console.error('Failed to fetch registered users:', error);
             return [];

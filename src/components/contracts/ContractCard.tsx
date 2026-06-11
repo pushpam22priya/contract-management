@@ -29,7 +29,7 @@ interface ContractCardProps {
     /**
      * Variant determines the card behavior:
      * - 'draft': Shows share button always (for review submission), handles "changes_requested" status
-     * - 'contract': Shows share button only for APPROVED/WAITING_FOR_SIGNATURE (for signature requests)
+     * - 'contract': Shows share button only for READY_FOR_SIGNATURE/IN_SIGNATURE (for signature requests)
      * - 'terminated': Shows History button only (all other actions suppressed)
      */
     variant?: 'draft' | 'contract' | 'terminated';
@@ -95,20 +95,14 @@ const ContractCard = ({
                 return 'Under Review';
             case ContractStatus.IN_APPROVAL:
                 return 'Under Approval';
-            case ContractStatus.REVIEW_APPROVAL:
-                return 'Review and Approval';
-            case ContractStatus.REVIEWED:
-                return 'Reviewed';
-            case ContractStatus.APPROVED:
-                return 'Approved';
             case ContractStatus.READY_FOR_SIGNATURE:
                 return 'Ready for Signature';
-            case ContractStatus.WAITING_FOR_SIGNATURE: {
+            case ContractStatus.IN_SIGNATURE: {
                 const progress = getMultiPartySigningProgress();
                 if (progress) {
                     return `Order ${progress.orderIndex + 1}/${progress.totalOrders} Signing`;
                 }
-                return 'Waiting for Signature';
+                return 'In Signature';
             }
             case ContractStatus.SIGNED_BY_EVERYONE:
                 return 'Signed by Assigned Parties';
@@ -146,14 +140,9 @@ const ContractCard = ({
                     return { bg: 'rgba(139,92,246,0.15)', color: '#a78bfabd', border: 'rgba(167,139,250,0.38)' };
                 case ContractStatus.IN_APPROVAL:
                     return { bg: 'rgba(245,158,11,0.14)', color: '#fbbe24bd', border: 'rgba(251,191,36,0.38)' };
-                case ContractStatus.REVIEW_APPROVAL:
-                case ContractStatus.REVIEWED:
-                    return { bg: 'rgba(59,130,246,0.14)', color: '#60a5fabd', border: 'rgba(96,165,250,0.38)' };
-                case ContractStatus.APPROVED:
-                    return { bg: 'rgba(16,185,129,0.15)', color: '#34d399bd', border: 'rgba(52,211,153,0.38)' };
                 case ContractStatus.READY_FOR_SIGNATURE:
                     return { bg: 'rgba(20,184,166,0.14)', color: '#2dd4bebd', border: 'rgba(45,212,191,0.38)' };
-                case ContractStatus.WAITING_FOR_SIGNATURE: {
+                case ContractStatus.IN_SIGNATURE: {
                     const progress = getMultiPartySigningProgress();
                     if (progress && progress.orderIndex > 0)
                         return { bg: 'rgba(20,184,166,0.14)', color: '#2dd4bebd', border: 'rgba(45,212,191,0.38)' };
@@ -187,14 +176,9 @@ const ContractCard = ({
                 return { bg: '#ede9fe', color: '#5b21b6', border: '#c4b5fd' };
             case ContractStatus.IN_APPROVAL:
                 return { bg: '#fef9c3', color: '#92400e', border: '#fde68a' };
-            case ContractStatus.REVIEW_APPROVAL:
-            case ContractStatus.REVIEWED:
-                return { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' };
-            case ContractStatus.APPROVED:
-                return { bg: '#d1fae5', color: '#065f46', border: '#34d399' };
             case ContractStatus.READY_FOR_SIGNATURE:
                 return { bg: '#e0f2f1', color: '#00695c', border: '#4db6ac' };
-            case ContractStatus.WAITING_FOR_SIGNATURE: {
+            case ContractStatus.IN_SIGNATURE: {
                 const progress = getMultiPartySigningProgress();
                 if (progress && progress.orderIndex > 0)
                     return { bg: '#e0f7fa', color: '#00695c', border: '#80cbc4' };
@@ -234,9 +218,8 @@ const ContractCard = ({
 
         if (variant === 'draft') return true;
 
-        return contract.status === ContractStatus.APPROVED ||
-            contract.status === ContractStatus.READY_FOR_SIGNATURE ||
-            contract.status === ContractStatus.WAITING_FOR_SIGNATURE ||
+        return contract.status === ContractStatus.READY_FOR_SIGNATURE ||
+            contract.status === ContractStatus.IN_SIGNATURE ||
             contract.status === ContractStatus.SIGNED_BY_EVERYONE;
     };
 

@@ -137,11 +137,8 @@ export enum ContractStatus {
     DRAFT = 'DRAFT',
     IN_REVIEW = 'IN_REVIEW',
     IN_APPROVAL = 'IN_APPROVAL',
-    REVIEW_APPROVAL = 'REVIEW_APPROVAL',
-    REVIEWED = 'REVIEWED',
-    APPROVED = 'APPROVED',
     READY_FOR_SIGNATURE = 'READY_FOR_SIGNATURE',
-    WAITING_FOR_SIGNATURE = 'WAITING_FOR_SIGNATURE',
+    IN_SIGNATURE = 'IN_SIGNATURE',
     SIGNED_BY_EVERYONE = 'SIGNED_BY_EVERYONE',
     SIGNED = 'SIGNED',
     ACTIVE = 'ACTIVE',
@@ -152,6 +149,10 @@ export enum ContractStatus {
     REJECTED_BY_REVIEWER = 'REJECTED_BY_REVIEWER',
     REJECTED_BY_APPROVER = 'REJECTED_BY_APPROVER'
 }
+
+export type WorkflowMode = 'ONLY_REVIEW' | 'ONLY_APPROVE' | 'REVIEW_AND_APPROVE';
+export type ReviewStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'REJECTED';
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface Contract {
     // Card display fields (from Step 2 - Basic Information)
@@ -168,11 +169,12 @@ export interface Contract {
     fileUploaded?: boolean;      // true once PDF has been successfully uploaded to MinIO (Spring Boot)
     xfdfData?: string;           // XFDF annotation data with field values
     // Review & Approval Workflow tracking
-    reviewers?: ReviewerInfo[];      // Multiple reviewers can be assigned
-    approver?: ApproverInfo;         // Single approver
-    signer?: SignerInfo;             // Single signer
-    reviewStatus?: 'pending' | 'in_review' | 'reviewed' | 'changes_requested';
-    approvalStatus?: 'pending' | 'approved' | 'rejected';
+    workflowMode?: WorkflowMode;         // Workflow mode set at submission time
+    reviewers?: ReviewerInfo[];          // Multiple reviewers can be assigned
+    approver?: ApproverInfo;             // Single approver
+    signer?: SignerInfo;                 // Single signer
+    reviewStatus?: ReviewStatus | 'pending' | 'in_review' | 'reviewed' | 'changes_requested';
+    approvalStatus?: ApprovalStatus | 'pending' | 'approved' | 'rejected';
     modificationComments?: string;   // Comments when changes are requested (legacy)
     modificationRequests?: ModificationRequest[];  // NEW: Detailed modification requests
 
@@ -272,24 +274,24 @@ export interface Contract {
 * Information about a modification request
 */
 export interface ModificationRequest {
-    requestedBy: string;                    // Email of requester
-    role: 'reviewer' | 'approver';         // Role of requester
-    comments: string;                       // Modification comments
-    requestedAt: string;                    // Timestamp
+    requestedBy: string;                                    // Email of requester
+    role: 'reviewer' | 'approver' | 'contractor';         // Role of requester
+    message: string;                                        // Modification message
+    requestedAt: string;                                    // Timestamp
 }
 
 /**
 * Information about a reviewer assigned to a contract
 */
 export interface ReviewerInfo {
-    email: string;                                               // Reviewer's email
-    status: 'pending' | 'reviewed' | 'requested_changes' | 'rejected';  // Review status
-    reviewedAt?: string;                                         // Timestamp when reviewed
-    rejectedAt?: string;                                         // Timestamp when rejected
-    comments?: string;                                           // Comments from reviewer
-    submissionMessage?: string;                                  // Message sent when submitting for review
-    sentAt?: string;                                             // Timestamp when review request was sent
-    sentBy?: string;                                             // Email of sender who requested review
+    email: string;                                                           // Reviewer's email
+    status: 'pending' | 'reviewed' | 'forwarded' | 'rejected';             // Review status
+    reviewedAt?: string;                                                     // Timestamp when reviewed
+    rejectedAt?: string;                                                     // Timestamp when rejected
+    comments?: string;                                                       // Comments from reviewer
+    submissionMessage?: string;                                              // Message sent when submitting for review
+    sentAt?: string;                                                         // Timestamp when review request was sent
+    sentBy?: string;                                                         // Email of sender who requested review
 }
 
 /**
@@ -299,6 +301,7 @@ export interface ApproverInfo {
     email: string;                                               // Approver's email
     status: 'pending' | 'approved' | 'rejected';                // Approval status
     approvedAt?: string;                                         // Timestamp when approved
+    rejectedAt?: string;                                         // Timestamp when rejected
     comments?: string;                                           // Comments from approver
     submissionMessage?: string;                                  // Message sent when submitting for approval
     sentAt?: string;                                             // Timestamp when approval request was sent

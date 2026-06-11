@@ -470,6 +470,21 @@ export const apiService = {
     },
 
     /**
+     * Fetch contracts where the current user is assigned as reviewer or approver.
+     * Used to populate the inbox page.
+     */
+    async getInboxContracts(): Promise<any[]> {
+        console.log('[ApiService] getInboxContracts → GET /contracts/inbox (Spring Boot via proxy)');
+        const response = await httpClient.get<any[]>('/contracts/inbox');
+        if (!response.ok || !Array.isArray(response.data)) {
+            console.error('[ApiService] getInboxContracts ✗', response.status, response.message);
+            return [];
+        }
+        console.log(`[ApiService] getInboxContracts ✓ received ${response.data.length} contracts`);
+        return response.data.map((c: any) => ({ ...c, id: c.id || c._id }));
+    },
+
+    /**
      * Get full contract detail by ID — Spring Boot backend via proxy.
      */
     async getContractDetails(id: string): Promise<any | null> {

@@ -3,7 +3,7 @@
 import { Box, Typography, Chip, IconButton, Tooltip, Popover, useTheme } from '@mui/material';
 import { Visibility, CheckCircle, AccessTime, Person, AccountCircle, Message, Groups, Cancel, MoreVert } from '@mui/icons-material';
 import AppButton from '@/components/common/AppButton';
-import { Contract } from '@/types/contract';
+import { Contract, ContractStatus } from '@/types/contract';
 import { useState } from 'react';
 import { authService } from '@/services/authService';
 
@@ -13,8 +13,7 @@ interface ReviewApprovalCardProps {
     onView: (id: string) => void;
     onMarkAsReviewed: (id: string) => void;
     onApprove: (id: string) => void;
-    onRequestModification: (id: string, comments: string) => void;
-    onReject: (id: string) => void;
+    onReject: (id: string, message: string) => void;
 }
 
 const truncate = (text: string | undefined, maxLen: number) => {
@@ -46,7 +45,6 @@ export default function ReviewApprovalCard({
     onView,
     onMarkAsReviewed,
     onApprove,
-    onRequestModification,
     onReject,
 }: ReviewApprovalCardProps) {
     const [showCommentInput, setShowCommentInput] = useState(false);
@@ -57,43 +55,43 @@ export default function ReviewApprovalCard({
     const isDark = theme.palette.mode === 'dark';
     const currentUser = authService.getCurrentUser();
 
-    /**
-     * Get reviewer status for current user
-     */
+    // Spring Boot inbox endpoint returns aggregate fields, not per-reviewer arrays.
+    // These helpers fall back to aggregate reviewStatus / approvalStatus when the
+    // detailed reviewers[] / approver{} arrays are absent.
+    const aggregateReviewStatus = (contract as any).reviewStatus as string | undefined;
+    const aggregateApprovalStatus = (contract as any).approvalStatus as string | undefined;
+
     const getMyReviewerStatus = () => {
-        if (!currentUser || !contract.reviewers) return null;
-        const myReview = contract.reviewers.find(r => r.email === currentUser.email);
-        return myReview?.status || null;
+        if (!currentUser) return null;
+        if (contract.reviewers) {
+            const myReview = contract.reviewers.find(r => r.email === currentUser.email);
+            if (myReview) return myReview.status;
+        }
+        // Fallback: derive from aggregate status
+        if (aggregateReviewStatus === 'COMPLETED') return 'reviewed';
+        if (aggregateReviewStatus === 'REJECTED' || contract.status === ContractStatus.REJECTED_BY_REVIEWER) return 'rejected';
+        return null; // pending
     };
 
-    /**
-     * Check if all reviewers have reviewed
-     */
     const allReviewersComplete = () => {
-        if (!contract.reviewers || contract.reviewers.length === 0) return true;
-        return contract.reviewers.every(r => r.status === 'reviewed');
+        if (contract.reviewers && contract.reviewers.length > 0)
+            // 'forwarded' counts as done — that reviewer delegated their part
+            return contract.reviewers.every(r => r.status === 'reviewed' || r.status === 'forwarded');
+        // Fallback: review is complete if status moved to IN_APPROVAL or beyond
+        return aggregateReviewStatus === 'COMPLETED' ||
+            contract.status === ContractStatus.IN_APPROVAL ||
+            contract.status === ContractStatus.READY_FOR_SIGNATURE;
     };
 
-    /**
-     * Check if contract is approved
-     */
     const isApproved = () => {
-        return contract.approver?.status === 'approved';
+        if (contract.approver) return contract.approver.status === 'approved';
+        return aggregateApprovalStatus === 'APPROVED';
     };
 
-    /**
-     * Check if contract is rejected by reviewer
-     */
-    const isRejectedByReviewer = () => {
-        const myStatus = getMyReviewerStatus();
-        return myStatus === 'rejected';
-    };
-
-    /**
-     * Check if contract is rejected by approver
-     */
     const isRejectedByApprover = () => {
-        return contract.approver?.status === 'rejected';
+        if (contract.approver) return contract.approver.status === 'rejected';
+        return aggregateApprovalStatus === 'REJECTED' ||
+            contract.status === ContractStatus.REJECTED_BY_APPROVER;
     };
 
     /**
@@ -111,24 +109,26 @@ export default function ReviewApprovalCard({
             if (userRole === 'reviewer') {
                 const myStatus = getMyReviewerStatus();
                 if (myStatus === 'rejected') return { bg: 'rgba(239,68,68,0.08)', color: '#b07070', border: 'rgba(239,68,68,0.22)' };
-                if (myStatus === 'reviewed') return { bg: 'rgba(16,185,129,0.08)', color: '#6bac8e', border: 'rgba(16,185,129,0.22)' };
+                if (myStatus === 'reviewed' || myStatus === 'forwarded') return { bg: 'rgba(16,185,129,0.08)', color: '#6bac8e', border: 'rgba(16,185,129,0.22)' };
                 return { bg: 'rgba(245,158,11,0.08)', color: '#b8935a', border: 'rgba(245,158,11,0.22)' };
             } else {
                 if (isRejectedByApprover()) return { bg: 'rgba(239,68,68,0.08)', color: '#b07070', border: 'rgba(239,68,68,0.22)' };
                 if (isApproved()) return { bg: 'rgba(16,185,129,0.08)', color: '#6bac8e', border: 'rgba(16,185,129,0.22)' };
-                if (allReviewersComplete()) return { bg: 'rgba(16,185,129,0.08)', color: '#6bac8e', border: 'rgba(16,185,129,0.22)' };
+                // pending approval — needs action, same orange as reviewer pending
+                if (contract.approver?.status === 'pending' || allReviewersComplete()) return { bg: 'rgba(245,158,11,0.08)', color: '#b8935a', border: 'rgba(245,158,11,0.22)' };
                 return { bg: 'rgba(59,130,246,0.08)', color: '#6888ac', border: 'rgba(59,130,246,0.22)' };
             }
         }
         if (userRole === 'reviewer') {
             const myStatus = getMyReviewerStatus();
             if (myStatus === 'rejected') return { bg: '#ffebee', color: '#c62828', border: '#ef9a9a' };
-            if (myStatus === 'reviewed') return { bg: '#e0f2f1', color: '#00695c', border: '#80cbc4' };
+            if (myStatus === 'reviewed' || myStatus === 'forwarded') return { bg: '#e0f2f1', color: '#00695c', border: '#80cbc4' };
             return { bg: '#fff3e0', color: '#e65100', border: '#ffb74d' };
         } else {
             if (isRejectedByApprover()) return { bg: '#ffebee', color: '#c62828', border: '#ef9a9a' };
             if (isApproved()) return { bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' };
-            if (allReviewersComplete()) return { bg: '#e8f5e9', color: '#2e7d32', border: '#81c784' };
+            // pending approval — needs action, same orange as reviewer pending
+            if (contract.approver?.status === 'pending' || allReviewersComplete()) return { bg: '#fff3e0', color: '#e65100', border: '#ffb74d' };
             return { bg: '#e8eaf6', color: '#3949ab', border: '#9fa8da' };
         }
     };
@@ -168,57 +168,51 @@ export default function ReviewApprovalCard({
         if (isDark) {
             if (userRole === 'reviewer') {
                 if (myReviewerStatus === 'rejected') return { bg: 'rgba(239,68,68,0.07)', border: 'rgba(239,68,68,0.20)', icon: '#b07070' };
-                if (myReviewerStatus === 'reviewed') return { bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.20)', icon: '#6bac8e' };
+                if (myReviewerStatus === 'reviewed' || myReviewerStatus === 'forwarded') return { bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.20)', icon: '#6bac8e' };
                 return { bg: 'rgba(245,158,11,0.07)', border: 'rgba(245,158,11,0.20)', icon: '#b8935a' };
             } else {
                 if (isRejectedByApprover()) return { bg: 'rgba(239,68,68,0.07)', border: 'rgba(239,68,68,0.20)', icon: '#b07070' };
                 if (isApproved()) return { bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.20)', icon: '#6bac8e' };
-                if (allReviewersComplete()) return { bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.20)', icon: '#6bac8e' };
+                if (contract.approver?.status === 'pending' || allReviewersComplete()) return { bg: 'rgba(245,158,11,0.07)', border: 'rgba(245,158,11,0.20)', icon: '#b8935a' };
                 return { bg: 'rgba(59,130,246,0.07)', border: 'rgba(59,130,246,0.20)', icon: '#6888ac' };
             }
         }
         if (userRole === 'reviewer') {
             if (myReviewerStatus === 'rejected') return { bg: '#ffebee', border: '#ef9a9a', icon: '#c62828' };
-            if (myReviewerStatus === 'reviewed') return { bg: '#e0f2f1', border: '#80cbc4', icon: '#00695c' };
+            if (myReviewerStatus === 'reviewed' || myReviewerStatus === 'forwarded') return { bg: '#e0f2f1', border: '#80cbc4', icon: '#00695c' };
             return { bg: '#fff3e0', border: '#ffb74d', icon: '#e65100' };
         } else {
             if (isRejectedByApprover()) return { bg: '#ffebee', border: '#ef9a9a', icon: '#c62828' };
             if (isApproved()) return { bg: '#ecfdf5', border: '#a7f3d0', icon: '#059669' };
-            if (allReviewersComplete()) return { bg: '#e8f5e9', border: '#81c784', icon: '#2e7d32' };
+            if (contract.approver?.status === 'pending' || allReviewersComplete()) return { bg: '#fff3e0', border: '#ffb74d', icon: '#e65100' };
             return { bg: '#e8eaf6', border: '#9fa8da', icon: '#3949ab' };
         }
     };
 
     const senderInfoColors = getSenderInfoColors();
 
-    /**
-     * Handle request modification
-     */
-    const handleRequestModification = () => {
+    const handleRejectWithMessage = () => {
         if (!comments.trim()) {
-            alert('Please enter comments before requesting modifications');
+            alert('Please enter a rejection reason');
             return;
         }
-        onRequestModification(contract.id, comments);
+        onReject(contract.id, comments);
         setComments('');
         setShowCommentInput(false);
     };
 
     return (
         <Box
-            onClick={() => onView(contract.id)}
             sx={{
                 border: '1px solid',
                 borderColor: 'divider',
                 borderRadius: 2.5,
                 bgcolor: 'background.paper',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                transition: 'box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 overflow: 'hidden',
                 boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-                cursor: 'pointer',
                 '&:hover': {
                     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-                    transform: 'translateY(-2px)',
                 },
             }}
         >
@@ -233,8 +227,10 @@ export default function ReviewApprovalCard({
                     </Tooltip>
                     <Chip
                         label={userRole === 'reviewer'
-                            ? (myReviewerStatus === 'rejected' ? 'Rejected' : (myReviewerStatus === 'reviewed' ? 'Reviewed' : 'Pending Review'))
-                            : (isRejectedByApprover() ? 'Rejected' : (isApproved() ? 'Approved' : (allReviewersComplete() ? 'Ready' : 'Awaiting Reviews')))}
+                            ? (myReviewerStatus === 'rejected' ? 'Rejected' : (myReviewerStatus === 'reviewed' || myReviewerStatus === 'forwarded') ? 'Reviewed' : 'Pending Review')
+                            : (contract.approver
+                                ? (contract.approver.status === 'approved' ? 'Approved' : contract.approver.status === 'rejected' ? 'Rejected' : 'Pending Approval')
+                                : (isRejectedByApprover() ? 'Rejected' : isApproved() ? 'Approved' : allReviewersComplete() ? 'Pending Approval' : 'Awaiting Reviews'))}
                         size="small"
                         sx={{
                             bgcolor: statusColors.bg,
@@ -287,28 +283,68 @@ export default function ReviewApprovalCard({
                         </IconButton>
                     </Tooltip>
 
-                    {/* Review Progress (approvers only) */}
-                    {userRole === 'approver' && contract.reviewers && contract.reviewers.length > 0 && (
+                    {/* Assigned for Review & Approval — visible on all cards */}
+                    {(contract.reviewers?.length || contract.approver) && (
                         <Tooltip
                             title={
                                 <Box sx={{ p: 0.5 }}>
-                                    <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1 }}>Review Progress</Typography>
-                                    <Box sx={{ maxHeight: 150, overflowY: 'auto', pr: 0.5, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-track': { bgcolor: 'action.hover', borderRadius: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'divider', borderRadius: '4px' } }}>
-                                        {contract.reviewers.map((reviewer, idx) => (
-                                            <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5, gap: 2 }}>
-                                                <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>{reviewer.email}</Typography>
-                                                <Chip
-                                                    label={reviewer.status.charAt(0).toUpperCase() + reviewer.status.slice(1).replace('_', ' ')}
-                                                    size="small"
-                                                    sx={{ height: '18px', fontSize: '0.65rem', bgcolor: reviewer.status === 'reviewed' ? (isDark ? 'rgba(16,185,129,0.12)' : '#e0f2f1') : (isDark ? 'rgba(245,158,11,0.12)' : '#fff3e0'), color: reviewer.status === 'reviewed' ? (isDark ? '#6bac8e' : '#00695c') : (isDark ? '#b8935a' : '#e65100') }}
-                                                />
-                                            </Box>
-                                        ))}
+                                    <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1 }}>Assigned for Review & Approve</Typography>
+                                    <Box sx={{ maxHeight: 180, overflowY: 'auto', pr: 0.5, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-track': { bgcolor: 'action.hover', borderRadius: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'divider', borderRadius: '4px' } }}>
+                                        {contract.reviewers && contract.reviewers.length > 0 && (
+                                            <>
+                                                <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', display: 'block', mb: 0.5 }}>Reviewers</Typography>
+                                                {contract.reviewers.map((reviewer, idx) => (
+                                                    <Box key={idx} sx={{ mb: 0.5 }}>
+                                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+                                                            <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>{reviewer.email}</Typography>
+                                                            <Chip
+                                                                label={
+                                                                    reviewer.status === 'reviewed' ? 'Reviewed'
+                                                                    : reviewer.status === 'forwarded' ? 'Reviewed'
+                                                                    : reviewer.status === 'rejected' ? 'Rejected'
+                                                                    : 'Pending'
+                                                                }
+                                                                size="small"
+                                                                sx={{
+                                                                    height: '18px', fontSize: '0.65rem', flexShrink: 0,
+                                                                    bgcolor: reviewer.status === 'reviewed' ? (isDark ? 'rgba(16,185,129,0.12)' : '#e0f2f1')
+                                                                        : reviewer.status === 'forwarded' ? (isDark ? 'rgba(16,185,129,0.12)' : '#e0f2f1')
+                                                                        : reviewer.status === 'rejected' ? (isDark ? 'rgba(239,68,68,0.12)' : '#ffebee')
+                                                                        : (isDark ? 'rgba(245,158,11,0.12)' : '#fff3e0'),
+                                                                    color: reviewer.status === 'reviewed' ? (isDark ? '#6bac8e' : '#00695c')
+                                                                        : reviewer.status === 'forwarded' ? (isDark ? '#6bac8e' : '#00695c')
+                                                                        : reviewer.status === 'rejected' ? (isDark ? '#b07070' : '#c62828')
+                                                                        : (isDark ? '#b8935a' : '#e65100'),
+                                                                }}
+                                                            />
+                                                        </Box>
+                                                        {reviewer.status === 'forwarded' && (
+                                                            <Typography variant="caption" sx={{ fontSize: '0.62rem', color: 'text.disabled', fontStyle: 'italic', pl: 0.25 }}>
+                                                                ↳ forwarded to next reviewer
+                                                            </Typography>
+                                                        )}
+                                                    </Box>
+                                                ))}
+                                            </>
+                                        )}
+                                        {contract.approver && (
+                                            <>
+                                                <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', display: 'block', mt: contract.reviewers?.length ? 0.75 : 0, mb: 0.5 }}>Approver</Typography>
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+                                                    <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>{contract.approver.email}</Typography>
+                                                    <Chip
+                                                        label={contract.approver.status.charAt(0).toUpperCase() + contract.approver.status.slice(1).replace('_', ' ')}
+                                                        size="small"
+                                                        sx={{ height: '18px', fontSize: '0.65rem', bgcolor: contract.approver.status === 'approved' ? (isDark ? 'rgba(16,185,129,0.12)' : '#e0f2f1') : contract.approver.status === 'rejected' ? (isDark ? 'rgba(239,68,68,0.12)' : '#ffebee') : (isDark ? 'rgba(59,130,246,0.12)' : '#e8eaf6'), color: contract.approver.status === 'approved' ? (isDark ? '#6bac8e' : '#00695c') : contract.approver.status === 'rejected' ? (isDark ? '#b07070' : '#c62828') : (isDark ? '#6888ac' : '#3949ab') }}
+                                                    />
+                                                </Box>
+                                            </>
+                                        )}
                                     </Box>
                                 </Box>
                             }
                             arrow placement="top"
-                            slotProps={{ tooltip: { sx: { bgcolor: 'background.paper', color: 'text.primary', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', borderRadius: 2, p: 1.5, minWidth: 200, border: '1px solid', borderColor: 'divider', '& .MuiTooltip-arrow' : { color: 'background.paper' } } } }}
+                            slotProps={{ tooltip: { sx: { bgcolor: 'background.paper', color: 'text.primary', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', borderRadius: 2, p: 1.5, minWidth: 200, border: '1px solid', borderColor: 'divider', '& .MuiTooltip-arrow': { color: 'background.paper' } } } }}
                         >
                             <IconButton size="small" sx={{ border: '1px solid', borderColor: statusColors.color, color: statusColors.color, borderRadius: 1, '&:hover': { bgcolor: statusColors.bg } }}>
                                 <Groups sx={{ fontSize: 18 }} />
@@ -316,8 +352,8 @@ export default function ReviewApprovalCard({
                         </Tooltip>
                     )}
 
-                    {/* Reviewer Actions */}
-                    {userRole === 'reviewer' && myReviewerStatus !== 'reviewed' && myReviewerStatus !== 'rejected' && (
+                    {/* Reviewer Actions — hidden once user has acted (reviewed / rejected / forwarded) */}
+                    {userRole === 'reviewer' && myReviewerStatus !== 'reviewed' && myReviewerStatus !== 'rejected' && myReviewerStatus !== 'forwarded' && (
                         <>
                             <Tooltip title="Mark as Reviewed" arrow>
                                 <IconButton size="small" onClick={() => { onMarkAsReviewed(contract.id); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: statusColors.color, color: statusColors.color, borderRadius: 1, '&:hover': { bgcolor: statusColors.bg } }}>
@@ -325,7 +361,7 @@ export default function ReviewApprovalCard({
                                 </IconButton>
                             </Tooltip>
                             <Tooltip title="Reject Contract" arrow>
-                                <IconButton size="small" onClick={() => { onReject(contract.id); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: isDark ? '#b07070' : '#d32f2f', color: isDark ? '#b07070' : '#d32f2f', borderRadius: 1, '&:hover': { bgcolor: isDark ? 'rgba(239,68,68,0.08)' : 'rgba(211,47,47,0.08)' } }}>
+                                <IconButton size="small" onClick={() => { setShowCommentInput(true); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: isDark ? '#b07070' : '#d32f2f', color: isDark ? '#b07070' : '#d32f2f', borderRadius: 1, '&:hover': { bgcolor: isDark ? 'rgba(239,68,68,0.08)' : 'rgba(211,47,47,0.08)' } }}>
                                     <Cancel sx={{ fontSize: '0.8rem' }} />
                                 </IconButton>
                             </Tooltip>
@@ -341,7 +377,7 @@ export default function ReviewApprovalCard({
                                 </IconButton>
                             </Tooltip>
                             <Tooltip title="Reject Contract" arrow>
-                                <IconButton size="small" onClick={() => { onReject(contract.id); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: isDark ? '#b07070' : '#d32f2f', color: isDark ? '#b07070' : '#d32f2f', borderRadius: 1, '&:hover': { bgcolor: isDark ? 'rgba(239,68,68,0.08)' : 'rgba(211,47,47,0.08)' } }}>
+                                <IconButton size="small" onClick={() => { setShowCommentInput(true); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: isDark ? '#b07070' : '#d32f2f', color: isDark ? '#b07070' : '#d32f2f', borderRadius: 1, '&:hover': { bgcolor: isDark ? 'rgba(239,68,68,0.08)' : 'rgba(211,47,47,0.08)' } }}>
                                     <Cancel sx={{ fontSize: '0.8rem' }} />
                                 </IconButton>
                             </Tooltip>
@@ -417,11 +453,11 @@ export default function ReviewApprovalCard({
                 </Box>
 
 
-                {/* Comment Input (when requesting modification) */}
+                {/* Rejection reason input */}
                 {showCommentInput && (
                     <Box sx={{ mb: 0}}>
                         <textarea
-                            placeholder="Enter your comments..."
+                            placeholder="Enter rejection reason (required)..."
                             value={comments}
                             onChange={(e) => setComments(e.target.value)}
                             style={{
@@ -440,9 +476,10 @@ export default function ReviewApprovalCard({
                             <AppButton
                                 size="small"
                                 variant="contained"
-                                onClick={handleRequestModification}
+                                color="error"
+                                onClick={handleRejectWithMessage}
                             >
-                                Submit
+                                Reject
                             </AppButton>
                             <AppButton
                                 size="small"

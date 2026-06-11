@@ -1153,15 +1153,15 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                     onClose={() => setReviewDialogOpen(false)}
                     contractId={contractId}
                     contractTitle={contractTitle}
-                    onSubmit={async (reviewers, approver, reviewerMessage, approverMessage) => {
+                    onSubmit={async (mode, reviewers, approver, reviewerMessage, approverMessage) => {
                         const currentUser = authService.getCurrentUser();
-                        const result = await contractService.submitForReview(
+                        const result = await contractService.submitForWorkflow(
                             contractId,
+                            mode,
                             reviewers,
                             approver,
                             reviewerMessage,
                             approverMessage,
-                            currentUser?.email
                         );
                         if (result.success) {
                             setSnackbar({ open: true, message: result.message, severity: 'success' });

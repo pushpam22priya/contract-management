@@ -21,7 +21,7 @@ import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
 import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog';
 import DeleteContractDialog from '@/components/contracts/DeleteContractDialog';
 import { contractService } from '@/services/contractService';
-import { Contract, ContractStatus, SignerAssignment } from '@/types/contract';
+import { Contract, ContractStatus, SignerAssignment, WorkflowMode } from '@/types/contract';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { authService } from '@/services/authService';
 import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
@@ -48,16 +48,13 @@ const DRAFT_STATUSES: ContractStatus[] = [
     ContractStatus.DRAFT,
     ContractStatus.IN_REVIEW,
     ContractStatus.IN_APPROVAL,
-    ContractStatus.REVIEW_APPROVAL,
-    ContractStatus.REVIEWED,
     ContractStatus.REJECTED_BY_REVIEWER,
     ContractStatus.REJECTED_BY_APPROVER,
 ];
 
 const CONTRACT_PAGE_STATUSES: ContractStatus[] = [
-    ContractStatus.APPROVED,
     ContractStatus.READY_FOR_SIGNATURE,
-    ContractStatus.WAITING_FOR_SIGNATURE,
+    ContractStatus.IN_SIGNATURE,
     ContractStatus.SIGNED_BY_EVERYONE,
     ContractStatus.SIGNED,
     ContractStatus.ACTIVE,
@@ -78,13 +75,10 @@ export default function ContractsContent() {
         { label: tFilters('draft'), value: ContractStatus.DRAFT },
         { label: tFilters('underReview'), value: ContractStatus.IN_REVIEW },
         { label: tFilters('underApproval'), value: ContractStatus.IN_APPROVAL },
-        { label: tFilters('reviewAndApprove'), value: ContractStatus.REVIEW_APPROVAL },
-        { label: tFilters('reviewed'), value: ContractStatus.REVIEWED },
         { label: tFilters('rejectedByReviewer'), value: ContractStatus.REJECTED_BY_REVIEWER },
         { label: tFilters('rejectedByApprover'), value: ContractStatus.REJECTED_BY_APPROVER },
-        { label: tFilters('approved'), value: ContractStatus.APPROVED },
         { label: tFilters('readyForSignature'), value: ContractStatus.READY_FOR_SIGNATURE },
-        { label: tFilters('waitingForSignature'), value: ContractStatus.WAITING_FOR_SIGNATURE },
+        { label: tFilters('inSignature'), value: ContractStatus.IN_SIGNATURE },
         { label: tFilters('signedByAssignedParties'), value: ContractStatus.SIGNED_BY_EVERYONE },
         { label: tFilters('signed'), value: ContractStatus.SIGNED },
         { label: tFilters('active'), value: ContractStatus.ACTIVE },
@@ -239,9 +233,8 @@ export default function ContractsContent() {
         [ContractStatus.EXPIRING]: 'Expiring Soon',
         [ContractStatus.EXPIRED]: 'Expired Contracts',
         [ContractStatus.TERMINATED]: 'Terminated Contracts',
-        [ContractStatus.WAITING_FOR_SIGNATURE]: 'Requested Contracts',
+        [ContractStatus.IN_SIGNATURE]: 'Requested Contracts',
         [ContractStatus.SIGNED_BY_EVERYONE]: 'Received Signed',
-        [ContractStatus.APPROVED]: 'Approved Contracts',
         [ContractStatus.READY_FOR_SIGNATURE]: 'Ready for Signature',
         [ContractStatus.SIGNED]: 'Signed Contracts',
         [ContractStatus.DRAFT]: 'Draft Contracts',
@@ -292,7 +285,7 @@ export default function ContractsContent() {
         contracts.filter(c => c.teamId === teamId).length;
 
     const waitingForSignatureIds = contracts
-        .filter(c => c.status === ContractStatus.WAITING_FOR_SIGNATURE)
+        .filter(c => c.status === ContractStatus.IN_SIGNATURE)
         .map(c => c.id);
 
     const handleSignatureComplete = useCallback((contractId: string) => {
@@ -440,15 +433,15 @@ export default function ContractsContent() {
     };
 
     const handleSubmitForReview = async (
+        mode: WorkflowMode,
         newReviewers: string[],
         approver: string,
         reviewerMessage?: string,
         approverMessage?: string,
     ) => {
         if (!contractForReview) return;
-        const currentUser = authService.getCurrentUser();
-        const result = await contractService.submitForReview(
-            contractForReview.id, newReviewers, approver, reviewerMessage, approverMessage, currentUser?.email,
+        const result = await contractService.submitForWorkflow(
+            contractForReview.id, mode, newReviewers, approver, reviewerMessage, approverMessage,
         );
         if (result.success) {
             showNotification(result.message, 'success');

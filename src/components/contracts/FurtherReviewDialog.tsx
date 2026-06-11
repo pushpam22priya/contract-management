@@ -5,14 +5,13 @@ import { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
-    Chip, 
+    Chip,
     Alert,
     Autocomplete,
     TextField,
-    Paper,
+    useTheme,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import BaseDialog from '@/components/common/BaseDialog';
 import { userService, User } from '@/services/userService';
 
@@ -24,7 +23,8 @@ interface FurtherReviewDialogProps {
     existingReviewers: string[]; // emails
     existingApprover: string | null; // email
     contractInitiator: string; // email
-    onSubmit: (additionalReviewers: string[]) => Promise<void>;
+    onSubmit: (additionalReviewers: string[], message?: string) => Promise<void>;
+    initialMessage?: string;
 }
 
 /**
@@ -40,12 +40,16 @@ export default function FurtherReviewDialog({
     existingApprover,
     contractInitiator,
     onSubmit,
+    initialMessage,
 }: FurtherReviewDialogProps) {
     const [users, setUsers] = useState<User[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [selectedReviewers, setSelectedReviewers] = useState<User[]>([]);
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [message, setMessage] = useState(initialMessage || '');
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
 
     /**
      * Load users on mount
@@ -108,7 +112,7 @@ export default function FurtherReviewDialog({
 
         try {
             const reviewerEmails = selectedReviewers.map(r => r.email);
-            await onSubmit(reviewerEmails);
+            await onSubmit(reviewerEmails, message.trim() || undefined);
             handleClose();
         } catch (err) {
             setError('Failed to submit for further review. Please try again.');
@@ -161,58 +165,28 @@ export default function FurtherReviewDialog({
         <BaseDialog
             open={open}
             onClose={handleClose}
-            title="SEND FOR FURTHER REVIEW"
+            title="Forward for Further Review"
             actions={dialogActions}
             maxWidth="sm"
         >
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, py: 2 }}>
-                {/* Contract Info */}
-                <Box
-                    sx={{
-                        bgcolor: '#f8fafc',
-                        p: 2,
-                        borderRadius: 2,
-                        border: '1px solid',
-                        borderColor: 'rgba(0, 0, 0, 0.08)',
-                    }}
-                >
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                        Contract
-                    </Typography>
-                    <Typography variant="body1" fontWeight={600}>
-                        {contractTitle}
-                    </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 0.5, pb: 1 }}>
+                {/* Contract Info — compact inline row */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 1, bgcolor: 'action.hover', borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>Contract:</Typography>
+                    <Typography variant="body2" fontWeight={600} noWrap>{contractTitle}</Typography>
                 </Box>
 
                 {/* Error Message */}
                 {error && (
-                    <Alert severity="error" onClose={() => setError('')}>
+                    <Alert severity="error" onClose={() => setError('')} sx={{ py: 0.25 }}>
                         {error}
                     </Alert>
                 )}
 
-                {/* Excluded Users Info */}
-                {/* <Paper
-                    elevation={0}
-                    sx={{
-                        bgcolor: '#fef3c7',
-                        border: '1px solid #fcd34d',
-                        borderRadius: 2,
-                        p: 1.5,
-                    }}
-                >
-                    <Typography variant="caption" color="#92400e">
-                        ℹ️ {getExcludedUserSummary()}
-                    </Typography>
-                </Paper> */}
-
                 {/* Additional Reviewers Selection */}
                 <Box>
-                    <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                    <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.75 }}>
                         Additional Reviewers <span style={{ color: '#d32f2f' }}>*</span>
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-                        Select one or more additional reviewers
                     </Typography>
 
                     <Autocomplete
@@ -228,13 +202,8 @@ export default function FurtherReviewDialog({
                         renderInput={(params) => (
                             <TextField
                                 {...params}
-                                placeholder="Search and select additional reviewers..."
+                                placeholder="Search and select reviewers..."
                                 size="small"
-                                sx={{
-                                    '& .MuiOutlinedInput-root': {
-                                        bgcolor: 'white',
-                                    },
-                                }}
                             />
                         )}
                         renderTags={(value, getTagProps) =>
@@ -243,29 +212,49 @@ export default function FurtherReviewDialog({
                                     {...getTagProps({ index })}
                                     key={option.id}
                                     label={option.email}
-                                    deleteIcon={<CloseIcon />}
+                                    size="small"
+                                    deleteIcon={<CloseIcon sx={{ fontSize: '0.9rem !important' }} />}
                                     sx={{
+                                        height: 24,
+                                        fontSize: '0.75rem',
                                         bgcolor: '#e3f2fd',
                                         color: '#1565c0',
-                                        '& .MuiChip-deleteIcon': {
-                                            color: '#1565c0',
-                                            '&:hover': {
-                                                color: '#0d47a1',
-                                            },
-                                        },
+                                        '& .MuiChip-deleteIcon': { color: '#1565c0', '&:hover': { color: '#0d47a1' } },
                                     }}
                                 />
                             ))
                         }
-                        sx={{ mb: 1 }}
                     />
 
-                    {/* Selected Count */}
                     {selectedReviewers.length > 0 && (
-                        <Typography variant="caption" color="text.secondary">
-                            {selectedReviewers.length} additional reviewer{selectedReviewers.length > 1 ? 's' : ''} selected
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                            {selectedReviewers.length} reviewer{selectedReviewers.length > 1 ? 's' : ''} selected
                         </Typography>
                     )}
+                </Box>
+                {/* Optional message to include with forward */}
+                <Box>
+                    <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>Message (optional)</Typography>
+                    <TextField
+                        label="Message (optional)"
+                        placeholder="Add a message to the additional reviewers"
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        multiline
+                        minRows={3}
+                        maxRows={6}
+                        size="small"
+                        fullWidth
+                        variant="outlined"
+                        inputProps={{ maxLength: 500 }}
+                        helperText={`${message.length}/500`}
+                        sx={{
+                            bgcolor: isDark ? 'rgba(255,255,255,0.02)' : '#ffffff',
+                            borderRadius: 1,
+                            '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
+                            boxShadow: (theme) => theme.palette.mode === 'dark' ? 'none' : '0 1px 4px rgba(16,24,40,0.04)'
+                        }}
+                    />
                 </Box>
             </Box>
         </BaseDialog>

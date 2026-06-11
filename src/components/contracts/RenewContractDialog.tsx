@@ -909,15 +909,15 @@ export default function RenewContractDialog({
                     onClose={() => setReviewDialogOpen(false)}
                     contractId={renewalId}
                     contractTitle={renewalTitle}
-                    onSubmit={async (reviewers, approver, reviewerMessage, approverMessage) => {
+                    onSubmit={async (mode, reviewers, approver, reviewerMessage, approverMessage) => {
                         const currentUser = authService.getCurrentUser();
-                        const result = await contractService.submitForReview(
+                        const result = await contractService.submitForWorkflow(
                             renewalId,
+                            mode,
                             reviewers,
                             approver,
                             reviewerMessage,
                             approverMessage,
-                            currentUser?.email
                         );
                         if (result.success) {
                             setSnackbar({ open: true, message: result.message, severity: 'success' });

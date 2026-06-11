@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Box, Typography, Tabs, Tab, AlertColor } from '@mui/material';
-import { AllInboxOutlined as AllInboxOutlinedIcon, OutboxOutlined as OutboxOutlinedIcon, CheckCircle, Cancel } from '@mui/icons-material';
+import { AllInboxOutlined as AllInboxOutlinedIcon, OutboxOutlined as OutboxOutlinedIcon } from '@mui/icons-material';
 import AppLayout from '@/components/layout/AppLayout';
 import AppButton from '@/components/common/AppButton';
 import EmptyState from '@/components/common/EmptyState';
@@ -12,12 +12,15 @@ import ContractCard from '@/components/contracts/ContractCard';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import ReviewConfirmationDialog from '@/components/contracts/ReviewConfirmationDialog';
 import FurtherReviewDialog from '@/components/contracts/FurtherReviewDialog';
+import BaseDialog from '@/components/common/BaseDialog';
+import { TextField } from '@mui/material';
 import SignaturePadDialog from '@/components/contracts/SignaturePadDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
 import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog';
 import { ReviewApprovalShimmerGrid } from '@/components/common/ShimmerCard';
 import { contractService } from '@/services/contractService';
+import { apiService } from '@/services/apiService';
 import { authService } from '@/services/authService';
 import { Contract, ContractStatus } from '@/types/contract';
 import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
@@ -43,16 +46,22 @@ export default function InboxPage() {
     const [viewerOpen, setViewerOpen] = useState(false);
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
     const [viewerMode, setViewerMode] = useState<'review' | 'signature'>('review');
+    const [viewerFileUrl, setViewerFileUrl] = useState<string>('');
 
     // Review dialogs
     const [reviewConfirmOpen, setReviewConfirmOpen] = useState(false);
     const [contractForReviewConfirm, setContractForReviewConfirm] = useState<Contract | null>(null);
     const [furtherReviewOpen, setFurtherReviewOpen] = useState(false);
     const [contractForFurtherReview, setContractForFurtherReview] = useState<Contract | null>(null);
+    const [contractForFurtherReviewMessage, setContractForFurtherReviewMessage] = useState<string | undefined>(undefined);
+    // Approve confirmation
+    const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
+    const [contractForApproveConfirm, setContractForApproveConfirm] = useState<Contract | null>(null);
+    const [approveComment, setApproveComment] = useState('');
 
     // Signature dialogs
     const [signaturePadOpen, setSignaturePadOpen] = useState(false);
-    const [contractToSign, setContractToSign] = useState<Contract | null>(null);
+    const [contractToSign] = useState<Contract | null>(null);
 
     // History panel
     const [historyAnchorEl, setHistoryAnchorEl] = useState<HTMLElement | null>(null);
@@ -90,25 +99,16 @@ export default function InboxPage() {
         const currentUser = authService.getCurrentUser();
         if (!currentUser) { setAllContracts([]); setLoading(false); return; }
 
-        const contracts = await contractService.getAllContracts();
-
-        // R&A: contracts in review/approval workflow where user is assigned
-        const raContracts = contracts.filter(c => {
-            const isReviewer = c.reviewers?.some(r => r.email === currentUser.email);
-            const isApprover = c.approver?.email === currentUser.email;
-            const inWorkflow =
-                c.status === ContractStatus.IN_REVIEW ||
-                c.status === ContractStatus.IN_APPROVAL ||
-                c.status === ContractStatus.REVIEW_APPROVAL ||
-                c.status === ContractStatus.REVIEWED ||
-                c.status === ContractStatus.REJECTED_BY_REVIEWER ||
-                c.status === ContractStatus.REJECTED_BY_APPROVER;
-            return inWorkflow || isReviewer || isApprover;
-        });
+        // R&A: use dedicated inbox endpoint (returns contracts where user is reviewer/approver)
+        // Signatures: use owned contracts endpoint (internalSigners/signer are multi-party signing fields)
+        const [inboxContracts, ownedContracts] = await Promise.all([
+            contractService.getInboxContracts(),
+            contractService.getAllContracts(),
+        ]);
 
         // Signature: contracts assigned to current user for signing
-        const sigContracts = contracts.filter(c => {
-            if (c.signer?.email === currentUser.email && c.status === ContractStatus.WAITING_FOR_SIGNATURE) return true;
+        const sigContracts = ownedContracts.filter(c => {
+            if (c.signer?.email === currentUser.email && c.status === ContractStatus.IN_SIGNATURE) return true;
             return (c.internalSigners || []).some(
                 s => s.email === currentUser.email && (s.status === 'unlocked' || s.status === 'completed')
             );
@@ -120,8 +120,8 @@ export default function InboxPage() {
             c => !(c.renewedContractId && assignedIds.has(c.renewedContractId))
         );
 
-        // Merge (dedup by id)
-        const merged = [...raContracts];
+        // Merge inbox R&A + signature contracts (dedup by id)
+        const merged = [...inboxContracts];
         headSigContracts.forEach(c => {
             if (!merged.some(r => r.id === c.id)) merged.push(c);
         });
@@ -132,44 +132,57 @@ export default function InboxPage() {
 
     useEffect(() => { loadContracts(); }, []);
 
-    // Polling for real-time signature unlock updates
-    const pollRef = useRef<NodeJS.Timeout | null>(null);
-    useEffect(() => {
-        if (viewerOpen) return;
-        pollRef.current = setInterval(() => {
-            setHistoryAnchorEl(null);
-            loadContracts();
-        }, 15000);
-        return () => { if (pollRef.current) clearInterval(pollRef.current); };
-    }, [viewerOpen]);
 
     // ── Classify items ────────────────────────────────────────────────────────
     const currentUser = authService.getCurrentUser();
+
+    // Merge a full ContractResponse (from action endpoints, includes reviewers[]) into local state
+    // so the inbox/sendbox memos update immediately without a full reload.
+    const updateContractInState = (updatedContract: any) => {
+        if (!updatedContract?.id) return;
+        setAllContracts(prev =>
+            prev.map(c => c.id === updatedContract.id ? { ...c, ...updatedContract } : c)
+        );
+    };
 
     const inboxItems = useMemo((): InboxItem[] => {
         if (!currentUser) return [];
         const result: InboxItem[] = [];
 
         allContracts.forEach(c => {
-            // R&A: pending actions
-            const myReviewerInfo = c.reviewers?.find(r => r.email === currentUser.email);
-            const hasReviewed = myReviewerInfo?.status === 'reviewed';
-            const hasRejectedAsReviewer = myReviewerInfo?.status === 'rejected';
-            const isApprover = c.approver?.email === currentUser.email;
-            const hasApproved = c.approver?.status === 'approved';
-            const hasRejectedAsApprover = c.approver?.status === 'rejected';
+            const reviewers = (c as any).reviewers as Array<{ email: string; status: string }> | undefined;
+            const approver = (c as any).approver as { email: string; status: string } | undefined;
 
-            if (myReviewerInfo && !hasReviewed && !hasRejectedAsReviewer)
-                result.push({ type: 'review', contract: c, role: 'reviewer' });
-            if (isApprover && !hasApproved && !hasRejectedAsApprover)
-                result.push({ type: 'review', contract: c, role: 'approver' });
+            // Approver check has priority (backend getCallerRole logic):
+            // a user who is both a previous reviewer and the approver should be treated as approver.
+            const isApprover = approver?.email?.toLowerCase() === currentUser.email.toLowerCase();
+            const myReviewerEntry = !isApprover
+                ? reviewers?.find(r => r.email.toLowerCase() === currentUser.email.toLowerCase())
+                : undefined;
+
+            if (isApprover) {
+                // Approver needs to act only when contract has moved to IN_APPROVAL and their status is still pending
+                if (c.status === ContractStatus.IN_APPROVAL && approver!.status === 'pending') {
+                    result.push({ type: 'review', contract: c, role: 'approver' });
+                }
+            } else if (myReviewerEntry) {
+                // Reviewer needs to act only when contract is IN_REVIEW and their individual status is still pending
+                if (c.status === ContractStatus.IN_REVIEW && myReviewerEntry.status === 'pending') {
+                    result.push({ type: 'review', contract: c, role: 'reviewer' });
+                }
+            } else if (!reviewers && !approver) {
+                // Fallback for old responses that don't include reviewers[]/approver{}
+                if (c.status === ContractStatus.IN_REVIEW)
+                    result.push({ type: 'review', contract: c, role: 'reviewer' });
+                else if (c.status === ContractStatus.IN_APPROVAL)
+                    result.push({ type: 'review', contract: c, role: 'approver' });
+            }
 
             // Signature: pending signing
             const internalSigner = (c.internalSigners || []).find(s => s.email === currentUser.email);
             const isPending =
                 internalSigner?.status === 'unlocked' ||
-                (!internalSigner && c.signer?.email === currentUser.email && c.status === ContractStatus.WAITING_FOR_SIGNATURE);
-
+                (!internalSigner && c.signer?.email === currentUser.email && c.status === ContractStatus.IN_SIGNATURE);
             if (isPending)
                 result.push({ type: 'signature', contract: c });
         });
@@ -182,26 +195,48 @@ export default function InboxPage() {
         const result: InboxItem[] = [];
 
         allContracts.forEach(c => {
-            // R&A: completed actions
-            const myReviewerInfo = c.reviewers?.find(r => r.email === currentUser.email);
-            const hasReviewed = myReviewerInfo?.status === 'reviewed';
-            const hasRejectedAsReviewer = myReviewerInfo?.status === 'rejected';
-            const isApprover = c.approver?.email === currentUser.email;
-            const hasApproved = c.approver?.status === 'approved';
-            const hasRejectedAsApprover = c.approver?.status === 'rejected';
+            const wfMode = (c as any).workflowMode as string | undefined;
+            const isRAContract = !!wfMode;
 
-            if (myReviewerInfo && (hasReviewed || hasRejectedAsReviewer))
-                result.push({ type: 'review', contract: c, role: 'reviewer' });
-            if (isApprover && (hasApproved || hasRejectedAsApprover))
-                result.push({ type: 'review', contract: c, role: 'approver' });
+            if (isRAContract) {
+                const reviewers = (c as any).reviewers as Array<{ email: string; status: string }> | undefined;
+                const approver = (c as any).approver as { email: string; status: string } | undefined;
+
+                const isApprover = approver?.email?.toLowerCase() === currentUser.email.toLowerCase();
+                const myReviewerEntry = !isApprover
+                    ? reviewers?.find(r => r.email.toLowerCase() === currentUser.email.toLowerCase())
+                    : undefined;
+
+                if (isApprover) {
+                    // Approver in sendbox once they've taken action (approved or rejected)
+                    if (approver!.status !== 'pending') {
+                        result.push({ type: 'review', contract: c, role: 'approver' });
+                    }
+                } else if (myReviewerEntry) {
+                    // Reviewer in sendbox once they've taken action (reviewed, rejected, or forwarded)
+                    if (myReviewerEntry.status !== 'pending') {
+                        result.push({ type: 'review', contract: c, role: 'reviewer' });
+                    }
+                } else if (!reviewers && !approver) {
+                    // Fallback: no role data — infer from approvalStatus and contract phase
+                    const approvalStatus = (c as any).approvalStatus as string | undefined;
+                    const stillPending = c.status === ContractStatus.IN_REVIEW || c.status === ContractStatus.IN_APPROVAL;
+                    if (!stillPending) {
+                        if (approvalStatus === 'APPROVED' || approvalStatus === 'REJECTED') {
+                            result.push({ type: 'review', contract: c, role: 'approver' });
+                        } else {
+                            result.push({ type: 'review', contract: c, role: 'reviewer' });
+                        }
+                    }
+                }
+            }
 
             // Signature: completed signing
             const internalSigner = (c.internalSigners || []).find(s => s.email === currentUser.email);
             const isCompleted =
                 internalSigner?.status === 'completed' ||
                 (!internalSigner && c.signer?.email === currentUser.email &&
-                    c.status !== ContractStatus.WAITING_FOR_SIGNATURE);
-
+                    c.status !== ContractStatus.IN_SIGNATURE);
             if (isCompleted)
                 result.push({ type: 'signature', contract: c });
         });
@@ -258,89 +293,72 @@ export default function InboxPage() {
         setEndDate(null);
     };
 
-    const getFileUrl = (contract: Contract): string => {
+    // ── Viewer ────────────────────────────────────────────────────────────────
+    const resolveFileUrl = async (contract: Contract): Promise<string> => {
+        // Spring Boot contracts: files are in MinIO — fetch a 15-min presigned URL
+        if ((contract as any).fileUploaded === true) {
+            const url = await apiService.getContractViewUrl(contract.id);
+            if (url) return url;
+        }
+        // Legacy fallbacks (old MongoDB contracts)
         if (contract.fileUrl) return contract.fileUrl;
         if (contract.fileData) return contract.fileData;
         if (contract.signedPdfBase64) return `data:application/pdf;base64,${contract.signedPdfBase64}`;
-        if (contract.templateId) return `/api/file/${contract.templateId}?type=template`;
         return '';
     };
 
-    // ── Viewer ────────────────────────────────────────────────────────────────
-    const handleViewReview = (id: string) => {
+    const handleViewReview = async (id: string) => {
         const contract = allContracts.find(c => c.id === id);
         if (!contract) return;
         setViewerMode('review');
         setSelectedContract(contract);
+        setViewerFileUrl(await resolveFileUrl(contract));
         setViewerOpen(true);
     };
 
-    const handleViewSignature = (id: string) => {
+    const handleViewSignature = async (id: string) => {
         const contract = allContracts.find(c => c.id === id);
         if (!contract) return;
         setViewerMode('signature');
         setSelectedContract(contract);
+        setViewerFileUrl(await resolveFileUrl(contract));
         setViewerOpen(true);
     };
 
     const getViewerExtraActions = () => {
-        if (viewerMode !== 'review' || !selectedContract || !currentUser) return null;
+        if (viewerMode !== 'review' || !selectedContract) return null;
 
-        const myReviewerInfo = selectedContract.reviewers?.find(r => r.email === currentUser.email);
-        const isReviewer = !!myReviewerInfo;
-        const myReviewerStatus = myReviewerInfo?.status;
+        const status = selectedContract.status;
 
-        const isApprover = selectedContract.approver?.email === currentUser.email;
-        const approverStatus = selectedContract.approver?.status;
+        // Reviewer actions — shown when contract is IN_REVIEW
+        if (status === ContractStatus.IN_REVIEW) {
+            return (
+                <AppButton
+                    variant="contained"
+                    color="success"
+                    onClick={() => handleOpenReviewConfirmation(selectedContract.id)}
+                    sx={{ py: 0.6 }}
+                >
+                    Mark as Reviewed
+                </AppButton>
+            );
+        }
 
-        const allReviewersComplete = !selectedContract.reviewers || selectedContract.reviewers.length === 0 || 
-            selectedContract.reviewers.every(r => r.status === 'reviewed');
+        // Approver actions — shown when contract is IN_APPROVAL
+        if (status === ContractStatus.IN_APPROVAL) {
+            return (
+                <AppButton
+                    variant="contained"
+                    color="success"
+                    onClick={() => handleApprove(selectedContract.id)}
+                    sx={{ py: 0.6 }}
+                >
+                    Approve
+                </AppButton>
+            );
+        }
 
-        return (
-            <Box sx={{ display: 'flex', gap: 1 }}>
-                {isReviewer && myReviewerStatus !== 'reviewed' && myReviewerStatus !== 'rejected' && (
-                    <>
-                        <AppButton
-                            variant="contained"
-                            color="success"
-                            onClick={() => handleOpenReviewConfirmation(selectedContract.id)}
-                            sx={{ py: 0.6 }}
-                        >
-                            Mark as Reviewed
-                        </AppButton>
-                        <AppButton
-                            variant="outlined"
-                            color="error"
-                            onClick={() => handleReject(selectedContract.id, 'reviewer')}
-                            sx={{ py: 0.6 }}
-                        >
-                            Reject
-                        </AppButton>
-                    </>
-                )}
-
-                {isApprover && allReviewersComplete && approverStatus !== 'approved' && approverStatus !== 'rejected' && (
-                    <>
-                        <AppButton
-                            variant="contained"
-                            color="success"
-                            onClick={() => handleApprove(selectedContract.id)}
-                            sx={{ py: 0.6 }}
-                        >
-                            Approve
-                        </AppButton>
-                        <AppButton
-                            variant="outlined"
-                            color="error"
-                            onClick={() => handleReject(selectedContract.id, 'approver')}
-                            sx={{ py: 0.6 }}
-                        >
-                            Reject
-                        </AppButton>
-                    </>
-                )}
-            </Box>
-        );
+        return null;
     };
 
     // Signature viewer props
@@ -368,34 +386,34 @@ export default function InboxPage() {
         setReviewConfirmOpen(true);
     };
 
-    const handleMarkAsReviewed = async () => {
+    const handleMarkAsReviewed = async (comments?: string) => {
         if (!currentUser || !contractForReviewConfirm) return;
-        const result = await contractService.markAsReviewed(contractForReviewConfirm.id, currentUser.email);
+        const result = await contractService.markAsReviewed(contractForReviewConfirm.id, currentUser.email, comments);
         if (result.success) {
             showNotification(result.message, 'success');
-            await loadContracts();
-            setTabValue(1);
+            if (result.contract) {
+                updateContractInState(result.contract);
+            } else {
+                await loadContracts();
+            }
             setViewerOpen(false);
         } else {
             showNotification(result.message, 'error');
         }
     };
 
-    const handleMarkAndSendForFurtherReview = async () => {
-        if (!currentUser || !contractForReviewConfirm) return;
-        const result = await contractService.markAsReviewed(contractForReviewConfirm.id, currentUser.email);
-        if (result.success) {
-            setContractForFurtherReview(contractForReviewConfirm);
-            setFurtherReviewOpen(true);
-            setViewerOpen(false);
-        } else {
-            showNotification(result.message, 'error');
-        }
+    const handleMarkAndSendForFurtherReview = (comments?: string) => {
+        if (!contractForReviewConfirm) return;
+        // Store message for forwarding and open dialog
+        setContractForFurtherReviewMessage(comments?.trim() || undefined);
+        setContractForFurtherReview(contractForReviewConfirm);
+        setFurtherReviewOpen(true);
+        setViewerOpen(false);
     };
 
-    const handleFurtherReviewSubmit = async (additionalReviewers: string[]) => {
+    const handleFurtherReviewSubmit = async (additionalReviewers: string[], message?: string) => {
         if (!currentUser || !contractForFurtherReview) return;
-        const result = await contractService.addAdditionalReviewers(contractForFurtherReview.id, additionalReviewers);
+        const result = await contractService.addAdditionalReviewers(contractForFurtherReview.id, additionalReviewers, message);
         if (result.success) {
             showNotification(result.message, 'success');
             loadContracts();
@@ -405,44 +423,51 @@ export default function InboxPage() {
         }
     };
 
-    const handleApprove = async (contractId: string) => {
-        if (!currentUser) return;
-        const result = await contractService.approveContract(contractId, currentUser.email);
+    const handleApprove = (contractId: string) => {
+        const contract = allContracts.find(c => c.id === contractId);
+        if (!contract) return;
+        setContractForApproveConfirm(contract);
+        setApproveComment('');
+        setApproveConfirmOpen(true);
+    };
+
+    const handleApproveConfirm = async () => {
+        if (!currentUser || !contractForApproveConfirm) return;
+        const result = await contractService.approveContract(contractForApproveConfirm.id, currentUser.email, approveComment.trim() || undefined);
         if (result.success) {
             showNotification(result.message, 'success');
-            await loadContracts();
-            setTabValue(1);
+            if (result.contract) {
+                updateContractInState(result.contract);
+            } else {
+                await loadContracts();
+            }
             setViewerOpen(false);
+            setApproveConfirmOpen(false);
+            setContractForApproveConfirm(null);
+            setApproveComment('');
         } else {
             showNotification(result.message, 'error');
         }
     };
 
-    const handleReject = async (contractId: string, role: 'reviewer' | 'approver') => {
+    const handleReject = async (contractId: string, role: 'reviewer' | 'approver', message: string) => {
         if (!currentUser) return;
         const result = role === 'reviewer'
-            ? await contractService.rejectByReviewer(contractId, currentUser.email)
-            : await contractService.rejectByApprover(contractId, currentUser.email);
+            ? await contractService.rejectByReviewer(contractId, currentUser.email, message)
+            : await contractService.rejectByApprover(contractId, currentUser.email, message);
         if (result.success) {
             showNotification(result.message, 'success');
-            await loadContracts();
-            setTabValue(1);
+            if (result.contract) {
+                updateContractInState(result.contract);
+            } else {
+                await loadContracts();
+            }
             setViewerOpen(false);
         } else {
             showNotification(result.message, 'error');
         }
     };
 
-    const handleRequestModification = async (contractId: string, comments: string, role: 'reviewer' | 'approver') => {
-        if (!currentUser) return;
-        const result = await contractService.requestModification(contractId, currentUser.email, role, comments);
-        if (result.success) {
-            showNotification(result.message, 'success');
-            loadContracts();
-        } else {
-            showNotification(result.message, 'error');
-        }
-    };
 
     // ── Signature handlers ────────────────────────────────────────────────────
     const handleSaveSignature = async (
@@ -652,10 +677,7 @@ export default function InboxPage() {
                                             onView={handleViewReview}
                                             onMarkAsReviewed={handleOpenReviewConfirmation}
                                             onApprove={handleApprove}
-                                            onRequestModification={(id, comments) =>
-                                                handleRequestModification(id, comments, item.role)
-                                            }
-                                            onReject={(id) => handleReject(id, item.role)}
+                                            onReject={(id, message) => handleReject(id, item.role, message)}
                                         />
                                     );
                                 }
@@ -680,8 +702,8 @@ export default function InboxPage() {
                 {selectedContract && (
                     <DocumentViewerDialog
                         open={viewerOpen}
-                        onClose={() => { setViewerOpen(false); setSelectedContract(null); }}
-                        fileUrl={getFileUrl(selectedContract)}
+                        onClose={() => { setViewerOpen(false); setSelectedContract(null); setViewerFileUrl(''); }}
+                        fileUrl={viewerFileUrl}
                         fileName={`${selectedContract.title}.pdf`}
                         title={selectedContract.title}
                         content={selectedContract.signedPdfBase64 ? undefined : selectedContract.content}
@@ -726,7 +748,54 @@ export default function InboxPage() {
                         existingApprover={contractForFurtherReview.approver?.email || null}
                         contractInitiator={contractForFurtherReview.createdBy}
                         onSubmit={handleFurtherReviewSubmit}
+                        initialMessage={contractForFurtherReviewMessage}
                     />
+                )}
+
+                {/* Approve Confirmation Dialog */}
+                {contractForApproveConfirm && (
+                    <BaseDialog
+                        open={approveConfirmOpen}
+                        onClose={() => { setApproveConfirmOpen(false); setContractForApproveConfirm(null); setApproveComment(''); }}
+                        title="Approve Contract"
+                        actions={(
+                            <>
+                                <AppButton variant="outlined" onClick={() => { setApproveConfirmOpen(false); setContractForApproveConfirm(null); setApproveComment(''); }}>
+                                    Cancel
+                                </AppButton>
+                                <AppButton variant="contained" onClick={handleApproveConfirm}>
+                                    Approve
+                                </AppButton>
+                            </>
+                        )}
+                        maxWidth="sm"
+                    >
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            <Box sx={{ bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'), p: 1, borderRadius: 10 }}>
+                                <Typography variant="subtitle2">{contractForApproveConfirm.title}</Typography>
+                            </Box>
+                            <TextField
+                                label="Message (optional)"
+                                placeholder="Add a brief message to include with approval"
+                                value={approveComment}
+                                onChange={(e) => setApproveComment(e.target.value)}
+                                multiline
+                                minRows={3}
+                                maxRows={6}
+                                size="small"
+                                fullWidth
+                                variant="outlined"
+                                inputProps={{ maxLength: 500 }}
+                                helperText={`${approveComment.length}/500`}
+                                sx={{
+                                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#ffffff',
+                                    borderRadius: 1,
+                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
+                                    boxShadow: (theme) => theme.palette.mode === 'dark' ? 'none' : '0 1px 4px rgba(16,24,40,0.04)'
+                                }}
+                            />
+                        </Box>
+                    </BaseDialog>
                 )}
 
                 {/* Contract History Panel */}
