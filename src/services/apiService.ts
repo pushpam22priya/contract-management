@@ -339,7 +339,7 @@ export const apiService = {
         console.log(`[ApiService] uploadTemplate Step 1 ✓ id="${id}"`);
 
         // Step 2 — Upload binary (size-gated)
-        const CHUNKED_THRESHOLD = 30 * 1024 * 1024; // 30 MB threshold for chunked upload
+        const CHUNKED_THRESHOLD = 30_000_000; // 30 MB decimal — matches backend single-shot limit
         console.log(
             `[ApiService] uploadTemplate Step 2: ${data.file.size >= CHUNKED_THRESHOLD ? 'CHUNKED' : 'single-shot'} upload`
         );
@@ -397,7 +397,7 @@ export const apiService = {
 
         // Step 2 — Upload new binary if a file was provided
         if (data.file instanceof Blob || data.file instanceof File) {
-            const CHUNKED_THRESHOLD = 50 * 1024 * 1024;
+            const CHUNKED_THRESHOLD = 30_000_000; // 30 MB decimal — matches backend single-shot limit
             console.log(
                 `[ApiService] updateTemplate Step 2: ${data.file.size >= CHUNKED_THRESHOLD ? 'CHUNKED' : 'single-shot'} upload`
             );

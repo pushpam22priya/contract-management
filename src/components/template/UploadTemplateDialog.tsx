@@ -562,6 +562,24 @@ export default function UploadTemplateDialog({
                 });
             }
 
+            // Enforce party assignment when form fields are present
+            if (exportedFormFields.length > 0) {
+                if (parties.length === 0) {
+                    setError('This template has form fields but no parties are configured. Please go back, create at least one party, and assign every field to a party before saving.');
+                    setUploading(false);
+                    return false;
+                }
+                const unassigned = exportedFormFields.filter(
+                    (f: any) => !f.assignedParty || f.assignedParty === 'unassigned'
+                );
+                if (unassigned.length > 0) {
+                    const names = unassigned.map((f: any) => f.label || f.name).join(', ');
+                    setError(`All fields must be assigned to a party before saving. Unassigned fields: ${names}`);
+                    setUploading(false);
+                    return false;
+                }
+            }
+
             // If there are mappable (non-signature) fields, show mapping dialog first
             const mappableCount = exportedFormFields.filter(
                 (f: any) => f.type !== 'Sig' && f.type !== 'signature'

@@ -470,8 +470,7 @@ export default function ContractsContent() {
         const partiesWithFields = effectiveParties.filter((party: any) =>
             formFields.some((field: any) => field.assignedParty === party.id)
         );
-        if (partiesWithFields.length > 1) setMultiPartyDialogOpen(true);
-        else setSignatureDialogOpen(true);
+        setMultiPartyDialogOpen(true);
     };
 
     const handleSignatureSubmit = async (signerEmail: string): Promise<{ success: boolean; signingUrl?: string }> => {
