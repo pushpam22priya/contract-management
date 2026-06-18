@@ -38,7 +38,7 @@ import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWar
 import { authService } from '@/services/authService';
 import { contractService } from '@/services/contractService';
 import { apiService } from '@/services/apiService';
-import { submitForMixedSignature } from '@/services/externalSignatureService';
+import { submitForSignature } from '@/services/externalSignatureService';
 import { validatePartyFields } from '@/utils/partyValidation';
 import AutofillPartyDialog from '@/components/contracts/AutofillPartyDialog';
 import { buildProfileData } from '@/utils/profileKeyOptions';
@@ -488,7 +488,7 @@ export default function RenewContractDialog({
         } as any;
 
         try {
-            const result = await submitForMixedSignature(contractMock, assignments, currentUser?.email || '');
+            const result = await submitForSignature(renewalId, assignments, currentUser?.email || '');
             if (result.success) {
                 setSnackbar({ open: true, message: 'Signature assignments created!', severity: 'success' });
                 setMultiPartyDialogOpen(false);
@@ -499,7 +499,7 @@ export default function RenewContractDialog({
                 }, 1000);
                 return { success: true };
             }
-            return { success: false, error: result.error };
+            return { success: false, error: result.message };
         } catch (e: any) {
             return { success: false, error: e.message };
         }

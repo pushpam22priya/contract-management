@@ -599,11 +599,19 @@ export default function DocumentViewerDialog({
             try {
                 exportedFormFields = await pdfViewerRef.current.exportFormFields();
                 // Sync values from filledFieldValues into exportedFormFields
+                // and merge back party assignments that exportFormFields() strips
                 if (exportedFormFields) {
-                    exportedFormFields = exportedFormFields.map((field: any) => ({
-                        ...field,
-                        value: filledFieldValues[field.name] || field.value || ''
-                    }));
+                    exportedFormFields = exportedFormFields.map((exportedField: any) => {
+                        const original = formFields?.find((f: any) => f.name === exportedField.name);
+                        return {
+                            ...exportedField,
+                            value: filledFieldValues[exportedField.name] || exportedField.value || '',
+                            ...(original?.assignedParty !== undefined && { assignedParty: original.assignedParty }),
+                            ...(original?.partyLabel !== undefined && { partyLabel: original.partyLabel }),
+                            ...(original?.partyColor !== undefined && { partyColor: original.partyColor }),
+                            ...(original?.profileKey !== undefined && { profileKey: original.profileKey }),
+                        };
+                    });
                 }
                 console.log(`✅ FormFields exported: ${exportedFormFields?.length || 0} fields`);
             } catch (e) {

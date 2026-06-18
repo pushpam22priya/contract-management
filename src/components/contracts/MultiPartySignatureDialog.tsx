@@ -130,10 +130,13 @@ const MultiPartySignatureDialog = ({
         }
     };
 
-    // Get parties that have fields assigned
-    const partiesWithFields = parties.filter(party => {
-        return formFields.some(field => field.assignedParty === party.id);
-    });
+    // When the contract comes from the list endpoint, formFields may not be loaded.
+    // In that case, show all parties so the user can still assign signers.
+    // When formFields ARE present, only show parties that have at least one field assigned.
+    const hasFormFields = formFields.length > 0;
+    const partiesWithFields = hasFormFields
+        ? parties.filter(party => formFields.some(field => field.assignedParty === party.id))
+        : parties; // formFields not loaded — show all parties
 
     // Get party IDs already assigned (existing + new)
     const existingAssignedPartyIds = [
@@ -143,18 +146,21 @@ const MultiPartySignatureDialog = ({
     const newAssignedPartyIds = assignments.map(a => a.partyId);
     const allAssignedPartyIds = [...existingAssignedPartyIds, ...newAssignedPartyIds];
 
-    // Detect parties whose fields are ALL filled by the contractor
-    const contractorFilledPartyIds = partiesWithFields
-        .filter(party => {
-            if (allAssignedPartyIds.includes(party.id)) return false;
-            const partyFields = formFields.filter(f => f.assignedParty === party.id);
-            if (partyFields.length === 0) return false;
-            return partyFields.every(f => {
-                const val = fieldValues[f.name];
-                return val !== undefined && val !== null && val !== '';
-            });
-        })
-        .map(p => p.id);
+    // Detect parties whose fields are ALL filled by the contractor.
+    // Skip this check when formFields aren't loaded (nothing to compare against).
+    const contractorFilledPartyIds = hasFormFields
+        ? partiesWithFields
+            .filter(party => {
+                if (allAssignedPartyIds.includes(party.id)) return false;
+                const partyFields = formFields.filter(f => f.assignedParty === party.id);
+                if (partyFields.length === 0) return false;
+                return partyFields.every(f => {
+                    const val = fieldValues[f.name];
+                    return val !== undefined && val !== null && val !== '';
+                });
+            })
+            .map(p => p.id)
+        : [];
 
     // Available parties = have fields, not already assigned, not already filled by contractor
     const availableParties = partiesWithFields.filter(
@@ -297,10 +303,16 @@ const MultiPartySignatureDialog = ({
         setError(null);
 
         try {
-            // Assign final order numbers based on list position
+            // If every previously-committed signer has completed, Spring Boot requires
+            // the new chain to restart at order 1. Any other start order returns a 400.
+            const allPreviousCompleted =
+                [...existingExternalSigners, ...existingInternalSigners]
+                    .every(s => s.status === 'completed');
+            const startOrder = allPreviousCompleted ? 1 : existingMaxOrder + 1;
+
             const assignmentsWithOrders = assignments.map((a, i) => ({
                 ...a,
-                order: existingMaxOrder + i + 1,
+                order: startOrder + i,
             }));
             const result = await onSubmit(assignmentsWithOrders);
 
@@ -720,7 +732,9 @@ const MultiPartySignatureDialog = ({
 
                             <List dense disablePadding>
                                 {assignments.map((assignment, index) => {
-                                    const computedOrder = existingMaxOrder + index + 1;
+                                    const allPrevDone = [...existingExternalSigners, ...existingInternalSigners].every(s => s.status === 'completed');
+                                    const previewStart = allPrevDone ? 1 : existingMaxOrder + 1;
+                                    const computedOrder = previewStart + index;
                                     const isDragging = draggedIndex === index;
                                     const isOver = dragOverIndex === index && draggedIndex !== index;
                                     return (

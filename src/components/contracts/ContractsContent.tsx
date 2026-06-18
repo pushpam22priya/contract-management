@@ -27,7 +27,7 @@ import { authService } from '@/services/authService';
 import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
 import MultiPartySignatureDialog from '@/components/contracts/MultiPartySignatureDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
-import { submitForMixedSignature } from '@/services/externalSignatureService';
+import { submitForSignature } from '@/services/externalSignatureService';
 import { AlertColor } from '@mui/material';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
@@ -452,24 +452,13 @@ export default function ContractsContent() {
         }
     };
 
-    const handleShareContract = (id: string) => {
-        const contract = contracts.find(c => c.id === id);
+    const handleShareContract = async (id: string) => {
+        // The list endpoint omits formFields and parties for performance.
+        // Fetch the full contract so the dialog has everything it needs.
+        const full = await apiService.getContractDetails(id);
+        const contract = (full as any) ?? contracts.find(c => c.id === id);
         if (!contract) return;
         setContractForSignature(contract);
-        const formFields = contract.formFields || [];
-        const effectiveParties = (contract.parties && contract.parties.length > 0)
-            ? contract.parties
-            : Array.from(
-                formFields.reduce((seen: Map<string, any>, f: any) => {
-                    if (f.assignedParty && !seen.has(f.assignedParty)) {
-                        seen.set(f.assignedParty, { id: f.assignedParty, label: f.partyLabel || f.assignedParty, color: f.partyColor || '#888' });
-                    }
-                    return seen;
-                }, new Map()).values()
-            );
-        const partiesWithFields = effectiveParties.filter((party: any) =>
-            formFields.some((field: any) => field.assignedParty === party.id)
-        );
         setMultiPartyDialogOpen(true);
     };
 
@@ -490,18 +479,15 @@ export default function ContractsContent() {
         const currentUser = authService.getCurrentUser();
         const senderName = currentUser?.email || 'Contract System';
         try {
-            const result = await submitForMixedSignature(contractForSignature, assignments, senderName);
+            const result = await submitForSignature(contractForSignature.id, assignments, senderName);
             if (result.success) {
                 showNotification('Send successfully', 'success');
                 loadContracts();
-                try {
-                    const refreshRes = await fetch(`/api/contracts/${contractForSignature.id}`);
-                    if (refreshRes.ok) setContractForSignature(await refreshRes.json());
-                } catch { /* ignore */ }
+                if (result.contract) setContractForSignature(result.contract);
                 return { success: true };
             }
-            showNotification(result.error || 'Failed to create assignments', 'error');
-            return { success: false, error: result.error };
+            showNotification(result.message || 'Failed to create assignments', 'error');
+            return { success: false, error: result.message };
         } catch (error: any) {
             showNotification(error.message || 'An unexpected error occurred', 'error');
             return { success: false, error: error.message };
@@ -957,10 +943,10 @@ export default function ContractsContent() {
                             }, new Map()).values()
                         );
                 })()}
-                formFields={contractForSignature?.formFields}
-                existingExternalSigners={contractForSignature?.externalSigners}
-                existingInternalSigners={contractForSignature?.internalSigners}
-                fieldValues={contractForSignature?.fieldValues}
+                formFields={contractForSignature?.formFields ?? []}
+                existingExternalSigners={contractForSignature?.externalSigners ?? []}
+                existingInternalSigners={contractForSignature?.internalSigners ?? []}
+                fieldValues={contractForSignature?.fieldValues ?? {}}
             />
 
             {contractForRenewal && (

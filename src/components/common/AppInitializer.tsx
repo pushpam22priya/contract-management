@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { initializeEmailService } from '@/services/emailService';
-import { validateConfig } from '../../../config/externalSignature';
 import { authService } from '@/services/authService';
 import { CircularProgress, Box } from '@mui/material';
 
@@ -23,17 +21,7 @@ export default function AppInitializer({ children }: { children: React.ReactNode
 
     useEffect(() => {
         console.log('🚀 [AppInitializer] Starting initialization...');
-
-        // Validate configuration
-        const configResult = validateConfig();
-
-        if (configResult.valid) {
-            // Initialize EmailJS
-            initializeEmailService();
-            console.log('✅ [AppInitializer] All services initialized');
-        } else {
-            console.warn('⚠️ [AppInitializer] Some services not initialized due to missing config');
-        }
+        // Email services are handled server-side by Spring Boot. No client-side init needed.
     }, []);
 
     // Route Protection Logic

@@ -1,7 +1,7 @@
 import { Contract, ContractStatus, WorkflowMode } from '@/types/contract';
 import { apiService } from './apiService';
 import { httpClient } from '@/lib/httpClient';
-import { submitForExternalSignature } from './externalSignatureService';
+import { submitForSignature as submitForSignatureSvc } from './externalSignatureService';
 
 class ContractService {
 
@@ -239,52 +239,38 @@ class ContractService {
     }
 
     /**
-     * Submit contract for external signature
+     * Submit contract for external signature (single-signer convenience wrapper).
+     * Builds a minimal one-assignment payload and calls the Spring Boot endpoint.
+     * For multi-party flows use submitForSignature from externalSignatureService directly.
      */
     async submitForSignature(contractId: string, signerEmail: string, senderName?: string): Promise<{
         success: boolean;
         message: string;
-        signingUrl?: string; // Return URL for immediate use if needed
+        signingUrl?: string;
     }> {
         try {
-            // 1. Get contract details
             const contract = await this.getContractById(contractId);
-            if (!contract) {
-                return { success: false, message: 'Contract not found' };
-            }
+            if (!contract) return { success: false, message: 'Contract not found' };
 
-            // 2. Determine sender name if not provided
             const finalSenderName = senderName || contract.createdBy || 'Contract System';
 
-            // 3. Call external signature service
-            const result = await submitForExternalSignature(contract, signerEmail, finalSenderName);
+            // Derive partyId from contract parties or formFields; fall back to 'default'
+            const firstParty = contract.parties?.[0];
+            const firstFieldParty = (contract.formFields || []).find((f: any) => f.assignedParty)?.assignedParty;
+            const partyId = firstParty?.id || firstFieldParty || 'default';
+            const partyLabel = firstParty?.label || 'Signer';
+
+            const result = await submitForSignatureSvc(contractId, [
+                { id: `auto_${Date.now()}`, partyId, partyLabel, type: 'external', email: signerEmail, order: 1 },
+            ], finalSenderName);
 
             if (result.success) {
-                // 4. Update contract status to IN_SIGNATURE
-
-                const updateData = {
-                    status: ContractStatus.IN_SIGNATURE,
-                    externalSigningToken: result.token,
-                    externalSigningUrl: result.signingUrl,
-                    externalSigningSentAt: new Date().toISOString(),
-                    // Update signer info
-                    signer: {
-                        email: signerEmail,
-                        status: 'pending' as const
-                    }
-                };
-
-                await apiService.updateContractMetadata(contractId, updateData);
-
-                return {
-                    success: true,
-                    message: 'Signature request sent successfully',
-                    signingUrl: result.signingUrl
-                };
-            } else {
-                return { success: false, message: result.error || 'Failed to send signature request' };
+                // Signing URL comes back in contract.externalSigners[0].token
+                const token = (result.contract as any)?.externalSigners?.[0]?.token;
+                const signingUrl = token ? `${window.location.origin}/sign/${token}` : undefined;
+                return { success: true, message: 'Signature request sent successfully', signingUrl };
             }
-
+            return { success: false, message: result.message || 'Failed to send signature request' };
         } catch (error) {
             console.error('Submit signature error:', error);
             return { success: false, message: 'An error occurred' };

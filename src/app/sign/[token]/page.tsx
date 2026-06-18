@@ -13,15 +13,12 @@ import {
     Chip,
     useTheme,
 } from '@mui/material';
-import { CheckCircle, Error, Save, Download } from '@mui/icons-material';
+import { CheckCircle, Error as ErrorIcon } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
 import { SignatureRequest } from '@/types/signature';
 import { PartyConfiguration } from '@/types/template';
-import {
-    getSignatureRequestData,
-    completeExternalSignature
-} from '@/services/externalSignatureService';
-import { sendSignedCopyEmail, sendSignatureRequestEmail } from '@/services/emailService';
+
+const BACKEND = '/api/backend';
 import SignAllDialog from '@/components/contracts/SignAllDialog';
 import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
 import PartyValidationWarningPopup from '@/components/viewer/pdfViewer/PartyValidationWarningPopup';
@@ -51,6 +48,7 @@ export default function PublicSigningPage() {
     const [submitting, setSubmitting] = useState(false);
     const [completed, setCompleted] = useState(false);
     const [signedPdfBlob, setSignedPdfBlob] = useState<Blob | null>(null);
+    const [documentUrl, setDocumentUrl] = useState<string>('');
 
     // Ref for PDF viewer
     const pdfViewerRef = useRef<any>(null);
@@ -346,15 +344,19 @@ export default function PublicSigningPage() {
         const loadData = async () => {
             try {
                 console.log(`📋 [PublicSigningPage] Loading signature request for token: ${token}`);
-                const result = await getSignatureRequestData(token);
+                const response = await fetch(`${BACKEND}/sign-requests/${token}`);
 
-                if (!result.success || !result.data) {
-                    setError('Unable to load document. The link may be invalid or expired.');
+                if (!response.ok) {
+                    const body = await response.json().catch(() => ({}));
+                    setError(body.message || 'Unable to load document. The link may be invalid or expired.');
                     setLoading(false);
                     return;
                 }
 
-                const data = result.data;
+                const data = await response.json();
+
+                // Fire-and-forget: mark as viewed
+                fetch(`${BACKEND}/sign-requests/${token}/viewed`, { method: 'PATCH' }).catch(() => {});
 
                 console.log(`📋 [PublicSigningPage] Loaded request:`, {
                     contractId: data.contractId,
@@ -414,6 +416,17 @@ export default function PublicSigningPage() {
                 console.log('✅ [INITIAL VALUES] Captured initial field values:', initialValues);
 
                 setSignatureRequest(data);
+
+                // Fetch presigned URL for PDF — browser loads directly from MinIO (bypasses proxy size limits)
+                const fileUrlRes = await fetch(`${BACKEND}/sign-requests/${token}/file-url`);
+                if (!fileUrlRes.ok) {
+                    setError('Failed to load document. Please try again.');
+                    setLoading(false);
+                    return;
+                }
+                const { url: pdfUrl } = await fileUrlRes.json();
+                setDocumentUrl(pdfUrl);
+
                 setLoading(false);
 
             } catch (err) {
@@ -503,6 +516,7 @@ export default function PublicSigningPage() {
         }
 
         setSubmitting(true);
+        let uploadId: string | null = null;
 
         try {
             // ✅ FIX: Use flatten: false to keep form fields editable.
@@ -531,71 +545,61 @@ export default function PublicSigningPage() {
                 console.warn('Could not export form fields:', e);
             }
 
-            const result = await completeExternalSignature(
-                token,
-                pdfBlob,
-                xfdfString,
-                filledFieldValues,
-                exportedFormFields
-            );
+            // Step 1: Initiate multipart upload
+            const initiateRes = await fetch(`${BACKEND}/sign-requests/${token}/upload/initiate`, { method: 'POST' });
+            if (!initiateRes.ok) throw new Error('Failed to initiate upload');
+            const { uploadId: uid } = await initiateRes.json();
+            uploadId = uid;
 
-            if (result.success) {
-                // Store the signed PDF blob for download
-                setSignedPdfBlob(pdfBlob);
-                setCompleted(true);
+            // Steps 2+3: Upload chunks directly to MinIO via presigned URLs (bypasses Next.js proxy)
+            const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB
+            const parts: { partNumber: number; eTag: string }[] = [];
+            let partNumber = 1;
 
-                // Send emails to newly unlocked external signers (auto-advance notification)
-                if (result.unlockedExternalSigners && result.unlockedExternalSigners.length > 0 && signatureRequest) {
-                    console.log(`📧 [SignPage] Sending emails to ${result.unlockedExternalSigners.length} newly unlocked external signer(s)...`);
-                    const baseUrl = window.location.origin;
-                    const sentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                    const expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                    for (const signer of result.unlockedExternalSigners) {
-                        sendSignatureRequestEmail({
-                            to_email: signer.email,
-                            contract_title: signatureRequest.contractTitle,
-                            sender_name: signatureRequest.createdByName || 'Contractor',
-                            sent_date: sentDate,
-                            expiry_date: expiryDate,
-                            signing_url: `${baseUrl}/sign/${signer.token}`,
-                        }).then(emailResult => {
-                            if (emailResult.success) {
-                                console.log(`✅ [SignPage] Email sent to ${signer.email}`);
-                            } else {
-                                console.warn(`⚠️ [SignPage] Email failed for ${signer.email}:`, emailResult.error);
-                            }
-                        }).catch(err => {
-                            console.error(`❌ [SignPage] Email error for ${signer.email}:`, err);
-                        });
-                    }
-                }
+            for (let offset = 0; offset < pdfBlob.size; offset += CHUNK_SIZE) {
+                const chunk = pdfBlob.slice(offset, offset + CHUNK_SIZE);
 
-                // Send signed copy email to the client (fire-and-forget)
-                // Skip for multi-party flow - the contractor will send finalized emails
-                if (signatureRequest?.signerEmail && !signatureRequest?.assignedParty) {
-                    const signerName = signatureRequest.signerName ||
-                        signatureRequest.signerEmail.split('@')[0];
-                    const downloadUrl = `${window.location.origin}/api/sign-requests/${token}/download`;
-                    sendSignedCopyEmail({
-                        to_email: signatureRequest.signerEmail,
-                        contract_title: signatureRequest.contractTitle,
-                        signer_name: signerName,
-                        signed_date: new Date().toLocaleDateString(),
-                        download_url: downloadUrl,
-                    }).then((emailResult: { success: boolean; error?: string }) => {
-                        if (emailResult.success) {
-                            console.log('Signed copy email sent to client');
-                        } else {
-                            console.warn('Could not send signed copy email:', emailResult.error);
-                        }
-                    });
-                }
-            } else {
-                setError('Failed to submit signature. Please try again.');
+                const presignRes = await fetch(`${BACKEND}/sign-requests/${token}/upload/presign?uploadId=${uploadId}&partNumber=${partNumber}`);
+                if (!presignRes.ok) throw new Error('Failed to get presigned URL');
+                const { url: presignUrl } = await presignRes.json();
+
+                const uploadRes = await fetch(presignUrl, { method: 'PUT', body: chunk });
+                if (!uploadRes.ok) throw new Error(`Failed to upload part ${partNumber}`);
+                parts.push({ partNumber, eTag: uploadRes.headers.get('ETag') || '' });
+                partNumber++;
             }
-        } catch (err) {
+
+            // Step 4: Finalize upload and record signature
+            const completeRes = await fetch(`${BACKEND}/sign-requests/${token}/upload/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    uploadId,
+                    parts,
+                    xfdf: xfdfString,
+                    fieldValues: filledFieldValues,
+                    formFields: exportedFormFields || [],
+                    autoSave: false,
+                }),
+            });
+
+            if (completeRes.status === 409) {
+                window.location.reload();
+                return;
+            }
+
+            if (!completeRes.ok) {
+                const body = await completeRes.json().catch(() => ({}));
+                throw new Error(body.message || 'Failed to submit signature. Please try again.');
+            }
+
+            setCompleted(true);
+        } catch (err: any) {
             console.error('Signature submission failed:', err);
-            setError('An error occurred while submitting. Please try again.');
+            if (uploadId) {
+                fetch(`${BACKEND}/sign-requests/${token}/upload/abort?uploadId=${uploadId}`, { method: 'POST' }).catch(() => {});
+            }
+            setError(err.message || 'An error occurred while submitting. Please try again.');
         } finally {
             setSubmitting(false);
         }
@@ -615,12 +619,19 @@ export default function PublicSigningPage() {
 
     // Error state
     if (error) {
+        const isAlreadySubmitted = error.toLowerCase().includes('already submitted') || error.toLowerCase().includes('already signed');
         return (
             <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50', p: 3 }}>
                 <Paper sx={{ p: 4, maxWidth: 500, textAlign: 'center' }}>
-                    <Error sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
-                    <Typography variant="h5" gutterBottom>Unable to Load Document</Typography>
-                    <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
+                    {isAlreadySubmitted ? (
+                        <CheckCircle sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
+                    ) : (
+                        <ErrorIcon sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
+                    )}
+                    <Typography variant="h5" gutterBottom>
+                        {isAlreadySubmitted ? 'Signature Already Submitted' : 'Unable to Load Document'}
+                    </Typography>
+                    <Alert severity={isAlreadySubmitted ? 'success' : 'error'} sx={{ mt: 2 }}>{error}</Alert>
                 </Paper>
             </Box>
         );
@@ -751,10 +762,10 @@ export default function PublicSigningPage() {
                 sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}
                 onClick={() => { userHasInteractedRef.current = true; }}
             >
-                {signatureRequest && (
+                {signatureRequest && documentUrl && (
                     <PDFViewerContainer
                         ref={pdfViewerRef}
-                        documentUrl={`/api/sign-requests/${token}/file`}
+                        documentUrl={documentUrl}
                         initialXfdf={signatureRequest.xfdfData}
                         formFields={formFieldsWithValues}
                         clientSigningMode={true}

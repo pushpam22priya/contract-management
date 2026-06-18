@@ -25,7 +25,7 @@ import { authService } from '@/services/authService';
 import { Contract, ContractStatus } from '@/types/contract';
 import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
-import { sendSignatureRequestEmail } from '@/services/emailService';
+import { httpClient } from '@/lib/httpClient';
 import { useTranslations } from 'next-intl';
 import { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -317,7 +317,9 @@ export default function InboxPage() {
     };
 
     const handleViewSignature = async (id: string) => {
-        const contract = allContracts.find(c => c.id === id);
+        // Fetch full contract so formFields (assignedParty + profileKey) are available for autofill
+        const full = await apiService.getContractDetails(id);
+        const contract = (full as any) ?? allContracts.find(c => c.id === id);
         if (!contract) return;
         setViewerMode('signature');
         setSelectedContract(contract);
@@ -478,61 +480,66 @@ export default function InboxPage() {
     ) => {
         if (!currentUser || !selectedContract) return;
 
-        try {
-            const pdfBase64 = await blobToBase64(pdfBlob);
-            if (!verifyPdfBase64(pdfBase64)) {
-                showNotification('Failed to save: Invalid PDF data', 'error');
-                return;
-            }
+        const internalSigner = selectedContract.internalSigners?.find(
+            s => s.email === currentUser.email && s.status === 'unlocked'
+        );
 
-            const internalSigner = selectedContract.internalSigners?.find(
-                s => s.email === currentUser.email && s.status === 'unlocked'
-            );
+        if (internalSigner) {
+            // 4-step chunked upload: PDF goes browser → MinIO directly (bypasses proxy size limits)
+            let uploadId: string | null = null;
+            try {
+                // Step 1: Initiate multipart upload
+                const initiateRes = await httpClient.post(`/contracts/${selectedContract.id}/sign/upload/initiate`, {});
+                if (!initiateRes.ok) { showNotification(initiateRes.message || 'Failed to initiate upload', 'error'); return; }
+                uploadId = (initiateRes.data as any).uploadId;
 
-            if (internalSigner) {
-                const response = await fetch(`/api/contracts/${selectedContract.id}/internal-sign`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        signerEmail: currentUser.email,
-                        pdfBase64,
-                        xfdfData: xfdfString,
-                        fieldValues,
-                        formFields,
-                    }),
-                });
+                // Steps 2+3: Upload chunks directly to MinIO via presigned URLs
+                const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB
+                const parts: { partNumber: number; eTag: string }[] = [];
+                let partNumber = 1;
 
-                if (!response.ok) {
-                    showNotification(`Failed to save signature: Server returned ${response.status}`, 'error');
-                    return;
+                for (let offset = 0; offset < pdfBlob.size; offset += CHUNK_SIZE) {
+                    const chunk = pdfBlob.slice(offset, offset + CHUNK_SIZE);
+                    const presignRes = await httpClient.get<{ url: string }>(`/contracts/${selectedContract.id}/sign/upload/presign?uploadId=${uploadId}&partNumber=${partNumber}`);
+                    if (!presignRes.ok) throw new Error('Failed to get presigned URL');
+                    const uploadRes = await fetch(presignRes.data!.url, { method: 'PUT', body: chunk });
+                    if (!uploadRes.ok) throw new Error(`Failed to upload part ${partNumber}`);
+                    parts.push({ partNumber, eTag: uploadRes.headers.get('ETag') || '' });
+                    partNumber++;
                 }
 
-                const result = await response.json();
+                // Step 4: Finalize upload and record signature
+                const completeRes = await httpClient.post(`/contracts/${selectedContract.id}/internal-sign`, {
+                    signerEmail: currentUser.email,
+                    uploadId,
+                    parts,
+                    xfdf: xfdfString,
+                    fieldValues,
+                    formFields,
+                });
 
-                if (result.success) {
-                    if (result.unlockedExternalSigners?.length > 0) {
-                        const baseUrl = window.location.origin;
-                        const sentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                        const expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                        for (const signer of result.unlockedExternalSigners) {
-                            sendSignatureRequestEmail({
-                                to_email: signer.email,
-                                contract_title: selectedContract.title,
-                                sender_name: selectedContract.createdBy,
-                                sent_date: sentDate,
-                                expiry_date: expiryDate,
-                                signing_url: `${baseUrl}/sign/${signer.token}`,
-                            });
-                        }
-                    }
+                if (completeRes.ok) {
                     showNotification(`Fields for ${internalSigner.partyLabel} completed successfully!`, 'success');
                     setViewerOpen(false);
                     setSelectedContract(null);
                     await loadContracts();
                 } else {
-                    showNotification(result.error || 'Failed to save signature', 'error');
+                    showNotification(completeRes.message || 'Failed to save signature', 'error');
                 }
-            } else {
+            } catch (err: any) {
+                if (uploadId) {
+                    httpClient.post(`/contracts/${selectedContract.id}/sign/upload/abort?uploadId=${uploadId}`, {}).catch(() => {});
+                }
+                showNotification(err.message || 'Failed to save signature', 'error');
+            }
+        } else {
+            // Legacy single-signer flow
+            try {
+                const pdfBase64 = await blobToBase64(pdfBlob);
+                if (!verifyPdfBase64(pdfBase64)) {
+                    showNotification('Failed to save: Invalid PDF data', 'error');
+                    return;
+                }
                 const updateResult = await contractService.updateContractSignedPdf(
                     selectedContract.id, pdfBase64, xfdfString
                 );
@@ -548,9 +555,9 @@ export default function InboxPage() {
                 setViewerOpen(false);
                 setSelectedContract(null);
                 await loadContracts();
+            } catch {
+                showNotification('Failed to save signature', 'error');
             }
-        } catch {
-            showNotification('Failed to save signature', 'error');
         }
     };
 

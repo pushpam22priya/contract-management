@@ -30,7 +30,7 @@ import AutofillPartyDialog from '@/components/contracts/AutofillPartyDialog';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import PartyValidationWarningPopup from '@/components/viewer/pdfViewer/PartyValidationWarningPopup';
 import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
-import { submitForMixedSignature } from '@/services/externalSignatureService';
+import { submitForSignature } from '@/services/externalSignatureService';
 import { templateService } from '@/services/templateService';
 import { contractService } from '@/services/contractService';
 import { apiService } from '@/services/apiService';
@@ -568,24 +568,23 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                 fieldValues: filledFieldValues
             } as any;
 
-            const result = await submitForMixedSignature(
-                contractMock,
+            const result = await submitForSignature(
+                contractId,
                 assignments,
                 senderName
             );
 
             if (result.success) {
-                setSnackbar({ open: true, message: 'Mixed signature assignments created successfully', severity: 'success' });
+                setSnackbar({ open: true, message: 'Signature assignments created successfully', severity: 'success' });
                 setMultiPartyDialogOpen(false);
-                // After submitting for signature, close dialog
                 setTimeout(() => {
                     handleClose();
-                    onSuccess?.(); // Trigger refresh if provided
+                    onSuccess?.();
                 }, 1500);
                 return { success: true };
             } else {
-                setError(result.error || 'Failed to create assignments');
-                return { success: false, error: result.error };
+                setError(result.message || 'Failed to create assignments');
+                return { success: false, error: result.message };
             }
         } catch (error: any) {
             console.error('❌ Mixed signature error:', error);

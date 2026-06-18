@@ -20,7 +20,7 @@ import ContractDetailsPanel from '@/components/contracts/ContractDetailsPanel';
 import { contractService } from '@/services/contractService';
 import { apiService } from '@/services/apiService';
 import { templateService } from '@/services/templateService';
-import { sendFinalizedContractEmails } from '@/services/externalSignatureService';
+import { finalizeContract } from '@/services/externalSignatureService';
 import { authService } from '@/services/authService';
 import DocumentViewerDialog from '@/components/viewer/DocumentViewerDialog';
 import { Document } from '@/components/contracts/ContractDetailsPanel';
@@ -308,12 +308,13 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
                     // ── Build document list (current contract only) ────────────
                     const contractId = found.id;
+                    const viewUrl = await apiService.getContractViewUrl(contractId) || '';
                     const documents = [{
                         id: contractId,
                         name: `${found.title.replace(/\s*\(Renewal\d*\)$/i, '')}.pdf`,
                         size: 'PDF',
                         uploadDate: new Date(found.createdAt).toLocaleDateString('en-GB'),
-                        url: `/api/file/${contractId}?type=contract`,
+                        url: viewUrl,
                     }];
 
                     setDetails({
@@ -342,10 +343,11 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
         (contract.signatureFlowStatus && contract.signatureFlowStatus !== 'finalized')
     );
 
-    const handleContractUpdate = useCallback((freshContract: any) => {
+    const handleContractUpdate = useCallback(async (freshContract: any) => {
         console.log('🔄 [ContractViewPage] Auto-refresh triggered — updating UI');
         setContract(freshContract);
 
+        const viewUrl = await apiService.getContractViewUrl(freshContract.id) || freshContract.fileUrl || '';
         setDetails((prev: any) => ({
             ...prev,
             ...freshContract,
@@ -354,7 +356,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 name: `${freshContract.title.replace(/\s*\(Renewal\d*\)$/i, '')}.pdf`,
                 size: 'PDF',
                 uploadDate: new Date(freshContract.createdAt).toLocaleDateString('en-GB'),
-                url: freshContract.fileUrl
+                url: viewUrl,
             }],
         }));
     }, []);
@@ -408,50 +410,21 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const handleFinalize = async () => {
         if (!contract) return;
 
-        console.log('🏁 [ContractViewPage] Finalizing contract:', contract.id);
         setFinalizing(true);
         setFinalizeError(null);
 
         try {
-            const currentUser = authService.getCurrentUser();
-            const finalizedBy = currentUser?.email || 'system';
-            const finalizedByName = currentUser?.email || 'System';
+            // Spring Boot creates the final PDF in MinIO and emails signed copies to all parties.
+            const result = await finalizeContract(contract.id);
 
-            // Call finalize API
-            const response = await fetch(`/api/contracts/${contract.id}/finalize`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    finalizedBy,
-                    finalizedByName,
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to finalize contract');
-            }
-
-            console.log('✅ [ContractViewPage] Contract finalized successfully');
-
-            // Send emails to all external signers
-            console.log('📧 [ContractViewPage] Sending finalized emails...');
-            const emailResult = await sendFinalizedContractEmails(contract, finalizedByName);
-
-            if (!emailResult.success) {
-                console.warn('⚠️ [ContractViewPage] Some emails failed:', emailResult.errors);
-            } else {
-                console.log(`✅ [ContractViewPage] Sent ${emailResult.sentCount} emails`);
+            if (!result.success) {
+                throw new Error(result.message || 'Failed to finalize contract');
             }
 
             setFinalizeSuccess(true);
 
-            // Refresh contract data
             const updatedContract = await contractService.getContractById(contract.id);
-            if (updatedContract) {
-                setContract(updatedContract);
-            }
+            if (updatedContract) setContract(updatedContract);
 
         } catch (error: any) {
             console.error('❌ [ContractViewPage] Finalize error:', error);
