@@ -303,12 +303,9 @@ const MultiPartySignatureDialog = ({
         setError(null);
 
         try {
-            // If every previously-committed signer has completed, Spring Boot requires
-            // the new chain to restart at order 1. Any other start order returns a 400.
-            const allPreviousCompleted =
-                [...existingExternalSigners, ...existingInternalSigners]
-                    .every(s => s.status === 'completed');
-            const startOrder = allPreviousCompleted ? 1 : existingMaxOrder + 1;
+            // Orders are globally unique across the contract lifetime — always continue
+            // from the highest existing order. Backend rejects any order <= existingMaxOrder.
+            const startOrder = existingMaxOrder > 0 ? existingMaxOrder + 1 : 1;
 
             const assignmentsWithOrders = assignments.map((a, i) => ({
                 ...a,
@@ -725,6 +722,11 @@ const MultiPartySignatureDialog = ({
                                     size="small"
                                     sx={{ bgcolor: 'primary.main', color: '#fff', fontWeight: 700, height: 20 }}
                                 />
+                                {existingMaxOrder > 0 && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                        Continuing chain from order {existingMaxOrder + 1}
+                                    </Typography>
+                                )}
                                 <Typography variant="caption" color="text.disabled" sx={{ ml: 'auto' }}>
                                     Drag to reorder
                                 </Typography>
@@ -732,8 +734,7 @@ const MultiPartySignatureDialog = ({
 
                             <List dense disablePadding>
                                 {assignments.map((assignment, index) => {
-                                    const allPrevDone = [...existingExternalSigners, ...existingInternalSigners].every(s => s.status === 'completed');
-                                    const previewStart = allPrevDone ? 1 : existingMaxOrder + 1;
+                                    const previewStart = existingMaxOrder > 0 ? existingMaxOrder + 1 : 1;
                                     const computedOrder = previewStart + index;
                                     const isDragging = draggedIndex === index;
                                     const isOver = dragOverIndex === index && draggedIndex !== index;

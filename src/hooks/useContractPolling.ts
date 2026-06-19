@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { contractService } from '@/services/contractService';
+import { apiService } from '@/services/apiService';
 
 /**
  * Custom hook to poll a single contract for any workflow state changes.
@@ -31,7 +31,7 @@ export const useContractPolling = (
         if (!contractId) return;
 
         try {
-            const fresh = await contractService.getContractById(contractId);
+            const fresh = await apiService.getContractDetails(contractId);
             if (!fresh) return;
 
             // Compare updatedAt timestamps to detect any change

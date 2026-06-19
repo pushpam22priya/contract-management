@@ -266,6 +266,7 @@
     "downloadPdf": "Download PDF",
     "renewContract": "Renew Contract",
     "terminateContract": "Terminate Contract",
+    "finalizeContract": "Finalize Contract",
     "view": "View",
     "viewTemplate": "View Template",
     "editTemplate": "Edit Template",

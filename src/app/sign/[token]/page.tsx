@@ -78,6 +78,9 @@ export default function PublicSigningPage() {
     // ✅ Track if validation has been triggered (by clicking submit)
     const [validationTriggered, setValidationTriggered] = useState(false);
 
+    // Suppress wrong-party field change events that fire internally during PDF export
+    const isSubmittingRef = useRef(false);
+
     // Derive parties from formFields when signatureRequest.parties is empty (renewal contracts)
     const effectiveParties = useMemo((): PartyConfiguration[] => {
         if (!signatureRequest) return [];
@@ -120,6 +123,9 @@ export default function PublicSigningPage() {
     }, [signatureRequest, effectiveParties]);
 
     const handleFieldChange = (fieldName: string, value: any) => {
+        // Apryse fires change events for all fields during export — skip during submission
+        if (isSubmittingRef.current) return;
+
         const newValue = value?.toString() || '';
 
         // ✅ Check if user is editing another party's field - show warning (only after user interaction)
@@ -516,6 +522,7 @@ export default function PublicSigningPage() {
         }
 
         setSubmitting(true);
+        isSubmittingRef.current = true;
         let uploadId: string | null = null;
 
         try {
@@ -601,6 +608,7 @@ export default function PublicSigningPage() {
             }
             setError(err.message || 'An error occurred while submitting. Please try again.');
         } finally {
+            isSubmittingRef.current = false;
             setSubmitting(false);
         }
     };

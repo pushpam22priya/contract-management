@@ -79,22 +79,12 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
             setLoading(true);
 
             try {
-                let found = null;
-                // LocalStorage fallback removed to enforce API usage
+                // Fetch full contract detail from Spring Boot — GET /contracts/{id}
+                const found = await apiService.getContractDetails(id);
 
-                // 2. Fallback to service if not found in raw storage
+                // Handle Not Found
                 if (!found) {
-                    const serviceContracts = await contractService.getAllContracts();
-                    if (Array.isArray(serviceContracts)) {
-                        found = serviceContracts.find(c => c.id === id);
-                    } else {
-                        console.error("ContractViewPage: getAllContracts returned non-array", serviceContracts);
-                    }
-                }
-
-                // 3. Handle Not Found
-                if (!found) {
-                    throw new Error(`Contract ${id} not found in storage.`);
+                    throw new Error(`Contract ${id} not found.`);
                 }
 
                 if (isMounted) setContract(found);
@@ -338,8 +328,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     // REAL-TIME POLLING: Auto-refresh when workflow state changes
     // ═══════════════════════════════════════════════════════════════════
     const shouldPoll = !loading && !!contract && (
-        contract.status === 'waiting_for_signature' ||
-        contract.status === 'signed_by_everyone' ||
+        contract.status === ContractStatus.IN_SIGNATURE ||
+        contract.status === ContractStatus.SIGNED_BY_EVERYONE ||
         (contract.signatureFlowStatus && contract.signatureFlowStatus !== 'finalized')
     );
 
@@ -423,7 +413,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
             setFinalizeSuccess(true);
 
-            const updatedContract = await contractService.getContractById(contract.id);
+            const updatedContract = await apiService.getContractDetails(contract.id);
             if (updatedContract) setContract(updatedContract);
 
         } catch (error: any) {
@@ -496,8 +486,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                     await apiService.updateContractMetadata(contract.id, metadataUpdates);
                 }
 
-                // Refresh contract data
-                const updatedContract = await contractService.getContractById(contract.id);
+                // Refresh contract data from Spring Boot
+                const updatedContract = await apiService.getContractDetails(contract.id);
                 if (updatedContract) setContract(updatedContract);
             }
         } catch (error) {
@@ -516,37 +506,65 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
         if (isDark) {
             switch (status) {
                 case 'active':
-                case 'signed': return { bgcolor: 'rgba(16,185,129,0.08)', color: '#6bac8e' };
-                case 'expiring': return { bgcolor: 'rgba(245,158,11,0.08)', color: '#b8935a' };
-                case 'terminated': return { bgcolor: 'rgba(148,163,184,0.07)', color: '#6b7e90' };
+                case 'signed':
+                case 'ACTIVE':
+                case 'SIGNED': return { bgcolor: 'rgba(16,185,129,0.08)', color: '#6bac8e' };
+                case 'expiring':
+                case 'EXPIRING': return { bgcolor: 'rgba(245,158,11,0.08)', color: '#b8935a' };
+                case 'terminated':
+                case 'TERMINATED': return { bgcolor: 'rgba(148,163,184,0.07)', color: '#6b7e90' };
                 case 'expired':
                 case 'rejected':
                 case 'rejected_by_reviewer':
-                case 'rejected_by_approver': return { bgcolor: 'rgba(239,68,68,0.08)', color: '#b07070' };
-                case 'in_review': return { bgcolor: 'rgba(139,92,246,0.08)', color: '#9080c0' };
-                case 'in_approval': return { bgcolor: 'rgba(245,158,11,0.08)', color: '#b8935a' };
+                case 'rejected_by_approver':
+                case 'EXPIRED':
+                case 'REJECTED':
+                case 'REJECTED_BY_REVIEWER':
+                case 'REJECTED_BY_APPROVER': return { bgcolor: 'rgba(239,68,68,0.08)', color: '#b07070' };
+                case 'in_review':
+                case 'IN_REVIEW': return { bgcolor: 'rgba(139,92,246,0.08)', color: '#9080c0' };
+                case 'in_approval':
+                case 'IN_APPROVAL': return { bgcolor: 'rgba(245,158,11,0.08)', color: '#b8935a' };
                 case 'reviewed':
                 case 'approved': return { bgcolor: 'rgba(16,185,129,0.08)', color: '#6bac8e' };
-                case 'waiting_for_signature': return { bgcolor: 'rgba(245,158,11,0.08)', color: '#b8935a' };
-                case 'signed_by_everyone': return { bgcolor: 'rgba(59,130,246,0.08)', color: '#6888ac' };
+                case 'waiting_for_signature':
+                case 'IN_SIGNATURE':
+                case 'READY_FOR_SIGNATURE': return { bgcolor: 'rgba(245,158,11,0.08)', color: '#b8935a' };
+                case 'signed_by_everyone':
+                case 'SIGNED_BY_EVERYONE': return { bgcolor: 'rgba(59,130,246,0.08)', color: '#6888ac' };
+                case 'DRAFT': return { bgcolor: 'rgba(148,163,184,0.07)', color: '#6b7e90' };
                 default: return { bgcolor: 'rgba(148,163,184,0.07)', color: '#6b7e90' };
             }
         }
         switch (status) {
             case 'active':
-            case 'signed': return { bgcolor: '#d1fae5', color: '#065f46' };
-            case 'expiring': return { bgcolor: '#fef3c7', color: '#92400e' };
-            case 'terminated': return { bgcolor: '#f1f5f9', color: '#334155' };
+            case 'signed':
+            case 'ACTIVE':
+            case 'SIGNED': return { bgcolor: '#d1fae5', color: '#065f46' };
+            case 'expiring':
+            case 'EXPIRING': return { bgcolor: '#fef3c7', color: '#92400e' };
+            case 'terminated':
+            case 'TERMINATED': return { bgcolor: '#f1f5f9', color: '#334155' };
             case 'expired':
             case 'rejected':
             case 'rejected_by_reviewer':
-            case 'rejected_by_approver': return { bgcolor: '#fee2e2', color: '#991b1b' };
-            case 'in_review': return { bgcolor: '#ede9fe', color: '#5b21b6' };
-            case 'in_approval': return { bgcolor: '#fef9c3', color: '#92400e' };
+            case 'rejected_by_approver':
+            case 'EXPIRED':
+            case 'REJECTED':
+            case 'REJECTED_BY_REVIEWER':
+            case 'REJECTED_BY_APPROVER': return { bgcolor: '#fee2e2', color: '#991b1b' };
+            case 'in_review':
+            case 'IN_REVIEW': return { bgcolor: '#ede9fe', color: '#5b21b6' };
+            case 'in_approval':
+            case 'IN_APPROVAL': return { bgcolor: '#fef9c3', color: '#92400e' };
             case 'reviewed':
             case 'approved': return { bgcolor: '#d1fae5', color: '#065f46' };
-            case 'waiting_for_signature': return { bgcolor: '#fff9c4', color: '#f57f17' };
-            case 'signed_by_everyone': return { bgcolor: '#e3f2fd', color: '#1565c0' };
+            case 'waiting_for_signature':
+            case 'IN_SIGNATURE':
+            case 'READY_FOR_SIGNATURE': return { bgcolor: '#fff9c4', color: '#f57f17' };
+            case 'signed_by_everyone':
+            case 'SIGNED_BY_EVERYONE': return { bgcolor: '#e3f2fd', color: '#1565c0' };
+            case 'DRAFT': return { bgcolor: '#f1f5f9', color: '#334155' };
             default: return { bgcolor: '#e5e7eb', color: '#374151' };
         }
     };

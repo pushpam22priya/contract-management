@@ -266,6 +266,7 @@
     "downloadPdf": "PDF डाउनलोड करें",
     "renewContract": "अनुबंध नवीनीकृत करें",
     "terminateContract": "अनुबंध समाप्त करें",
+    "finalizeContract": "अनुबंध अंतिम करें",
     "view": "देखें",
     "viewTemplate": "टेम्पलेट देखें",
     "editTemplate": "टेम्पलेट संपादित करें",

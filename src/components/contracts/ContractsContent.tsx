@@ -27,7 +27,7 @@ import { authService } from '@/services/authService';
 import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
 import MultiPartySignatureDialog from '@/components/contracts/MultiPartySignatureDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
-import { submitForSignature } from '@/services/externalSignatureService';
+import { submitForSignature, finalizeContract } from '@/services/externalSignatureService';
 import { AlertColor } from '@mui/material';
 import { templateService } from '@/services/templateService';
 import { categoryService } from '@/services/categoryService';
@@ -508,6 +508,20 @@ export default function ContractsContent() {
         setTerminateDialogOpen(true);
     };
 
+    const handleFinalize = async (id: string) => {
+        try {
+            const result = await finalizeContract(id);
+            if (result.success) {
+                showNotification('Contract finalized successfully!', 'success');
+                loadContracts();
+            } else {
+                showNotification(result.message || 'Failed to finalize contract', 'error');
+            }
+        } catch {
+            showNotification('Failed to finalize contract', 'error');
+        }
+    };
+
     const handleHistory = (id: string, event: React.MouseEvent<HTMLButtonElement>) => {
         setHistoryContractId(id);
         setHistoryAnchorEl(event.currentTarget);
@@ -757,6 +771,7 @@ export default function ContractsContent() {
                                             onShare={cardVariant === 'draft' ? handleShare : cardVariant === 'contract' ? handleShareContract : undefined}
                                             onRenew={cardVariant === 'contract' ? handleRenewContract : undefined}
                                             onTerminate={cardVariant === 'contract' ? handleTerminateContract : undefined}
+                                            onFinalize={cardVariant === 'contract' ? handleFinalize : undefined}
                                             onHistory={cardVariant === 'terminated' || contract.renewedFromId || contract.renewedContractId ? handleHistory : undefined}
                                             onDelete={cardVariant === 'terminated' ? handleDeleteContract : undefined}
                                         />
@@ -788,6 +803,7 @@ export default function ContractsContent() {
                                             onShare={cardVariant === 'draft' ? handleShare : cardVariant === 'contract' ? handleShareContract : undefined}
                                             onRenew={cardVariant === 'contract' ? handleRenewContract : undefined}
                                             onTerminate={cardVariant === 'contract' ? handleTerminateContract : undefined}
+                                            onFinalize={cardVariant === 'contract' ? handleFinalize : undefined}
                                             onHistory={cardVariant === 'terminated' || contract.renewedFromId || contract.renewedContractId ? handleHistory : undefined}
                                             onDelete={cardVariant === 'terminated' ? handleDeleteContract : undefined}
                                         />

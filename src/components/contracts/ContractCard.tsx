@@ -5,6 +5,7 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import { Contract, ContractStatus } from '@/types/contract';
 import { useTranslations } from 'next-intl';
 
@@ -26,6 +27,7 @@ interface ContractCardProps {
     onTerminate?: (id: string) => void;
     onHistory?: (id: string, event: React.MouseEvent<HTMLButtonElement>) => void;
     onDelete?: (id: string) => void;
+    onFinalize?: (id: string) => void;
     /**
      * Variant determines the card behavior:
      * - 'draft': Shows share button always (for review submission), handles "changes_requested" status
@@ -47,6 +49,7 @@ const ContractCard = ({
     onTerminate,
     onHistory,
     onDelete,
+    onFinalize,
     variant = 'contract',
     teamName,
 }: ContractCardProps) => {
@@ -515,6 +518,19 @@ const ContractCard = ({
                             !!onTerminate &&
                             contract.status === ContractStatus.EXPIRED &&
                             !contract.renewalStatus,
+                    },
+                    {
+                        title: tTooltips('finalizeContract'),
+                        icon: <TaskAltIcon sx={{ fontSize: '0.9rem' }} />,
+                        onClick: () => onFinalize?.(contract.id),
+                        color: '#16a34a',
+                        shadow: 'rgba(22, 163, 74, 0.2)',
+                        // Show only when all signers have completed and awaiting finalization.
+                        // Naturally hidden when re-shared (status reverts to pending_signatures)
+                        // and after finalization (status becomes finalized).
+                        show: variant === 'contract' &&
+                            !!onFinalize &&
+                            contract.signatureFlowStatus === 'all_completed',
                     },
                 ].map((action, idx) =>
                     action.show ? (
