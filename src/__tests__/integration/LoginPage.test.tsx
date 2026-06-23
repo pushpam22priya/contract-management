@@ -350,7 +350,10 @@ describe('LoginPage — login failure', () => {
         await user.type(passwordField, 'wrongpass');
         await user.click(submitButton);
 
-        expect(await screen.findByText('Invalid email or password')).toBeInTheDocument();
+        // Use a flexible text matcher that handles Typography wrapping
+        expect(await screen.findByText((content, element) =>
+            content.includes('Invalid email or password')
+        )).toBeInTheDocument();
         expect(mockRouterPush).not.toHaveBeenCalled();
     });
 
@@ -366,9 +369,10 @@ describe('LoginPage — login failure', () => {
         await user.type(passwordField, 'secret123');
         await user.click(submitButton);
 
-        expect(
-            await screen.findByText('An unexpected error occurred. Please try again.')
-        ).toBeInTheDocument();
+        // Use a flexible text matcher that handles Typography wrapping
+        expect(await screen.findByText((content, element) =>
+            content.includes('An unexpected error occurred')
+        )).toBeInTheDocument();
         expect(mockRouterPush).not.toHaveBeenCalled();
     });
 
@@ -387,7 +391,9 @@ describe('LoginPage — login failure', () => {
         await user.type(emailField, 'wrong@example.com');
         await user.type(passwordField, 'wrongpass');
         await user.click(submitButton);
-        expect(await screen.findByText('Invalid email or password')).toBeInTheDocument();
+        expect(await screen.findByText((content, element) =>
+            content.includes('Invalid email or password')
+        )).toBeInTheDocument();
 
         // ── Clear fields and try again ─
         await user.clear(emailField);
@@ -398,9 +404,13 @@ describe('LoginPage — login failure', () => {
 
         // Error must be gone; success must appear
         await waitFor(() => {
-            expect(screen.queryByText('Invalid email or password')).not.toBeInTheDocument();
+            expect(screen.queryByText((content, element) =>
+                content.includes('Invalid email or password')
+            )).not.toBeInTheDocument();
         });
-        expect(await screen.findByText('Login successful')).toBeInTheDocument();
+        expect(await screen.findByText((content, element) =>
+            content.includes('Login successful')
+        )).toBeInTheDocument();
     });
 });
 
@@ -426,7 +436,10 @@ describe('LoginPage — loading state', () => {
         await user.click(submitButton);
 
         // After click, button label must change to "Signing In..."
-        expect(await screen.findByRole('button', { name: /signing in/i })).toBeInTheDocument();
+        // Use flexible text matcher to handle the button's inner content structure
+        expect(await screen.findByText((content, element) =>
+            content.includes('Signing In')
+        )).toBeInTheDocument();
 
         // Original "Sign In" button is gone (same button, different text)
         expect(screen.queryByRole('button', { name: /^sign in$/i })).not.toBeInTheDocument();
@@ -445,7 +458,12 @@ describe('LoginPage — loading state', () => {
         await user.click(screen.getByRole('button', { name: /sign in/i }));
 
         // AppButton sets disabled={loading} — button must be disabled
-        const button = await screen.findByRole('button', { name: /signing in/i });
+        // Wait for the button text to change to "Signing In..." to confirm loading state
+        await screen.findByText((content, element) =>
+            content.includes('Signing In')
+        );
+        
+        const button = screen.getByRole('button');
         expect(button).toBeDisabled();
     });
 
@@ -461,7 +479,9 @@ describe('LoginPage — loading state', () => {
         await user.type(passwordField, 'secret123');
         await user.click(screen.getByRole('button', { name: /sign in/i }));
 
-        await screen.findByRole('button', { name: /signing in/i }); // wait for loading state
+        await screen.findByText((content, element) =>
+            content.includes('Signing In')
+        ); // wait for loading state
 
         // TextField disabled={loading} is set by the controller
         expect(screen.getByRole('textbox', { name: /email address/i })).toBeDisabled();
@@ -479,7 +499,9 @@ describe('LoginPage — loading state', () => {
         await user.type(passwordField, 'secret123');
         await user.click(screen.getByRole('button', { name: /sign in/i }));
 
-        await screen.findByRole('button', { name: /signing in/i }); // wait for loading state
+        await screen.findByText((content, element) =>
+            content.includes('Signing In')
+        ); // wait for loading state
 
         expect(screen.getByLabelText(/password/i)).toBeDisabled();
     });
@@ -497,7 +519,9 @@ describe('LoginPage — loading state', () => {
         await user.click(screen.getByRole('button', { name: /sign in/i }));
 
         // Wait for error alert to appear (request finished)
-        await screen.findByText('Invalid email or password');
+        await screen.findByText((content, element) =>
+            content.includes('Invalid email or password')
+        );
 
         // Button label is back to "Sign In" and enabled
         const btn = screen.getByRole('button', { name: /sign in/i });

@@ -229,7 +229,13 @@ export default function ReviewApprovalCard({
                         label={userRole === 'reviewer'
                             ? (myReviewerStatus === 'rejected' ? 'Rejected' : (myReviewerStatus === 'reviewed' || myReviewerStatus === 'forwarded') ? 'Reviewed' : 'Pending Review')
                             : (contract.approver
-                                ? (contract.approver.status === 'approved' ? 'Approved' : contract.approver.status === 'rejected' ? 'Rejected' : 'Pending Approval')
+                                ? (contract.approver.status === 'approved'
+                                    ? 'Approved'
+                                    : contract.approver.status === 'rejected'
+                                        ? 'Rejected'
+                                        : allReviewersComplete()
+                                            ? 'Pending Approval'
+                                            : 'Awaiting Reviews')
                                 : (isRejectedByApprover() ? 'Rejected' : isApproved() ? 'Approved' : allReviewersComplete() ? 'Pending Approval' : 'Awaiting Reviews'))}
                         size="small"
                         sx={{
