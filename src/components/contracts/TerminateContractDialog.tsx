@@ -4,14 +4,14 @@ import AppButton from '@/components/common/AppButton';
 import { useState } from 'react';
 import {
     Box,
-    Typography, 
+    Typography,
     Alert,
     alpha,
     useTheme,
 } from '@mui/material';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import BaseDialog from '@/components/common/BaseDialog';
-import { authService } from '@/services/authService';
+import { httpClient } from '@/lib/httpClient';
 
 interface TerminateContractDialogProps {
     open: boolean;
@@ -43,31 +43,17 @@ export default function TerminateContractDialog({
         setLoading(true);
         setError(null);
 
-        try {
-            const currentUser = authService.getCurrentUser();
-            const terminatedBy = currentUser?.email || 'unknown';
+        const response = await httpClient.post(`/contracts/${contractId}/terminate`, null);
 
-            const res = await fetch(`/api/contracts/${contractId}/terminate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ terminatedBy }),
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                setError(data.error || 'Failed to terminate contract. Please try again.');
-                return;
-            }
-
-            // Success
-            onSuccess();
-            handleClose();
-        } catch {
-            setError('An unexpected error occurred. Please try again.');
-        } finally {
+        if (!response.ok) {
             setLoading(false);
+            setError(response.message || 'Failed to terminate contract. Please try again.');
+            return;
         }
+
+        setLoading(false);
+        onSuccess();
+        handleClose();
     };
 
     return (

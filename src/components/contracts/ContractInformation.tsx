@@ -35,12 +35,16 @@ const ContractInformation = ({
     // Get progress bar color based on status
     const getProgressBarColor = () => {
         switch (status) {
+            case 'ACTIVE':
             case 'active':
                 return theme.palette.primary.main;
+            case 'SIGNED':
             case 'signed':
                 return '#6366f1'; // Indigo - signed but not started
+            case 'EXPIRING':
             case 'expiring':
                 return '#f59e0b'; // Amber/Orange - warning
+            case 'EXPIRED':
             case 'expired':
                 return '#ef4444'; // Red - expired
             default:
@@ -52,17 +56,25 @@ const ContractInformation = ({
     const getProgressBarBgColor = () => {
         if (isDark) {
             switch (status) {
+                case 'ACTIVE':
                 case 'active':   return alpha('#10b981', 0.12);
+                case 'SIGNED':
                 case 'signed':   return alpha('#6366f1', 0.12);
+                case 'EXPIRING':
                 case 'expiring': return alpha('#f59e0b', 0.12);
+                case 'EXPIRED':
                 case 'expired':  return alpha('#ef4444', 0.12);
                 default:         return alpha('#6b7280', 0.12);
             }
         }
         switch (status) {
+            case 'ACTIVE':
             case 'active':   return '#d1fae5';
+            case 'SIGNED':
             case 'signed':   return '#e0e7ff';
+            case 'EXPIRING':
             case 'expiring': return '#fef3c7';
+            case 'EXPIRED':
             case 'expired':  return '#fee2e2';
             default:         return '#e5e7eb';
         }
