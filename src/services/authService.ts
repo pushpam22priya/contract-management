@@ -78,11 +78,20 @@ class AuthService {
     }
  
     /**
-     * Logout user
+     * Logout user — revokes the JWT on the backend (JTI blacklist) then
+     * clears the local session. Session is always cleared even if the
+     * backend call fails, so the user is never stuck logged-in locally.
      */
-    logout(): void {
+    async logout(): Promise<void> {
         if (typeof window === 'undefined') return;
- 
+        try {
+            // httpClient attaches the stored Bearer token automatically.
+            // Backend adds the JTI to the revoked_tokens collection so the
+            // token cannot be reused even before it expires.
+            await httpClient.post('/auth/logout', {});
+        } catch {
+            // Network / server errors must not prevent local sign-out.
+        }
         sessionStorage.removeItem(CURRENT_USER_STORAGE_KEY);
     }
  

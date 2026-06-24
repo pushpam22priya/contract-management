@@ -28,8 +28,8 @@ export default function Header({ onMobileMenuToggle }: HeaderProps) {
     const [moreAnchorEl, setMoreAnchorEl] = useState<null | HTMLElement>(null);
     const [profileOpen, setProfileOpen] = useState(false);
 
-    const handleLogout = () => {
-        authService.logout();
+    const handleLogout = async () => {
+        await authService.logout();
         router.push('/login');
     };
 

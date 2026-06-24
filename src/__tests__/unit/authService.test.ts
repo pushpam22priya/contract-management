@@ -19,12 +19,14 @@
  * 11.  getCurrentUser() — returns null for corrupt sessionStorage JSON
  * 12.  isAuthenticated() — returns false when no session
  * 13.  isAuthenticated() — returns true when session exists
- * 14.  logout() — clears session from sessionStorage
- * 15.  logout() — is a no-op when called with no active session
- * 16.  updateSessionUser() — merges partial updates into the existing session
- * 17.  updateSessionUser() — is a no-op when there is no existing session
- * 18.  getAllRegisteredUsers() — returns user list from backend
- * 19.  getAllRegisteredUsers() — returns empty array on backend error
+ * 14.  logout() — calls POST /auth/logout to revoke the token on the backend
+ * 15.  logout() — removes the session from sessionStorage after revoking
+ * 16.  logout() — still clears the local session when the backend call fails
+ * 17.  logout() — does not throw when called without an active session
+ * 18.  updateSessionUser() — merges partial updates into the existing session
+ * 19.  updateSessionUser() — is a no-op when there is no existing session
+ * 20.  getAllRegisteredUsers() — returns user list from backend
+ * 21.  getAllRegisteredUsers() — returns empty array on backend error
  */
 
 // ─── httpClient mock ──────────────────────────────────────────────────────────
@@ -265,23 +267,52 @@ describe('authService.isAuthenticated()', () => {
 // logout()
 // =============================================================================
 
+const LOGOUT_OK = { ok: true, status: 200, data: null, message: 'Logged out successfully' };
+
 describe('authService.logout()', () => {
 
-    it('removes the session from sessionStorage', () => {
-        const session = {
+    it('calls POST /auth/logout to revoke the token on the backend', async () => {
+        mockPost.mockResolvedValueOnce(LOGOUT_OK);
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({
             token: 'jwt_token_abc',
             user:  { email: 'alice@example.com', isAdmin: false, lastLogin: '2026-01-01T00:00:00Z' },
-        };
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        }));
 
-        authService.logout();
+        await authService.logout();
+
+        expect(mockPost).toHaveBeenCalledWith('/auth/logout', {});
+    });
+
+    it('removes the session from sessionStorage after revoking the token', async () => {
+        mockPost.mockResolvedValueOnce(LOGOUT_OK);
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+            token: 'jwt_token_abc',
+            user:  { email: 'alice@example.com', isAdmin: false, lastLogin: '2026-01-01T00:00:00Z' },
+        }));
+
+        await authService.logout();
 
         expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
         expect(authService.getCurrentUser()).toBeNull();
     });
 
-    it('is a no-op when called without an active session (does not throw)', () => {
-        expect(() => authService.logout()).not.toThrow();
+    it('still clears the local session when the backend call fails', async () => {
+        mockPost.mockRejectedValueOnce(new Error('Network error'));
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+            token: 'jwt_token_abc',
+            user:  { email: 'alice@example.com', isAdmin: false, lastLogin: '2026-01-01T00:00:00Z' },
+        }));
+
+        await authService.logout();
+
+        expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+        expect(authService.getCurrentUser()).toBeNull();
+    });
+
+    it('does not throw when called without an active session', async () => {
+        mockPost.mockResolvedValueOnce(LOGOUT_OK);
+        await expect(authService.logout()).resolves.toBeUndefined();
+        expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
     });
 });
 
