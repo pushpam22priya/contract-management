@@ -504,7 +504,7 @@ export const apiService = {
      * Returns the new contract id to use for file upload.
      */
     async createContract(contractData: any): Promise<{ success: boolean; id?: string; message?: string }> {
-        console.log(`[ApiService] createContract → POST /contracts | title="${contractData.title}" | teamId="${contractData.teamId ?? 'none'}"`);
+        console.log(`[ApiService] createContract → POST /contracts | title="${contractData.title}" | folderId="${contractData.folderId ?? 'none'}"`);
         const response = await httpClient.post<any>('/contracts', contractData);
         if (!response.ok) {
             console.error('[ApiService] createContract ✗', response.status, response.message);
@@ -564,7 +564,7 @@ export const apiService = {
      * Update document-level contract fields — Spring Boot backend.
      *
      * Use for: xfdfData, fieldValues, formFields, parties, title, client,
-     * description, value, category, startDate, endDate, teamId.
+     * description, value, category, startDate, endDate, folderId.
      *
      * These fields live in Spring Boot's MongoDB document. Routing them through
      * the internal Next.js PATCH (/api/contracts/{id}) causes 404 for contracts

@@ -6,19 +6,19 @@ import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import { Team } from '@/types/team';
+import { Folder } from '@/types/folder';
 import dayjs from 'dayjs';
 import { useTranslations } from 'next-intl';
 
-interface TeamCardProps {
-    team: Team;
+interface FolderCardProps {
+    folder: Folder;
     contractCount: number;
-    onClick: (teamId: string) => void;
-    onRename: (team: Team) => void;
-    onDelete?: (team: Team) => void;
+    onClick: (folderId: string) => void;
+    onRename: (folder: Folder) => void;
+    onDelete?: (folder: Folder) => void;
 }
 
-export default function TeamCard({ team, contractCount, onClick, onRename, onDelete }: TeamCardProps) {
+export default function FolderCard({ folder, contractCount, onClick, onRename, onDelete }: FolderCardProps) {
     const theme = useTheme();
     const primaryColor = theme.palette.primary.main;
     const isDark = theme.palette.mode === 'dark';
@@ -28,22 +28,22 @@ export default function TeamCard({ team, contractCount, onClick, onRename, onDel
 
     const actions = [
         {
-            title: tTooltips('openTeam'),
+            title: tTooltips('openFolder'),
             icon: <VisibilityOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
-            onClick: () => onClick(team.id),
+            onClick: () => onClick(folder.id),
             hoverColor: 'primary.main',
         },
         {
-            title: tTooltips('renameTeam'),
+            title: tTooltips('renameFolder'),
             icon: <EditOutlinedIcon sx={{ fontSize: '0.8rem' }} />,
-            onClick: () => onRename(team),
+            onClick: () => onRename(folder),
             hoverColor: 'primary.main',
         },
-        // Delete button — only when team is empty (contractCount === 0)
+        // Delete button — only when folder is empty (contractCount === 0)
         ...(contractCount === 0 && onDelete ? [{
-            title: 'Delete team',
+            title: 'Delete folder',
             icon: <DeleteOutlineIcon sx={{ fontSize: '0.8rem' }} />,
-            onClick: () => onDelete(team),
+            onClick: () => onDelete(folder),
             hoverColor: 'error.main',
             hoverBorder: theme.palette.error.main,
             hoverShadow: alpha(theme.palette.error.main, 0.2),
@@ -52,7 +52,7 @@ export default function TeamCard({ team, contractCount, onClick, onRename, onDel
 
     return (
         <Box
-            onClick={() => onClick(team.id)}
+            onClick={() => onClick(folder.id)}
             sx={{
                 bgcolor: 'background.paper',
                 borderRadius: 3,
@@ -68,8 +68,8 @@ export default function TeamCard({ team, contractCount, onClick, onRename, onDel
                     boxShadow: '0 12px 24px rgba(0,0,0,0.1)',
                     transform: 'translateY(-4px)',
                     borderColor: primaryColor,
-                    '& .team-action-buttons': { opacity: 1 },
-                    '& .team-icon-box': { transform: 'scale(1.1)' },
+                    '& .folder-action-buttons': { opacity: 1 },
+                    '& .folder-icon-box': { transform: 'scale(1.1)' },
                 },
                 '&::before': {
                     content: '""',
@@ -88,7 +88,7 @@ export default function TeamCard({ team, contractCount, onClick, onRename, onDel
             {/* Folder icon + title row */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
                 <Box
-                    className="team-icon-box"
+                    className="folder-icon-box"
                     sx={{
                         width: 32,
                         height: 32,
@@ -104,12 +104,12 @@ export default function TeamCard({ team, contractCount, onClick, onRename, onDel
                     <FolderOpenOutlinedIcon sx={{ fontSize: 17, color: primaryColor }} />
                 </Box>
 
-                <Tooltip title={team.name} arrow placement="top">
+                <Tooltip title={folder.name} arrow placement="top">
                     <Typography
                         variant="subtitle2"
                         sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                     >
-                        {team.name}
+                        {folder.name}
                     </Typography>
                 </Tooltip>
             </Box>
@@ -121,12 +121,12 @@ export default function TeamCard({ team, contractCount, onClick, onRename, onDel
 
             {/* Created date */}
             <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>
-                Created {dayjs(team.createdAt).format('DD/MM/YYYY')}
+                Created {dayjs(folder.createdAt).format('DD/MM/YYYY')}
             </Typography>
 
             {/* Hover action buttons */}
             <Box
-                className="team-action-buttons"
+                className="folder-action-buttons"
                 onClick={e => e.stopPropagation()}
                 sx={{
                     position: 'absolute',

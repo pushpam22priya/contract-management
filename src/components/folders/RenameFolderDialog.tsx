@@ -1,37 +1,38 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Box, TextField, Typography, LinearProgress } from '@mui/material';
 import BaseDialog from '@/components/common/BaseDialog';
 import AppButton from '@/components/common/AppButton';
-import { Team } from '@/types/team';
+import { Folder } from '@/types/folder';
 import { httpClient } from '@/lib/httpClient';
 
-interface CreateTeamDialogProps {
+interface RenameFolderDialogProps {
     open: boolean;
+    folder: Folder | null;
     onClose: () => void;
-    onCreated: (team: Team) => void;
+    onRenamed: (folder: Folder) => void;
 }
 
 const MAX_LENGTH = 50;
 
-const teamSchema = z.object({
+const renameFolderSchema = z.object({
     name: z.string()
-        .min(1, 'Team name is required')
-        .max(MAX_LENGTH, `Team name must be ${MAX_LENGTH} characters or less`),
+        .min(1, 'Folder name is required')
+        .max(MAX_LENGTH, `Folder name must be ${MAX_LENGTH} characters or less`),
 });
 
-type TeamForm = z.infer<typeof teamSchema>;
+type RenameFolderForm = z.infer<typeof renameFolderSchema>;
 
-export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTeamDialogProps) {
+export default function RenameFolderDialog({ open, folder, onClose, onRenamed }: RenameFolderDialogProps) {
     const [loading, setLoading] = useState(false);
     const [apiError, setApiError] = useState('');
 
-    const { control, handleSubmit, reset, watch } = useForm<TeamForm>({
-        resolver: zodResolver(teamSchema),
+    const { control, handleSubmit, reset, watch } = useForm<RenameFolderForm>({
+        resolver: zodResolver(renameFolderSchema),
         defaultValues: { name: '' },
     });
 
@@ -39,29 +40,39 @@ export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTea
     const remaining = MAX_LENGTH - watchedName.length;
     const isNearLimit = watchedName.length >= MAX_LENGTH - 10;
 
+    useEffect(() => {
+        if (folder) {
+            reset({ name: folder.name });
+            setApiError('');
+        }
+    }, [folder, reset]);
+
     const handleClose = () => {
-        reset();
         setApiError('');
         onClose();
     };
 
-    const onSubmit = async (data: TeamForm) => {
+    const onSubmit = async (data: RenameFolderForm) => {
+        if (!folder) return;
+
         setLoading(true);
         setApiError('');
 
-        // createdBy is derived from the JWT token on the backend — not sent in the body
-        const response = await httpClient.post<Team>('/teams', {
+        // createdBy is derived from JWT on the backend — not sent in the body
+        const response = await httpClient.put<Folder>(`/folders/${folder.id}`, {
             name: data.name.trim(),
         });
 
         setLoading(false);
 
-        if (!response.ok || !response.data) {
-            setApiError(response.message || 'Failed to create team');
+        if (!response.ok) {
+            setApiError(response.message || 'Failed to rename folder');
             return;
         }
 
-        onCreated(response.data);
+        // Backend returns the full updated folder object
+        const updatedFolder = response.data ?? { ...folder, name: data.name.trim() };
+        onRenamed(updatedFolder);
         handleClose();
     };
 
@@ -69,21 +80,23 @@ export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTea
         <BaseDialog
             open={open}
             onClose={handleClose}
-            title="Create Team"
+            title="Rename Folder"
             maxWidth="xs"
             disableBackdropClick={loading}
             actions={
                 <Box sx={{ display: 'flex', gap: 1, px: 0.5 }}>
-                    <AppButton variant="outlined" onClick={handleClose} disabled={loading}>
+                    <AppButton variant="outlined" onClick={handleClose} disabled={loading} size="small">
                         Cancel
                     </AppButton>
                     <AppButton
                         variant="contained"
                         onClick={handleSubmit(onSubmit)}
                         loading={loading}
-                        disabled={!watchedName.trim()}
+                        disabled={!watchedName.trim() || watchedName.trim() === folder?.name}
+                        size="small"
+                        sx={{ minWidth: 80 }}
                     >
-                        {loading ? 'Creating…' : 'Create Team'}
+                        {loading ? 'Saving…' : 'Save'}
                     </AppButton>
                 </Box>
             }
@@ -91,12 +104,6 @@ export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTea
             {loading && (
                 <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0, borderRadius: '16px 16px 0 0' }} />
             )}
-
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
-                <Typography variant="body2" color="text.secondary">
-                    Create team to group contracts together.
-                </Typography>
-            </Box>
 
             <Controller
                 name="name"
@@ -106,8 +113,7 @@ export default function CreateTeamDialog({ open, onClose, onCreated }: CreateTea
                         {...field}
                         onChange={e => field.onChange(e.target.value.slice(0, MAX_LENGTH))}
                         onKeyDown={e => { if (e.key === 'Enter') handleSubmit(onSubmit)(); }}
-                        label="Team Name"
-                        placeholder="e.g. Legal, HR, Client Projects…"
+                        label="Folder Name"
                         fullWidth
                         autoFocus
                         size="small"

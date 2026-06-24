@@ -1,4 +1,4 @@
-export interface Team {
+export interface Folder {
     id: string;
     name: string;
     createdBy: string;

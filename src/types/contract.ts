@@ -256,8 +256,8 @@ export interface Contract {
     finalizedAt?: string;
     finalizedBy?: string;
 
-    // Team (folder) this contract belongs to
-    teamId?: string | null;
+    // Folder this contract belongs to
+    folderId?: string | null;
 
     // Renewal tracking (linked-list pattern)
     renewedFromId?: string;        // ID of the contract this was renewed from (set on renewal)

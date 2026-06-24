@@ -35,11 +35,11 @@ import { apiService } from '@/services/apiService';
 import CompactFilter, { FilterOption } from '@/components/common/CompactFilter';
 import { useSignaturePolling } from '@/hooks/useSignaturePolling';
 import { ShimmerCardGrid } from '@/components/common/ShimmerCard';
-import TeamCard from '@/components/teams/TeamCard';
-import CreateTeamDialog from '@/components/teams/CreateTeamDialog';
-import RenameTeamDialog from '@/components/teams/RenameTeamDialog';
+import FolderCard from '@/components/folders/FolderCard';
+import CreateFolderDialog from '@/components/folders/CreateFolderDialog';
+import RenameFolderDialog from '@/components/folders/RenameFolderDialog';
 import ConfirmationDialog from '@/components/common/ConfirmationDialog';
-import { Team } from '@/types/team';
+import { Folder } from '@/types/folder';
 import { httpClient } from '@/lib/httpClient';
 import { useTranslations } from 'next-intl';
 import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
@@ -87,22 +87,22 @@ export default function ContractsContent() {
         { label: tFilters('terminated'), value: ContractStatus.TERMINATED },
     ];
 
-    const activeTeamId = searchParams.get('team');
+    const activeFolderId = searchParams.get('folder');
     const statusFromUrl = searchParams.get('status');
-    const isFlatView = !activeTeamId && statusFromUrl !== null;
-    const [teams, setTeams] = useState<Team[]>([]);
-    const [teamsLoading, setTeamsLoading] = useState(true);
-    const [createTeamOpen, setCreateTeamOpen] = useState(false);
-    const [renameTeamOpen, setRenameTeamOpen] = useState(false);
-    const [teamToRename, setTeamToRename] = useState<Team | null>(null);
-    const [deleteTeamOpen, setDeleteTeamOpen] = useState(false);
-    const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
-    const [deletingTeam, setDeletingTeam] = useState(false);
+    const isFlatView = !activeFolderId && statusFromUrl !== null;
+    const [folders, setFolders] = useState<Folder[]>([]);
+    const [foldersLoading, setFoldersLoading] = useState(true);
+    const [createFolderOpen, setCreateFolderOpen] = useState(false);
+    const [renameFolderOpen, setRenameFolderOpen] = useState(false);
+    const [folderToRename, setFolderToRename] = useState<Folder | null>(null);
+    const [deleteFolderOpen, setDeleteFolderOpen] = useState(false);
+    const [folderToDelete, setFolderToDelete] = useState<Folder | null>(null);
+    const [deletingFolder, setDeletingFolder] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<FilterOption[]>([statusOptions[0]]);
     const [categoryFilter, setCategoryFilter] = useState<FilterOption[]>([{ label: tFilters('allCategories'), value: 'all' }]);
-    const [teamFilterValue, setTeamFilterValue] = useState<FilterOption[]>([{ label: tFilters('allTeams'), value: 'all' }]);
+    const [folderFilterValue, setFolderFilterValue] = useState<FilterOption[]>([{ label: tFilters('allFolders'), value: 'all' }]);
     const [startDate, setStartDate] = useState<Dayjs | null>(null);
     const [endDate, setEndDate] = useState<Dayjs | null>(null);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -152,14 +152,14 @@ export default function ContractsContent() {
         ]);
     };
 
-    const loadTeams = useCallback(async () => {
-        setTeamsLoading(true);
+    const loadFolders = useCallback(async () => {
+        setFoldersLoading(true);
         // Backend derives the user from the JWT token — no query params needed
-        const response = await httpClient.get<Team[]>('/teams');
+        const response = await httpClient.get<Folder[]>('/folders');
         if (response.ok && Array.isArray(response.data)) {
-            setTeams(response.data);
+            setFolders(response.data);
         }
-        setTeamsLoading(false);
+        setFoldersLoading(false);
     }, []);
 
     const loadContracts = useCallback(async () => {
@@ -215,18 +215,18 @@ export default function ContractsContent() {
 
     useEffect(() => {
         loadContracts();
-        loadTeams();
+        loadFolders();
         loadCategories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
         setSearchQuery('');
-        setTeamFilterValue([{ label: tFilters('allTeams'), value: 'all' }]);
+        setFolderFilterValue([{ label: tFilters('allFolders'), value: 'all' }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTeamId]);
+    }, [activeFolderId]);
 
-    const activeTeam = teams.find(t => t.id === activeTeamId) ?? null;
+    const activeFolder = folders.find(f => f.id === activeFolderId) ?? null;
 
     const statusLabelMap: Record<string, string> = {
         [ContractStatus.ACTIVE]: 'Active Contracts',
@@ -245,28 +245,28 @@ export default function ContractsContent() {
         ? contracts.filter(c => c.status === statusFromUrl)
         : contracts;
 
-    const teamFilterOptions: FilterOption[] = [
-        { label: tFilters('allTeams'), value: 'all' },
-        ...teams.map(t => ({ label: t.name, value: t.id })),
+    const folderFilterOptions: FilterOption[] = [
+        { label: tFilters('allFolders'), value: 'all' },
+        ...folders.map(f => ({ label: f.name, value: f.id })),
     ];
 
-    const filteredTeams = teams.filter(t => {
-        const matchesSearch = searchQuery === '' || t.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesFilter = teamFilterValue.some(f => f.value === 'all') || teamFilterValue.some(f => f.value === t.id);
+    const filteredFolders = folders.filter(f => {
+        const matchesSearch = searchQuery === '' || f.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesFilter = folderFilterValue.some(fv => fv.value === 'all') || folderFilterValue.some(fv => fv.value === f.id);
         let matchesDate = true;
         if (startDate || endDate) {
-            const d = dayjs(t.createdAt);
+            const d = dayjs(f.createdAt);
             if (startDate && d.isBefore(startDate, 'day')) matchesDate = false;
             if (endDate && d.isAfter(endDate, 'day')) matchesDate = false;
         }
         return matchesSearch && matchesFilter && matchesDate;
     });
 
-    const teamContracts = activeTeamId
-        ? contracts.filter(c => c.teamId === activeTeamId)
+    const folderContracts = activeFolderId
+        ? contracts.filter(c => c.folderId === activeFolderId)
         : contracts;
 
-    const filteredContracts = teamContracts.filter(contract => {
+    const filteredContracts = folderContracts.filter(contract => {
         const matchesSearch = searchQuery === '' ||
             contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (contract.client || '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -281,8 +281,8 @@ export default function ContractsContent() {
         return matchesSearch && matchesStatus && matchesCategory && matchesDate;
     });
 
-    const contractCountByTeam = (teamId: string) =>
-        contracts.filter(c => c.teamId === teamId).length;
+    const contractCountByFolder = (folderId: string) =>
+        contracts.filter(c => c.folderId === folderId).length;
 
     const waitingForSignatureIds = contracts
         .filter(c => c.status === ContractStatus.IN_SIGNATURE)
@@ -533,41 +533,41 @@ export default function ContractsContent() {
         setDeleteDialogOpen(true);
     };
 
-    const handleTeamClick = (teamId: string) => router.push(`${basePath}?team=${teamId}`);
+    const handleFolderClick = (folderId: string) => router.push(`${basePath}?folder=${folderId}`);
 
-    const handleRenameTeam = (team: Team) => {
-        setTeamToRename(team);
-        setRenameTeamOpen(true);
+    const handleRenameFolder = (folder: Folder) => {
+        setFolderToRename(folder);
+        setRenameFolderOpen(true);
     };
 
-    const handleTeamRenamed = (updated: Team) => {
-        setTeams(prev => prev.map(t => t.id === updated.id ? updated : t));
-        showNotification(`Team renamed to "${updated.name}"`, 'success');
+    const handleFolderRenamed = (updated: Folder) => {
+        setFolders(prev => prev.map(f => f.id === updated.id ? updated : f));
+        showNotification(`Folder renamed to "${updated.name}"`, 'success');
     };
 
-    const handleTeamCreated = (team: Team) => {
-        setTeams(prev => [team, ...prev]);
-        showNotification(`Team "${team.name}" created`, 'success');
+    const handleFolderCreated = (folder: Folder) => {
+        setFolders(prev => [folder, ...prev]);
+        showNotification(`Folder "${folder.name}" created`, 'success');
     };
 
-    const handleDeleteTeamClick = (team: Team) => {
-        setTeamToDelete(team);
-        setDeleteTeamOpen(true);
+    const handleDeleteFolderClick = (folder: Folder) => {
+        setFolderToDelete(folder);
+        setDeleteFolderOpen(true);
     };
 
-    const handleConfirmDeleteTeam = async () => {
-        if (!teamToDelete) return;
-        setDeletingTeam(true);
-        const response = await httpClient.delete(`/teams/${teamToDelete.id}`);
-        setDeletingTeam(false);
+    const handleConfirmDeleteFolder = async () => {
+        if (!folderToDelete) return;
+        setDeletingFolder(true);
+        const response = await httpClient.delete(`/folders/${folderToDelete.id}`);
+        setDeletingFolder(false);
         if (response.ok || response.status === 204) {
-            setTeams(prev => prev.filter(t => t.id !== teamToDelete.id));
-            showNotification(`Team "${teamToDelete.name}" deleted`, 'success');
+            setFolders(prev => prev.filter(f => f.id !== folderToDelete.id));
+            showNotification(`Folder "${folderToDelete.name}" deleted`, 'success');
         } else {
-            showNotification(response.message || 'Failed to delete team', 'error');
+            showNotification(response.message || 'Failed to delete folder', 'error');
         }
-        setDeleteTeamOpen(false);
-        setTeamToDelete(null);
+        setDeleteFolderOpen(false);
+        setFolderToDelete(null);
     };
 
     return (
@@ -585,8 +585,8 @@ export default function ContractsContent() {
                     borderColor: 'divider',
                 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                        {(activeTeamId || isFlatView) && (
-                            <Tooltip title={isFlatView ? 'Back to Contracts' : 'Back to Teams'} arrow>
+                        {(activeFolderId || isFlatView) && (
+                            <Tooltip title={isFlatView ? 'Back to Contracts' : 'Back to Folders'} arrow>
                                 <IconButton
                                     size="small"
                                     onClick={() => router.push(basePath)}
@@ -602,10 +602,10 @@ export default function ContractsContent() {
                         )}
 
                         <Typography variant="h5">
-                            {activeTeam ? activeTeam.name : isFlatView ? flatViewTitle : tContracts('title')}
+                            {activeFolder ? activeFolder.name : isFlatView ? flatViewTitle : tContracts('title')}
                         </Typography>
 
-                        {activeTeamId ? (
+                        {activeFolderId ? (
                             <>
                                 <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
                                 <Typography
@@ -617,7 +617,7 @@ export default function ContractsContent() {
                                 <Typography sx={{ color: 'text.disabled', fontSize: '0.78rem' }}>/</Typography>
                                 <FolderIcon sx={{ fontSize: 12, color: 'primary.main' }} />
                                 <Typography sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>
-                                    {activeTeam?.name}
+                                    {activeFolder?.name}
                                 </Typography>
                                 <Chip
                                     label={`${filteredContracts.length} contract${filteredContracts.length !== 1 ? 's' : ''}`}
@@ -655,9 +655,9 @@ export default function ContractsContent() {
                     </Box>
 
                     {!isFlatView && (
-                        <Tooltip title={activeTeamId ? tTooltips('createContract') : tTooltips('createTeam')} arrow>
+                        <Tooltip title={activeFolderId ? tTooltips('createContract') : tTooltips('createFolder')} arrow>
                             <IconButton
-                                onClick={() => activeTeamId ? setWizardOpen(true) : setCreateTeamOpen(true)}
+                                onClick={() => activeFolderId ? setWizardOpen(true) : setCreateFolderOpen(true)}
                                 size="small"
                                 sx={{
                                     p: 0.5,
@@ -671,7 +671,7 @@ export default function ContractsContent() {
                                     },
                                 }}
                             >
-                                {activeTeamId ? <NoteAddIcon sx={{ fontSize: '20px' }} /> : <CreateNewFolderIcon sx={{ fontSize: '20px' }} />}
+                                {activeFolderId ? <NoteAddIcon sx={{ fontSize: '20px' }} /> : <CreateNewFolderIcon sx={{ fontSize: '20px' }} />}
                             </IconButton>
                         </Tooltip>
                     )}
@@ -681,8 +681,8 @@ export default function ContractsContent() {
                 <CompactFilter
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder={activeTeamId || isFlatView ? tFilters('searchContracts') : tFilters('searchTeams')}
-                    filters={activeTeamId || isFlatView ? [
+                    searchPlaceholder={activeFolderId || isFlatView ? tFilters('searchContracts') : tFilters('searchFolders')}
+                    filters={activeFolderId || isFlatView ? [
                         {
                             label: tFilters('status'),
                             value: statusFilter,
@@ -700,10 +700,10 @@ export default function ContractsContent() {
                         },
                     ] : [
                         {
-                            label: tFilters('team'),
-                            value: teamFilterValue,
-                            onChange: (newValue) => setTeamFilterValue(newValue || [{ label: tFilters('allTeams'), value: 'all' }]),
-                            options: teamFilterOptions,
+                            label: tFilters('folder'),
+                            value: folderFilterValue,
+                            onChange: (newValue) => setFolderFilterValue(newValue || [{ label: tFilters('allFolders'), value: 'all' }]),
+                            options: folderFilterOptions,
                             multiple: true,
                         },
                     ]}
@@ -714,14 +714,14 @@ export default function ContractsContent() {
                     onEndDateChange={setEndDate}
                     showAdvancedFilters={showAdvancedFilters}
                     onAdvancedFiltersToggle={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                    dateFilterTitle={activeTeamId || isFlatView ? 'Filter by Contract Date Range' : 'Filter by Team Creation Date'}
-                    filteredCount={activeTeamId || isFlatView ? filteredContracts.length : filteredTeams.length}
-                    totalCount={activeTeamId ? teamContracts.length : isFlatView ? flatViewBaseContracts.length : teams.length}
-                    countLabel={activeTeamId || isFlatView ? tFilters('countContracts') : tFilters('countTeams')}
+                    dateFilterTitle={activeFolderId || isFlatView ? 'Filter by Contract Date Range' : 'Filter by Folder Creation Date'}
+                    filteredCount={activeFolderId || isFlatView ? filteredContracts.length : filteredFolders.length}
+                    totalCount={activeFolderId ? folderContracts.length : isFlatView ? flatViewBaseContracts.length : folders.length}
+                    countLabel={activeFolderId || isFlatView ? tFilters('countContracts') : tFilters('countFolders')}
                     hasActiveFilters={
-                        (activeTeamId || isFlatView)
+                        (activeFolderId || isFlatView)
                             ? (searchQuery !== '' || (!(isFlatView && statusFromUrl && statusFromUrl !== 'all' && !statusFromUrl.includes(',')) && statusFilter.every(f => f.value !== 'all')) || categoryFilter.every(f => f.value !== 'all') || startDate !== null || endDate !== null)
-                            : (searchQuery !== '' || teamFilterValue.every(f => f.value !== 'all') || startDate !== null || endDate !== null)
+                            : (searchQuery !== '' || folderFilterValue.every(f => f.value !== 'all') || startDate !== null || endDate !== null)
                     }
                     onClearFilters={() => {
                         setSearchQuery('');
@@ -732,7 +732,7 @@ export default function ContractsContent() {
                             setStatusFilter([statusOptions[0]]);
                         }
                         setCategoryFilter([{ label: tFilters('allCategories'), value: 'all' }]);
-                        setTeamFilterValue([{ label: tFilters('allTeams'), value: 'all' }]);
+                        setFolderFilterValue([{ label: tFilters('allFolders'), value: 'all' }]);
                         setStartDate(null);
                         setEndDate(null);
                         setShowAdvancedFilters(false);
@@ -746,8 +746,7 @@ export default function ContractsContent() {
                         gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
                         gap: 1,
                     }}>
-                        {isFlatView ? (
-                            loading ? (
+                        {isFlatView ? (                            loading ? (
                                 <ShimmerCardGrid count={8} variant="contract" />
                             ) : filteredContracts.length === 0 ? (
                                 <Box sx={{ gridColumn: '1 / -1' }}>
@@ -778,14 +777,14 @@ export default function ContractsContent() {
                                     );
                                 })
                             )
-                        ) : activeTeamId ? (
+                        ) : activeFolderId ? (
                             loading ? (
                                 <ShimmerCardGrid count={8} variant="contract" />
                             ) : filteredContracts.length === 0 ? (
                                 <Box sx={{ gridColumn: '1 / -1' }}>
                                     <EmptyState
                                         icon={<FolderIcon />}
-                                        title="No contracts in this team yet"
+                                        title="No contracts in this folder yet"
                                         description="Click the + button in the top right to create one."
                                         sx={{ minHeight: '55vh' }}
                                     />
@@ -811,40 +810,40 @@ export default function ContractsContent() {
                                 })
                             )
                         ) : (
-                            teamsLoading ? (
+                            foldersLoading ? (
                                 <ShimmerCardGrid count={6} variant="contract" />
-                            ) : teams.length === 0 ? (
+                            ) : folders.length === 0 ? (
                                 <Box sx={{ gridColumn: '1 / -1' }}>
                                     <EmptyState
                                         icon={<FolderIcon />}
-                                        title="No teams yet"
-                                        description="Organize your contracts by creating a team."
+                                        title="No folders yet"
+                                        description="Organize your contracts by creating a folder."
                                         action={{
-                                            label: 'Create your first team',
-                                            onClick: () => setCreateTeamOpen(true),
+                                            label: 'Create your first folder',
+                                            onClick: () => setCreateFolderOpen(true),
                                             startIcon: <CreateNewFolderIcon />,
                                             variant: 'outlined',
                                         }}
                                         sx={{ minHeight: '55vh' }}
                                     />
                                 </Box>
-                            ) : filteredTeams.length === 0 ? (
+                            ) : filteredFolders.length === 0 ? (
                                 <Box sx={{ gridColumn: '1 / -1' }}>
                                     <EmptyState
                                         icon={<FolderIcon />}
-                                        title="No teams match your search."
+                                        title="No folders match your search."
                                         sx={{ minHeight: '55vh' }}
                                     />
                                 </Box>
                             ) : (
-                                filteredTeams.map(team => (
-                                    <TeamCard
-                                        key={team.id}
-                                        team={team}
-                                        contractCount={contractCountByTeam(team.id)}
-                                        onClick={handleTeamClick}
-                                        onRename={handleRenameTeam}
-                                        onDelete={handleDeleteTeamClick}
+                                filteredFolders.map(folder => (
+                                    <FolderCard
+                                        key={folder.id}
+                                        folder={folder}
+                                        contractCount={contractCountByFolder(folder.id)}
+                                        onClick={handleFolderClick}
+                                        onRename={handleRenameFolder}
+                                        onDelete={handleDeleteFolderClick}
                                     />
                                 ))
                             )
@@ -858,7 +857,7 @@ export default function ContractsContent() {
                 open={wizardOpen}
                 onClose={() => setWizardOpen(false)}
                 onSuccess={loadContracts}
-                teamId={activeTeamId}
+                folderId={activeFolderId}
             />
 
             {contractForEdit && (
@@ -870,27 +869,27 @@ export default function ContractsContent() {
                 />
             )}
 
-            <CreateTeamDialog
-                open={createTeamOpen}
-                onClose={() => setCreateTeamOpen(false)}
-                onCreated={handleTeamCreated}
+            <CreateFolderDialog
+                open={createFolderOpen}
+                onClose={() => setCreateFolderOpen(false)}
+                onCreated={handleFolderCreated}
             />
 
-            <RenameTeamDialog
-                open={renameTeamOpen}
-                team={teamToRename}
-                onClose={() => setRenameTeamOpen(false)}
-                onRenamed={handleTeamRenamed}
+            <RenameFolderDialog
+                open={renameFolderOpen}
+                folder={folderToRename}
+                onClose={() => setRenameFolderOpen(false)}
+                onRenamed={handleFolderRenamed}
             />
 
             <ConfirmationDialog
-                open={deleteTeamOpen}
-                title="Delete Team"
-                message={`Are you sure you want to delete "${teamToDelete?.name}"? This action cannot be undone.`}
-                onYes={handleConfirmDeleteTeam}
-                onNo={() => { setDeleteTeamOpen(false); setTeamToDelete(null); }}
-                onClose={() => { setDeleteTeamOpen(false); setTeamToDelete(null); }}
-                loading={deletingTeam}
+                open={deleteFolderOpen}
+                title="Delete Folder"
+                message={`Are you sure you want to delete "${folderToDelete?.name}"? This action cannot be undone.`}
+                onYes={handleConfirmDeleteFolder}
+                onNo={() => { setDeleteFolderOpen(false); setFolderToDelete(null); }}
+                onClose={() => { setDeleteFolderOpen(false); setFolderToDelete(null); }}
+                loading={deletingFolder}
             />
 
             {selectedContract && viewerData && (

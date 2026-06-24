@@ -35,8 +35,8 @@ interface ContractCardProps {
      * - 'terminated': Shows History button only (all other actions suppressed)
      */
     variant?: 'draft' | 'contract' | 'terminated';
-    /** Team name to display on draft cards */
-    teamName?: string;
+    /** Folder name to display on draft cards */
+    folderName?: string;
 }
 
 const ContractCard = ({
@@ -51,7 +51,7 @@ const ContractCard = ({
     onDelete,
     onFinalize,
     variant = 'contract',
-    teamName,
+    folderName,
 }: ContractCardProps) => {
     /**
      * For multi-party sequential signing, returns the position of the current
@@ -280,8 +280,8 @@ const ContractCard = ({
                 },
             }}
         >
-            {/* Team badge — shown only on draft variant when contract belongs to a team */}
-            {variant === 'draft' && teamName && (
+            {/* Folder badge — shown only on draft variant when contract belongs to a folder */}
+            {variant === 'draft' && folderName && (
                 <Box sx={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -296,7 +296,7 @@ const ContractCard = ({
                     maxWidth: '100%',
                 }}>
                     <FolderOutlined sx={{ fontSize: '0.8rem', color: isDark ? '#a5b4fc' : '#4338ca', flexShrink: 0 }} />
-                    <Tooltip title={teamName} arrow placement="top">
+                    <Tooltip title={folderName} arrow placement="top">
                         <Typography
                             variant="caption"
                             sx={{
@@ -308,7 +308,7 @@ const ContractCard = ({
                                 whiteSpace: 'nowrap',
                             }}
                         >
-                            {teamName}
+                            {folderName}
                         </Typography>
                     </Tooltip>
                 </Box>

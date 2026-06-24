@@ -1,6 +1,6 @@
 /**
  * INTEGRATION TESTS — FurtherReviewDialog
- * (src/components/teams/FurtherReviewDialog.tsx)
+ * (src/components/contracts/FurtherReviewDialog.tsx)
  *
  * userService.getAllUsers is mocked — no real HTTP calls are made.
  * onSubmit is a jest.fn() callback — contractService is not called by the dialog.

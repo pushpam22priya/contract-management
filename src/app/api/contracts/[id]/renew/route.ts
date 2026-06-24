@@ -210,7 +210,7 @@ export async function POST(
             description: original.description || '',
             client: original.client || '',
             category: original.category || '',
-            teamId: original.teamId || null,
+            folderId: original.folderId || null,
 
             // New dates
             startDate: startDate,

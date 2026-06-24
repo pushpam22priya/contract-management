@@ -37,7 +37,7 @@ import { apiService } from '@/services/apiService';
 import { authService } from '@/services/authService';
 import { httpClient } from '@/lib/httpClient';
 import { Template, PartyConfiguration } from '@/types/template';
-import { Team } from '@/types/team';
+import { Folder } from '@/types/folder';
 import { validatePartyFields } from '@/utils/partyValidation';
 import dayjs, { Dayjs } from 'dayjs';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -53,10 +53,10 @@ interface CreateContractDialogProps {
     onClose: () => void;
     onSuccess?: () => void;
     initialTemplateName?: string;
-    teamId?: string | null;
+    folderId?: string | null;
 }
 
-const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, teamId }: CreateContractDialogProps) => {
+const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, folderId }: CreateContractDialogProps) => {
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
@@ -71,9 +71,9 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     const [templateViewUrl, setTemplateViewUrl] = useState<string | null>(null);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
 
-    // Team selection (only used when teamId prop is not provided)
-    const [teams, setTeams] = useState<Team[]>([]);
-    const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+    // Folder selection (only used when folderId prop is not provided)
+    const [folders, setFolders] = useState<Folder[]>([]);
+    const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
     const [documentLoaded, setDocumentLoaded] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(''); // Add success state
@@ -138,20 +138,20 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
     useEffect(() => { filledFieldValuesRef.current = filledFieldValues; }, [filledFieldValues]);
 
 
-    // Load templates (and teams when no teamId prop) when dialog opens
+    // Load templates (and folders when no folderId prop) when dialog opens
     useEffect(() => {
         if (open) {
             loadTemplates();
-            if (!teamId) loadTeams();
+            if (!folderId) loadFolders();
         }
     }, [open]);
 
-    const loadTeams = async () => {
+    const loadFolders = async () => {
         try {
-            const res = await httpClient.get<Team[]>('/teams');
-            if (res.ok && res.data) setTeams(res.data);
+            const res = await httpClient.get<Folder[]>('/folders');
+            if (res.ok && res.data) setFolders(res.data);
         } catch {
-            // non-critical — team selector stays empty
+            // non-critical — folder selector stays empty
         }
     };
 
@@ -375,7 +375,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                 formFields: exportedFormFields, // Save field definitions
                 hasFormFields: (exportedFormFields?.length ?? 0) > 0 || selectedTemplate.hasFormFields || false, // ✅ Use template flag or check fields
                 parties: selectedTemplate.parties,  // ✅ Include parties for external signer validation
-                teamId: teamId || selectedTeam?.id || null, // Which team this contract belongs to
+                folderId: folderId || selectedFolder?.id || null, // Which folder this contract belongs to
             };
 
             let activeContractId = contractId;
@@ -442,7 +442,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
         // Reset all state
         setCurrentStep(1); // Reset to Step 1
         setSelectedTemplate(null);
-        setSelectedTeam(null);
+        setSelectedFolder(null);
         reset();
         setStartDate('');
         setEndDate('');
@@ -885,18 +885,18 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                                 }}
                             />
 
-                            {/* Second column: Team selector (when outside a team) OR Template info (when inside a team) */}
-                            {!teamId ? (
+                            {/* Second column: Folder selector (when outside a folder) OR Template info (when inside a folder) */}
+                            {!folderId ? (
                                 <Autocomplete
-                                    value={selectedTeam}
-                                    onChange={(_event, newValue) => setSelectedTeam(newValue)}
-                                    options={teams}
+                                    value={selectedFolder}
+                                    onChange={(_event, newValue) => setSelectedFolder(newValue)}
+                                    options={folders}
                                     getOptionLabel={(option) => option.name}
                                     renderInput={(params) => (
                                         <TextField
                                             {...params}
-                                            label="Assign to Team"
-                                            placeholder="Select a team (optional)"
+                                            label="Assign to Folder"
+                                            placeholder="Select a folder (optional)"
                                             sx={{ '& .MuiOutlinedInput-root': { padding: '4px' } }}
                                         />
                                     )}
@@ -938,8 +938,8 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, t
                             )}
                         </Box>
 
-                        {/* Template info row shown below when team selector is in second column */}
-                        {!teamId && selectedTemplate && (
+                        {/* Template info row shown below when folder selector is in second column */}
+                        {!folderId && selectedTemplate && (
                             <Box
                                 sx={{
                                     mt: 1,

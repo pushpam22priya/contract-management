@@ -114,11 +114,11 @@ export async function GET(request: Request) {
         const client = await clientPromise;
         const db = client.db();
 
-        // Optional teamId filter
+        // Optional folderId filter
         const { searchParams } = new URL(request.url);
-        const teamId = searchParams.get('teamId');
+        const folderId = searchParams.get('folderId');
         const query: Record<string, any> = {};
-        if (teamId) query.teamId = teamId;
+        if (folderId) query.folderId = folderId;
 
         const contracts = await db.collection('contracts')
             .find(query)
