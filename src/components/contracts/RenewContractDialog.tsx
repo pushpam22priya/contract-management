@@ -116,7 +116,6 @@ export default function RenewContractDialog({
     const [hasSaved, setHasSaved] = useState(false);
 
     // ── Refs so callbacks always see latest values ────────────────────────────
-    const contractorPartyIdRef = useRef<string | null>(null);
     const filledFieldValuesRef = useRef<Record<string, string>>({});
     useEffect(() => { filledFieldValuesRef.current = filledFieldValues; }, [filledFieldValues]);
 
@@ -181,18 +180,12 @@ export default function RenewContractDialog({
         return Array.from(seen.values());
     }, [renewalContract?.parties, renewalContract?.formFields, originalParties]);
 
-    // ── Contractor party restriction: first party touched locks the rest ─────
-    const contractorPartyId = useMemo(() => {
-        const formFields = renewalContract?.formFields || [];
-        for (const field of formFields) {
-            if (field.assignedParty && filledFieldValues[field.name]?.trim()) {
-                return field.assignedParty as string;
-            }
-        }
-        return null;
-    }, [filledFieldValues, renewalContract?.formFields]);
-
-    useEffect(() => { contractorPartyIdRef.current = contractorPartyId; }, [contractorPartyId]);
+    // IDs of parties marked as EXTERNAL — contractor must not edit these fields
+    const externalTypePartyIds = useMemo(() => {
+        return effectiveParties
+            .filter((p: any) => p.type === 'EXTERNAL')
+            .map((p: any) => p.id as string);
+    }, [effectiveParties]);
 
     // ── Party validation: detect partially filled parties ─────────────────────
     const partyValidationWarning = useMemo(() => {
@@ -216,11 +209,11 @@ export default function RenewContractDialog({
 
     const hasPartialParty = !!partyValidationWarning;
 
-    // ── Field change handler with single-party restriction ────────────────────
+    // ── Field change handler: block EXTERNAL party fields ────────────────────
     const handleFieldChange = useCallback((fieldName: string, value: any) => {
         const formFields = renewalContract?.formFields || [];
         const field = formFields.find((f: any) => f.name === fieldName);
-        if (field?.assignedParty && contractorPartyIdRef.current && field.assignedParty !== contractorPartyIdRef.current) {
+        if (field?.assignedParty && externalTypePartyIds.includes(field.assignedParty)) {
             setShowWrongPartyWarning(true);
             const prevValue = filledFieldValuesRef.current[fieldName] || '';
             if (prevValue) {
@@ -231,7 +224,7 @@ export default function RenewContractDialog({
             return;
         }
         setFilledFieldValues(prev => ({ ...prev, [fieldName]: value?.toString() || '' }));
-    }, [renewalContract?.formFields]);
+    }, [renewalContract?.formFields, externalTypePartyIds]);
 
     // ── Fetch templates when user picks "Use a different template" ────────────
     useEffect(() => {
@@ -343,7 +336,7 @@ export default function RenewContractDialog({
     };
 
     // ── canSave: drives button disabled state ─────────────────────────────────
-    const canSave = documentLoaded && !saving && (!validationTriggered || !hasPartialParty);
+    const canSave = documentLoaded && !saving;
 
     // ── Mark original as "renewal in progress" (called once on first save) ──────
     const markOriginalAsRenewed = useCallback(async (rid: string) => {
@@ -363,10 +356,6 @@ export default function RenewContractDialog({
 
     // ── Step 2: Save ──────────────────────────────────────────────────────────
     const handleSave = useCallback(async (): Promise<string | null> => {
-        if (hasPartialParty) {
-            setValidationTriggered(true);
-            return null;
-        }
         if (!renewalId || !pdfViewerRef.current) return null;
         setSaving(true);
         setStep2Error('');
@@ -534,7 +523,7 @@ export default function RenewContractDialog({
 
     const handleAutofillClick = (silent = false) => {
         const formFields = renewalContract?.formFields || [];
-        const parties = effectiveParties;
+        const parties = effectiveParties.filter((p: any) => p.type !== 'EXTERNAL');
 
         const getMappedFieldCount = (partyId: string) =>
             formFields.filter(
@@ -651,7 +640,7 @@ export default function RenewContractDialog({
                                 </span>
                             </Tooltip>
 
-                            <Tooltip title={hasPartialParty ? 'Complete all fields for the party you started' : ''} arrow>
+                            <Tooltip title="" arrow>
                                 <span>
                                     <AppButton
                                         onClick={handleSave}
@@ -868,14 +857,10 @@ export default function RenewContractDialog({
 
                                 <WrongPartyWarningDialog
                                     open={showWrongPartyWarning}
-                                    title="Single Party Restriction"
-                                    description={
-                                        contractorPartyId
-                                            ? <>You have already started filling <strong>{effectiveParties.find((p: any) => p.id === contractorPartyId)?.label || contractorPartyId}</strong> fields. You can only fill one party&apos;s fields.</>
-                                            : <>You can only fill one party&apos;s fields.</>
-                                    }
+                                    title="External Party Field"
+                                    description="This field belongs to an external party and cannot be edited by your organisation."
                                     pdfViewerRef={pdfViewerRef}
-                                    navigateConfig={contractorPartyId ? { type: 'party', partyIds: [contractorPartyId] } : { type: 'party', partyIds: [] }}
+                                    navigateConfig={{ type: 'nonClient', excludePartyIds: externalTypePartyIds }}
                                     onClose={() => setShowWrongPartyWarning(false)}
                                     zIndex={1400}
                                 />
@@ -899,7 +884,7 @@ export default function RenewContractDialog({
                 onClose={() => { setShowUnsavedDialog(false); setPendingAction(null); }}
                 loading={saving}
                 disableYes={!canSave}
-                yesTooltip={hasPartialParty ? 'Complete all fields for the party you started' : ''}
+                yesTooltip=""
             />
 
             {/* Request Review Dialog */}

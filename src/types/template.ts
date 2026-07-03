@@ -50,6 +50,7 @@ export interface PartyConfiguration {
     label: string;             // Human-readable label: "Buyer", "Seller", "Witness"
     color: string;             // Hex color for visual distinction: "#4CAF50"
     order: number;             // Signing order (1 = first to sign, 2 = second, etc.)
+    type?: 'INTERNAL' | 'EXTERNAL' | null; // Unified flow: INTERNAL = org-owned (any participant can edit), EXTERNAL = client-owned (read-only for org users)
 }
 
 /**

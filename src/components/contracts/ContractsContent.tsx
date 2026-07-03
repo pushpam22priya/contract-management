@@ -17,6 +17,7 @@ import EditContractDialog from '@/components/contracts/EditContractDialog';
 import RenewContractDialog from '@/components/contracts/RenewContractDialog';
 import TerminateContractDialog from '@/components/contracts/TerminateContractDialog';
 import RequestReviewDialog from '@/components/contracts/RequestReviewDialog';
+import UnifiedFlowSubmitDialog from '@/components/unified-flow/UnifiedFlowSubmitDialog';
 import ContractHistoryPanel from '@/components/contracts/ContractHistoryPanel';
 import ContractHistoryDialog from '@/components/contracts/ContractHistoryDialog';
 import DeleteContractDialog from '@/components/contracts/DeleteContractDialog';
@@ -128,6 +129,9 @@ export default function ContractsContent() {
     const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
     const [multiPartyDialogOpen, setMultiPartyDialogOpen] = useState(false);
     const [contractForSignature, setContractForSignature] = useState<Contract | null>(null);
+
+    const [unifiedSubmitOpen, setUnifiedSubmitOpen] = useState(false);
+    const [contractForUnifiedSubmit, setContractForUnifiedSubmit] = useState<Contract | null>(null);
 
     const [renewDialogOpen, setRenewDialogOpen] = useState(false);
     const [contractForRenewal, setContractForRenewal] = useState<Contract | null>(null);
@@ -462,6 +466,31 @@ export default function ContractsContent() {
         setMultiPartyDialogOpen(true);
     };
 
+    // Unified flow entry points — replace the legacy share handlers visually;
+    // the original handleShare / handleShareContract remain intact below for easy rollback.
+    const handleUnifiedShare = (id: string) => {
+        const contract = contracts.find(c => c.id === id);
+        if (!contract) return;
+        if ((contract.participants?.length ?? 0) > 0) {
+            router.push(`/contracts/${id}`);
+            return;
+        }
+        setContractForUnifiedSubmit(contract);
+        setUnifiedSubmitOpen(true);
+    };
+
+    const handleUnifiedShareContract = async (id: string) => {
+        const full = await apiService.getContractDetails(id);
+        const contract = (full as any) ?? contracts.find(c => c.id === id);
+        if (!contract) return;
+        if ((contract.participants?.length ?? 0) > 0) {
+            router.push(`/contracts/${id}`);
+            return;
+        }
+        setContractForSignature(contract);
+        setMultiPartyDialogOpen(true);
+    };
+
     const handleSignatureSubmit = async (signerEmail: string): Promise<{ success: boolean; signingUrl?: string }> => {
         if (!contractForSignature) return { success: false };
         const result = await contractService.submitForSignature(contractForSignature.id, signerEmail);
@@ -767,7 +796,7 @@ export default function ContractsContent() {
                                             contract={contract}
                                             onView={cardVariant !== 'terminated' ? handleView : undefined}
                                             onEdit={cardVariant === 'draft' ? handleEdit : undefined}
-                                            onShare={cardVariant === 'draft' ? handleShare : cardVariant === 'contract' ? handleShareContract : undefined}
+                                            onShare={cardVariant === 'draft' ? handleUnifiedShare : cardVariant === 'contract' ? handleUnifiedShareContract : undefined}
                                             onRenew={cardVariant === 'contract' ? handleRenewContract : undefined}
                                             onTerminate={cardVariant === 'contract' ? handleTerminateContract : undefined}
                                             onFinalize={cardVariant === 'contract' ? handleFinalize : undefined}
@@ -799,7 +828,7 @@ export default function ContractsContent() {
                                             contract={contract}
                                             onView={cardVariant !== 'terminated' ? handleView : undefined}
                                             onEdit={cardVariant === 'draft' ? handleEdit : undefined}
-                                            onShare={cardVariant === 'draft' ? handleShare : cardVariant === 'contract' ? handleShareContract : undefined}
+                                            onShare={cardVariant === 'draft' ? handleUnifiedShare : cardVariant === 'contract' ? handleUnifiedShareContract : undefined}
                                             onRenew={cardVariant === 'contract' ? handleRenewContract : undefined}
                                             onTerminate={cardVariant === 'contract' ? handleTerminateContract : undefined}
                                             onFinalize={cardVariant === 'contract' ? handleFinalize : undefined}
@@ -929,6 +958,16 @@ export default function ContractsContent() {
                     contractId={contractForReview.id}
                     contractTitle={contractForReview.title}
                     onSubmit={handleSubmitForReview}
+                />
+            )}
+
+            {contractForUnifiedSubmit && (
+                <UnifiedFlowSubmitDialog
+                    open={unifiedSubmitOpen}
+                    onClose={() => { setUnifiedSubmitOpen(false); setContractForUnifiedSubmit(null); }}
+                    onSubmitted={() => { setUnifiedSubmitOpen(false); setContractForUnifiedSubmit(null); loadContracts(); }}
+                    contractId={contractForUnifiedSubmit.id}
+                    contractTitle={contractForUnifiedSubmit.title}
                 />
             )}
 

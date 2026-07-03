@@ -32,6 +32,11 @@ import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
 import { ContractStatus } from '@/types/contract';
 import HistoryIcon from '@mui/icons-material/History';
 import { useTranslations } from 'next-intl';
+import UnifiedFlowParticipantTimeline from '@/components/unified-flow/UnifiedFlowParticipantTimeline';
+import UnifiedFlowOrgGateStatus from '@/components/unified-flow/UnifiedFlowOrgGateStatus';
+import UnifiedFlowSubmitDialog from '@/components/unified-flow/UnifiedFlowSubmitDialog';
+import UnifiedFlowResubmitDialog from '@/components/unified-flow/UnifiedFlowResubmitDialog';
+import UnifiedFlowSendForSignatureDialog from '@/components/unified-flow/UnifiedFlowSendForSignatureDialog';
 
 export default function ContractViewPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -55,6 +60,11 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const [finalizing, setFinalizing] = useState(false);
     const [finalizeError, setFinalizeError] = useState<string | null>(null);
     const [finalizeSuccess, setFinalizeSuccess] = useState(false);
+
+    // Unified flow dialog state
+    const [unifiedSubmitOpen, setUnifiedSubmitOpen] = useState(false);
+    const [unifiedResubmitOpen, setUnifiedResubmitOpen] = useState(false);
+    const [unifiedSendForSigOpen, setUnifiedSendForSigOpen] = useState(false);
 
     const t = useTranslations('contractDetail');
     const tStatus = useTranslations('contractStatus');
@@ -126,6 +136,17 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                     // ── 1. Contract Created ──────────────────────────────────────────
                     if (found.createdAt) {
                         push('created', 'Contract Created', found.createdBy || 'System', found.createdAt);
+                    }
+
+                    // ── 2a. Unified flow participants ─────────────────────────────────
+                    if (found.participants && found.participants.length > 0) {
+                        found.participants.forEach((p: any, idx: number) => {
+                            const roleLabel = p.role === 'REVIEWER' ? 'Reviewer' : 'Approver';
+                            if (p.sentAt) push(`unified-sent-${idx}`, `Submitted for ${roleLabel} to ${p.email} (Order ${p.order})`, p.sentBy || found.createdBy || 'System', p.sentAt);
+                            if (p.unlockedAt) push(`unified-unlocked-${idx}`, `${roleLabel} unlocked — ${p.email}`, p.email, p.unlockedAt);
+                            if (p.status === 'completed' && p.completedAt) push(`unified-completed-${idx}`, `${roleLabel} completed — ${p.email}`, p.email, p.completedAt);
+                            if (p.status === 'rejected' && p.rejectedAt) push(`unified-rejected-${idx}`, `${roleLabel} rejected — ${p.email}`, p.email, p.rejectedAt);
+                        });
                     }
 
                     // ── 2. Submitted for Review ──────────────────────────────────────
@@ -327,10 +348,18 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     // ═══════════════════════════════════════════════════════════════════
     // REAL-TIME POLLING: Auto-refresh when workflow state changes
     // ═══════════════════════════════════════════════════════════════════
+    const isUnifiedFlow = (contract?.participants?.length ?? 0) > 0;
+    const pageCurrentUser = authService.getCurrentUser();
+    const isContractOwner = !!pageCurrentUser && contract?.createdBy === pageCurrentUser.email;
+
     const shouldPoll = !loading && !!contract && (
         contract.status === ContractStatus.IN_SIGNATURE ||
         contract.status === ContractStatus.SIGNED_BY_EVERYONE ||
-        (contract.signatureFlowStatus && contract.signatureFlowStatus !== 'finalized')
+        (contract.signatureFlowStatus && contract.signatureFlowStatus !== 'finalized') ||
+        (isUnifiedFlow && (
+            contract.status === ContractStatus.IN_REVIEW ||
+            contract.status === ContractStatus.IN_APPROVAL
+        ))
     );
 
     const handleContractUpdate = useCallback(async (freshContract: any) => {
@@ -665,6 +694,28 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                             alignSelf: { xs: 'flex-end', md: 'center' },
                         }}
                     >
+                        {/* Unified flow action buttons (owner-only) */}
+                        {isContractOwner && !isUnifiedFlow && (
+                            <AppButton
+                                size="small"
+                                variant="outlined"
+                                onClick={() => setUnifiedSubmitOpen(true)}
+                                sx={{ fontSize: '0.78rem', borderColor: '#7c3aed', color: '#7c3aed', '&:hover': { bgcolor: 'rgba(124,58,237,0.06)', borderColor: '#7c3aed' } }}
+                            >
+                                Start Unified Review/Approval
+                            </AppButton>
+                        )}
+                        {isContractOwner && isUnifiedFlow && contract.status === ContractStatus.REJECTED && (
+                            <AppButton
+                                size="small"
+                                variant="outlined"
+                                onClick={() => setUnifiedResubmitOpen(true)}
+                                sx={{ fontSize: '0.78rem', borderColor: '#f59e0b', color: '#f59e0b', '&:hover': { bgcolor: 'rgba(245,158,11,0.06)', borderColor: '#f59e0b' } }}
+                            >
+                                Resubmit
+                            </AppButton>
+                        )}
+
                         {/* History button — shown whenever this contract is part of a renewal chain */}
                         {(contract?.renewedFromId || contract?.renewedContractId) && (
                             <Tooltip title={t('contractHistory')} arrow>
@@ -729,6 +780,26 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                             </Box>
                         )}
 
+
+                        {/* ═══════════════════════════════════════════════════════════════════════════ */}
+                        {/* UNIFIED FLOW: PARTICIPANT TIMELINE + ORG GATE */}
+                        {/* ═══════════════════════════════════════════════════════════════════════════ */}
+                        {isUnifiedFlow && (
+                            <UnifiedFlowParticipantTimeline
+                                contractId={contract.id}
+                                contractStatus={contract.status}
+                                initialParticipants={contract.participants}
+                            />
+                        )}
+                        {isUnifiedFlow && isContractOwner && (
+                            <UnifiedFlowOrgGateStatus
+                                contractId={contract.id}
+                                onSendForSignature={() => setUnifiedSendForSigOpen(true)}
+                                onEditContract={() => router.push(`/contracts/${contract.id}/edit`)}
+                                externalSigningIncluded={contract.externalSigningIncluded}
+                                contractStatus={contract.status}
+                            />
+                        )}
 
                         {/* ═══════════════════════════════════════════════════════════════════════════ */}
                         {/* MULTI-PARTY SIGNATURE STATUS */}
@@ -896,6 +967,49 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 onClose={() => setHistoryDialogEntry(null)}
                 entry={historyDialogEntry}
                 currentContractId={contract?.id || ''}
+            />
+
+            {/* Unified Flow — Submit (start a new flow) */}
+            <UnifiedFlowSubmitDialog
+                open={unifiedSubmitOpen}
+                onClose={() => setUnifiedSubmitOpen(false)}
+                onSubmitted={async () => {
+                    setUnifiedSubmitOpen(false);
+                    const fresh = await apiService.getContractDetails(contract.id);
+                    if (fresh) setContract(fresh);
+                }}
+                contractId={contract.id}
+                contractTitle={displayTitle}
+            />
+
+            {/* Unified Flow — Resubmit (after rejection) */}
+            {isUnifiedFlow && contract.participants && (
+                <UnifiedFlowResubmitDialog
+                    open={unifiedResubmitOpen}
+                    onClose={() => setUnifiedResubmitOpen(false)}
+                    onSubmitted={async () => {
+                        setUnifiedResubmitOpen(false);
+                        const fresh = await apiService.getContractDetails(contract.id);
+                        if (fresh) setContract(fresh);
+                    }}
+                    contractId={contract.id}
+                    contractTitle={displayTitle}
+                    participants={contract.participants}
+                />
+            )}
+
+            {/* Unified Flow — Send for External Signature */}
+            <UnifiedFlowSendForSignatureDialog
+                open={unifiedSendForSigOpen}
+                onClose={() => setUnifiedSendForSigOpen(false)}
+                onSent={async () => {
+                    setUnifiedSendForSigOpen(false);
+                    const fresh = await apiService.getContractDetails(contract.id);
+                    if (fresh) setContract(fresh);
+                }}
+                contractId={contract.id}
+                contractTitle={displayTitle}
+                senderName={pageCurrentUser?.fullName || pageCurrentUser?.email}
             />
         </AppLayout>
     );

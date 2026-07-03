@@ -117,24 +117,19 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
     // These values are specific to THIS contract only - template remains unchanged
     const [filledFieldValues, setFilledFieldValues] = useState<Record<string, string>>({});
 
-    // ✅ Contractor party restriction: contractor may only fill ONE party's fields
+    // Contractor cannot edit EXTERNAL party fields (type === 'EXTERNAL' on the party config)
     const [showWrongPartyWarning, setShowWrongPartyWarning] = useState(false);
 
-    // The party the contractor has committed to (first party where they filled any field)
-    const contractorPartyId = useMemo(() => {
-        if (!selectedTemplate?.formFields) return null;
-        for (const field of selectedTemplate.formFields) {
-            if (field.assignedParty && filledFieldValues[field.name]?.trim()) {
-                return field.assignedParty as string;
-            }
-        }
-        return null;
-    }, [filledFieldValues, selectedTemplate?.formFields]);
+    // IDs of parties marked as EXTERNAL — contractor must not edit these fields
+    const externalTypePartyIds = useMemo(() => {
+        if (!selectedTemplate?.parties) return [] as string[];
+        return (selectedTemplate.parties as any[])
+            .filter((p) => p.type === 'EXTERNAL')
+            .map((p) => p.id as string);
+    }, [selectedTemplate?.parties]);
 
-    // Refs so handleFieldChange (called via viewer ref) always sees the latest values
-    const contractorPartyIdRef = useRef<string | null>(null);
+    // Ref so handleFieldChange always sees latest values (called via viewer ref / closure)
     const filledFieldValuesRef = useRef<Record<string, string>>({});
-    useEffect(() => { contractorPartyIdRef.current = contractorPartyId; }, [contractorPartyId]);
     useEffect(() => { filledFieldValuesRef.current = filledFieldValues; }, [filledFieldValues]);
 
 
@@ -177,16 +172,13 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
     };
 
     // Handle form field changes
-    // Explanation: When user types in a form field, this function captures the value
-    // and stores it in filledFieldValues state so we can save it with the contract
     const handleFieldChange = (fieldName: string, value: any) => {
         console.log(`📝 Field changed: ${fieldName} = ${value}`);
 
-        // ✅ Restrict contractor to filling only ONE party's fields
+        // Block contractor from editing EXTERNAL party fields
         const field = (selectedTemplate?.formFields || []).find((f: any) => f.name === fieldName);
-        if (field?.assignedParty && contractorPartyIdRef.current && field.assignedParty !== contractorPartyIdRef.current) {
+        if (field?.assignedParty && externalTypePartyIds.includes(field.assignedParty)) {
             setShowWrongPartyWarning(true);
-            // Revert the field to its previous value
             const prevValue = filledFieldValuesRef.current[fieldName] || '';
             if (prevValue) {
                 pdfViewerRef.current?.restoreFieldValue(fieldName, prevValue);
@@ -242,13 +234,6 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
     const hasPartialParty = !!partyValidationWarning;
 
     const handleSave = async (): Promise<string | null> => {
-        // ✅ Check for party validation before proceeding
-        if (hasPartialParty) {
-            console.warn('📋 [SAVE BLOCKED] Partial party fields detected');
-            setValidationTriggered(true);
-            return null;
-        }
-
         if (!selectedTemplate) {
             setError('Please select a template');
             return null;
@@ -620,7 +605,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
     };
 
     const handleAutofillClick = (silent = false) => {
-        const parties = selectedTemplate?.parties || [];
+        const parties = (selectedTemplate?.parties || []).filter((p: any) => p.type !== 'EXTERNAL');
         const formFields = selectedTemplate?.formFields || [];
 
         // Only count fields that have a profileKey mapping (those can actually be autofilled)
@@ -688,7 +673,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
         setCurrentStep(2);
     };
 
-    const canSave = selectedTemplate && contractTitle.trim() && clientName.trim() && documentLoaded && (!validationTriggered || !hasPartialParty);
+    const canSave = selectedTemplate && contractTitle.trim() && clientName.trim() && documentLoaded;
 
     // Step 1: Contract Details Actions
     const step1Actions = (
@@ -751,7 +736,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
                 </span>
             </Tooltip>
 
-            <Tooltip title={hasPartialParty ? 'Complete all fields for the party you started' : ''} arrow>
+            <Tooltip title="" arrow>
                 <span>
                     <AppButton
                         onClick={handleSave}
@@ -1098,17 +1083,13 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
                                     onNavigateToField={(name) => pdfViewerRef.current?.navigateToField(name)}
                                 />
 
-                                {/* ✅ Warn contractor when they try to fill a second party's fields */}
+                                {/* Warn contractor when they try to fill an EXTERNAL party's fields */}
                                 <WrongPartyWarningDialog
                                     open={showWrongPartyWarning}
-                                    title="Single Party Restriction"
-                                    description={
-                                        contractorPartyId
-                                            ? <>You have already started filling <strong>{selectedTemplate?.parties?.find((p: PartyConfiguration) => p.id === contractorPartyId)?.label || contractorPartyId}</strong> fields. You can only fill one party&apos;s fields.</>
-                                            : <>You can only fill one party&apos;s fields.</>
-                                    }
+                                    title="External Party Field"
+                                    description="This field belongs to an external party and cannot be edited by your organisation."
                                     pdfViewerRef={pdfViewerRef}
-                                    navigateConfig={contractorPartyId ? { type: 'party', partyIds: [contractorPartyId] } : { type: 'party', partyIds: [] }}
+                                    navigateConfig={{ type: 'nonClient', excludePartyIds: externalTypePartyIds }}
                                     onClose={() => setShowWrongPartyWarning(false)}
                                     zIndex={1400}
                                 />
@@ -1142,7 +1123,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
                 onClose={handleUnsavedClose}
                 loading={saving}
                 disableYes={!canSave}
-                yesTooltip={hasPartialParty ? 'Complete all fields for the party you started' : ''}
+                yesTooltip=""
             />
 
             {/* Request Review Dialog */}

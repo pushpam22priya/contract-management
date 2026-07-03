@@ -30,6 +30,7 @@ interface PDFViewerContainerProps {
     onSignaturePositionRestored?: () => void; // ✅ Callback when a signature position is restored (for showing warning without refresh)
     silentPositionRestore?: boolean; // ✅ If true, restore signature positions silently without showing warning
     protectedPartyIds?: string[]; // ✅ Party IDs whose signatures should be protected from modification (e.g., client parties for contractor view)
+    blockAllNewSignatures?: boolean; // ✅ When true, blocks ALL new signature additions (used for unified flow REVIEWER role)
 
     // Multi-party field assignment props
     parties?: PartyConfiguration[];           // Available parties for field assignment
@@ -89,7 +90,7 @@ export interface PDFViewerHandle {
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole, currentUserEmail, canAddFormFields = false }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole, currentUserEmail, canAddFormFields = false, blockAllNewSignatures = false }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const isDark = useTheme().palette.mode === 'dark';
@@ -128,6 +129,10 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
             onSignatureApplied,
             onFieldChange
         });
+
+        // Sync blockAllNewSignatures prop → ref so the annotationChanged handler always sees the latest value
+        const blockAllNewSignaturesRef = useRef<boolean>(blockAllNewSignatures ?? false);
+        useEffect(() => { blockAllNewSignaturesRef.current = blockAllNewSignatures ?? false; }, [blockAllNewSignatures]);
 
         // ✅ Helper: Switch toolbar group using the correct API for the UI version
         // WebViewer 11+ uses Modular UI by default, where setToolbarGroup is a Legacy API
@@ -2199,6 +2204,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                                         const formField = formFieldsRef.current.find((f: any) => f.name === fieldName);
                                                                         signatureParty = formField?.assignedParty;
                                                                     }
+                                                                    // Fallback: read from widget annotation custom data
+                                                                    // (when formFields prop is not provided, e.g. unified flow panels)
+                                                                    if (!signatureParty) {
+                                                                        signatureParty = (widget as any).getCustomData?.('assignedParty');
+                                                                    }
 
                                                                     // Check if this is a protected party or not in editable parties
                                                                     let isUnauthorizedParty = false;
@@ -2217,6 +2227,11 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                                             isUnauthorizedParty = true;
                                                                             console.log(`🚫 [SIGNATURE ADD] Contractor attempted to sign client party field: ${fieldName} (party: ${signatureParty})`);
                                                                         }
+                                                                    }
+
+                                                                    // For unified flow REVIEWERs: block ALL new signatures regardless of party
+                                                                    if (!isUnauthorizedParty && blockAllNewSignaturesRef.current) {
+                                                                        isUnauthorizedParty = true;
                                                                     }
 
                                                                     // If unauthorized, delete the signature and show warning

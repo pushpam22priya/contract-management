@@ -90,6 +90,13 @@ interface DocumentViewerDialogProps {
     assignedPartyLabel?: string;
     assignedPartyColor?: string;
     extraActions?: React.ReactNode;
+    // ✅ Unified flow: participant role and party type info for field-level access control
+    unifiedParticipantRole?: 'REVIEWER' | 'APPROVER';
+    contractParties?: any[]; // PartyConfiguration[] — INTERNAL parties are editable, EXTERNAL are read-only
+    /** Ref exposed to parent panels so they can trigger PDF export before marking complete */
+    saveRef?: React.RefObject<(() => Promise<void>) | null>;
+    /** When true, hides the built-in Save/Send button while onSave still works via saveRef */
+    hideSaveButton?: boolean;
 }
 
 export default function DocumentViewerDialog({
@@ -121,6 +128,10 @@ export default function DocumentViewerDialog({
     assignedPartyLabel,
     assignedPartyColor,
     extraActions,
+    unifiedParticipantRole,
+    contractParties,
+    saveRef,
+    hideSaveButton,
 }: DocumentViewerDialogProps) {
 
 
@@ -196,6 +207,18 @@ export default function DocumentViewerDialog({
         return combined;
     }, [clientPartyIds, internalClientPartyIds]);
 
+    // ✅ Unified flow: compute editable parties (INTERNAL + unassigned).
+    // EXTERNAL party fields become read-only via the editableParties restriction in PDFViewerContainer.
+    // Memoised so the array reference stays stable across renders.
+    const unifiedEditableParties = useMemo<string[] | undefined>(() => {
+        if (!unifiedParticipantRole) return undefined;
+        if (!contractParties?.length) return undefined; // no party info → fall back to default (all fields interactive)
+        const internalIds = contractParties
+            .filter((p: any) => p.type !== 'EXTERNAL')
+            .map((p: any) => p.id as string);
+        return [...internalIds, 'unassigned'];
+    }, [unifiedParticipantRole, contractParties]);
+
     // ✅ Store initial field values for restoration (for contractor protection)
     const initialFieldValuesRef = useRef<Record<string, string>>({});
 
@@ -217,15 +240,11 @@ export default function DocumentViewerDialog({
         return initial;
     });
 
-    // ✅ Contractor single-party restriction.
-    // Managed as explicit state+ref (NOT derived from filledFieldValues) to avoid:
-    //   - stale closure / async useEffect timing issues
-    //   - false positives during the 2-second PDF load window
-    // The ref is updated SYNCHRONOUSLY inside handleFieldChange so it is always current.
-    const [contractorCommittedPartyId, setContractorCommittedPartyId] = useState<string | null>(null);
-    const contractorCommittedPartyIdRef = useRef<string | null>(null);
-    // Tracks which kind of warning to show ('client-party' or 'single-party')
-    const [contractorWarnType, setContractorWarnType] = useState<'client-party' | 'single-party'>('client-party');
+    // IDs of parties marked EXTERNAL on the contract — contractor cannot edit these fields
+    const externalTypePartyIds = useMemo(() => {
+        if (!parties?.length) return [] as string[];
+        return (parties as any[]).filter((p) => p.type === 'EXTERNAL').map((p) => p.id as string);
+    }, [parties]);
 
     // ✅ CRITICAL FIX: Reset all transient state when dialog reopens
     // If user closed without saving, discard in-session edits and re-seed from formFields
@@ -250,19 +269,7 @@ export default function DocumentViewerDialog({
             setValidationTriggered(false);
             hasAutoFilledRef.current = false;
 
-            // ✅ Initialise contractor committed party from pre-filled values
-            // (the party the contractor filled when they created the contract)
-            if (currentUserRole === 'contractor' && formFields) {
-                const firstFilledParty = (formFields as any[]).find(
-                    (f) => f.assignedParty && initial[f.name]?.trim() && !allClientPartyIds.includes(f.assignedParty)
-                )?.assignedParty ?? null;
-                setContractorCommittedPartyId(firstFilledParty);
-                contractorCommittedPartyIdRef.current = firstFilledParty;
-            } else {
-                setContractorCommittedPartyId(null);
-                contractorCommittedPartyIdRef.current = null;
-            }
-            // ✅ Capture initial values for contractor protection (to restore if they edit client fields)
+            // ✅ Capture initial values for contractor protection (to restore if they edit external party fields)
             initialFieldValuesRef.current = { ...initial };
             // ✅ Track last saved values to detect unsaved changes
             lastSavedValuesRef.current = { ...initial };
@@ -342,45 +349,38 @@ export default function DocumentViewerDialog({
             }
         }
 
-        // ✅ CONTRACTOR PROTECTION (unified)
+        // ✅ CONTRACTOR PROTECTION: block EXTERNAL party fields
         const isContractor = currentUserRole === 'contractor';
 
-        if (isContractor && hasFormFields) {
+        if (isContractor && hasFormFields && userHasInteractedRef.current) {
             const field = formFields!.find((f: any) => f.name === fieldName);
             const fieldParty = (field as any)?.assignedParty;
 
-            if (fieldParty) {
-                const revert = () => {
+            if (fieldParty && externalTypePartyIds.includes(fieldParty)) {
+                console.log(`🚫 [DocumentViewerDialog] Contractor blocked — EXTERNAL party field: ${fieldName} (${fieldParty})`);
+                setShowWrongPartyWarning(true);
+                const orig = initialFieldValuesRef.current[fieldName] || '';
+                if (orig) pdfViewerRef.current?.restoreFieldValue?.(fieldName, orig);
+                else pdfViewerRef.current?.clearField?.(fieldName);
+                return;
+            }
+        }
+
+        // ✅ UNIFIED FLOW PROTECTION: block EXTERNAL party fields for reviewers/approvers
+        if (unifiedParticipantRole && userHasInteractedRef.current) {
+            const fieldEntry = formFields?.find((f: any) => f.name === fieldName);
+            const fieldPartyId = fieldEntry?.assignedParty;
+
+            if (fieldPartyId) {
+                const isExternalField = contractParties?.some(
+                    (p: any) => p.id === fieldPartyId && p.type === 'EXTERNAL'
+                );
+                if (isExternalField) {
+                    setShowWrongPartyWarning(true);
                     const orig = initialFieldValuesRef.current[fieldName] || '';
                     if (orig) pdfViewerRef.current?.restoreFieldValue?.(fieldName, orig);
                     else pdfViewerRef.current?.clearField?.(fieldName);
-                };
-
-                // Case 1: Field belongs to an already-assigned signer party — block after interaction starts
-                // (userHasInteractedRef guard prevents false positives during XFDF restoration on load)
-                if (allClientPartyIds.includes(fieldParty) && userHasInteractedRef.current) {
-                    console.log(`🚫 [DocumentViewerDialog] Contractor blocked — client party field: ${fieldName} (${fieldParty})`);
-                    setContractorWarnType('client-party');
-                    setShowWrongPartyWarning(true);
-                    revert();
                     return;
-                }
-
-                // Case 2: Single-party restriction — only apply after interaction tracking starts
-                // (avoids false positives during the 2-second PDF load window)
-                if (userHasInteractedRef.current) {
-                    if (contractorCommittedPartyIdRef.current === null) {
-                        // First party the contractor fills → commit to it (update ref synchronously)
-                        contractorCommittedPartyIdRef.current = fieldParty;
-                        setContractorCommittedPartyId(fieldParty);
-                    } else if (contractorCommittedPartyIdRef.current !== fieldParty) {
-                        // Different party → block
-                        console.log(`🚫 [DocumentViewerDialog] Contractor blocked — already committed to ${contractorCommittedPartyIdRef.current}, tried ${fieldParty}`);
-                        setContractorWarnType('single-party');
-                        setShowWrongPartyWarning(true);
-                        revert();
-                        return;
-                    }
                 }
             }
         }
@@ -514,7 +514,7 @@ export default function DocumentViewerDialog({
 
     // ✅ Handle Send button click (internal signers only) — validate first, then confirm
     const handleSendButtonClick = () => {
-        if (hasPartialParty || (assignedPartyId && !hasFilledAllAssignedFields)) {
+        if (assignedPartyId && !hasFilledAllAssignedFields) {
             setValidationTriggered(true);
             return;
         }
@@ -524,9 +524,7 @@ export default function DocumentViewerDialog({
 
     // ✅ Handle confirmation dialog: Yes - save and close
     const handleUnsavedYes = async () => {
-        // If required fields are missing, trigger validation and keep the main dialog open.
-        // (Yes button is disabled in this state, but guard here too for safety.)
-        if (hasPartialParty || (assignedPartyId && !hasFilledAllAssignedFields)) {
+        if (assignedPartyId && !hasFilledAllAssignedFields) {
             setShowUnsavedDialog(false);
             setValidationTriggered(true);
             return;
@@ -564,8 +562,8 @@ export default function DocumentViewerDialog({
             return;
         }
 
-        // ✅ Check for validation before proceeding
-        if (hasPartialParty || (assignedPartyId && !hasFilledAllAssignedFields)) {
+        // ✅ Check for validation before proceeding (skip for unified flow — reviewer/approver panels handle their own validation)
+        if (!unifiedParticipantRole && (hasPartialParty || (assignedPartyId && !hasFilledAllAssignedFields))) {
             console.warn(`📋 [SAVE BLOCKED] Required fields missing. PartialParty: ${hasPartialParty}, AllAssigned: ${hasFilledAllAssignedFields}`);
             setValidationTriggered(true);
             return;
@@ -655,6 +653,9 @@ export default function DocumentViewerDialog({
         }
     };
 
+    // Expose handleSaveClick to parent panels via saveRef (for Mark Complete triggering PDF export first)
+    if (saveRef) saveRef.current = handleSaveClick;
+
     // Core autofill execution — called after a party is resolved
     const runAutofill = (targetPartyId: string | null) => {
         const currentUser = authService.getCurrentUser();
@@ -682,9 +683,6 @@ export default function DocumentViewerDialog({
     // Called when user selects a party from the autofill picker
     const handleAutofillPartySelected = (partyId: string) => {
         setShowAutofillPartyPicker(false);
-        // Commit the contractor to this party (same as when they manually fill a field)
-        contractorCommittedPartyIdRef.current = partyId;
-        setContractorCommittedPartyId(partyId);
         runAutofill(partyId);
     };
 
@@ -706,39 +704,25 @@ export default function DocumentViewerDialog({
             return;
         }
 
-        // Contractor path
-        const contractorParties = (parties || []).filter((p: any) => !allClientPartyIds.includes(p.id));
+        // Contractor path: only INTERNAL (non-EXTERNAL) parties are autofillable
+        const contractorParties = (parties || []).filter((p: any) => p.type !== 'EXTERNAL');
 
         if (contractorParties.length === 0) {
-            // No party config — fill all empty fields
-            runAutofill(null);
+            runAutofill(null); // No party config — fill all empty fields
             return;
         }
 
-        // If contractor already committed to a party (manually filled at least one field), use that party
-        if (contractorCommittedPartyId) {
-            runAutofill(contractorCommittedPartyId);
-            return;
-        }
-
-        // Only one contractor party — auto-select, no need to ask
         if (contractorParties.length === 1) {
-            const p = contractorParties[0];
-            contractorCommittedPartyIdRef.current = p.id;
-            setContractorCommittedPartyId(p.id);
-            runAutofill(p.id);
+            runAutofill(contractorParties[0].id);
             return;
         }
 
-        // Multiple contractor parties and none committed yet — show party picker
+        // Multiple internal parties — show party picker
         setShowAutofillPartyPicker(true);
     };
 
     // ✅ Determine if save button should be disabled
-    // For internal signers (assignedPartyId is set): require all assigned party fields to be filled
-    // For legacy client signing mode: require signature committed
     const getSaveDisabledReason = (): string => {
-        if (hasPartialParty) return 'Complete all fields for the party you started';
         if (assignedPartyId && !hasFilledAllAssignedFields) {
             return `Please fill all your assigned fields (${unfilledFieldCount} remaining)`;
         }
@@ -748,7 +732,7 @@ export default function DocumentViewerDialog({
         return '';
     };
 
-    const saveDisabled = saving || (validationTriggered && (hasPartialParty || (assignedPartyId && !hasFilledAllAssignedFields))) ||
+    const saveDisabled = saving || (validationTriggered && assignedPartyId && !hasFilledAllAssignedFields) ||
         (!validationTriggered && clientSigningMode && !assignedPartyId && !signatureCommitted);
 
     // Action buttons for dialog footer
@@ -772,7 +756,7 @@ export default function DocumentViewerDialog({
                     </span>
                 </Tooltip>
             )}
-            {onSave && (
+            {onSave && !hideSaveButton && (
                 <Tooltip title={getSaveDisabledReason()} arrow>
                     <span>
                         <AppButton
@@ -847,27 +831,23 @@ export default function DocumentViewerDialog({
                         showAnnotationNavigation={showAnnotationNavigation}
                         // ✅ For contractor: Show warning when signature position is restored (silent restore + warning)
                         silentPositionRestore={readOnly}
-                        // ✅ Show warning when signature position is restored (for both contractor and internal signer)
-                        // onSignaturePositionRestored only fires for CLIENT party signatures (protectedPartyIds match),
-                        // so for contractors we must always reset contractorWarnType to 'client-party' here —
-                        // otherwise a stale 'single-party' type from a previous text-field warning would show.
-                        onSignaturePositionRestored={(currentUserRole === 'contractor' || assignedPartyId) ? () => {
-                            if (currentUserRole === 'contractor') {
-                                setContractorWarnType('client-party');
-                            }
+                        // ✅ Show warning when signature position is restored (contractor, internal signer, or reviewer)
+                        onSignaturePositionRestored={(currentUserRole === 'contractor' || assignedPartyId || unifiedParticipantRole === 'REVIEWER') ? () => {
                             setShowWrongPartyWarning(true);
                         } : undefined}
-                        // ✅ For contractor: Protect ALL client signatures (external + internal)
+                        // ✅ For contractor: Protect EXTERNAL type party signatures
                         // ✅ For internal signer: Protect other party signatures (all parties except assigned)
                         protectedPartyIds={
                             currentUserRole === 'contractor'
-                                ? allClientPartyIds
+                                ? externalTypePartyIds
                                 : assignedPartyId && parties
                                     ? parties.filter((p: any) => p.id !== assignedPartyId).map((p: any) => p.id)
                                     : undefined
                         }
-                        // ✅ For internal signer: Restrict editing to only assigned party's fields
-                        editableParties={assignedPartyId ? [assignedPartyId] : undefined}
+                        // ✅ Unified flow: restrict to INTERNAL party fields. Legacy internal signer: restrict to assigned party only.
+                        editableParties={unifiedEditableParties ?? (assignedPartyId ? [assignedPartyId] : undefined)}
+                        // ✅ Block all new signatures for unified flow REVIEWERs
+                        blockAllNewSignatures={unifiedParticipantRole === 'REVIEWER' && !readOnly}
                         // ✅ Auto-scroll to first assigned field + autofill on document load
                         onDocumentLoaded={(!readOnly && (assignedPartyId || currentUserRole === 'contractor')) ? () => {
                             if (assignedPartyId) {
@@ -891,28 +871,26 @@ export default function DocumentViewerDialog({
                     <WrongPartyWarningDialog
                         open={showWrongPartyWarning}
                         title={
-                            currentUserRole === 'contractor'
-                                ? contractorWarnType === 'single-party'
-                                    ? 'Single Party Restriction'
-                                    : 'Client Party Field'
-                                : 'Wrong Party Field'
+                            unifiedParticipantRole === 'REVIEWER'
+                                ? 'Cannot Sign as Reviewer'
+                                : currentUserRole === 'contractor'
+                                    ? 'External Party Field'
+                                    : 'Wrong Party Field'
                         }
                         description={
-                            currentUserRole === 'contractor'
-                                ? contractorWarnType === 'single-party'
-                                    ? <>You have already started filling <strong>{parties?.find((p: any) => p.id === contractorCommittedPartyId)?.label || contractorCommittedPartyId}</strong> fields. You can only fill one party&apos;s fields.</>
-                                    : 'This field is assigned to a client party and cannot be edited by the contractor.'
-                                : assignedPartyLabel
-                                    ? `You are assigned to fill fields as "${assignedPartyLabel}". This field belongs to another party.`
-                                    : 'This field belongs to another party and cannot be edited by you.'
+                            unifiedParticipantRole === 'REVIEWER'
+                                ? 'Reviewers can only read and edit text fields belongs to Internal Parties. Signing the contract is reserved for approvers.'
+                                : currentUserRole === 'contractor'
+                                    ? 'This field belongs to an external party and cannot be edited by your organisation.'
+                                    : assignedPartyLabel
+                                        ? `You are assigned to fill fields as "${assignedPartyLabel}". This field belongs to another party.`
+                                        : 'This field belongs to another party and cannot be edited by you.'
                         }
                         pdfViewerRef={pdfViewerRef}
                         navigateConfig={
                             assignedPartyId
                                 ? { type: 'party', partyIds: [assignedPartyId] }
-                                : contractorWarnType === 'single-party' && contractorCommittedPartyId
-                                    ? { type: 'party', partyIds: [contractorCommittedPartyId] }
-                                    : { type: 'nonClient', excludePartyIds: allClientPartyIds }
+                                : { type: 'nonClient', excludePartyIds: externalTypePartyIds }
                         }
                         onClose={() => setShowWrongPartyWarning(false)}
                         zIndex={1200}
@@ -950,7 +928,7 @@ export default function DocumentViewerDialog({
             open={showAutofillPartyPicker}
             onClose={() => setShowAutofillPartyPicker(false)}
             onConfirm={handleAutofillPartySelected}
-            parties={((parties || []).filter((p: any) => !allClientPartyIds.includes(p.id))) as PartyConfiguration[]}
+            parties={((parties || []).filter((p: any) => p.type !== 'EXTERNAL')) as PartyConfiguration[]}
             formFields={formFields || []}
         />
         </>

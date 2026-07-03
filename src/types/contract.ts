@@ -17,6 +17,7 @@ export interface PartyConfiguration {
     label: string;             // Human-readable label: "Buyer", "Seller", "Witness"
     color: string;             // Hex color for visual distinction
     order: number;             // Signing order
+    type?: 'INTERNAL' | 'EXTERNAL' | null; // Unified flow: INTERNAL = org-owned, EXTERNAL = client-owned
 }
 
 /**
@@ -268,6 +269,14 @@ export interface Contract {
     // Termination tracking (one-way, irreversible)
     terminatedAt?: string;         // ISO datetime — when the contract was terminated
     terminatedBy?: string;         // email of the user who performed the termination
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // UNIFIED WORKFLOW (additive — parallel track, does not affect legacy flow)
+    // Presence of participants[] is the detection signal: participants.length > 0
+    // ═══════════════════════════════════════════════════════════════════════════
+    participants?: import('./unifiedFlow').WorkflowParticipant[];
+    currentParticipantOrder?: number | null;
+    externalSigningIncluded?: boolean;
 }
 
 /**

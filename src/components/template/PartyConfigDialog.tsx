@@ -12,6 +12,8 @@ import {
     Chip,
     Tooltip,
     Paper,
+    ToggleButtonGroup,
+    ToggleButton,
 } from '@mui/material';
 import {
     Add,
@@ -63,6 +65,7 @@ export default function PartyConfigDialog({
     const [editingParty, setEditingParty] = useState<PartyConfiguration | null>(null);
     const [newPartyLabel, setNewPartyLabel] = useState('');
     const [newPartyColor, setNewPartyColor] = useState(COLOR_PALETTE[0]);
+    const [newPartyType, setNewPartyType] = useState<'INTERNAL' | 'EXTERNAL'>('INTERNAL');
     const [showColorPicker, setShowColorPicker] = useState<string | null>(null);
 
     // Initialize parties from props
@@ -75,6 +78,7 @@ export default function PartyConfigDialog({
             } else {
                 setNewPartyColor(COLOR_PALETTE[0]);
             }
+            setNewPartyType('INTERNAL');
         }
     }, [open, initialParties]);
 
@@ -96,6 +100,7 @@ export default function PartyConfigDialog({
             label: newPartyLabel.trim(),
             color: newPartyColor,
             order: newOrder,
+            type: newPartyType,
         };
 
         console.log(`${LOG_PREFIX} Adding party:`, newParty);
@@ -138,6 +143,14 @@ export default function PartyConfigDialog({
         setNewPartyColor(getNextAvailableColor(updatedParties));
     };
 
+    // Toggle party type between INTERNAL and EXTERNAL
+    const handleUpdatePartyType = (partyId: string, newType: 'INTERNAL' | 'EXTERNAL') => {
+        console.log(`${LOG_PREFIX} Updating party ${partyId} type to: ${newType}`);
+        setParties(parties.map(p =>
+            p.id === partyId ? { ...p, type: newType } : p
+        ));
+    };
+
     // Save and close
     const handleSave = () => {
         console.log(`${LOG_PREFIX} Saving ${parties.length} parties:`, parties);
@@ -166,10 +179,14 @@ export default function PartyConfigDialog({
             maxWidth="sm"
             actions={dialogActions}
         >
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }} >
-
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
                 You can assign fields after saving parties.
             </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+                <strong>Internal</strong> — org-owned; any participant can edit these fields.&nbsp;
+                <strong>External</strong> — client-owned; org participants cannot edit these fields.
+            </Typography>
+
             {/* Party List */}
             <Paper variant="outlined" sx={{ mb: 3, maxHeight: 300, overflow: 'auto' }}>
                 {parties.length > 0 && <List dense>
@@ -177,7 +194,7 @@ export default function PartyConfigDialog({
                         <ListItem
                             key={party.id}
                             secondaryAction={
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                     {/* Color picker */}
                                     <Tooltip title="Change color">
                                         <IconButton
@@ -215,6 +232,7 @@ export default function PartyConfigDialog({
                             sx={{
                                 borderLeft: `4px solid ${party.color}`,
                                 '&:hover': { bgcolor: 'action.hover' },
+                                pr: 14,
                             }}
                         >
                             <Chip
@@ -226,6 +244,7 @@ export default function PartyConfigDialog({
                                     bgcolor: party.color,
                                     color: 'white',
                                     fontWeight: 'bold',
+                                    flexShrink: 0,
                                 }}
                             />
 
@@ -241,13 +260,48 @@ export default function PartyConfigDialog({
                                         }
                                     }}
                                     autoFocus
-                                    sx={{ flex: 1 }}
+                                    sx={{ flex: 1, mr: 1 }}
                                 />
                             ) : (
                                 <ListItemText
                                     primary={party.label}
+                                    sx={{ mr: 1 }}
                                 />
                             )}
+
+                            {/* Party type toggle */}
+                            <ToggleButtonGroup
+                                value={party.type === 'EXTERNAL' ? 'EXTERNAL' : 'INTERNAL'}
+                                exclusive
+                                onChange={(_, val) => val && handleUpdatePartyType(party.id, val)}
+                                size="small"
+                                sx={{ flexShrink: 0 }}
+                            >
+                                <ToggleButton
+                                    value="INTERNAL"
+                                    sx={{
+                                        fontSize: '0.65rem',
+                                        px: 1,
+                                        py: 0.25,
+                                        lineHeight: 1.4,
+                                        '&.Mui-selected': { bgcolor: 'success.main', color: 'white', '&:hover': { bgcolor: 'success.dark' } },
+                                    }}
+                                >
+                                    Internal
+                                </ToggleButton>
+                                <ToggleButton
+                                    value="EXTERNAL"
+                                    sx={{
+                                        fontSize: '0.65rem',
+                                        px: 1,
+                                        py: 0.25,
+                                        lineHeight: 1.4,
+                                        '&.Mui-selected': { bgcolor: 'warning.main', color: 'white', '&:hover': { bgcolor: 'warning.dark' } },
+                                    }}
+                                >
+                                    External
+                                </ToggleButton>
+                            </ToggleButtonGroup>
                         </ListItem>
                     ))}
                 </List>}
@@ -300,7 +354,7 @@ export default function PartyConfigDialog({
             )}
 
             {/* Add new party */}
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 <Box
                     sx={{
                         width: 40,
@@ -317,7 +371,6 @@ export default function PartyConfigDialog({
                 </Box>
 
                 <TextField
-                    fullWidth
                     size="small"
                     label="New Party Name"
                     placeholder="e.g., Witness, Guarantor"
@@ -328,14 +381,44 @@ export default function PartyConfigDialog({
                             handleAddParty();
                         }
                     }}
+                    sx={{ flex: 1, minWidth: 140 }}
                 />
+
+                <ToggleButtonGroup
+                    value={newPartyType}
+                    exclusive
+                    onChange={(_, val) => val && setNewPartyType(val)}
+                    size="small"
+                    sx={{ flexShrink: 0, height: 40 }}
+                >
+                    <ToggleButton
+                        value="INTERNAL"
+                        sx={{
+                            fontSize: '0.72rem',
+                            px: 1.5,
+                            '&.Mui-selected': { bgcolor: 'success.main', color: 'white', '&:hover': { bgcolor: 'success.dark' } },
+                        }}
+                    >
+                        Internal
+                    </ToggleButton>
+                    <ToggleButton
+                        value="EXTERNAL"
+                        sx={{
+                            fontSize: '0.72rem',
+                            px: 1.5,
+                            '&.Mui-selected': { bgcolor: 'warning.main', color: 'white', '&:hover': { bgcolor: 'warning.dark' } },
+                        }}
+                    >
+                        External
+                    </ToggleButton>
+                </ToggleButtonGroup>
 
                 <AppButton
                     variant="contained"
                     onClick={handleAddParty}
                     disabled={!newPartyLabel.trim()}
                     startIcon={<Add />}
-                    sx={{ flexShrink: 0 }}
+                    sx={{ flexShrink: 0, height: 40 }}
                 >
                     Add
                 </AppButton>

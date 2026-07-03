@@ -24,6 +24,12 @@ import { apiService } from '@/services/apiService';
 import { authService } from '@/services/authService';
 import { Contract, ContractStatus } from '@/types/contract';
 import type { HistoryEntry } from '@/components/contracts/ContractHistoryPanel';
+// ── Unified Flow (additive — does not affect legacy review/approve/signature) ──
+import UnifiedFlowInboxCard from '@/components/unified-flow/UnifiedFlowInboxCard';
+import UnifiedFlowReviewerPanel from '@/components/unified-flow/UnifiedFlowReviewerPanel';
+import UnifiedFlowApproverPanel from '@/components/unified-flow/UnifiedFlowApproverPanel';
+import { unifiedFlowService } from '@/services/unifiedFlowService';
+import type { WorkflowParticipant } from '@/types/unifiedFlow';
 import { blobToBase64, verifyPdfBase64 } from '@/utils/pdfUtils';
 import { httpClient } from '@/lib/httpClient';
 import { useTranslations } from 'next-intl';
@@ -32,13 +38,15 @@ import dayjs from 'dayjs';
 
 type ReviewItem = { type: 'review'; contract: Contract; role: 'reviewer' | 'approver' };
 type SignatureItem = { type: 'signature'; contract: Contract };
-type InboxItem = ReviewItem | SignatureItem;
+type UnifiedFlowItem = { type: 'unified'; contract: Contract; role: 'REVIEWER' | 'APPROVER'; participant: WorkflowParticipant };
+type InboxItem = ReviewItem | SignatureItem | UnifiedFlowItem;
 
 export default function InboxPage() {
     const t = useTranslations('inbox');
     const tFilters = useTranslations('filters');
 
     const [allContracts, setAllContracts] = useState<Contract[]>([]);
+    const [sentContracts, setSentContracts] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
     const [tabValue, setTabValue] = useState(0); // 0 = Inbox, 1 = Sendbox
 
@@ -75,6 +83,12 @@ export default function InboxPage() {
         severity: 'success' as AlertColor,
     });
 
+    // ── Unified flow panel state ──────────────────────────────────────────────
+    const [unifiedReviewerOpen, setUnifiedReviewerOpen] = useState(false);
+    const [unifiedApproverOpen, setUnifiedApproverOpen] = useState(false);
+    const [selectedUnifiedContract, setSelectedUnifiedContract] = useState<Contract | null>(null);
+    const [selectedUnifiedParticipant, setSelectedUnifiedParticipant] = useState<WorkflowParticipant | null>(null);
+
     // Filters
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState<FilterOption[]>([]);
@@ -101,10 +115,20 @@ export default function InboxPage() {
 
         // R&A: use dedicated inbox endpoint (returns contracts where user is reviewer/approver)
         // Signatures: use owned contracts endpoint (internalSigners/signer are multi-party signing fields)
-        const [inboxContracts, ownedContracts] = await Promise.all([
+        // Unified flow: separate endpoint for unified-flow participant inbox
+        const [inboxContracts, ownedContracts, unifiedRes, sentRes] = await Promise.all([
             contractService.getInboxContracts(),
             contractService.getAllContracts(),
+            unifiedFlowService.getFlowInbox(),
+            unifiedFlowService.getFlowSent(),
         ]);
+        const unifiedContracts: Contract[] = unifiedRes.ok && Array.isArray(unifiedRes.data)
+            ? unifiedRes.data.map((c: any) => ({ ...c, id: c.id || c._id }))
+            : [];
+        const sentContractsList: Contract[] = sentRes.ok && Array.isArray(sentRes.data)
+            ? sentRes.data.map((c: any) => ({ ...c, id: c.id || c._id }))
+            : [];
+        setSentContracts(sentContractsList);
 
         // Signature: contracts assigned to current user for signing
         const sigContracts = ownedContracts.filter(c => {
@@ -120,10 +144,18 @@ export default function InboxPage() {
             c => !(c.renewedContractId && assignedIds.has(c.renewedContractId))
         );
 
-        // Merge inbox R&A + signature contracts (dedup by id)
+        // Merge inbox R&A + signature contracts + unified flow contracts (dedup by id)
         const merged = [...inboxContracts];
         headSigContracts.forEach(c => {
             if (!merged.some(r => r.id === c.id)) merged.push(c);
+        });
+        unifiedContracts.forEach(c => {
+            const idx = merged.findIndex(r => r.id === c.id);
+            if (idx >= 0) {
+                merged[idx] = { ...merged[idx], ...c }; // enrich with participants from unified version
+            } else {
+                merged.push(c);
+            }
         });
 
         setAllContracts(merged);
@@ -150,6 +182,17 @@ export default function InboxPage() {
         const result: InboxItem[] = [];
 
         allContracts.forEach(c => {
+            // Unified flow check FIRST — contracts with participants bypass all legacy classification
+            if ((c.participants?.length ?? 0) > 0) {
+                const myParticipant = c.participants!.find(
+                    p => p.email.toLowerCase() === currentUser.email.toLowerCase()
+                );
+                if (myParticipant && (myParticipant.status === 'unlocked' || myParticipant.status === 'in_progress')) {
+                    result.push({ type: 'unified', contract: c, role: myParticipant.role, participant: myParticipant });
+                }
+                return; // skip legacy R&A + signature logic for unified flow contracts
+            }
+
             const reviewers = (c as any).reviewers as Array<{ email: string; status: string }> | undefined;
             const approver = (c as any).approver as { email: string; status: string } | undefined;
 
@@ -231,6 +274,17 @@ export default function InboxPage() {
                 }
             }
 
+            // Unified flow sendbox: participant who has completed or been rejected
+            if ((c.participants?.length ?? 0) > 0) {
+                const myParticipant = c.participants!.find(
+                    p => p.email.toLowerCase() === currentUser.email.toLowerCase()
+                );
+                if (myParticipant && (myParticipant.status === 'completed' || myParticipant.status === 'rejected')) {
+                    result.push({ type: 'unified', contract: c, role: myParticipant.role, participant: myParticipant });
+                }
+                return;
+            }
+
             // Signature: completed signing
             const internalSigner = (c.internalSigners || []).find(s => s.email === currentUser.email);
             const isCompleted =
@@ -241,8 +295,29 @@ export default function InboxPage() {
                 result.push({ type: 'signature', contract: c });
         });
 
+        // Unified flow sent: contracts from getFlowSent() — completed/rejected participants.
+        // These are NOT in allContracts (inbox only returns active participants).
+        // The sent endpoint guarantees the current user is a completed participant, so
+        // push regardless — inject a synthetic completed participant when participants[]
+        // isn't included in the response so UnifiedFlowInboxCard renders the right status.
+        sentContracts.forEach(c => {
+            if (result.some(r => r.contract.id === c.id)) return; // avoid duplicates
+            const found = c.participants?.find(
+                p => p.email.toLowerCase() === currentUser.email.toLowerCase()
+            );
+            const participant: WorkflowParticipant = found ?? {
+                email: currentUser.email,
+                role: 'REVIEWER',
+                status: 'completed',
+                order: 1,
+            };
+            // Enrich the contract so UnifiedFlowInboxCard can find the participant itself
+            const enriched: Contract = found ? c : { ...c, participants: [participant, ...(c.participants ?? [])] };
+            result.push({ type: 'unified', contract: enriched, role: participant.role, participant });
+        });
+
         return result;
-    }, [allContracts, currentUser]);
+    }, [allContracts, sentContracts, currentUser]);
 
     const tabItems = tabValue === 0 ? inboxItems : sendboxItems;
 
@@ -293,6 +368,42 @@ export default function InboxPage() {
         setEndDate(null);
     };
 
+    // ── Unified flow panel handlers ───────────────────────────────────────────
+    const handleOpenUnifiedPanel = async (contractId: string, role: 'REVIEWER' | 'APPROVER') => {
+        const contract = allContracts.find(c => c.id === contractId)
+            ?? sentContracts.find(c => c.id === contractId);
+        if (!contract || !currentUser) return;
+        const participant = contract.participants?.find(p => p.email.toLowerCase() === currentUser.email.toLowerCase())
+            ?? { email: currentUser.email, role, status: 'completed' as const, order: 1 };
+        if (!participant) return;
+
+        // Fetch flow status to get party type config + field-to-party mapping (formFields).
+        // formFields.assignedParty is the most reliable way to know which fields are EXTERNAL.
+        let enrichedContract = contract;
+        const flowStatus = await unifiedFlowService.getFlowStatus(contractId);
+        if (flowStatus.ok && flowStatus.data) {
+            enrichedContract = {
+                ...contract,
+                ...(flowStatus.data.parties?.length ? { parties: flowStatus.data.parties } : {}),
+                ...(flowStatus.data.formFields?.length ? { formFields: flowStatus.data.formFields } : {}),
+                ...(flowStatus.data.xfdfData ? { xfdfData: flowStatus.data.xfdfData } : {}),
+            };
+        }
+
+        setSelectedUnifiedContract(enrichedContract);
+        setSelectedUnifiedParticipant(participant);
+        if (role === 'REVIEWER') setUnifiedReviewerOpen(true);
+        else setUnifiedApproverOpen(true);
+    };
+
+    const handleUnifiedActed = () => {
+        setUnifiedReviewerOpen(false);
+        setUnifiedApproverOpen(false);
+        setSelectedUnifiedContract(null);
+        setSelectedUnifiedParticipant(null);
+        loadContracts();
+    };
+
     // ── Viewer ────────────────────────────────────────────────────────────────
     const resolveFileUrl = async (contract: Contract): Promise<string> => {
         // Spring Boot contracts: files are in MinIO — fetch a 15-min presigned URL
@@ -308,8 +419,35 @@ export default function InboxPage() {
     };
 
     const handleViewReview = async (id: string) => {
-        const contract = allContracts.find(c => c.id === id);
+        const contract = allContracts.find(c => c.id === id) ?? sentContracts.find(c => c.id === id);
         if (!contract) return;
+
+        // Probe unified flow status first.
+        // GET /contracts/{id}/flow/status is accessible to owner OR any participant.
+        // GET /contracts/{id} (getContractDetails) is owner-only → always 404 for reviewers.
+        if (currentUser) {
+            const flowStatus = await unifiedFlowService.getFlowStatus(id);
+            if (flowStatus.ok && flowStatus.data?.participants?.length) {
+                const myParticipant = flowStatus.data.participants.find(
+                    (p: WorkflowParticipant) => p.email.toLowerCase() === currentUser.email.toLowerCase()
+                );
+                if (myParticipant) {
+                    setSelectedUnifiedContract({
+                        ...contract,
+                        participants: flowStatus.data.participants,
+                        ...(flowStatus.data.parties?.length ? { parties: flowStatus.data.parties } : {}),
+                        ...(flowStatus.data.formFields?.length ? { formFields: flowStatus.data.formFields } : {}),
+                        ...(flowStatus.data.xfdfData ? { xfdfData: flowStatus.data.xfdfData } : {}),
+                    });
+                    setSelectedUnifiedParticipant(myParticipant);
+                    if (myParticipant.role === 'REVIEWER') setUnifiedReviewerOpen(true);
+                    else setUnifiedApproverOpen(true);
+                    return;
+                }
+            }
+        }
+
+        // Legacy path
         setViewerMode('review');
         setSelectedContract(contract);
         setViewerFileUrl(await resolveFileUrl(contract));
@@ -675,6 +813,17 @@ export default function InboxPage() {
                             gap: 2,
                         }}>
                             {filteredItems.map((item, index) => {
+                                if (item.type === 'unified') {
+                                    return (
+                                        <UnifiedFlowInboxCard
+                                            key={`unified-${item.contract.id}-${index}`}
+                                            contract={item.contract}
+                                            onOpen={handleOpenUnifiedPanel}
+                                            onComplete={() => loadContracts()}
+                                            onReloaded={() => loadContracts()}
+                                        />
+                                    );
+                                }
                                 if (item.type === 'review') {
                                     return (
                                         <ReviewApprovalCard
@@ -828,6 +977,36 @@ export default function InboxPage() {
                     onClose={() => setSignaturePadOpen(false)}
                     onSign={handleSign}
                 />
+
+                {/* Unified Flow Reviewer Panel */}
+                {selectedUnifiedContract && selectedUnifiedParticipant && selectedUnifiedParticipant.role === 'REVIEWER' && (
+                    <UnifiedFlowReviewerPanel
+                        open={unifiedReviewerOpen}
+                        onClose={() => { setUnifiedReviewerOpen(false); setSelectedUnifiedContract(null); setSelectedUnifiedParticipant(null); }}
+                        onActed={handleUnifiedActed}
+                        contractId={selectedUnifiedContract.id}
+                        contractTitle={selectedUnifiedContract.title}
+                        participant={selectedUnifiedParticipant}
+                        contractParties={selectedUnifiedContract.parties}
+                        flowFormFields={selectedUnifiedContract.formFields}
+                        statusXfdf={selectedUnifiedContract.xfdfData}
+                    />
+                )}
+
+                {/* Unified Flow Approver Panel */}
+                {selectedUnifiedContract && selectedUnifiedParticipant && selectedUnifiedParticipant.role === 'APPROVER' && (
+                    <UnifiedFlowApproverPanel
+                        open={unifiedApproverOpen}
+                        onClose={() => { setUnifiedApproverOpen(false); setSelectedUnifiedContract(null); setSelectedUnifiedParticipant(null); }}
+                        onActed={handleUnifiedActed}
+                        contractId={selectedUnifiedContract.id}
+                        contractTitle={selectedUnifiedContract.title}
+                        participant={selectedUnifiedParticipant}
+                        contractParties={selectedUnifiedContract.parties}
+                        flowFormFields={selectedUnifiedContract.formFields}
+                        statusXfdf={selectedUnifiedContract.xfdfData}
+                    />
+                )}
 
                 {/* Snackbar */}
                 <NotificationSnackbar
