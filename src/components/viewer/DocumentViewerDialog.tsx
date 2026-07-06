@@ -97,6 +97,8 @@ interface DocumentViewerDialogProps {
     saveRef?: React.RefObject<(() => Promise<void>) | null>;
     /** When true, hides the built-in Save/Send button while onSave still works via saveRef */
     hideSaveButton?: boolean;
+    /** Externally supplied warning to show in the draggable popup — bypasses the internal validationTriggered guard */
+    externalWarning?: import('./pdfViewer/PartyValidationWarningPopup').PartyValidationEntry[] | null;
 }
 
 export default function DocumentViewerDialog({
@@ -132,6 +134,7 @@ export default function DocumentViewerDialog({
     contractParties,
     saveRef,
     hideSaveButton,
+    externalWarning,
 }: DocumentViewerDialogProps) {
 
 
@@ -863,7 +866,11 @@ export default function DocumentViewerDialog({
                     />
 
                     <PartyValidationWarningPopup
-                        partyValidationWarning={validationTriggered ? partyValidationWarning : null}
+                        partyValidationWarning={
+                            externalWarning != null
+                                ? externalWarning
+                                : (validationTriggered ? partyValidationWarning : null)
+                        }
                         onNavigateToField={(name) => pdfViewerRef.current?.navigateToField(name)}
                     />
 

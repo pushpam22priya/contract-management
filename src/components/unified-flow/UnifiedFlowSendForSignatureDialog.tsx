@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-    Box, Typography, TextField, Alert, Paper, useTheme,
+    Box, Typography, TextField, Alert, Paper, useTheme, List, ListItem, ListItemIcon, ListItemText, CircularProgress,
 } from '@mui/material';
-import { Add, Delete, SendOutlined, DriveFileRenameOutline, InfoOutlined } from '@mui/icons-material';
+import { Add, Delete, SendOutlined, DriveFileRenameOutline, InfoOutlined, WarningAmber, FiberManualRecord } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 import BaseDialog from '@/components/common/BaseDialog';
 import AppButton from '@/components/common/AppButton';
@@ -48,10 +48,26 @@ export default function UnifiedFlowSendForSignatureDialog({
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const handleOpen = () => {
+    // Internal-field gate: check that all INTERNAL party fields are filled before allowing send
+    const [checkingFields, setCheckingFields] = useState(false);
+    const [orgCheck, setOrgCheck] = useState<{ complete: boolean; unfilledFields: string[] } | null>(null);
+
+    useEffect(() => {
+        if (!open) return;
         setSigners([newSigner(1)]);
         setError(null);
-    };
+        setOrgCheck(null);
+        setCheckingFields(true);
+        unifiedFlowService.getFlowStatus(contractId).then((res) => {
+            if (res.ok && res.data) {
+                setOrgCheck({
+                    complete: res.data.orgFieldsComplete,
+                    unfilledFields: res.data.unfilledOrgFields || [],
+                });
+            }
+            setCheckingFields(false);
+        });
+    }, [open, contractId]);
 
     const addSigner = () => {
         const maxOrder = Math.max(...signers.map((s) => s.order));
@@ -79,6 +95,11 @@ export default function UnifiedFlowSendForSignatureDialog({
 
     const handleSend = async () => {
         setError(null);
+        // Block send if internal party fields are not yet fully filled
+        if (orgCheck && !orgCheck.complete) {
+            setError('Fill all internal party fields before sending to external signers.');
+            return;
+        }
         const err = validate();
         if (err) { setError(err); return; }
 
@@ -124,6 +145,7 @@ export default function UnifiedFlowSendForSignatureDialog({
                     <AppButton
                         variant="contained"
                         loading={submitting}
+                        disabled={checkingFields || (orgCheck != null && !orgCheck.complete)}
                         startIcon={<SendOutlined />}
                         onClick={handleSend}
                         sx={{
@@ -159,6 +181,42 @@ export default function UnifiedFlowSendForSignatureDialog({
                         Signers with the same order number are notified simultaneously.
                     </Typography>
                 </Alert>
+
+                {/* Internal-field gate: show loading spinner or warning while checking */}
+                {checkingFields && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CircularProgress size={14} />
+                        <Typography variant="caption" color="text.secondary">Checking field completion…</Typography>
+                    </Box>
+                )}
+
+                {!checkingFields && orgCheck && !orgCheck.complete && (
+                    <Alert
+                        severity="warning"
+                        icon={<WarningAmber fontSize="inherit" />}
+                        sx={{ borderRadius: 2, '& .MuiAlert-message': { width: '100%' } }}
+                    >
+                        <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                            Internal fields must be filled before sending to external signers:
+                        </Typography>
+                        <List dense disablePadding>
+                            {orgCheck.unfilledFields.map((field) => (
+                                <ListItem key={field} disableGutters sx={{ py: 0 }}>
+                                    <ListItemIcon sx={{ minWidth: 16 }}>
+                                        <FiberManualRecord sx={{ fontSize: 6, color: 'warning.main' }} />
+                                    </ListItemIcon>
+                                    <ListItemText
+                                        primary={field}
+                                        primaryTypographyProps={{ variant: 'caption', fontWeight: 500 }}
+                                    />
+                                </ListItem>
+                            ))}
+                        </List>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                            Close this dialog, fill the above fields in the contract, then come back to send.
+                        </Typography>
+                    </Alert>
+                )}
 
                 {error && (
                     <Alert severity="error" onClose={() => setError(null)} sx={{ borderRadius: 2 }}>

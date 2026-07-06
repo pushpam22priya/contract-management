@@ -299,6 +299,27 @@ const MultiPartySignatureDialog = ({
             return;
         }
 
+        // Gate: if any new assignment is external, all INTERNAL party fields must be filled first
+        const hasExternalAssignment = assignments.some(a => a.type === 'external');
+        if (hasExternalAssignment && formFields.length > 0) {
+            const internalParties = parties.filter(p => (p as any).type === 'INTERNAL');
+            if (internalParties.length > 0) {
+                const internalPartyIds = new Set(internalParties.map(p => p.id));
+                const missing: string[] = [];
+                for (const field of formFields) {
+                    if (!field.assignedParty || !internalPartyIds.has(field.assignedParty)) continue;
+                    const val = fieldValues[field.name];
+                    if (!val || String(val).trim() === '') {
+                        missing.push(field.name);
+                    }
+                }
+                if (missing.length > 0) {
+                    setError(`Fill all internal party fields before assigning external signers. Unfilled: ${missing.join(', ')}`);
+                    return;
+                }
+            }
+        }
+
         setLoading(true);
         setError(null);
 

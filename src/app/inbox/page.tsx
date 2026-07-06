@@ -387,6 +387,7 @@ export default function InboxPage() {
                 ...(flowStatus.data.parties?.length ? { parties: flowStatus.data.parties } : {}),
                 ...(flowStatus.data.formFields?.length ? { formFields: flowStatus.data.formFields } : {}),
                 ...(flowStatus.data.xfdfData ? { xfdfData: flowStatus.data.xfdfData } : {}),
+                externalSigningIncluded: flowStatus.data.externalSigningIncluded,
             };
         }
 
@@ -438,6 +439,7 @@ export default function InboxPage() {
                         ...(flowStatus.data.parties?.length ? { parties: flowStatus.data.parties } : {}),
                         ...(flowStatus.data.formFields?.length ? { formFields: flowStatus.data.formFields } : {}),
                         ...(flowStatus.data.xfdfData ? { xfdfData: flowStatus.data.xfdfData } : {}),
+                        externalSigningIncluded: flowStatus.data.externalSigningIncluded,
                     });
                     setSelectedUnifiedParticipant(myParticipant);
                     if (myParticipant.role === 'REVIEWER') setUnifiedReviewerOpen(true);
@@ -1005,6 +1007,8 @@ export default function InboxPage() {
                         contractParties={selectedUnifiedContract.parties}
                         flowFormFields={selectedUnifiedContract.formFields}
                         statusXfdf={selectedUnifiedContract.xfdfData}
+                        externalSigningIncluded={selectedUnifiedContract.externalSigningIncluded}
+                        allParticipants={selectedUnifiedContract.participants}
                     />
                 )}
 

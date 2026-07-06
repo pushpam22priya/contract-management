@@ -62,6 +62,9 @@ export default function UnifiedFlowReviewerPanel({
     const [rejectOpen, setRejectOpen] = useState(false);
     const [actionError, setActionError] = useState<string | null>(null);
 
+    // Prevents double-click: true from button click until phase transitions away from 'viewing'
+    const [submitting, setSubmitting] = useState(false);
+
     // Cached viewer output (refs avoid async state-update race in handleMarkComplete)
     const cachedBlobRef = useRef<Blob | null>(null);
     const cachedXfdfRef = useRef<string>('');
@@ -81,6 +84,7 @@ export default function UnifiedFlowReviewerPanel({
             setActionError(null);
             setUploadProgress(0);
             cachedBlobRef.current = null;
+            setSubmitting(false);
         }
     }, [open, contractId]);
 
@@ -127,6 +131,7 @@ export default function UnifiedFlowReviewerPanel({
 
     const handleMarkComplete = async () => {
         setActionError(null);
+        setSubmitting(true);
 
         // 1. Export current PDF state from the viewer (while viewer is still mounted)
         if (viewerSaveRef.current) {
@@ -136,6 +141,7 @@ export default function UnifiedFlowReviewerPanel({
         const blob = cachedBlobRef.current;
         if (!blob) {
             setActionError('Could not export the PDF. Please try saving first.');
+            setSubmitting(false);
             return;
         }
 
@@ -237,6 +243,7 @@ export default function UnifiedFlowReviewerPanel({
                     <AppButton
                         size="small"
                         variant="contained"
+                        loading={submitting}
                         startIcon={<CheckCircleOutline />}
                         onClick={handleMarkComplete}
                         sx={{ fontSize: '0.78rem', bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' } }}
@@ -248,6 +255,7 @@ export default function UnifiedFlowReviewerPanel({
                         size="small"
                         variant="outlined"
                         color="error"
+                        disabled={submitting}
                         startIcon={<CancelOutlined />}
                         onClick={() => setRejectOpen(true)}
                         sx={{ fontSize: '0.78rem' }}
@@ -347,7 +355,7 @@ export default function UnifiedFlowReviewerPanel({
                                 <AppButton
                                     variant="outlined"
                                     color="inherit"
-                                    onClick={() => { setPhase('viewing'); setPhaseError(null); }}
+                                    onClick={() => { setPhase('viewing'); setPhaseError(null); setSubmitting(false); }}
                                 >
                                     Back
                                 </AppButton>

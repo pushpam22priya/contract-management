@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
     Box, Typography, Alert, CircularProgress,
     LinearProgress, Stepper, Step, StepLabel, Tooltip, useTheme,
@@ -16,6 +16,7 @@ import AppButton from '@/components/common/AppButton';
 import UnifiedFlowRejectDialog from './UnifiedFlowRejectDialog';
 import { unifiedFlowService } from '@/services/unifiedFlowService';
 import type { WorkflowParticipant, FlowUploadPart } from '@/types/unifiedFlow';
+import type { PartyValidationEntry } from '@/components/viewer/pdfViewer/PartyValidationWarningPopup';
 
 const DocumentViewerDialog = dynamic(() => import('@/components/viewer/DocumentViewerDialog'), {
     ssr: false,
@@ -36,6 +37,10 @@ interface UnifiedFlowApproverPanelProps {
     contractParties?: any[]; // PartyConfiguration[] — INTERNAL parties editable, EXTERNAL read-only
     flowFormFields?: any[];  // formFields from flow status (name + assignedParty) — EXTERNAL field detection
     statusXfdf?: string;     // xfdfData from flow status — restores previously saved annotations
+    /** True when external signers were registered at flow-submit time (Case B). Triggers internal-field gate on approve. */
+    externalSigningIncluded?: boolean;
+    /** Full list of all participants — used to determine if this approver is the last one in the flow. */
+    allParticipants?: WorkflowParticipant[];
 }
 
 export default function UnifiedFlowApproverPanel({
@@ -48,6 +53,8 @@ export default function UnifiedFlowApproverPanel({
     contractParties,
     flowFormFields,
     statusXfdf,
+    externalSigningIncluded,
+    allParticipants,
 }: UnifiedFlowApproverPanelProps) {
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
@@ -80,7 +87,25 @@ export default function UnifiedFlowApproverPanel({
     const [rejectOpen, setRejectOpen] = useState(false);
     const [actionError, setActionError] = useState<string | null>(null);
 
+    // Internal-field gate: non-null when approver tried to submit with unfilled internal party fields
+    const [internalFieldsWarning, setInternalFieldsWarning] = useState<PartyValidationEntry[] | null>(null);
+
+    // Prevents double-click: true from button click until phase transitions away from 'viewing'
+    const [submitting, setSubmitting] = useState(false);
+
     const isReadOnly = participant.status === 'completed' || participant.status === 'rejected';
+
+    // True when this approver has the highest order among all APPROVER participants.
+    // The internal-field gate only runs for the last approver because external signers are
+    // triggered automatically right after the last approval completes.
+    const isLastApprover = useMemo(() => {
+        if (!allParticipants?.length) return true; // no info → assume last (safe: show gate rather than miss it)
+        const approverOrders = allParticipants
+            .filter((p) => p.role === 'APPROVER')
+            .map((p) => p.order);
+        if (approverOrders.length === 0) return true;
+        return participant.order === Math.max(...approverOrders);
+    }, [allParticipants, participant.order]);
 
     useEffect(() => {
         if (open) {
@@ -90,6 +115,8 @@ export default function UnifiedFlowApproverPanel({
             cachedBlobRef.current = null;
             setUploadProgress(0);
             setActionError(null);
+            setInternalFieldsWarning(null);
+            setSubmitting(false);
         }
     }, [open, contractId]);
 
@@ -220,6 +247,9 @@ export default function UnifiedFlowApproverPanel({
 
     const handleSignAndApprove = async () => {
         setActionError(null);
+        setInternalFieldsWarning(null);
+        setSubmitting(true);
+
         // Export current PDF state from viewer before uploading
         if (viewerSaveRef.current) {
             try { await viewerSaveRef.current(); } catch { /* fall through */ }
@@ -227,8 +257,49 @@ export default function UnifiedFlowApproverPanel({
         const blob = cachedBlobRef.current;
         if (!blob) {
             setActionError('Could not export the PDF. Please try again.');
+            setSubmitting(false);
             return;
         }
+
+        // Gate: only the LAST approver needs all internal party fields filled, because external
+        // signers are triggered automatically right after their submission.
+        if (externalSigningIncluded && isLastApprover && flowFormFields?.length && contractParties?.length) {
+            const internalPartyIds = new Set(
+                (contractParties as any[])
+                    .filter((p) => p.type !== 'EXTERNAL')
+                    .map((p) => p.id as string),
+            );
+            const currentValues = cachedFieldValuesRef.current;
+
+            // Group unfilled internal fields by their party
+            const unfilledByParty = new Map<string, { party: any; missing: string[] }>();
+            for (const field of (flowFormFields as any[])) {
+                if (!field.assignedParty || !internalPartyIds.has(field.assignedParty)) continue;
+                const val = currentValues[field.name];
+                if (!val || String(val).trim() === '') {
+                    if (!unfilledByParty.has(field.assignedParty)) {
+                        const partyConfig = (contractParties as any[]).find((p) => p.id === field.assignedParty);
+                        unfilledByParty.set(field.assignedParty, { party: partyConfig, missing: [] });
+                    }
+                    unfilledByParty.get(field.assignedParty)!.missing.push(field.name);
+                }
+            }
+
+            if (unfilledByParty.size > 0) {
+                const warning: PartyValidationEntry[] = Array.from(unfilledByParty.entries()).map(
+                    ([partyId, { party, missing }]) => ({
+                        party: party || { id: partyId, label: partyId, color: '#f59e0b' },
+                        filled: (flowFormFields as any[]).filter((f) => f.assignedParty === partyId).length - missing.length,
+                        total: (flowFormFields as any[]).filter((f) => f.assignedParty === partyId).length,
+                        missing,
+                    }),
+                );
+                setInternalFieldsWarning(warning);
+                setSubmitting(false);
+                return;
+            }
+        }
+
         handleUploadAndComplete(blob);
     };
 
@@ -261,6 +332,7 @@ export default function UnifiedFlowApproverPanel({
                     <AppButton
                         size="small"
                         variant="contained"
+                        loading={submitting}
                         startIcon={<Create />}
                         onClick={handleSignAndApprove}
                         sx={{ fontSize: '0.78rem', bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' } }}
@@ -271,6 +343,7 @@ export default function UnifiedFlowApproverPanel({
                         size="small"
                         variant="outlined"
                         color="error"
+                        disabled={submitting}
                         startIcon={<CancelOutlined />}
                         onClick={() => setRejectOpen(true)}
                         sx={{ fontSize: '0.78rem' }}
@@ -388,7 +461,7 @@ export default function UnifiedFlowApproverPanel({
                                 <AppButton
                                     variant="outlined"
                                     color="inherit"
-                                    onClick={() => { setPhase('viewing'); setPhaseError(null); }}
+                                    onClick={() => { setPhase('viewing'); setPhaseError(null); setSubmitting(false); }}
                                 >
                                     Back to Contract
                                 </AppButton>
@@ -442,6 +515,7 @@ export default function UnifiedFlowApproverPanel({
                 initialXfdf={initialXfdf}
                 saveRef={viewerSaveRef}
                 hideSaveButton
+                externalWarning={internalFieldsWarning}
             />
 
             {/* Upload / Done / Error overlay dialogs */}
