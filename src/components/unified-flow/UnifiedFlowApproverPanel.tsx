@@ -100,7 +100,27 @@ export default function UnifiedFlowApproverPanel({
         setLoadingUrl(false);
         if (res.ok && res.data?.url) {
             setFileUrl(res.data.url);
-            setInitialXfdf(statusXfdf || res.data.xfdfData || undefined);
+            // Prefer statusXfdf (from flow status fetched by parent), then file-url response.
+            // If neither has xfdfData, fall back to the internal Next.js contract route
+            // which reads directly from MongoDB and always includes xfdfData.
+            // (The Spring Boot GET /contracts/{id} is owner-only, but
+            //  the internal /api/contracts/{id} has no such restriction.)
+            let xfdf = statusXfdf || res.data.xfdfData;
+            if (!xfdf) {
+                try {
+                    const fallbackRes = await fetch(`/api/contracts/${contractId}`);
+                    if (fallbackRes.ok) {
+                        const contractData = await fallbackRes.json();
+                        if (contractData.xfdfData) {
+                            xfdf = contractData.xfdfData;
+                            // console.log(`📥 [ApproverPanel] Fetched xfdfData from internal contract route (${xfdf.length} chars)`);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('⚠️ [ApproverPanel] Could not fetch xfdfData from internal route:', e);
+                }
+            }
+            setInitialXfdf(xfdf || undefined);
         } else {
             setUrlError(res.message || 'Failed to load contract PDF.');
         }
@@ -277,13 +297,15 @@ export default function UnifiedFlowApproverPanel({
         const steps = ['Uploading PDF', 'Finalising'];
         const activeStep = phase === 'uploading' ? 0 : phase === 'completing' ? 1 : 2;
 
+        const canClose = phase === 'done' || phase === 'error';
+
         return (
             <BaseDialog
                 open
-                onClose={() => {}}
+                onClose={canClose ? handleDoneClose : () => {}}
                 title={phase === 'done' ? 'Approval Complete' : phase === 'error' ? 'Upload Failed' : 'Uploading Signed PDF'}
                 maxWidth="sm"
-                disableBackdropClick
+                disableBackdropClick={!canClose}
             >
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, py: 1 }}>
                     {(phase === 'uploading' || phase === 'completing') && (

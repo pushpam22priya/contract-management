@@ -9,7 +9,8 @@ import {
 import {
     Add, Delete, RateReview, ThumbUp, DragIndicator,
     Groups, PeopleAlt, InfoOutlined, SendOutlined, DriveFileRenameOutline,
-    BusinessCenter,
+    BusinessCenter, CheckCircle, RadioButtonUnchecked, TaskAlt,
+    HourglassEmpty, ErrorOutline, AutoAwesome, Person,
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 import BaseDialog from '@/components/common/BaseDialog';
@@ -17,7 +18,7 @@ import AppButton from '@/components/common/AppButton';
 import { userService, User } from '@/services/userService';
 import { authService } from '@/services/authService';
 import { unifiedFlowService } from '@/services/unifiedFlowService';
-import type { ParticipantAssignment, ParticipantRole, ExternalSignerSubmitInput } from '@/types/unifiedFlow';
+import type { ParticipantAssignment, ParticipantRole, ExternalSignerSubmitInput, FlowStatusResponse, WorkflowParticipant, ParticipantStatus } from '@/types/unifiedFlow';
 
 interface UnifiedFlowSubmitDialogProps {
     open: boolean;
@@ -86,18 +87,31 @@ export default function UnifiedFlowSubmitDialog({
     const [error, setError] = useState<string | null>(null);
     const [externalParties, setExternalParties] = useState<Array<{ id: string; label: string; order: number }>>([]);
     const [loadingParties, setLoadingParties] = useState(false);
+    const [activeFlowStatus, setActiveFlowStatus] = useState<FlowStatusResponse | null>(null);
+    const [checkingStatus, setCheckingStatus] = useState(false);
 
     useEffect(() => {
         if (open) {
-            loadUsers();
-            setRows([
-                newParticipantRow('REVIEWER', 1),
-                newParticipantRow('APPROVER', 2),
-            ]);
-            setExternalSigningIncluded(false);
-            setExternalSigners([]);
-            setExternalParties([]);
-            setError(null);
+            // Check if a flow is already active before showing the editable form
+            setCheckingStatus(true);
+            setActiveFlowStatus(null);
+            unifiedFlowService.getFlowStatus(contractId).then((res) => {
+                if (res.ok && res.data && (res.data.participants?.length ?? 0) > 0) {
+                    setActiveFlowStatus(res.data);
+                } else {
+                    // No active flow — prepare the editable form
+                    loadUsers();
+                    setRows([
+                        newParticipantRow('REVIEWER', 1),
+                        newParticipantRow('APPROVER', 2),
+                    ]);
+                    setExternalSigningIncluded(false);
+                    setExternalSigners([]);
+                    setExternalParties([]);
+                    setError(null);
+                }
+                setCheckingStatus(false);
+            });
         }
     }, [open]);
 
@@ -271,6 +285,283 @@ export default function UnifiedFlowSubmitDialog({
 
     const sectionBg = isDark ? alpha('#ffffff', 0.03) : '#f8fafc';
     const sectionBorder = isDark ? alpha('#ffffff', 0.08) : '#e2e8f0';
+
+    // ─── Read-only mode helpers ────────────────────────────────────────────────
+    const FLOW_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+        IN_REVIEW:            { label: 'Under Review',         color: '#3b82f6', bg: isDark ? alpha('#3b82f6', 0.1) : '#eff6ff' },
+        IN_APPROVAL:          { label: 'In Approval',          color: '#f59e0b', bg: isDark ? alpha('#f59e0b', 0.1) : '#fffbeb' },
+        READY_FOR_SIGNATURE:  { label: 'Ready for Signature',  color: '#8b5cf6', bg: isDark ? alpha('#8b5cf6', 0.1) : '#f5f3ff' },
+        IN_SIGNATURE:         { label: 'In Signature',         color: '#14b8a6', bg: isDark ? alpha('#14b8a6', 0.1) : '#f0fdfa' },
+        REJECTED:             { label: 'Rejected',             color: '#ef4444', bg: isDark ? alpha('#ef4444', 0.1) : '#fef2f2' },
+        ALL_COMPLETED:        { label: 'Completed',            color: '#10b981', bg: isDark ? alpha('#10b981', 0.1) : '#f0fdf4' },
+        COMPLETED:            { label: 'Completed',            color: '#10b981', bg: isDark ? alpha('#10b981', 0.1) : '#f0fdf4' },
+    };
+
+    const PARTICIPANT_STATUS_CONFIG: Record<string, { label: string; color: string; Icon: React.ElementType }> = {
+        pending:     { label: 'Waiting',     color: '#94a3b8', Icon: RadioButtonUnchecked },
+        unlocked:    { label: 'Notified',    color: '#3b82f6', Icon: HourglassEmpty },
+        in_progress: { label: 'In Progress', color: '#f59e0b', Icon: HourglassEmpty },
+        completed:   { label: 'Completed',   color: '#10b981', Icon: TaskAlt },
+        rejected:    { label: 'Rejected',    color: '#ef4444', Icon: ErrorOutline },
+    };
+
+    const renderParticipantCard = (p: WorkflowParticipant, isActive: boolean) => {
+        const cfg = PARTICIPANT_STATUS_CONFIG[p.status] ?? PARTICIPANT_STATUS_CONFIG.pending;
+        const { Icon: StatusIcon } = cfg;
+        const roleColor = p.role === 'REVIEWER' ? '#3b82f6' : '#10b981';
+        const RoleIcon = p.role === 'REVIEWER' ? RateReview : ThumbUp;
+
+        return (
+            <Box
+                key={`${p.email}-${p.order}`}
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    p: 1.25,
+                    borderRadius: 2,
+                    bgcolor: isActive
+                        ? (isDark ? alpha(roleColor, 0.12) : alpha(roleColor, 0.06))
+                        : 'background.paper',
+                    border: '1px solid',
+                    borderColor: isActive ? alpha(roleColor, 0.4) : 'divider',
+                    transition: 'all 0.2s',
+                    boxShadow: isActive ? `0 0 0 2px ${alpha(roleColor, 0.2)}` : 'none',
+                }}
+            >
+                {/* Order badge */}
+                <Box sx={{
+                    minWidth: 26, height: 26, borderRadius: '50%',
+                    bgcolor: alpha(roleColor, 0.15),
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                    <Typography variant="caption" fontWeight={700} sx={{ fontSize: '0.68rem', color: roleColor }}>
+                        {p.order}
+                    </Typography>
+                </Box>
+
+                {/* Role icon */}
+                <RoleIcon sx={{ fontSize: 16, color: roleColor, flexShrink: 0 }} />
+
+                {/* Name + email */}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    {p.name && (
+                        <Typography variant="body2" fontWeight={600} noWrap sx={{ lineHeight: 1.2 }}>
+                            {p.name}
+                        </Typography>
+                    )}
+                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                        {p.email}
+                    </Typography>
+                </Box>
+
+                {/* Status chip */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                    <StatusIcon sx={{ fontSize: 14, color: cfg.color }} />
+                    <Typography variant="caption" fontWeight={600} sx={{ color: cfg.color, whiteSpace: 'nowrap' }}>
+                        {cfg.label}
+                    </Typography>
+                </Box>
+
+                {isActive && (
+                    <Box sx={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        bgcolor: roleColor, flexShrink: 0,
+                        animation: 'pulse 1.5s infinite',
+                        '@keyframes pulse': {
+                            '0%, 100%': { opacity: 1 },
+                            '50%': { opacity: 0.3 },
+                        },
+                    }} />
+                )}
+            </Box>
+        );
+    };
+
+    const renderReadOnlyView = () => {
+        if (!activeFlowStatus) return null;
+        const { status, participants, externalSigningIncluded: extIncluded, parties, externalSigners: extSigners, currentParticipantOrder } = activeFlowStatus;
+        const flowCfg = FLOW_STATUS_CONFIG[status] ?? { label: status, color: '#64748b', bg: sectionBg };
+
+        const reviewers = participants.filter((p) => p.role === 'REVIEWER').sort((a, b) => a.order - b.order);
+        const approvers = participants.filter((p) => p.role === 'APPROVER').sort((a, b) => a.order - b.order);
+        const externalPartySlots = (parties ?? []).filter((p) => p.type === 'EXTERNAL');
+
+        const isActiveParticipant = (p: WorkflowParticipant) =>
+            p.order === currentParticipantOrder && (p.status === 'unlocked' || p.status === 'in_progress');
+
+        const renderGroup = (
+            label: string,
+            subtext: string,
+            accentColor: string,
+            Icon: React.ElementType,
+            members: WorkflowParticipant[],
+        ) => (
+            <Paper elevation={0} sx={{ bgcolor: sectionBg, border: `1px solid ${sectionBorder}`, borderRadius: 2, overflow: 'hidden' }}>
+                <Box sx={{
+                    px: 1.5, py: 0.75,
+                    display: 'flex', alignItems: 'center', gap: 1,
+                    borderBottom: `1px solid ${sectionBorder}`,
+                    bgcolor: isDark ? alpha(accentColor, 0.08) : alpha(accentColor, 0.05),
+                }}>
+                    <Icon sx={{ fontSize: 16, color: accentColor }} />
+                    <Box sx={{ flex: 1 }}>
+                        <Typography variant="subtitle2" fontWeight={700} sx={{ color: accentColor }}>{label}</Typography>
+                        <Typography variant="caption" color="text.secondary">{subtext}</Typography>
+                    </Box>
+                    <Chip label={members.length} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700, bgcolor: alpha(accentColor, 0.15), color: accentColor }} />
+                </Box>
+                <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                    {members.length === 0 ? (
+                        <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'center', py: 1 }}>None assigned</Typography>
+                    ) : (
+                        members.map((p) => renderParticipantCard(p, isActiveParticipant(p)))
+                    )}
+                </Box>
+            </Paper>
+        );
+
+        return (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                {/* Contract name */}
+                {contractTitle && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, borderRadius: 1.5, bgcolor: isDark ? alpha('#ffffff', 0.04) : '#f8fafc', border: '1px solid', borderColor: 'divider' }}>
+                        <Groups sx={{ fontSize: 18, color: 'text.secondary' }} />
+                        <Typography variant="body2" color="text.secondary">
+                            Contract: <strong>{contractTitle}</strong>
+                        </Typography>
+                    </Box>
+                )}
+
+                {/* Flow status banner */}
+                <Box sx={{
+                    display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5, borderRadius: 2,
+                    bgcolor: flowCfg.bg, border: '1px solid', borderColor: alpha(flowCfg.color, 0.35),
+                }}>
+                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: flowCfg.color, flexShrink: 0 }} />
+                    <Box sx={{ flex: 1 }}>
+                        <Typography variant="subtitle2" fontWeight={700} sx={{ color: flowCfg.color }}>
+                            {flowCfg.label}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            {currentParticipantOrder !== null
+                                ? `Currently waiting on participants at order ${currentParticipantOrder}`
+                                : 'All participant steps are complete'}
+                        </Typography>
+                    </Box>
+                    {['IN_REVIEW', 'IN_APPROVAL', 'IN_SIGNATURE'].includes(status) && (
+                        <Box sx={{
+                            width: 8, height: 8, borderRadius: '50%', bgcolor: flowCfg.color,
+                            animation: 'pulse 2s infinite',
+                            '@keyframes pulse': { '0%, 100%': { opacity: 1, transform: 'scale(1)' }, '50%': { opacity: 0.4, transform: 'scale(0.8)' } },
+                        }} />
+                    )}
+                </Box>
+
+                {/* Reviewers */}
+                {reviewers.length > 0 && renderGroup('Reviewers', 'Can review & edit organisation fields.', '#3b82f6', RateReview, reviewers)}
+
+                {/* Approvers */}
+                {approvers.length > 0 && renderGroup('Approvers', 'Can sign the PDF and approve the contract.', '#10b981', ThumbUp, approvers)}
+
+                {/* External signing */}
+                {extIncluded && (
+                    <Paper elevation={0} sx={{ bgcolor: sectionBg, border: `1px solid ${isDark ? alpha('#f59e0b', 0.3) : '#fde68a'}`, borderRadius: 2, overflow: 'hidden' }}>
+                        <Box sx={{
+                            px: 1.5, py: 0.75, display: 'flex', alignItems: 'center', gap: 1,
+                            borderBottom: `1px solid ${sectionBorder}`,
+                            bgcolor: isDark ? alpha('#f59e0b', 0.08) : '#fffbeb',
+                        }}>
+                            <DriveFileRenameOutline sx={{ fontSize: 16, color: '#f59e0b' }} />
+                            <Box sx={{ flex: 1 }}>
+                                <Typography variant="subtitle2" fontWeight={700} sx={{ color: isDark ? '#fcd34d' : '#92400e' }}>External Client Signing</Typography>
+                                <Typography variant="caption" color="text.secondary">Emails sent automatically after all approvals</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <AutoAwesome sx={{ fontSize: 12, color: '#f59e0b' }} />
+                                <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 600 }}>Auto</Typography>
+                            </Box>
+                        </Box>
+                        <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                            {/* Prefer extSigners (have email) over party slots (no email) */}
+                            {(extSigners && extSigners.length > 0 ? extSigners : externalPartySlots).length === 0 ? (
+                                <Typography variant="caption" color="text.secondary" sx={{ p: 1 }}>
+                                    External signers will be notified after all approvers complete.
+                                </Typography>
+                            ) : extSigners && extSigners.length > 0 ? (
+                                extSigners.map((signer, idx) => (
+                                    <Box key={signer.email} sx={{
+                                        display: 'flex', alignItems: 'center', gap: 1.5, p: 1, borderRadius: 1.5,
+                                        bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
+                                    }}>
+                                        <Box sx={{ minWidth: 26, height: 26, borderRadius: '50%', bgcolor: alpha('#f59e0b', 0.12), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Typography variant="caption" fontWeight={700} sx={{ fontSize: '0.68rem', color: '#f59e0b' }}>{signer.order}</Typography>
+                                        </Box>
+                                        <Person sx={{ fontSize: 16, color: '#f59e0b', flexShrink: 0 }} />
+                                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                                            {signer.name && (
+                                                <Typography variant="body2" fontWeight={600} noWrap sx={{ lineHeight: 1.2 }}>
+                                                    {signer.name}
+                                                </Typography>
+                                            )}
+                                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                                                {signer.email}
+                                            </Typography>
+                                            {signer.partyLabel && (
+                                                <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 600 }}>
+                                                    {signer.partyLabel}
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                                            {status === 'IN_SIGNATURE' ? (
+                                                <>
+                                                    <CheckCircle sx={{ fontSize: 14, color: '#10b981' }} />
+                                                    <Typography variant="caption" fontWeight={600} sx={{ color: '#10b981' }}>Sent</Typography>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <HourglassEmpty sx={{ fontSize: 14, color: '#94a3b8' }} />
+                                                    <Typography variant="caption" fontWeight={600} sx={{ color: '#94a3b8' }}>Pending approval</Typography>
+                                                </>
+                                            )}
+                                        </Box>
+                                    </Box>
+                                ))
+                            ) : (
+                                externalPartySlots.map((slot) => (
+                                    <Box key={slot.id} sx={{
+                                        display: 'flex', alignItems: 'center', gap: 1.5, p: 1, borderRadius: 1.5,
+                                        bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
+                                    }}>
+                                        <Box sx={{ minWidth: 26, height: 26, borderRadius: '50%', bgcolor: alpha('#f59e0b', 0.12), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Typography variant="caption" fontWeight={700} sx={{ fontSize: '0.68rem', color: '#f59e0b' }}>{slot.order}</Typography>
+                                        </Box>
+                                        <Person sx={{ fontSize: 16, color: '#f59e0b', flexShrink: 0 }} />
+                                        <Typography variant="body2" fontWeight={600} sx={{ flex: 1 }}>{slot.label}</Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                                            {status === 'IN_SIGNATURE' ? (
+                                                <>
+                                                    <CheckCircle sx={{ fontSize: 14, color: '#10b981' }} />
+                                                    <Typography variant="caption" fontWeight={600} sx={{ color: '#10b981' }}>Sent</Typography>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <HourglassEmpty sx={{ fontSize: 14, color: '#94a3b8' }} />
+                                                    <Typography variant="caption" fontWeight={600} sx={{ color: '#94a3b8' }}>Pending approval</Typography>
+                                                </>
+                                            )}
+                                        </Box>
+                                    </Box>
+                                ))
+                            )}
+                        </Box>
+                    </Paper>
+                )}
+            </Box>
+        );
+    };
+    // ──────────────────────────────────────────────────────────────────────────
 
     const renderParticipantSection = (role: ParticipantRole, sectionRows: ParticipantRow[]) => {
         const isReviewer = role === 'REVIEWER';
@@ -629,35 +920,52 @@ export default function UnifiedFlowSubmitDialog({
         </Paper>
     );
 
+    const isReadOnlyMode = !checkingStatus && activeFlowStatus !== null;
+
     return (
         <BaseDialog
             open={open}
             onClose={handleClose}
-            title="SUBMIT FOR UNIFIED REVIEW"
+            title={isReadOnlyMode ? 'UNIFIED FLOW STATUS' : 'SUBMIT FOR UNIFIED REVIEW'}
             maxWidth="md"
             disableBackdropClick={submitting}
             actions={
-                <>
-                    <AppButton variant="outlined" onClick={handleClose} disabled={submitting}>
-                        Cancel
+                isReadOnlyMode ? (
+                    <AppButton variant="outlined" onClick={handleClose}>
+                        Close
                     </AppButton>
-                    <AppButton
-                        variant="contained"
-                        loading={submitting}
-                        disabled={rows.length === 0}
-                        startIcon={<SendOutlined />}
-                        onClick={handleSubmit}
-                        sx={{
-                            fontWeight: 600,
-                            px: 3,
-                            boxShadow: (t) => `0 2px 8px ${t.palette.primary.main}40`,
-                        }}
-                    >
-                        {submitting ? 'Submitting…' : 'Submit Flow'}
-                    </AppButton>
-                </>
+                ) : (
+                    <>
+                        <AppButton variant="outlined" onClick={handleClose} disabled={submitting}>
+                            Cancel
+                        </AppButton>
+                        <AppButton
+                            variant="contained"
+                            loading={submitting}
+                            disabled={rows.length === 0}
+                            startIcon={<SendOutlined />}
+                            onClick={handleSubmit}
+                            sx={{
+                                fontWeight: 600,
+                                px: 3,
+                                boxShadow: (t) => `0 2px 8px ${t.palette.primary.main}40`,
+                            }}
+                        >
+                            {submitting ? 'Submitting…' : 'Submit Flow'}
+                        </AppButton>
+                    </>
+                )
             }
         >
+            {checkingStatus ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {[80, 120, 120].map((h, i) => (
+                        <Box key={i} sx={{ height: h, borderRadius: 2, bgcolor: isDark ? alpha('#ffffff', 0.06) : '#f1f5f9', animation: 'shimmer 1.5s infinite', '@keyframes shimmer': { '0%': { opacity: 0.6 }, '50%': { opacity: 1 }, '100%': { opacity: 0.6 } } }} />
+                    ))}
+                </Box>
+            ) : isReadOnlyMode ? (
+                renderReadOnlyView()
+            ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 {/* Contract info */}
                 {contractTitle && (
@@ -762,6 +1070,7 @@ export default function UnifiedFlowSubmitDialog({
                     </Box>
                 )}
             </Box>
+            )}
         </BaseDialog>
     );
 }

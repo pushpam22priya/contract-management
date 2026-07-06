@@ -366,7 +366,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
         console.log('🔄 [ContractViewPage] Auto-refresh triggered — updating UI');
         setContract(freshContract);
 
-        const viewUrl = await apiService.getContractViewUrl(freshContract.id) || freshContract.fileUrl || '';
         setDetails((prev: any) => ({
             ...prev,
             ...freshContract,
@@ -375,7 +374,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 name: `${freshContract.title.replace(/\s*\(Renewal\d*\)$/i, '')}.pdf`,
                 size: 'PDF',
                 uploadDate: new Date(freshContract.createdAt).toLocaleDateString('en-GB'),
-                url: viewUrl,
+                url: '',
             }],
         }));
     }, []);
@@ -395,7 +394,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     /**
      * Helper to download a document (PDF)
      */
-    const handleDownloadDocument = (doc: Document) => {
+    const handleDownloadDocument = async (doc: Document) => {
         console.log('📥 [ContractViewPage] Downloading document:', doc.id);
 
         let downloadUrl = doc.url;
@@ -404,6 +403,10 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
         if (doc.id === 'main-contract' && contract?.signedPdfBase64) {
             console.log('📄 [ContractViewPage] Using signedPdfBase64 for download');
             downloadUrl = `data:application/pdf;base64,${contract.signedPdfBase64}`;
+        }
+
+        if (!downloadUrl) {
+            downloadUrl = await apiService.getContractViewUrl(doc.id) || '';
         }
 
         if (!downloadUrl) {
@@ -525,8 +528,15 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     };
 
     // View Document Handler
-    const handleViewDocument = (doc: Document) => {
-        setSelectedDoc(doc);
+    const handleViewDocument = async (doc: Document) => {
+        let docWithUrl = doc;
+        if(!doc.url){
+            docWithUrl = {
+                ...doc,
+                url: await apiService.getContractViewUrl(doc.id) || ''
+            }
+        }
+        setSelectedDoc(docWithUrl);
         setViewerOpen(true);
     };
 

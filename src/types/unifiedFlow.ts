@@ -46,6 +46,8 @@ export interface FlowStatusResponse {
     unfilledOrgFields: string[];
     /** Party configurations with INTERNAL/EXTERNAL type — used to compute editable parties */
     parties?: Array<{ id: string; label: string; color: string; order: number; type?: 'INTERNAL' | 'EXTERNAL' | null }>;
+    /** External signers stored at submit time — returned by the backend so owners can see who will receive signature emails */
+    externalSigners?: ExternalSignerSubmitInput[];
     /** Form fields with assignedParty — most reliable source for EXTERNAL field detection */
     formFields?: Array<{ name: string; assignedParty?: string; type?: string; value?: string; partyLabel?: string; profileKey?: string | null }>;
     /** Stored XFDF from the last participant save — pass as initialXfdf to restore annotations in the viewer */

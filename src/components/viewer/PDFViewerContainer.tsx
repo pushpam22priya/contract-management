@@ -99,6 +99,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
         const initialLoadDone = useRef(false);
         const isLoadingInitialDocument = useRef(true); // ✅ Track if we're loading the initial document
+        const isImportingXfdf = useRef(false); // Suppress annotationChanged handlers during XFDF import
         // ✅ Ref-based Storage & Logic (Extracted to Hooks)
         const {
             isInitializingRef,
@@ -1969,6 +1970,45 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                         console.log('✅ Default tool mode set to Pan (View)');
                         // Sync viewer theme with app theme on init
                         UI.setTheme(isDark ? UI.Theme.DARK : UI.Theme.LIGHT);
+
+                        // ✅ PERFORMANCE: Disable form-field UI panels/popups that subscribe to
+                        // fieldChanged via useOnFormFieldsChanged. On a large PDF (11k pages,
+                        // 12k+ widgets), each field render fires the hook → React re-render →
+                        // re-registers non-passive touchstart listener → Chrome DevTools OOM crash.
+                        UI.disableElements([
+                            // Form-field EDIT popup (template-definition editor, not signing)
+                            'formFieldEditPopup',
+                            'formFieldIndicatorContainer',
+                            'formFieldIndicator',
+                            'formFieldPanel',
+                            'formFieldPanelButton',
+                            'formFieldOptionsPopup',
+                            // Annotation notes panel (subscribes to annotationChanged; renders one row per annotation)
+                            'notesPanel',
+                            'notesPanelButton',
+                            // NOTE: intentionally NOT disabling signatureFieldPopup, signatureListPanel,
+                            // signatureOptionsButton, textFieldPopup, annotationDeleteButton,
+                            // annotationStyleEditButton, annotationCommentButton — signers need these
+                            // to sign/fill/edit/delete their fields.
+                        ]);
+                        console.log('✅ [PERFORMANCE] Disabled form-field UI hooks to prevent touch-listener storm');
+
+                        // ✅ PERFORMANCE: For view-only mode (creator viewing signed contract),
+                        // enable annotation read-only mode BEFORE document load. This stops
+                        // WebViewer from creating a React component + touchstart listener per
+                        // form-field widget. On a 12k-widget PDF, that would OOM Chrome DevTools.
+                        // Signers still get interaction because editableParties is set for them.
+                        // Owner gets interaction because effectiveReadOnly is false before finalized.
+                        if (effectiveReadOnly) {
+                            try {
+                                if ((Core.annotationManager as any).enableReadOnlyMode) {
+                                    (Core.annotationManager as any).enableReadOnlyMode();
+                                    console.log('🔒 [PERFORMANCE] Enabled annotation read-only mode pre-load (view-only viewer)');
+                                }
+                            } catch (e) {
+                                console.warn('⚠️ Could not enable read-only mode:', e);
+                            }
+                        }
                     } catch (e) {
                         console.error('Failed to enable features:', e);
                     }
@@ -2146,6 +2186,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     // We capture them here and restore before export
                     try {
                         Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string, info: any) => {
+                            if (info?.imported) return;
+                            if (isImportingXfdf.current) return;
                             annotations.forEach((annot: any) => {
                                 // ✅ FIX: Check for ALL signature-type annotations (FreeHand or ANY Stamp)
                                 // Typed signatures create StampAnnotations without Subject='Signature'
@@ -2299,6 +2341,12 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         // ✅ Quick escape if this delete was triggered by our cleanup script
                                         if (info?.source === 'cleanup_script') {
                                             console.log(`🧹 [SIGNATURE DELETE] Ignoring annotation deletion (cleanup script)`);
+                                            return;
+                                        }
+
+                                        // ✅ Quick escape if this delete was triggered by our rebuild interceptor
+                                        if (info?.source === 'rebuild_intercept') {
+                                            console.log(`🧹 [SIGNATURE DELETE] Ignoring annotation deletion (rebuild intercept)`);
                                             return;
                                         }
 
@@ -2495,38 +2543,64 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             const isMultiPartyFlow = (editableParties && editableParties.length > 0) || protectedPartyIds !== undefined;
 
                             if (initialXfdf) {
-                                // ✅ MULTI-PARTY FIX: Always import XFDF when editableParties or protectedPartyIds is set
-                                // This is crucial for multi-party flows where:
-                                // - Internal signers save signatures to XFDF (flatten: false)
-                                // - Contractors need to see those signatures even if PDF has form widgets
-                                // - External signers need XFDF imported to see other parties' signatures
-
-                                if (hasExistingAnnotations && !isMultiPartyFlow) {
-                                    // PDF already has annotations AND not multi-party - skip XFDF import to preserve appearances
-                                    console.log('⚠️ [IMPORT] PDF has existing annotations - SKIPPING XFDF import to preserve appearances');
-                                    console.log(`✅ [IMPORT] Using ${existingAnnotations.length} embedded annotations from PDF`);
-
-                                    // Log annotation types for debugging
-                                    const annotTypes = existingAnnotations.map((a: any) => a.constructor.name);
-                                    const typeCount: Record<string, number> = {};
-                                    annotTypes.forEach((t: string) => { typeCount[t] = (typeCount[t] || 0) + 1; });
-                                    console.log('📊 [IMPORT] Existing annotation types:', typeCount);
-                                } else {
-                                    // Import XFDF if: 1) No existing annotations OR 2) Multi-party flow
-                                    if (isMultiPartyFlow) {
-                                        console.log('📥 [IMPORT] Multi-party flow detected - importing XFDF to load all parties\' signatures...');
+                                // Filter XFDF to only signature annotations (FreeHand/Stamp/Ink).
+                                // The PDF already has form-field widgets embedded and auto-loaded by PDFTron.
+                                // Importing the full XFDF creates duplicate IDs → rename events bypass guards.
+                                let signatureXfdf: string | null = null;
+                                let filteredSigCount = 0;
+                                let totalAnnotCount = 0;
+                                try {
+                                    const parser = new DOMParser();
+                                    const xmlDoc = parser.parseFromString(initialXfdf, 'text/xml');
+                                    // Use getElementsByTagName — namespace-safe alternative to querySelector
+                                    const annotsEl = xmlDoc.getElementsByTagName('annots')[0] as Element | undefined;
+                                    if (annotsEl) {
+                                        totalAnnotCount = annotsEl.children.length;
+                                        const sigTags = new Set(['freehand', 'stamp', 'ink']);
+                                        const toRemove: Element[] = [];
+                                        for (const child of Array.from(annotsEl.children)) {
+                                            const tag = child.tagName.toLowerCase();
+                                            if (!sigTags.has(tag)) toRemove.push(child);
+                                        }
+                                        toRemove.forEach(el => annotsEl.removeChild(el));
+                                        filteredSigCount = annotsEl.children.length;
+                                        if (filteredSigCount > 0) {
+                                            signatureXfdf = new XMLSerializer().serializeToString(xmlDoc);
+                                        }
+                                        console.log(`🔍 [FILTER] XFDF had ${totalAnnotCount} annotations, kept ${filteredSigCount} signatures (freehand/stamp/ink)`);
                                     } else {
-                                        console.log('📥 [IMPORT] No existing annotations - importing XFDF...');
+                                        console.warn('⚠️ [FILTER] Could not find <annots> element in XFDF — skipping import');
                                     }
-                                    console.log(`📥 [IMPORT] XFDF length: ${initialXfdf.length} chars`);
-                                    console.log(`📥 [IMPORT] XFDF preview: ${initialXfdf.substring(0, 500)}...`);
-                                    await Core.annotationManager.importAnnotations(initialXfdf);
+                                } catch (e) {
+                                    console.warn('⚠️ [IMPORT] Failed to filter XFDF, falling back to full import:', e);
+                                    signatureXfdf = initialXfdf;
+                                }
+
+                                // Skip import if the PDF has already auto-loaded these signatures into the
+                                // annotation manager AND this is not a multi-party flow (where we need all parties visible)
+                                const hasEmbeddedSignatures = existingAnnotations.some((a: any) =>
+                                    a instanceof Core.Annotations.FreeHandAnnotation ||
+                                    a instanceof Core.Annotations.StampAnnotation
+                                );
+                                if (hasEmbeddedSignatures && !isMultiPartyFlow) {
+                                    console.log('⚠️ [IMPORT] Signatures already in annotation manager, skipping import');
+                                    signatureXfdf = null;
+                                }
+
+
+                                console.log(`📥 [IMPORT] Signature-only XFDF: ${filteredSigCount} annotations (full XFDF: ${initialXfdf.length} chars)`);
+
+                                if (signatureXfdf) {
+                                    isImportingXfdf.current = true;
+                                    try {
+                                        await Core.annotationManager.importAnnotations(signatureXfdf);
+                                    } finally {
+                                        isImportingXfdf.current = false;
+                                    }
                                     const importedCount = Core.annotationManager.getAnnotationsList().length;
-                                    console.log(`✅ [IMPORT] XFDF imported successfully - ${importedCount} annotations loaded`);
+                                    console.log(`✅ [IMPORT] Signature XFDF imported - ${importedCount} total annotations`);
 
                                     // ✅ MULTI-PARTY: Capture signature annotations BEFORE cleanup
-                                    // This is critical for contractor view - we need to preserve signature annotations
-                                    // even after widget rebuild which happens automatically by PDFTron
                                     if (isMultiPartyFlow) {
                                         const allAnnots = Core.annotationManager.getAnnotationsList();
                                         const signatureAnnots = allAnnots.filter((a: any) =>
@@ -2551,11 +2625,18 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                             }
                                         }
                                     }
+                                }
 
-                                    // ✅ FIX: Cleanup duplicate signatures loaded from XFDF
-                                    // When a document is saved with `flatten: false`, both the Widget appearance
-                                    // AND the original FreeHand/Stamp annotations might be saved to XFDF.
-                                    // This causes the duplicate, draggable signatures.
+                                // Cleanup duplicate FreeHand/Stamp annotations that overlap a signature widget.
+                                // Only runs when editableParties is set — we need to know which party the
+                                // current user owns so we don't accidentally erase another party's signature.
+                                // In read-only / creator views (editableParties undefined) every FreeHand/Stamp
+                                // IS the visible signature appearance and must be preserved.
+                                // NOTE: This runs whether or not we imported new XFDF signatures, because the PDF
+                                // itself may already have auto-loaded FreeHand/Stamp annotations from prior sessions
+                                // that overlap the current user's widgets. Leaving them causes visual duplication
+                                // when the user re-signs the same field.
+                                if (editableParties && editableParties.length > 0) {
                                     const allAnnots = Core.annotationManager.getAnnotationsList();
                                     const widgets = allAnnots.filter((a: any) =>
                                         a instanceof Core.Annotations.WidgetAnnotation &&
@@ -2567,12 +2648,12 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     );
 
                                     let deletedCount = 0;
+                                    const keptDrawingsPerWidget = new Set<string>();
+
                                     drawings.forEach((drawing: any) => {
                                         const drawingRect = drawing.getRect();
-                                        // Find a signature widget that overlaps completely/heavily with this drawing
                                         const overlappingWidget = widgets.find((w: any) => {
                                             const wRect = w.getRect();
-                                            // 10px tolerance for overlap detection
                                             const tolerance = 10;
                                             return drawing.PageNumber === w.PageNumber &&
                                                 drawingRect.x1 >= wRect.x1 - tolerance &&
@@ -2582,7 +2663,18 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                         });
 
                                         if (overlappingWidget) {
-                                            // Remove from capture ref so the 1200ms widget-rebuild timer doesn't restore it
+                                            const widgetId = overlappingWidget.Id;
+
+                                            // ✅ CRITICAL FIX: Always preserve exactly ONE signature per widget.
+                                            // Previously, we deleted ALL signatures on editable widgets assuming the
+                                            // current user would "sign fresh". But in multi-approver flows, 
+                                            // an "editable" widget might already have Approver 1's signature on it.
+                                            if (!keptDrawingsPerWidget.has(widgetId)) {
+                                                keptDrawingsPerWidget.add(widgetId);
+                                                return; // Keep this first drawing
+                                            }
+
+                                            // Duplicate drawing on the same widget - safe to delete
                                             capturedSignatureAnnotationsRef.current.delete(drawing.Id);
                                             Core.annotationManager.deleteAnnotation(drawing, { force: true, source: 'cleanup_script' } as any);
                                             deletedCount++;
@@ -2590,7 +2682,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     });
 
                                     if (deletedCount > 0) {
-                                        console.log(`🧹 [CLEANUP] Removed ${deletedCount} duplicate FreeHand/Stamp annotations overlapping signature widgets`);
+                                        console.log(`🧹 [CLEANUP] Removed ${deletedCount} FreeHand/Stamp annotations overlapping editable-party widgets (other parties preserved)`);
                                     }
                                 }
 
@@ -2904,11 +2996,94 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                     captureSignaturePositions();
                                 }, 3000);
 
+                                // ✅ MULTI-PARTY: Synchronous interceptor for widget-appearance rebuild drawings.
+                                // When PDFTron loads a signed PDF that has flattened widget appearances, it recreates
+                                // FreeHand/Stamp annotations from those appearances ~500ms after document load. If we
+                                // also imported signatures from XFDF, both pipelines produce drawings on the same
+                                // widget — causing overlap and dangling widget.annot references.
+                                //
+                                // Rules:
+                                //   • On EDITABLE widgets (current user's fields): delete every rebuild drawing —
+                                //     the user needs a clean widget to sign into.
+                                //   • On PROTECTED widgets (other parties' fields): only delete the rebuild drawing
+                                //     if another drawing already exists on that widget (i.e., duplicate). If it's
+                                //     the only drawing (XFDF import produced nothing, e.g., PDF flatten baked in
+                                //     the appearance and XFDF was empty of signatures), keep it so the signer can
+                                //     still see other parties' signatures.
+                                if (isMultiPartyFlow) {
+                                    Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string, info: any) => {
+                                        if (action !== 'add') return;
+                                        if (!info?.imported) return; // widget-rebuild / re-import events only
+                                        if (isImportingXfdf.current) return; // don't interfere with our own XFDF import
+
+                                        try {
+                                            const allAnnots = Core.annotationManager.getAnnotationsList();
+                                            const sigWidgets = allAnnots.filter((a: any) =>
+                                                a instanceof Core.Annotations.WidgetAnnotation &&
+                                                (a.getField()?.type === 'Sig' || a.getField()?.type === 'signature')
+                                            );
+                                            const allDrawings = allAnnots.filter((a: any) =>
+                                                a instanceof Core.Annotations.FreeHandAnnotation ||
+                                                a instanceof Core.Annotations.StampAnnotation
+                                            );
+                                            const tolerance = 10;
+                                            const overlaps = (aRect: any, wRect: any, aPage: number, wPage: number) =>
+                                                aPage === wPage &&
+                                                aRect.x1 >= wRect.x1 - tolerance &&
+                                                aRect.x2 <= wRect.x2 + tolerance &&
+                                                aRect.y1 >= wRect.y1 - tolerance &&
+                                                aRect.y2 <= wRect.y2 + tolerance;
+
+                                            const toDelete: any[] = [];
+
+                                            annotations.forEach((annot: any) => {
+                                                const isDrawing = annot instanceof Core.Annotations.FreeHandAnnotation ||
+                                                    annot instanceof Core.Annotations.StampAnnotation;
+                                                if (!isDrawing) return;
+
+                                                const aRect = annot.getRect?.();
+                                                if (!aRect) return;
+
+                                                // Find the signature widget this drawing lands on
+                                                const targetWidget = sigWidgets.find((w: any) =>
+                                                    overlaps(aRect, w.getRect(), annot.PageNumber, w.PageNumber)
+                                                );
+                                                if (!targetWidget) return;
+
+                                                // ✅ CRITICAL FIX: Treat all widgets equally here. 
+                                                // Keep exactly 1 signature per widget. If another drawing (from XFDF) 
+                                                // already exists on this widget, delete this rebuild drawing.
+                                                // We no longer blindly delete signatures on "editable" widgets, 
+                                                // which protects prior approvers' signatures in multi-party flows.
+                                                const wRect = targetWidget.getRect();
+                                                const anotherExists = allDrawings.some((d: any) =>
+                                                    d.Id !== annot.Id &&
+                                                    overlaps(d.getRect(), wRect, d.PageNumber, targetWidget.PageNumber)
+                                                );
+                                                
+                                                if (anotherExists) {
+                                                    toDelete.push(annot);
+                                                }
+                                            });
+
+                                            if (toDelete.length > 0) {
+                                                toDelete.forEach((annot: any) => {
+                                                    Core.annotationManager.deleteAnnotation(annot, { force: true, source: 'rebuild_intercept' } as any);
+                                                });
+                                                console.log(`🚫 [REBUILD INTERCEPT] Deleted ${toDelete.length} duplicate rebuild drawing(s) — kept exactly 1 per widget`);
+                                            }
+                                        } catch (e) {
+                                            console.warn('⚠️ [REBUILD INTERCEPT] Failed:', e);
+                                        }
+                                    });
+                                }
+
                                 // ✅ MULTI-PARTY: Restore signature annotations after widget rebuild
-                                // Widget rebuild happens automatically after document load and wipes out signature annotations
-                                // We restore them from capturedSignatureAnnotationsRef which was populated during XFDF import
-                                if (isMultiPartyFlow && capturedSignatureAnnotationsRef.current.size > 0) {
+                                // (kept for cases where widget rebuild removes our XFDF-imported signatures)
+                                if (isMultiPartyFlow) {
                                     setTimeout(() => {
+                                        if (capturedSignatureAnnotationsRef.current.size === 0) return;
+
                                         console.log(`🔄 [WIDGET REBUILD] Checking if signature annotations need restoration...`);
                                         const currentAnnotations = Core.annotationManager.getAnnotationsList();
                                         const currentSignatureAnnotIds = new Set(
@@ -2967,6 +3142,8 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 // ✅ Add listener to detect and prevent signature position changes
                                 // Including cross-page drag tracking with deferred verification
                                 Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string, info: any) => {
+                                    if (info?.imported) return;
+                                    if (isImportingXfdf.current) return;
                                     // Handle position changes (drag)
                                     if (action === 'modify') {
                                         annotations.forEach((annot: any) => {
@@ -3473,7 +3650,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
 
                                 // ✅ Add silent restoration listener for read-only mode
                                 // Including cross-page drag tracking with deferred verification
-                                Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string) => {
+                                Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string, info: any) => {
+                                    if (info?.imported) return;
+                                    if (isImportingXfdf.current) return;
                                     if (action !== 'modify') return;
 
                                     annotations.forEach((annot: any) => {
@@ -3562,29 +3741,27 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 console.log('👂 [AUTO-SAVE] onFieldChange callback provided:', !!onFieldChange);
 
                                 // Listen for annotation changes (drawings, comments, form field widgets, etc.)
-                                Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string) => {
+                                Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string, info: any) => {
                                     // Ignore 'render' actions (these are just visual updates)
                                     if (action === 'render') return;
+                                    // Skip events from file loading (PDF load, lazy page load, XFDF import, dedup renames)
+                                    if (info?.imported) return;
+                                    if (isImportingXfdf.current) return;
 
-                                    // Check if any of the annotations are form field widgets
-                                    const hasFormFieldWidgets = annotations.some((annot: any) => {
-                                        const isWidget = annot instanceof Core.Annotations.WidgetAnnotation ||
-                                            annot.elementName === 'widget' ||
-                                            annot.Subject === 'Widget';
-                                        if (isWidget) {
-                                            console.log(`📝 [AUTO-SAVE] Form field widget detected: ${annot.fieldName || 'unnamed'}, type: ${annot.constructor.name}`);
-                                        }
-                                        return isWidget;
-                                    });
+                                    // Only process modify/delete for non-widget annotations.
+                                    // 'add' with non-widgets fires for lazy-loaded page annotations and dedup renames —
+                                    // these are not user-generated and must not trigger document-modified state.
+                                    const hasFormFieldWidgets = annotations.some((annot: any) =>
+                                        annot instanceof Core.Annotations.WidgetAnnotation ||
+                                        annot.elementName === 'widget' ||
+                                        annot.Subject === 'Widget'
+                                    );
 
-                                    if (hasFormFieldWidgets) {
-                                        console.log(`🔔 [AUTO-SAVE] Form field annotation changed (action: ${action}, widgets: ${annotations.length})`);
-                                        // Notify parent that document has been modified
+                                    if (hasFormFieldWidgets && action !== 'add') {
+                                        console.log(`🔔 [AUTO-SAVE] Widget changed (action: ${action}, count: ${annotations.length})`);
                                         if (onDocumentModified) {
                                             onDocumentModified();
                                         }
-                                    } else {
-                                        console.log(`🔔 [AUTO-SAVE] Annotation changed (action: ${action}, count: ${annotations.length})`);
                                     }
                                     // scheduleAutoSave();
                                 });
@@ -3658,7 +3835,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 fieldMetadataStoreRef.current.clear();
 
                                 // Capture field metadata when widget is added/modified, remove when deleted
-                                Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string) => {
+                                Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string, info: any) => {
+                                    if (info?.imported) return;
+                                    if (isImportingXfdf.current) return;
                                     // ✅ FIX: Handle delete action to remove fields from metadata store
                                     if (action === 'delete') {
                                         annotations.forEach((annot: any) => {
@@ -3734,7 +3913,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 // ✅ CRITICAL: Track signature annotations (stamps, freehand drawings)
                                 // When user signs a signature field, PDFTron creates a separate annotation
                                 // This needs to be captured separately from the widget
-                                Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string) => {
+                                Core.annotationManager.addEventListener('annotationChanged', (annotations: any, action: string, info: any) => {
+                                    if (info?.imported) return;
+                                    if (isImportingXfdf.current) return;
                                     // ✅ FIX: Handle delete action to remove user-deleted signatures from capture store
                                     if (action === 'delete') {
                                         annotations.forEach((annot: any) => {
