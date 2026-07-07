@@ -113,10 +113,17 @@ export async function PATCH(
             updateOperation.$unset = unsetFields;
         }
 
-        const result = await db.collection('contracts').updateOne(
+        // Try ObjectId first; Spring Boot contracts store _id as a plain string so fall back if unmatched.
+        let result = await db.collection('contracts').updateOne(
             { _id: new ObjectId(id) },
             updateOperation
         );
+        if (result.matchedCount === 0) {
+            result = await db.collection('contracts').updateOne(
+                { _id: id as any },
+                updateOperation
+            );
+        }
 
         if (result.matchedCount === 0) {
             return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
@@ -174,10 +181,17 @@ export async function GET(
         const db = client.db();
 
         // Exclude large binary fields from default response
-        const contract = await db.collection('contracts').findOne(
+        let contract = await db.collection('contracts').findOne(
             { _id: new ObjectId(id) },
             { projection: { pdf: 0, fileData: 0, signedPdfBase64: 0 } }
         );
+        // Spring Boot contracts store _id as a plain string — fall back if ObjectId query unmatched
+        if (!contract) {
+            contract = await db.collection('contracts').findOne(
+                { _id: id as any },
+                { projection: { pdf: 0, fileData: 0, signedPdfBase64: 0 } }
+            );
+        }
 
         if (!contract) {
             return NextResponse.json({ error: 'Contract not found' }, { status: 404 });

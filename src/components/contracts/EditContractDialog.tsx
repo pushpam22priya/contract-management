@@ -33,14 +33,56 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { getTemplateViewUrl } from '@/utils/getTemplateViewUrl';
 
+/**
+ * In resubmit mode the owner edits a clean template PDF. Only fields they explicitly fill
+ * get exported as XFDF annotations. Fields left empty produce no XFDF entry, which means
+ * the previous reviewer's values baked into the MinIO flow PDF will show through for those
+ * fields when the new participant applies this XFDF. This function augments the XFDF to
+ * include an explicit entry for every text/choice form field, using the exported value
+ * (owner's input or empty string) so every field is properly overridden.
+ */
+function buildComprehensiveXfdf(
+    xfdf: string,
+    formFields: Array<{ name?: string; value?: string; type?: string }>,
+): string {
+    if (!formFields?.length) return xfdf;
+
+    const existingNames = new Set<string>();
+    const namePattern = /<field name="([^"]+)"/g;
+    let m: RegExpExecArray | null;
+    while ((m = namePattern.exec(xfdf)) !== null) existingNames.add(m[1]);
+
+    const SKIP_TYPES = new Set(['signature', 'button']);
+    const additionalEntries = formFields
+        .filter(f => f.name && !existingNames.has(f.name) && !SKIP_TYPES.has(f.type ?? ''))
+        .map(f => {
+            const escaped = String(f.value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+            return `<field name="${f.name}"><value>${escaped}</value></field>`;
+        })
+        .join('');
+
+    if (!additionalEntries) return xfdf;
+
+    if (xfdf.includes('</fields>')) return xfdf.replace('</fields>', additionalEntries + '</fields>');
+    if (xfdf.includes('<fields/>')) return xfdf.replace('<fields/>', `<fields>${additionalEntries}</fields>`);
+    return xfdf.replace(/<annots(\s*\/?)>/, `<fields>${additionalEntries}</fields><annots$1>`);
+}
+
 interface EditContractDialogProps {
     open: boolean;
     onClose: () => void;
     onSuccess?: () => void;
     contract: Contract;
+    /** When true: Step 2 loads the fresh template (not current PDF), save calls onResubmitReady */
+    resubmitMode?: boolean;
+    onResubmitReady?: (contractId: string, contract: Contract) => void;
 }
 
-const EditContractDialog = ({ open, onClose, onSuccess, contract }: EditContractDialogProps) => {
+const EditContractDialog = ({ open, onClose, onSuccess, contract, resubmitMode, onResubmitReady }: EditContractDialogProps) => {
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
@@ -120,8 +162,11 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract }: EditContract
         setLoadingDocument(true);
 
         try {
-            if (templateChanged && selectedTemplate) {
-                // User switched to a different template — load that template's PDF
+            // In resubmit mode: always load the original template fresh (empty form fields).
+            // This discards any reviewer/approver annotations — owner starts from scratch.
+            const loadFreshTemplate = resubmitMode || (templateChanged && !!selectedTemplate);
+
+            if (loadFreshTemplate && selectedTemplate) {
                 const [fullTemplate, viewUrl] = await Promise.all([
                     templateService.getTemplateById(selectedTemplate.id),
                     getTemplateViewUrl(selectedTemplate.id),
@@ -134,10 +179,13 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract }: EditContract
                 }
                 if (fullTemplate) setSelectedTemplate(fullTemplate);
                 setDocumentUrl(url);
-                setInitialXfdf(tpl.xfdfData);
+                // Load with empty XFDF so all form fields start blank
+                setInitialXfdf(undefined);
                 setInitialFormFields(tpl.formFields);
+                // Clear old reviewer/approver field values so the PATCH sends only the owner's new values
+                if (resubmitMode) setFilledFieldValues({});
             } else {
-                // Load the existing contract PDF
+                // Normal edit: load the existing contract PDF with saved annotations
                 let url: string | null = null;
                 if (contract.fileUploaded) {
                     url = await apiService.getContractViewUrl(contract.id);
@@ -153,7 +201,14 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract }: EditContract
                     return;
                 }
                 setDocumentUrl(url);
-                setInitialXfdf(contract.xfdfData);
+                // In resubmit mode without a matched template: still strip reviewer/approver
+                // XFDF so the owner sees the clean base PDF (no old annotations).
+                if (resubmitMode) {
+                    setInitialXfdf(undefined);
+                    setFilledFieldValues({});
+                } else {
+                    setInitialXfdf(contract.xfdfData);
+                }
                 setInitialFormFields(contract.formFields);
             }
             setCurrentStep(2);
@@ -195,6 +250,22 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract }: EditContract
                 });
             }
 
+            // In resubmit mode: augment XFDF to include ALL form fields with explicit values.
+            // Without this, the new reviewer loads the MinIO flow PDF (which still has the
+            // previous reviewer's values baked in from their markFlowComplete upload) and only
+            // the owner's explicitly filled fields are overridden. Empty explicit entries ensure
+            // every field is reset to the owner's submitted state regardless of the flow PDF.
+            const finalXfdf = resubmitMode
+                ? buildComprehensiveXfdf(xfdfString, exportedFormFields ?? [])
+                : xfdfString;
+
+            // Build comprehensive fieldValues from exported form fields in resubmit mode
+            // so the PATCH sends the full owner state rather than an empty map that
+            // causes the internal PATCH handler to merge-preserve old reviewer values.
+            const finalFieldValues = resubmitMode
+                ? Object.fromEntries((exportedFormFields ?? []).map(f => [f.name, f.value ?? '']))
+                : filledFieldValues;
+
             const finalStartDate = startDate || dayjs().format('YYYY-MM-DD');
             const finalEndDate = endDate || dayjs(finalStartDate).add(1, 'year').format('YYYY-MM-DD');
             const expiresInDays = dayjs(finalEndDate).diff(dayjs(), 'day');
@@ -207,8 +278,8 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract }: EditContract
                 expiresInDays,
                 startDate: finalStartDate,
                 endDate: finalEndDate,
-                xfdfData: xfdfString,
-                fieldValues: filledFieldValues,
+                xfdfData: finalXfdf,
+                fieldValues: finalFieldValues,
                 formFields: exportedFormFields,
                 hasFormFields: (exportedFormFields?.length ?? 0) > 0,
             };
@@ -230,15 +301,36 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract }: EditContract
                 return;
             }
 
-            const uploadResult = await contractService.updateContractSignedPdf(contract.id, pdfBlob, xfdfString);
+            const uploadResult = await contractService.updateContractSignedPdf(contract.id, pdfBlob, finalXfdf);
             if (!uploadResult.success) {
                 setError('Metadata saved but PDF upload failed. Please try saving again.');
                 return;
             }
 
-            setSnackbar({ open: true, message: 'Contract updated successfully!', severity: 'success' });
-            onSuccess?.();
-            setTimeout(() => handleClose(), 1200);
+            if (resubmitMode) {
+                // Belt-and-suspenders: also write directly to MongoDB via the internal API so the
+                // reviewer/approver panels (which now read MongoDB first) always see the fresh values
+                // without depending solely on Spring Boot's flush timing.
+                try {
+                    await fetch(`/api/contracts/${contract.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            xfdfData: finalXfdf,
+                            fieldValues: finalFieldValues,
+                            formFields: exportedFormFields,
+                        }),
+                    });
+                } catch {
+                    // Non-fatal — Spring Boot path already persisted above
+                }
+                onResubmitReady?.(contract.id, contract);
+                handleClose();
+            } else {
+                setSnackbar({ open: true, message: 'Contract updated successfully!', severity: 'success' });
+                onSuccess?.();
+                setTimeout(() => handleClose(), 1200);
+            }
         } catch {
             setError('Failed to update contract. Please try again.');
         } finally {
@@ -283,7 +375,7 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract }: EditContract
                 '&:hover': { bgcolor: 'primary.dark' },
             }}
         >
-            Next: Edit Document
+            {resubmitMode ? 'Next: Fill Document' : 'Next: Edit Document'}
         </AppButton>
     );
 
@@ -312,7 +404,7 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract }: EditContract
                     '&:hover': { bgcolor: 'primary.dark' },
                 }}
             >
-                {saving ? 'Saving...' : 'Save Contract'}
+                {saving ? 'Saving...' : resubmitMode ? 'Save & Continue' : 'Save Contract'}
             </AppButton>
         </Box>
     );
@@ -323,8 +415,8 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract }: EditContract
                 open={open}
                 onClose={handleCloseAttempt}
                 title={currentStep === 1
-                    ? 'Edit Contract — Step 1: Contract Details'
-                    : 'Edit Contract — Step 2: Edit Document'}
+                    ? (resubmitMode ? 'Update & Resubmit — Step 1: Contract Details' : 'Edit Contract — Step 1: Contract Details')
+                    : (resubmitMode ? 'Update & Resubmit — Step 2: Fill Document' : 'Edit Contract — Step 2: Edit Document')}
                 maxWidth={currentStep === 1 ? 'md' : 'xl'}
                 fullWidth
                 fullScreen={currentStep === 2}

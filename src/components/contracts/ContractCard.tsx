@@ -1,6 +1,6 @@
 import { Box, Typography, Chip, IconButton, Tooltip, useTheme } from '@mui/material';
 import dayjs from 'dayjs';
-import { Visibility, Share, Download, FolderOutlined, AutorenewOutlined, Loop } from '@mui/icons-material';
+import { Visibility, Share, Download, FolderOutlined, AutorenewOutlined, Loop, PublishedWithChanges } from '@mui/icons-material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import HistoryIcon from '@mui/icons-material/History';
@@ -28,6 +28,8 @@ interface ContractCardProps {
     onHistory?: (id: string, event: React.MouseEvent<HTMLButtonElement>) => void;
     onDelete?: (id: string) => void;
     onFinalize?: (id: string) => void;
+    /** Unified flow resubmission: opens metadata+file editor then UnifiedFlowSubmitDialog */
+    onUpdateAndResubmit?: (id: string) => void;
     /**
      * Variant determines the card behavior:
      * - 'draft': Shows share button always (for review submission), handles "changes_requested" status
@@ -50,6 +52,7 @@ const ContractCard = ({
     onHistory,
     onDelete,
     onFinalize,
+    onUpdateAndResubmit,
     variant = 'contract',
     folderName,
 }: ContractCardProps) => {
@@ -113,6 +116,8 @@ const ContractCard = ({
                 return 'Draft';
             case ContractStatus.SIGNED:
                 return 'Signed';
+            case ContractStatus.REJECTED:
+                return 'Rejected';
             case ContractStatus.REJECTED_BY_REVIEWER:
                 return 'Rejected by Reviewer';
             case ContractStatus.REJECTED_BY_APPROVER:
@@ -216,8 +221,14 @@ const ContractCard = ({
         return `${text.substring(0, maxLength)}...`;
     };
 
+    // Rejected unified flow contracts get a dedicated "Update & Resubmit" button
+    // instead of the normal Edit + Share buttons.
+    const isRejectedForResubmit =
+        contract.status === ContractStatus.REJECTED_BY_REVIEWER ||
+        contract.status === ContractStatus.REJECTED_BY_APPROVER;
+
     const shouldShowShareButton = (): boolean => {
-        if (!onShare || variant === 'terminated') return false;
+        if (!onShare || variant === 'terminated' || isRejectedForResubmit) return false;
 
         if (variant === 'draft') return true;
 
@@ -477,7 +488,7 @@ const ContractCard = ({
                         onClick: () => onEdit?.(contract.id),
                         color: 'primary.main',
                         shadow: 'rgba(15, 118, 110, 0.2)',
-                        show: variant === 'draft' && !!onEdit,
+                        show: variant === 'draft' && !!onEdit && !isRejectedForResubmit,
                     },
                     {
                         title: tTooltips('downloadPdf'),
@@ -531,6 +542,14 @@ const ContractCard = ({
                         show: variant === 'contract' &&
                             !!onFinalize &&
                             contract.signatureFlowStatus === 'all_completed',
+                    },
+                    {
+                        title: 'Update & Resubmit',
+                        icon: <PublishedWithChanges sx={{ fontSize: '0.9rem' }} />,
+                        onClick: () => onUpdateAndResubmit?.(contract.id),
+                        color: '#0f766e',
+                        shadow: 'rgba(15, 118, 110, 0.25)',
+                        show: isRejectedForResubmit && !!onUpdateAndResubmit,
                     },
                 ].map((action, idx) =>
                     action.show ? (

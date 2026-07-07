@@ -72,7 +72,7 @@
     "description": "Tasks and signatures assigned to you",
     "loading": "Loading…",
     "inboxTab": "Inbox",
-    "sendboxTab": "Sendbox",
+    "sendboxTab": "Sent",
     "type": "Type",
     "typeReviewApproval": "Review & Approval",
     "typeSignature": "Signature",

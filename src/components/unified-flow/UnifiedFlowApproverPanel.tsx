@@ -15,6 +15,7 @@ import BaseDialog from '@/components/common/BaseDialog';
 import AppButton from '@/components/common/AppButton';
 import UnifiedFlowRejectDialog from './UnifiedFlowRejectDialog';
 import { unifiedFlowService } from '@/services/unifiedFlowService';
+import { apiService } from '@/services/apiService';
 import type { WorkflowParticipant, FlowUploadPart } from '@/types/unifiedFlow';
 import type { PartyValidationEntry } from '@/components/viewer/pdfViewer/PartyValidationWarningPopup';
 
@@ -127,27 +128,22 @@ export default function UnifiedFlowApproverPanel({
         setLoadingUrl(false);
         if (res.ok && res.data?.url) {
             setFileUrl(res.data.url);
-            // Prefer statusXfdf (from flow status fetched by parent), then file-url response.
-            // If neither has xfdfData, fall back to the internal Next.js contract route
-            // which reads directly from MongoDB and always includes xfdfData.
-            // (The Spring Boot GET /contracts/{id} is owner-only, but
-            //  the internal /api/contracts/{id} has no such restriction.)
-            let xfdf = statusXfdf || res.data.xfdfData;
-            if (!xfdf) {
-                try {
-                    const fallbackRes = await fetch(`/api/contracts/${contractId}`);
-                    if (fallbackRes.ok) {
-                        const contractData = await fallbackRes.json();
-                        if (contractData.xfdfData) {
-                            xfdf = contractData.xfdfData;
-                            // console.log(`📥 [ApproverPanel] Fetched xfdfData from internal contract route (${xfdf.length} chars)`);
-                        }
-                    }
-                } catch (e) {
-                    console.warn('⚠️ [ApproverPanel] Could not fetch xfdfData from internal route:', e);
-                }
+            // Fetch xfdfData from Spring Boot's contract endpoint directly.
+            // getFlowStatus (statusXfdf) and getParticipantFileUrl (res.data.xfdfData) both return
+            // the flow-level xfdf which may be stale from a previous participant's markFlowComplete.
+            // GET /contracts/{id} returns the contract-level xfdfData, which is what the owner's
+            // PATCH writes to before submitting the new flow — so this is always fresh.
+            let xfdf: string | undefined;
+            try {
+                const contract = await apiService.getContractDetails(contractId);
+                if (contract?.xfdfData) xfdf = contract.xfdfData;
+            } catch (e) {
+                console.warn('⚠️ [ApproverPanel] Could not fetch xfdfData from Spring Boot contract:', e);
             }
-            setInitialXfdf(xfdf || undefined);
+            if (!xfdf) {
+                xfdf = statusXfdf || res.data.xfdfData || undefined;
+            }
+            setInitialXfdf(xfdf);
         } else {
             setUrlError(res.message || 'Failed to load contract PDF.');
         }

@@ -1,8 +1,7 @@
 'use client';
 
 import { Box, Typography, Chip, IconButton, Tooltip, Popover, useTheme } from '@mui/material';
-import { Visibility, CheckCircle, AccessTime, Person, AccountCircle, Message, Groups, Cancel, MoreVert } from '@mui/icons-material';
-import AppButton from '@/components/common/AppButton';
+import { Visibility, AccessTime, Person, AccountCircle, Message, Groups, MoreVert } from '@mui/icons-material';
 import { Contract, ContractStatus } from '@/types/contract';
 import { useState } from 'react';
 import { authService } from '@/services/authService';
@@ -21,9 +20,6 @@ const truncate = (text: string | undefined, maxLen: number) => {
     return text.length > maxLen ? text.slice(0, maxLen) + '…' : text;
 };
 
-/**
- * Format a date string to a readable format
- */
 const formatDateTime = (dateString?: string): string => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -35,29 +31,17 @@ const formatDateTime = (dateString?: string): string => {
     return `${d}/${m}/${y}, ${h}:${min}`;
 };
 
-/**
- * Card component for Review & Approval page
- * Displays contract information with action buttons based on user role
- */
 export default function ReviewApprovalCard({
     contract,
     userRole,
     onView,
-    onMarkAsReviewed,
-    onApprove,
-    onReject,
 }: ReviewApprovalCardProps) {
-    const [showCommentInput, setShowCommentInput] = useState(false);
-    const [comments, setComments] = useState('');
     const [actionsAnchor, setActionsAnchor] = useState<HTMLElement | null>(null);
 
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
     const currentUser = authService.getCurrentUser();
 
-    // Spring Boot inbox endpoint returns aggregate fields, not per-reviewer arrays.
-    // These helpers fall back to aggregate reviewStatus / approvalStatus when the
-    // detailed reviewers[] / approver{} arrays are absent.
     const aggregateReviewStatus = (contract as any).reviewStatus as string | undefined;
     const aggregateApprovalStatus = (contract as any).approvalStatus as string | undefined;
 
@@ -67,17 +51,14 @@ export default function ReviewApprovalCard({
             const myReview = contract.reviewers.find(r => r.email === currentUser.email);
             if (myReview) return myReview.status;
         }
-        // Fallback: derive from aggregate status
         if (aggregateReviewStatus === 'COMPLETED') return 'reviewed';
         if (aggregateReviewStatus === 'REJECTED' || contract.status === ContractStatus.REJECTED_BY_REVIEWER) return 'rejected';
-        return null; // pending
+        return null;
     };
 
     const allReviewersComplete = () => {
         if (contract.reviewers && contract.reviewers.length > 0)
-            // 'forwarded' counts as done — that reviewer delegated their part
             return contract.reviewers.every(r => r.status === 'reviewed' || r.status === 'forwarded');
-        // Fallback: review is complete if status moved to IN_APPROVAL or beyond
         return aggregateReviewStatus === 'COMPLETED' ||
             contract.status === ContractStatus.IN_APPROVAL ||
             contract.status === ContractStatus.READY_FOR_SIGNATURE;
@@ -94,16 +75,6 @@ export default function ReviewApprovalCard({
             contract.status === ContractStatus.REJECTED_BY_APPROVER;
     };
 
-    /**
-     * Get status color - distinct colors for different states
-     * Reviewer pending: Orange (action needed)
-     * Reviewer reviewed: Teal green (completed)
-     * Reviewer rejected: Red (rejected)
-     * Approver awaiting: Blue/Indigo (waiting for others)
-     * Approver ready: Light green (action needed)
-     * Approver approved: Emerald green (completed)
-     * Approver rejected: Red (rejected)
-     */
     const getStatusColor = () => {
         if (isDark) {
             if (userRole === 'reviewer') {
@@ -114,7 +85,6 @@ export default function ReviewApprovalCard({
             } else {
                 if (isRejectedByApprover()) return { bg: 'rgba(239,68,68,0.08)', color: '#b07070', border: 'rgba(239,68,68,0.22)' };
                 if (isApproved()) return { bg: 'rgba(16,185,129,0.08)', color: '#6bac8e', border: 'rgba(16,185,129,0.22)' };
-                // pending approval — needs action, same orange as reviewer pending
                 if (contract.approver?.status === 'pending' || allReviewersComplete()) return { bg: 'rgba(245,158,11,0.08)', color: '#b8935a', border: 'rgba(245,158,11,0.22)' };
                 return { bg: 'rgba(59,130,246,0.08)', color: '#6888ac', border: 'rgba(59,130,246,0.22)' };
             }
@@ -127,43 +97,33 @@ export default function ReviewApprovalCard({
         } else {
             if (isRejectedByApprover()) return { bg: '#ffebee', color: '#c62828', border: '#ef9a9a' };
             if (isApproved()) return { bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' };
-            // pending approval — needs action, same orange as reviewer pending
             if (contract.approver?.status === 'pending' || allReviewersComplete()) return { bg: '#fff3e0', color: '#e65100', border: '#ffb74d' };
             return { bg: '#e8eaf6', color: '#3949ab', border: '#9fa8da' };
         }
     };
 
-    /**
-     * Get sender info and message for current user
-     * Falls back to contract.createdAt if sentAt is not available
-     */
     const getSenderInfo = () => {
         if (userRole === 'reviewer' && contract.reviewers) {
             const myReview = contract.reviewers.find(r => r.email === currentUser?.email);
             return {
                 sentBy: myReview?.sentBy || contract.createdBy,
                 sentAt: myReview?.sentAt || contract.createdAt,
-                message: myReview?.submissionMessage
+                message: myReview?.submissionMessage,
             };
         } else if (userRole === 'approver' && contract.approver) {
             return {
                 sentBy: contract.approver.sentBy || contract.createdBy,
                 sentAt: contract.approver.sentAt || contract.createdAt,
-                message: contract.approver.submissionMessage
+                message: contract.approver.submissionMessage,
             };
         }
         return { sentBy: contract.createdBy, sentAt: contract.createdAt, message: undefined };
     };
 
     const senderInfo = getSenderInfo();
-
     const statusColors = getStatusColor();
     const myReviewerStatus = getMyReviewerStatus();
 
-    /**
-     * Get sender info section colors based on completion status
-     * Colors match the header for consistency
-     */
     const getSenderInfoColors = () => {
         if (isDark) {
             if (userRole === 'reviewer') {
@@ -191,18 +151,9 @@ export default function ReviewApprovalCard({
 
     const senderInfoColors = getSenderInfoColors();
 
-    const handleRejectWithMessage = () => {
-        if (!comments.trim()) {
-            alert('Please enter a rejection reason');
-            return;
-        }
-        onReject(contract.id, comments);
-        setComments('');
-        setShowCommentInput(false);
-    };
-
     return (
         <Box
+            onClick={() => onView(contract.id)}
             sx={{
                 border: '1px solid',
                 borderColor: 'divider',
@@ -211,14 +162,14 @@ export default function ReviewApprovalCard({
                 transition: 'box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 overflow: 'hidden',
                 boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+                cursor: 'pointer',
                 '&:hover': {
                     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
                 },
             }}
         >
-            {/* Content */}
             <Box sx={{ p: 1 }}>
-                {/* Title + Status Chip + Actions Toggle */}
+                {/* Title + Status Chip + 3-dot Menu */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
                     <Tooltip title={contract.title?.length > 22 ? contract.title : ''} arrow placement="top">
                         <Typography variant="subtitle2" sx={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -226,17 +177,21 @@ export default function ReviewApprovalCard({
                         </Typography>
                     </Tooltip>
                     <Chip
-                        label={userRole === 'reviewer'
-                            ? (myReviewerStatus === 'rejected' ? 'Rejected' : (myReviewerStatus === 'reviewed' || myReviewerStatus === 'forwarded') ? 'Reviewed' : 'Pending Review')
-                            : (contract.approver
-                                ? (contract.approver.status === 'approved'
-                                    ? 'Approved'
-                                    : contract.approver.status === 'rejected'
-                                        ? 'Rejected'
-                                        : allReviewersComplete()
-                                            ? 'Pending Approval'
-                                            : 'Awaiting Reviews')
-                                : (isRejectedByApprover() ? 'Rejected' : isApproved() ? 'Approved' : allReviewersComplete() ? 'Pending Approval' : 'Awaiting Reviews'))}
+                        label={
+                            userRole === 'reviewer'
+                                ? (myReviewerStatus === 'rejected' ? 'Rejected'
+                                    : (myReviewerStatus === 'reviewed' || myReviewerStatus === 'forwarded') ? 'Reviewed'
+                                    : 'Pending Review')
+                                : (contract.approver
+                                    ? (contract.approver.status === 'approved' ? 'Approved'
+                                        : contract.approver.status === 'rejected' ? 'Rejected'
+                                        : allReviewersComplete() ? 'Pending Approval'
+                                        : 'Awaiting Reviews')
+                                    : (isRejectedByApprover() ? 'Rejected'
+                                        : isApproved() ? 'Approved'
+                                        : allReviewersComplete() ? 'Pending Approval'
+                                        : 'Awaiting Reviews'))
+                        }
                         size="small"
                         sx={{
                             bgcolor: statusColors.bg,
@@ -249,6 +204,7 @@ export default function ReviewApprovalCard({
                             '& .MuiChip-label': { px: 1 },
                         }}
                     />
+                    {/* stopPropagation prevents the card's onClick from firing when opening the menu */}
                     <IconButton
                         size="small"
                         onClick={(e) => { e.stopPropagation(); setActionsAnchor(e.currentTarget); }}
@@ -258,7 +214,7 @@ export default function ReviewApprovalCard({
                     </IconButton>
                 </Box>
 
-                {/* Floating Actions Popover */}
+                {/* Actions Popover — only View + optional assignment info */}
                 <Popover
                     open={Boolean(actionsAnchor)}
                     anchorEl={actionsAnchor}
@@ -278,7 +234,7 @@ export default function ReviewApprovalCard({
                         },
                     }}
                 >
-                    {/* View Button */}
+                    {/* View */}
                     <Tooltip title="View Contract" arrow>
                         <IconButton
                             size="small"
@@ -289,7 +245,7 @@ export default function ReviewApprovalCard({
                         </IconButton>
                     </Tooltip>
 
-                    {/* Assigned for Review & Approval — visible on all cards */}
+                    {/* Assignment info — shown when reviewers/approver are assigned */}
                     {(contract.reviewers?.length || contract.approver) && (
                         <Tooltip
                             title={
@@ -313,14 +269,16 @@ export default function ReviewApprovalCard({
                                                                 size="small"
                                                                 sx={{
                                                                     height: '18px', fontSize: '0.65rem', flexShrink: 0,
-                                                                    bgcolor: reviewer.status === 'reviewed' ? (isDark ? 'rgba(16,185,129,0.12)' : '#e0f2f1')
-                                                                        : reviewer.status === 'forwarded' ? (isDark ? 'rgba(16,185,129,0.12)' : '#e0f2f1')
-                                                                        : reviewer.status === 'rejected' ? (isDark ? 'rgba(239,68,68,0.12)' : '#ffebee')
-                                                                        : (isDark ? 'rgba(245,158,11,0.12)' : '#fff3e0'),
-                                                                    color: reviewer.status === 'reviewed' ? (isDark ? '#6bac8e' : '#00695c')
-                                                                        : reviewer.status === 'forwarded' ? (isDark ? '#6bac8e' : '#00695c')
-                                                                        : reviewer.status === 'rejected' ? (isDark ? '#b07070' : '#c62828')
-                                                                        : (isDark ? '#b8935a' : '#e65100'),
+                                                                    bgcolor: reviewer.status === 'reviewed' || reviewer.status === 'forwarded'
+                                                                        ? (isDark ? 'rgba(16,185,129,0.12)' : '#e0f2f1')
+                                                                        : reviewer.status === 'rejected'
+                                                                            ? (isDark ? 'rgba(239,68,68,0.12)' : '#ffebee')
+                                                                            : (isDark ? 'rgba(245,158,11,0.12)' : '#fff3e0'),
+                                                                    color: reviewer.status === 'reviewed' || reviewer.status === 'forwarded'
+                                                                        ? (isDark ? '#6bac8e' : '#00695c')
+                                                                        : reviewer.status === 'rejected'
+                                                                            ? (isDark ? '#b07070' : '#c62828')
+                                                                            : (isDark ? '#b8935a' : '#e65100'),
                                                                 }}
                                                             />
                                                         </Box>
@@ -341,7 +299,19 @@ export default function ReviewApprovalCard({
                                                     <Chip
                                                         label={contract.approver.status.charAt(0).toUpperCase() + contract.approver.status.slice(1).replace('_', ' ')}
                                                         size="small"
-                                                        sx={{ height: '18px', fontSize: '0.65rem', bgcolor: contract.approver.status === 'approved' ? (isDark ? 'rgba(16,185,129,0.12)' : '#e0f2f1') : contract.approver.status === 'rejected' ? (isDark ? 'rgba(239,68,68,0.12)' : '#ffebee') : (isDark ? 'rgba(59,130,246,0.12)' : '#e8eaf6'), color: contract.approver.status === 'approved' ? (isDark ? '#6bac8e' : '#00695c') : contract.approver.status === 'rejected' ? (isDark ? '#b07070' : '#c62828') : (isDark ? '#6888ac' : '#3949ab') }}
+                                                        sx={{
+                                                            height: '18px', fontSize: '0.65rem',
+                                                            bgcolor: contract.approver.status === 'approved'
+                                                                ? (isDark ? 'rgba(16,185,129,0.12)' : '#e0f2f1')
+                                                                : contract.approver.status === 'rejected'
+                                                                    ? (isDark ? 'rgba(239,68,68,0.12)' : '#ffebee')
+                                                                    : (isDark ? 'rgba(59,130,246,0.12)' : '#e8eaf6'),
+                                                            color: contract.approver.status === 'approved'
+                                                                ? (isDark ? '#6bac8e' : '#00695c')
+                                                                : contract.approver.status === 'rejected'
+                                                                    ? (isDark ? '#b07070' : '#c62828')
+                                                                    : (isDark ? '#6888ac' : '#3949ab'),
+                                                        }}
                                                     />
                                                 </Box>
                                             </>
@@ -349,45 +319,14 @@ export default function ReviewApprovalCard({
                                     </Box>
                                 </Box>
                             }
-                            arrow placement="top"
+                            arrow
+                            placement="top"
                             slotProps={{ tooltip: { sx: { bgcolor: 'background.paper', color: 'text.primary', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', borderRadius: 2, p: 1.5, minWidth: 200, border: '1px solid', borderColor: 'divider', '& .MuiTooltip-arrow': { color: 'background.paper' } } } }}
                         >
                             <IconButton size="small" sx={{ border: '1px solid', borderColor: statusColors.color, color: statusColors.color, borderRadius: 1, '&:hover': { bgcolor: statusColors.bg } }}>
                                 <Groups sx={{ fontSize: 18 }} />
                             </IconButton>
                         </Tooltip>
-                    )}
-
-                    {/* Reviewer Actions — hidden once user has acted (reviewed / rejected / forwarded) */}
-                    {userRole === 'reviewer' && myReviewerStatus !== 'reviewed' && myReviewerStatus !== 'rejected' && myReviewerStatus !== 'forwarded' && (
-                        <>
-                            <Tooltip title="Mark as Reviewed" arrow>
-                                <IconButton size="small" onClick={() => { onMarkAsReviewed(contract.id); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: statusColors.color, color: statusColors.color, borderRadius: 1, '&:hover': { bgcolor: statusColors.bg } }}>
-                                    <CheckCircle sx={{ fontSize: '0.8rem' }} />
-                                </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Reject Contract" arrow>
-                                <IconButton size="small" onClick={() => { setShowCommentInput(true); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: isDark ? '#b07070' : '#d32f2f', color: isDark ? '#b07070' : '#d32f2f', borderRadius: 1, '&:hover': { bgcolor: isDark ? 'rgba(239,68,68,0.08)' : 'rgba(211,47,47,0.08)' } }}>
-                                    <Cancel sx={{ fontSize: '0.8rem' }} />
-                                </IconButton>
-                            </Tooltip>
-                        </>
-                    )}
-
-                    {/* Approver Actions */}
-                    {userRole === 'approver' && allReviewersComplete() && !isApproved() && !isRejectedByApprover() && (
-                        <>
-                            <Tooltip title="Approve Contract" arrow>
-                                <IconButton size="small" onClick={() => { onApprove(contract.id); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: statusColors.color, color: statusColors.color, borderRadius: 1, '&:hover': { bgcolor: statusColors.bg } }}>
-                                    <CheckCircle sx={{ fontSize: '0.8rem' }} />
-                                </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Reject Contract" arrow>
-                                <IconButton size="small" onClick={() => { setShowCommentInput(true); setActionsAnchor(null); }} sx={{ border: '1px solid', borderColor: isDark ? '#b07070' : '#d32f2f', color: isDark ? '#b07070' : '#d32f2f', borderRadius: 1, '&:hover': { bgcolor: isDark ? 'rgba(239,68,68,0.08)' : 'rgba(211,47,47,0.08)' } }}>
-                                    <Cancel sx={{ fontSize: '0.8rem' }} />
-                                </IconButton>
-                            </Tooltip>
-                        </>
                     )}
                 </Popover>
 
@@ -403,7 +342,6 @@ export default function ReviewApprovalCard({
                         borderColor: senderInfoColors.border,
                     }}
                 >
-                    {/* Client */}
                     {contract.client && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                             <AccountCircle sx={{ fontSize: 14, color: senderInfoColors.icon }} />
@@ -415,7 +353,6 @@ export default function ReviewApprovalCard({
                         </Box>
                     )}
 
-                    {/* Sender Email */}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                         <Person sx={{ fontSize: 14, color: senderInfoColors.icon }} />
                         <Tooltip title={(senderInfo.sentBy?.length ?? 0) > 25 ? senderInfo.sentBy : ''} arrow>
@@ -425,7 +362,6 @@ export default function ReviewApprovalCard({
                         </Tooltip>
                     </Box>
 
-                    {/* Sent Time */}
                     {senderInfo.sentAt && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                             <AccessTime sx={{ fontSize: 14, color: senderInfoColors.icon }} />
@@ -435,7 +371,6 @@ export default function ReviewApprovalCard({
                         </Box>
                     )}
 
-                    {/* Message */}
                     {senderInfo.message && (
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75 }}>
                             <Message sx={{ fontSize: 14, color: senderInfoColors.icon, mt: 0.25 }} />
@@ -457,50 +392,6 @@ export default function ReviewApprovalCard({
                         </Box>
                     )}
                 </Box>
-
-
-                {/* Rejection reason input */}
-                {showCommentInput && (
-                    <Box sx={{ mb: 0}}>
-                        <textarea
-                            placeholder="Enter rejection reason (required)..."
-                            value={comments}
-                            onChange={(e) => setComments(e.target.value)}
-                            style={{
-                                width: '100%',
-                                minHeight: '80px',
-                                padding: '8px',
-                                borderRadius: '4px',
-                                border: `1px solid ${isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.23)'}`,
-                                background: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
-                                color: isDark ? '#efefef' : 'inherit',
-                                fontFamily: 'inherit',
-                                fontSize: '0.875rem',
-                            }}
-                        />
-                        <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                            <AppButton
-                                size="small"
-                                variant="contained"
-                                color="error"
-                                onClick={handleRejectWithMessage}
-                            >
-                                Reject
-                            </AppButton>
-                            <AppButton
-                                size="small"
-                                variant="outlined"
-                                onClick={() => {
-                                    setShowCommentInput(false);
-                                    setComments('');
-                                }}
-                            >
-                                Cancel
-                            </AppButton>
-                        </Box>
-                    </Box>
-                )}
-
             </Box>
         </Box>
     );

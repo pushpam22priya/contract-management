@@ -108,6 +108,14 @@ export default function InboxPage() {
         endDate !== null;
 
     // ── Load contracts ────────────────────────────────────────────────────────
+    const loadSentContracts = async () => {
+        const sentRes = await unifiedFlowService.getFlowSent();
+        const sentContractsList: Contract[] = sentRes.ok && Array.isArray(sentRes.data)
+            ? sentRes.data.map((c: any) => ({ ...c, id: c.id || c._id }))
+            : [];
+        setSentContracts(sentContractsList);
+    };
+
     const loadContracts = async () => {
         setLoading(true);
         const currentUser = authService.getCurrentUser();
@@ -163,6 +171,9 @@ export default function InboxPage() {
     };
 
     useEffect(() => { loadContracts(); }, []);
+
+    // Refresh sent contracts whenever the user opens the Sent tab
+    useEffect(() => { if (tabValue === 1) loadSentContracts(); }, [tabValue]);
 
 
     // ── Classify items ────────────────────────────────────────────────────────
@@ -297,18 +308,24 @@ export default function InboxPage() {
 
         // Unified flow sent: contracts from getFlowSent() — completed/rejected participants.
         // These are NOT in allContracts (inbox only returns active participants).
-        // The sent endpoint guarantees the current user is a completed participant, so
-        // push regardless — inject a synthetic completed participant when participants[]
-        // isn't included in the response so UnifiedFlowInboxCard renders the right status.
+        // The sent endpoint guarantees the current user is a completed/rejected participant, so
+        // push regardless — inject a synthetic participant when participants[] isn't included
+        // in the response. Infer status from the contract-level status field.
+        const rejectedContractStatuses = new Set<string>([
+            ContractStatus.REJECTED,
+            ContractStatus.REJECTED_BY_REVIEWER,
+            ContractStatus.REJECTED_BY_APPROVER,
+        ]);
         sentContracts.forEach(c => {
             if (result.some(r => r.contract.id === c.id)) return; // avoid duplicates
             const found = c.participants?.find(
                 p => p.email.toLowerCase() === currentUser.email.toLowerCase()
             );
+            const inferredStatus = rejectedContractStatuses.has(c.status) ? 'rejected' : 'completed';
             const participant: WorkflowParticipant = found ?? {
                 email: currentUser.email,
                 role: 'REVIEWER',
-                status: 'completed',
+                status: inferredStatus,
                 order: 1,
             };
             // Enrich the contract so UnifiedFlowInboxCard can find the participant itself

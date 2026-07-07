@@ -1,18 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
-    Box, Typography, TextField, Chip, Autocomplete, Alert,
-    Paper, Divider, useTheme,
+    Box, Typography, Chip, Alert, Autocomplete, TextField,
+    Paper, Divider, Switch, FormControlLabel, IconButton, Tooltip,
+    useTheme, CircularProgress,
 } from '@mui/material';
-import { Add, Delete, LockOutlined, WarningAmber, SendOutlined, ThumbUp } from '@mui/icons-material';
+import {
+    Add, Delete, DragIndicator, RateReview, ThumbUp,
+    LockOutlined, WarningAmber, SendOutlined, Person,
+    DriveFileRenameOutline, AutoAwesome,
+} from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 import BaseDialog from '@/components/common/BaseDialog';
 import AppButton from '@/components/common/AppButton';
 import { userService, User } from '@/services/userService';
 import { authService } from '@/services/authService';
 import { unifiedFlowService } from '@/services/unifiedFlowService';
-import type { WorkflowParticipant, ParticipantAssignment } from '@/types/unifiedFlow';
+import type {
+    ParticipantAssignment,
+    ExternalSignerSubmitInput,
+    WorkflowParticipant,
+} from '@/types/unifiedFlow';
 
 interface UnifiedFlowResubmitDialogProps {
     open: boolean;
@@ -20,18 +29,36 @@ interface UnifiedFlowResubmitDialogProps {
     onSubmitted: () => void;
     contractId: string;
     contractTitle?: string;
-    /** Current participants from contract.participants */
-    participants: WorkflowParticipant[];
 }
 
-let _counter = 0;
-const uid = () => `r_${++_counter}`;
+let _rsctr = 0;
+const uid = () => `rs_${++_rsctr}`;
 
-interface ApproverRow {
+interface ParticipantRow {
     _id: string;
     email: string;
-    name?: string;
-    order: number;
+    name: string;
+    role: 'REVIEWER' | 'APPROVER';
+}
+
+interface SignerRow {
+    _id: string;
+    email: string;
+    name: string;
+    partyId?: string;
+    partyLabel?: string;
+}
+
+const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+function reorder<T extends { _id: string }>(arr: T[], fromId: string, toId: string): T[] {
+    const from = arr.findIndex(r => r._id === fromId);
+    const to = arr.findIndex(r => r._id === toId);
+    if (from < 0 || to < 0 || from === to) return arr;
+    const next = [...arr];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    return next;
 }
 
 export default function UnifiedFlowResubmitDialog({
@@ -40,94 +67,171 @@ export default function UnifiedFlowResubmitDialog({
     onSubmitted,
     contractId,
     contractTitle,
-    participants,
 }: UnifiedFlowResubmitDialogProps) {
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
     const currentUser = authService.getCurrentUser();
 
+    // Flow status
+    const [loadingStatus, setLoadingStatus] = useState(false);
+    const [participants, setParticipants] = useState<WorkflowParticipant[]>([]);
+    const [externalPartiesFromStatus, setExternalPartiesFromStatus] = useState<Array<{ id: string; label: string; order: number }>>([]);
+
+    // Rejection info
+    const rejectedParticipant = useMemo(() => participants.find(p => p.status === 'rejected'), [participants]);
+    const isApproverRejection = rejectedParticipant?.role === 'APPROVER';
+    const preservedReviewers = useMemo(
+        () => isApproverRejection ? participants.filter(p => p.role === 'REVIEWER' && p.status === 'completed').sort((a, b) => a.order - b.order) : [],
+        [participants, isApproverRejection],
+    );
+
+    // Participant rows
+    const [reviewerRows, setReviewerRows] = useState<ParticipantRow[]>([]);
+    const [approverRows, setApproverRows] = useState<ParticipantRow[]>([]);
+
+    // Drag state
+    const [dragging, setDragging] = useState<{ id: string; group: 'reviewer' | 'approver' | 'signer' } | null>(null);
+    const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+    // Users for autocomplete
     const [users, setUsers] = useState<User[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
-    const [approverRows, setApproverRows] = useState<ApproverRow[]>([]);
+
+    // External signing
+    const [externalSigningEnabled, setExternalSigningEnabled] = useState(false);
+    const [signerRows, setSignerRows] = useState<SignerRow[]>([]);
+    const [senderName, setSenderName] = useState('');
+
+    // Submit
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Determine rejection type from participant statuses
-    const rejectedParticipant = participants.find((p) => p.status === 'rejected');
-    const isApproverRejection = rejectedParticipant?.role === 'APPROVER';
-    const isReviewerRejection = rejectedParticipant?.role === 'REVIEWER';
-
-    // Preserved reviewers (when approver rejected — reviewers stay as-is)
-    const preservedReviewers = isApproverRejection
-        ? participants.filter((p) => p.role === 'REVIEWER')
-        : [];
-
-    // Previous approvers as a reference
-    const prevApprovers = participants.filter((p) => p.role === 'APPROVER');
-
     useEffect(() => {
-        if (open) {
-            loadUsers();
-            // Seed approver rows from previous approvers so user can edit them
-            const maxReviewerOrder = preservedReviewers.length > 0
-                ? Math.max(...preservedReviewers.map((r) => r.order))
-                : 0;
-            setApproverRows(
-                prevApprovers.length > 0
-                    ? prevApprovers.map((a) => ({ _id: uid(), email: a.email, name: a.name, order: a.order }))
-                    : [{ _id: uid(), email: '', name: '', order: maxReviewerOrder + 1 }],
-            );
-            setError(null);
-        }
-    }, [open]);
-
-    const loadUsers = async () => {
+        if (!open) return;
+        setError(null);
+        setParticipants([]);
+        setExternalPartiesFromStatus([]);
+        setLoadingStatus(true);
         setLoadingUsers(true);
-        const all = await userService.getAllUsers();
-        setUsers(all);
-        setLoadingUsers(false);
-    };
 
-    const usedEmails = approverRows.map((r) => r.email).filter(Boolean);
+        Promise.all([
+            unifiedFlowService.getFlowStatus(contractId),
+            userService.getAllUsers(),
+        ]).then(([statusRes, allUsers]) => {
+            setUsers(allUsers);
+            setLoadingUsers(false);
+
+            if (statusRes.ok && statusRes.data) {
+                const ps = statusRes.data.participants ?? [];
+                setParticipants(ps);
+
+                // External parties
+                const extParties = (statusRes.data.parties ?? [])
+                    .filter(p => p.type === 'EXTERNAL')
+                    .map(p => ({ id: p.id, label: p.label, order: p.order }));
+                setExternalPartiesFromStatus(extParties);
+
+                // Pre-populate external signing from stored data
+                const extIncluded = statusRes.data.externalSigningIncluded ?? false;
+                setExternalSigningEnabled(extIncluded);
+                if (extIncluded && statusRes.data.externalSigners?.length) {
+                    setSignerRows(statusRes.data.externalSigners.map(s => ({
+                        _id: uid(),
+                        email: s.email,
+                        name: s.name ?? '',
+                        partyId: s.partyId,
+                        partyLabel: s.partyLabel,
+                    })));
+                } else if (extIncluded) {
+                    setSignerRows([{ _id: uid(), email: '', name: '', partyId: extParties[0]?.id, partyLabel: extParties[0]?.label }]);
+                } else {
+                    setSignerRows([]);
+                }
+            }
+            setLoadingStatus(false);
+
+            // Seed empty rows for the case we're in
+            const rejected = statusRes.ok ? statusRes.data?.participants?.find(p => p.status === 'rejected') : undefined;
+            const isApprover = rejected?.role === 'APPROVER';
+            if (isApprover) {
+                // Case B: approver rejected → only approver rows
+                setReviewerRows([]);
+                setApproverRows([{ _id: uid(), email: '', name: '', role: 'APPROVER' }]);
+            } else {
+                // Case A: reviewer rejected (or unknown) → full reset
+                setReviewerRows([{ _id: uid(), email: '', name: '', role: 'REVIEWER' }]);
+                setApproverRows([{ _id: uid(), email: '', name: '', role: 'APPROVER' }]);
+            }
+        });
+    }, [open, contractId]);
+
+    const usedEmails = [...reviewerRows, ...approverRows].map(r => r.email).filter(Boolean);
+
     const availableUsers = (excludeEmail?: string) =>
-        users.filter((u) => {
+        users.filter(u => {
             if (currentUser && u.email === currentUser.email) return false;
-            const locked = preservedReviewers.map((r) => r.email);
-            if (locked.includes(u.email)) return false;
+            const preserved = preservedReviewers.map(r => r.email);
+            if (preserved.includes(u.email)) return false;
             if (!excludeEmail && usedEmails.includes(u.email)) return false;
-            if (excludeEmail && usedEmails.filter((e) => e !== excludeEmail).includes(u.email)) return false;
+            if (excludeEmail && usedEmails.filter(e => e !== excludeEmail).includes(u.email)) return false;
             return true;
         });
 
-    const addApproverRow = () => {
-        const maxOrder = approverRows.length > 0 ? Math.max(...approverRows.map((r) => r.order)) : 0;
-        const reviewerMax = preservedReviewers.length > 0 ? Math.max(...preservedReviewers.map((r) => r.order)) : 0;
-        setApproverRows((prev) => [...prev, { _id: uid(), email: '', name: '', order: Math.max(maxOrder, reviewerMax) + 1 }]);
+    const updateParticipantRow = (id: string, patch: Partial<ParticipantRow>) => {
+        setReviewerRows(prev => prev.map(r => r._id === id ? { ...r, ...patch } : r));
+        setApproverRows(prev => prev.map(r => r._id === id ? { ...r, ...patch } : r));
     };
 
-    const removeApproverRow = (id: string) => {
-        setApproverRows((prev) => prev.filter((r) => r._id !== id));
+    const removeParticipantRow = (id: string) => {
+        setReviewerRows(prev => prev.filter(r => r._id !== id));
+        setApproverRows(prev => prev.filter(r => r._id !== id));
     };
 
-    const updateApproverRow = (id: string, patch: Partial<ApproverRow>) => {
-        setApproverRows((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r)));
+    const handleExternalToggle = (checked: boolean) => {
+        setExternalSigningEnabled(checked);
+        if (checked && signerRows.length === 0) {
+            setSignerRows([{
+                _id: uid(), email: '', name: '',
+                partyId: externalPartiesFromStatus[0]?.id,
+                partyLabel: externalPartiesFromStatus[0]?.label,
+            }]);
+        }
+    };
+
+    const updateSignerRow = (id: string, patch: Partial<SignerRow>) => {
+        setSignerRows(prev => prev.map(s => s._id === id ? { ...s, ...patch } : s));
+    };
+
+    const removeSignerRow = (id: string) => {
+        setSignerRows(prev => prev.filter(s => s._id !== id));
     };
 
     const validate = (): string | null => {
-        if (approverRows.length === 0) return 'At least one approver is required.';
-        for (const r of approverRows) {
-            if (!r.email.trim()) return 'All approvers must have an email address.';
+        if (approverRows.length === 0) return 'At least one Approver is required.';
+
+        const allRows = isApproverRejection ? approverRows : [...reviewerRows, ...approverRows];
+        for (const r of allRows) {
+            if (!r.email.trim()) return 'All participants must have an email address.';
+            if (!isValidEmail(r.email.trim())) return `"${r.email}" is not a valid email.`;
         }
-        const emails = approverRows.map((r) => r.email.toLowerCase().trim());
-        if (new Set(emails).size !== emails.length) return 'Duplicate approver emails are not allowed.';
+        const emails = allRows.map(r => r.email.toLowerCase().trim());
+        if (new Set(emails).size !== emails.length) return 'Duplicate participant emails are not allowed.';
         if (currentUser && emails.includes(currentUser.email.toLowerCase()))
             return 'You cannot add yourself as a participant.';
 
-        // Orders must be > max reviewer order
-        const reviewerMax = preservedReviewers.length > 0 ? Math.max(...preservedReviewers.map((r) => r.order)) : 0;
-        const minApproverOrder = Math.min(...approverRows.map((r) => r.order));
-        if (reviewerMax > 0 && minApproverOrder <= reviewerMax)
-            return `Approver order must be greater than ${reviewerMax} (highest reviewer order).`;
+        if (externalSigningEnabled) {
+            if (signerRows.length === 0)
+                return 'Add at least one external signer when client signing is enabled.';
+            for (const s of signerRows) {
+                if (!s.email.trim()) return 'All external signers must have an email.';
+                if (!isValidEmail(s.email.trim())) return `"${s.email}" is not a valid email.`;
+                if (externalPartiesFromStatus.length > 0 && !s.partyId)
+                    return `Select a party for signer "${s.email || 'unknown'}".`;
+            }
+            const signerEmails = signerRows.map(s => s.email.toLowerCase().trim());
+            if (new Set(signerEmails).size !== signerEmails.length)
+                return 'Duplicate external signer emails are not allowed.';
+        }
 
         return null;
     };
@@ -139,21 +243,53 @@ export default function UnifiedFlowResubmitDialog({
 
         setSubmitting(true);
 
-        // Build final assignments: preserved reviewers + new approvers
-        let assignments: ParticipantAssignment[] = [];
+        let assignments: ParticipantAssignment[];
+
         if (isApproverRejection) {
-            assignments = [
-                ...preservedReviewers.map(({ email, name, role, order }) => ({ email, name, role, order })),
-                ...approverRows.map(({ email, name, order }) => ({ email, name, role: 'APPROVER' as const, order })),
-            ];
-        } else {
-            // Reviewer rejection: only approvers (full reset, no reviewers kept)
-            assignments = approverRows.map(({ email, name, order }) => ({
-                email, name, role: 'APPROVER' as const, order,
+            // Case B: pass ONLY new approvers; backend preserves completed reviewers
+            const maxReviewerOrder = preservedReviewers.length > 0
+                ? Math.max(...preservedReviewers.map(r => r.order))
+                : 0;
+            assignments = approverRows.map((r, i) => ({
+                email: r.email.trim(),
+                name: r.name.trim() || undefined,
+                role: 'APPROVER' as const,
+                order: maxReviewerOrder + i + 1,
             }));
+        } else {
+            // Case A: full reset — all new reviewers + approvers
+            assignments = [
+                ...reviewerRows.map((r, i) => ({
+                    email: r.email.trim(),
+                    name: r.name.trim() || undefined,
+                    role: 'REVIEWER' as const,
+                    order: i + 1,
+                })),
+                ...approverRows.map((r, i) => ({
+                    email: r.email.trim(),
+                    name: r.name.trim() || undefined,
+                    role: 'APPROVER' as const,
+                    order: reviewerRows.length + i + 1,
+                })),
+            ];
         }
 
-        const res = await unifiedFlowService.submitFlow(contractId, assignments, false);
+        const signers: ExternalSignerSubmitInput[] | undefined = externalSigningEnabled
+            ? signerRows.map((s, i) => ({
+                email: s.email.trim(),
+                name: s.name.trim() || undefined,
+                order: i + 1,
+                ...(s.partyId ? { partyId: s.partyId, partyLabel: s.partyLabel } : {}),
+            }))
+            : undefined;
+
+        const res = await unifiedFlowService.submitFlow(
+            contractId,
+            assignments,
+            externalSigningEnabled,
+            signers,
+            senderName.trim() || currentUser?.fullName || currentUser?.email,
+        );
         setSubmitting(false);
 
         if (res.ok) {
@@ -166,7 +302,10 @@ export default function UnifiedFlowResubmitDialog({
 
     const handleClose = () => {
         if (submitting) return;
+        setParticipants([]);
+        setReviewerRows([]);
         setApproverRows([]);
+        setSignerRows([]);
         setError(null);
         onClose();
     };
@@ -174,12 +313,236 @@ export default function UnifiedFlowResubmitDialog({
     const sectionBg = isDark ? alpha('#ffffff', 0.03) : '#f8fafc';
     const sectionBorder = isDark ? alpha('#ffffff', 0.08) : '#e2e8f0';
 
+    const renderParticipantSection = (
+        role: 'REVIEWER' | 'APPROVER',
+        rows: ParticipantRow[],
+        setRows: React.Dispatch<React.SetStateAction<ParticipantRow[]>>,
+        orderOffset: number,
+    ) => {
+        const isReviewer = role === 'REVIEWER';
+        const accentColor = isReviewer ? '#3b82f6' : '#10b981';
+        const Icon = isReviewer ? RateReview : ThumbUp;
+        const label = isReviewer ? 'Reviewers' : 'Approvers';
+        const subtext = isReviewer ? 'Can review & edit organisation fields.' : 'Can sign the PDF and approve the contract.';
+        const group: 'reviewer' | 'approver' = isReviewer ? 'reviewer' : 'approver';
+
+        return (
+            <Paper elevation={0} sx={{ bgcolor: sectionBg, border: `1px solid ${sectionBorder}`, borderRadius: 2, overflow: 'hidden' }}>
+                <Box sx={{ px: 1.5, py: 1, display: 'flex', alignItems: 'center', gap: 1, borderBottom: `1px solid ${sectionBorder}`, bgcolor: isDark ? alpha(accentColor, 0.08) : alpha(accentColor, 0.05) }}>
+                    <Icon sx={{ fontSize: 16, color: accentColor }} />
+                    <Box sx={{ flex: 1 }}>
+                        <Typography variant="subtitle2" fontWeight={700} sx={{ color: accentColor }}>{label}</Typography>
+                        <Typography variant="caption" color="text.secondary">{subtext}</Typography>
+                    </Box>
+                    <Chip label={rows.length} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700, bgcolor: alpha(accentColor, 0.15), color: accentColor }} />
+                </Box>
+                <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                    {rows.length === 0 && (
+                        <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'center', py: 1 }}>No {label.toLowerCase()} added yet</Typography>
+                    )}
+                    {rows.map((row, idx) => {
+                        const order = orderOffset + idx + 1;
+                        const isDraggingThis = dragging?.id === row._id;
+                        const isDragTarget = dragOverId === row._id && dragging?.group === group && !isDraggingThis;
+                        return (
+                            <Box
+                                key={row._id}
+                                draggable
+                                onDragStart={e => { setDragging({ id: row._id, group }); e.dataTransfer.effectAllowed = 'move'; }}
+                                onDragOver={e => { e.preventDefault(); if (dragging?.group !== group) return; e.dataTransfer.dropEffect = 'move'; if (dragOverId !== row._id) setDragOverId(row._id); }}
+                                onDrop={e => { e.preventDefault(); if (!dragging || dragging.group !== group) return; setRows(prev => reorder(prev, dragging.id, row._id)); setDragging(null); setDragOverId(null); }}
+                                onDragEnd={() => { setDragging(null); setDragOverId(null); }}
+                                sx={{
+                                    display: 'flex', alignItems: 'center', gap: 1,
+                                    p: 1, borderRadius: 1.5,
+                                    bgcolor: 'background.paper',
+                                    border: '1px solid',
+                                    borderColor: isDragTarget ? accentColor : 'divider',
+                                    cursor: isDraggingThis ? 'grabbing' : 'grab',
+                                    opacity: isDraggingThis ? 0.4 : 1,
+                                    boxShadow: isDragTarget ? `0 0 0 2px ${alpha(accentColor, 0.25)}` : 'none',
+                                    transition: 'border-color 0.1s, box-shadow 0.1s, opacity 0.15s',
+                                    userSelect: 'none',
+                                }}
+                            >
+                                <Box sx={{ minWidth: 22, height: 22, borderRadius: '50%', bgcolor: alpha(accentColor, 0.12), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <Typography variant="caption" fontWeight={700} sx={{ fontSize: '0.62rem', color: accentColor }}>{order}</Typography>
+                                </Box>
+                                <DragIndicator sx={{ fontSize: 18, color: 'text.disabled', flexShrink: 0 }} />
+                                <Autocomplete
+                                    options={availableUsers(row.email)}
+                                    getOptionLabel={u => typeof u === 'string' ? u : `${u.name || ''} (${u.email})`}
+                                    value={users.find(u => u.email === row.email) || null}
+                                    onChange={(_, val) => {
+                                        if (val && typeof val !== 'string') {
+                                            updateParticipantRow(row._id, { email: val.email, name: val.name ?? '' });
+                                        } else {
+                                            updateParticipantRow(row._id, { email: '', name: '' });
+                                        }
+                                    }}
+                                    loading={loadingUsers}
+                                    size="small"
+                                    sx={{ flex: 1, minWidth: 0 }}
+                                    renderInput={params => (
+                                        <TextField
+                                            {...params}
+                                            placeholder="Search user…"
+                                            size="small"
+                                            sx={{ '& .MuiOutlinedInput-root': { fontSize: '0.82rem' } }}
+                                        />
+                                    )}
+                                    freeSolo
+                                    onInputChange={(_, val, reason) => {
+                                        if (reason === 'input') updateParticipantRow(row._id, { email: val });
+                                    }}
+                                />
+                                <Tooltip title="Remove">
+                                    <span>
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => removeParticipantRow(row._id)}
+                                            disabled={rows.length === 1}
+                                            sx={{ color: 'error.main', p: 0.5 }}
+                                        >
+                                            <Delete sx={{ fontSize: 16 }} />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                            </Box>
+                        );
+                    })}
+                    <AppButton
+                        variant="outlined"
+                        size="small"
+                        startIcon={<Add />}
+                        onClick={() => setRows(prev => [...prev, { _id: uid(), email: '', name: '', role }])}
+                        sx={{ mt: 0.25, borderColor: alpha(accentColor, 0.4), color: accentColor, '&:hover': { borderColor: accentColor, bgcolor: alpha(accentColor, 0.06) } }}
+                    >
+                        Add {isReviewer ? 'Reviewer' : 'Approver'}
+                    </AppButton>
+                </Box>
+            </Paper>
+        );
+    };
+
+    const renderSignerSection = () => (
+        <Paper elevation={0} sx={{ bgcolor: sectionBg, border: `1px solid ${isDark ? alpha('#f59e0b', 0.3) : '#fde68a'}`, borderRadius: 2, overflow: 'hidden' }}>
+            <Box sx={{ px: 1.5, py: 1, display: 'flex', alignItems: 'center', gap: 1, borderBottom: `1px solid ${sectionBorder}`, bgcolor: isDark ? alpha('#f59e0b', 0.08) : '#fffbeb' }}>
+                <DriveFileRenameOutline sx={{ fontSize: 16, color: '#f59e0b' }} />
+                <Box sx={{ flex: 1 }}>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ color: isDark ? '#fcd34d' : '#92400e' }}>External Client Signers</Typography>
+                    <Typography variant="caption" color="text.secondary">Emails sent automatically after all approvers complete</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <AutoAwesome sx={{ fontSize: 12, color: '#f59e0b' }} />
+                    <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 600 }}>Auto</Typography>
+                </Box>
+            </Box>
+            <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                {signerRows.map((row, idx) => {
+                    const isDraggingThis = dragging?.id === row._id;
+                    const isDragTarget = dragOverId === row._id && dragging?.group === 'signer' && !isDraggingThis;
+                    return (
+                        <Box
+                            key={row._id}
+                            draggable
+                            onDragStart={e => { setDragging({ id: row._id, group: 'signer' }); e.dataTransfer.effectAllowed = 'move'; }}
+                            onDragOver={e => { e.preventDefault(); if (dragging?.group !== 'signer') return; e.dataTransfer.dropEffect = 'move'; if (dragOverId !== row._id) setDragOverId(row._id); }}
+                            onDrop={e => { e.preventDefault(); if (!dragging || dragging.group !== 'signer') return; setSignerRows(prev => reorder(prev, dragging.id, row._id)); setDragging(null); setDragOverId(null); }}
+                            onDragEnd={() => { setDragging(null); setDragOverId(null); }}
+                            sx={{
+                                display: 'flex', alignItems: 'center', gap: 1, p: 1, borderRadius: 1.5,
+                                bgcolor: 'background.paper', border: '1px solid',
+                                borderColor: isDragTarget ? '#f59e0b' : 'divider',
+                                cursor: isDraggingThis ? 'grabbing' : 'grab',
+                                opacity: isDraggingThis ? 0.4 : 1,
+                                boxShadow: isDragTarget ? `0 0 0 2px ${alpha('#f59e0b', 0.25)}` : 'none',
+                                userSelect: 'none',
+                            }}
+                        >
+                            <Box sx={{ minWidth: 22, height: 22, borderRadius: '50%', bgcolor: alpha('#f59e0b', 0.12), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <Typography variant="caption" fontWeight={700} sx={{ fontSize: '0.62rem', color: '#f59e0b' }}>{idx + 1}</Typography>
+                            </Box>
+                            <DragIndicator sx={{ fontSize: 18, color: 'text.disabled', flexShrink: 0 }} />
+                            <TextField
+                                placeholder="Email *"
+                                size="small"
+                                value={row.email}
+                                onChange={e => updateSignerRow(row._id, { email: e.target.value })}
+                                sx={{ flex: 1, '& .MuiOutlinedInput-root': { fontSize: '0.82rem' } }}
+                            />
+                            <TextField
+                                placeholder="Name"
+                                size="small"
+                                value={row.name}
+                                onChange={e => updateSignerRow(row._id, { name: e.target.value })}
+                                sx={{ flex: 1, '& .MuiOutlinedInput-root': { fontSize: '0.82rem' } }}
+                            />
+                            {externalPartiesFromStatus.length > 1 && (
+                                <Autocomplete
+                                    options={externalPartiesFromStatus}
+                                    getOptionLabel={p => p.label}
+                                    value={externalPartiesFromStatus.find(p => p.id === row.partyId) || null}
+                                    onChange={(_, val) => updateSignerRow(row._id, { partyId: val?.id, partyLabel: val?.label })}
+                                    size="small"
+                                    sx={{ width: 130, '& .MuiOutlinedInput-root': { fontSize: '0.82rem' } }}
+                                    renderInput={params => <TextField {...params} placeholder="Party" size="small" />}
+                                />
+                            )}
+                            {externalPartiesFromStatus.length === 1 && row.partyLabel && (
+                                <Chip label={row.partyLabel} size="small" sx={{ bgcolor: alpha('#f59e0b', 0.12), color: '#f59e0b', fontSize: '0.65rem' }} />
+                            )}
+                            <Tooltip title="Remove">
+                                <span>
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => removeSignerRow(row._id)}
+                                        disabled={signerRows.length === 1}
+                                        sx={{ color: 'error.main', p: 0.5 }}
+                                    >
+                                        <Delete sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                        </Box>
+                    );
+                })}
+                <AppButton
+                    variant="outlined"
+                    size="small"
+                    startIcon={<Add />}
+                    onClick={() => setSignerRows(prev => [...prev, {
+                        _id: uid(), email: '', name: '',
+                        partyId: externalPartiesFromStatus.length === 1 ? externalPartiesFromStatus[0].id : undefined,
+                        partyLabel: externalPartiesFromStatus.length === 1 ? externalPartiesFromStatus[0].label : undefined,
+                    }])}
+                    sx={{ mt: 0.25, borderColor: alpha('#f59e0b', 0.4), color: '#f59e0b', '&:hover': { borderColor: '#f59e0b', bgcolor: alpha('#f59e0b', 0.06) } }}
+                >
+                    Add Signer
+                </AppButton>
+
+                {/* Optional sender name */}
+                <Box sx={{ mt: 0.5 }}>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        label="Sender name (shown in signature emails)"
+                        placeholder="e.g. Priya from CostaCloud"
+                        value={senderName}
+                        onChange={e => setSenderName(e.target.value)}
+                        sx={{ '& .MuiOutlinedInput-root': { fontSize: '0.82rem' } }}
+                    />
+                </Box>
+            </Box>
+        </Paper>
+    );
+
     return (
         <BaseDialog
             open={open}
             onClose={handleClose}
             title="RESUBMIT CONTRACT"
-            maxWidth="sm"
+            maxWidth="md"
             disableBackdropClick={submitting}
             actions={
                 <>
@@ -191,6 +554,7 @@ export default function UnifiedFlowResubmitDialog({
                         loading={submitting}
                         startIcon={<SendOutlined />}
                         onClick={handleSubmit}
+                        disabled={loadingStatus}
                         sx={{ fontWeight: 600, px: 3 }}
                     >
                         {submitting ? 'Resubmitting…' : 'Resubmit'}
@@ -199,7 +563,8 @@ export default function UnifiedFlowResubmitDialog({
             }
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                {/* Contract info */}
+
+                {/* Contract title */}
                 {contractTitle && (
                     <Box sx={{ p: 1, borderRadius: 1.5, bgcolor: isDark ? alpha('#ffffff', 0.04) : '#f8fafc', border: '1px solid', borderColor: 'divider' }}>
                         <Typography variant="body2" color="text.secondary">
@@ -208,15 +573,23 @@ export default function UnifiedFlowResubmitDialog({
                     </Box>
                 )}
 
-                {/* Rejection context banner */}
-                {rejectedParticipant && (
+                {/* Loading spinner */}
+                {loadingStatus && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                        <CircularProgress size={16} />
+                        <Typography variant="caption" color="text.secondary">Loading contract status…</Typography>
+                    </Box>
+                )}
+
+                {/* Rejection banner */}
+                {!loadingStatus && rejectedParticipant && (
                     <Alert
                         severity="error"
                         icon={<WarningAmber fontSize="inherit" />}
                         sx={{ borderRadius: 2, '& .MuiAlert-message': { width: '100%' } }}
                     >
                         <Typography variant="body2" fontWeight={700}>
-                            Rejected by {isApproverRejection ? 'Approver' : 'Reviewer'}: {rejectedParticipant.email}
+                            Rejected by {isApproverRejection ? 'Approver' : 'Reviewer'}: {rejectedParticipant.name || rejectedParticipant.email}
                         </Typography>
                         {rejectedParticipant.comments && (
                             <Typography variant="caption" sx={{ display: 'block', mt: 0.5, fontStyle: 'italic' }}>
@@ -225,8 +598,8 @@ export default function UnifiedFlowResubmitDialog({
                         )}
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                             {isApproverRejection
-                                ? 'Reviewer stage was already completed and will be preserved. Only approvers need to be reassigned.'
-                                : 'All participants will be reset. Assign new approvers below.'}
+                                ? 'Reviewer stage was already completed and will be preserved. Assign new approver(s) below.'
+                                : 'All participants will be reset. Assign new reviewers and approvers below.'}
                         </Typography>
                     </Alert>
                 )}
@@ -237,167 +610,70 @@ export default function UnifiedFlowResubmitDialog({
                     </Alert>
                 )}
 
-                {/* Preserved reviewers (approver rejection only) */}
-                {isApproverRejection && preservedReviewers.length > 0 && (
-                    <Paper
-                        elevation={0}
-                        sx={{ bgcolor: sectionBg, border: `1px solid ${sectionBorder}`, borderRadius: 2, overflow: 'hidden' }}
-                    >
-                        <Box
-                            sx={{
-                                px: 1.5,
-                                py: 0.75,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 1,
-                                borderBottom: `1px solid ${sectionBorder}`,
-                                bgcolor: isDark ? alpha('#3b82f6', 0.08) : alpha('#3b82f6', 0.05),
-                            }}
-                        >
-                            <LockOutlined sx={{ fontSize: 14, color: '#3b82f6' }} />
-                            <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#3b82f6' }}>
-                                Reviewers (preserved — locked)
-                            </Typography>
-                        </Box>
-                        <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            {preservedReviewers.map((r) => (
-                                <Box
-                                    key={r.email}
-                                    sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 1,
-                                        px: 1.25,
-                                        py: 0.75,
-                                        borderRadius: 1.5,
-                                        bgcolor: isDark ? alpha('#3b82f6', 0.06) : '#eff6ff',
-                                        border: '1px solid',
-                                        borderColor: isDark ? alpha('#3b82f6', 0.2) : '#bfdbfe',
-                                    }}
-                                >
-                                    <LockOutlined sx={{ fontSize: 13, color: '#3b82f6', flexShrink: 0 }} />
-                                    <Box sx={{ flex: 1 }}>
-                                        <Typography variant="caption" fontWeight={600}>{r.name || r.email}</Typography>
-                                        {r.name && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{r.email}</Typography>}
-                                    </Box>
-                                    <Chip
-                                        label={`Order ${r.order}`}
-                                        size="small"
-                                        sx={{ height: 18, fontSize: '0.62rem', bgcolor: alpha('#3b82f6', 0.12), color: '#3b82f6' }}
-                                    />
-                                    <Chip
-                                        label={r.status}
-                                        size="small"
-                                        sx={{ height: 18, fontSize: '0.62rem', bgcolor: r.status === 'completed' ? alpha('#10b981', 0.12) : alpha('#6b7280', 0.12), color: r.status === 'completed' ? '#10b981' : '#6b7280' }}
-                                    />
+                {!loadingStatus && (
+                    <>
+                        {/* Case B: preserved reviewers display */}
+                        {isApproverRejection && preservedReviewers.length > 0 && (
+                            <Paper elevation={0} sx={{ bgcolor: sectionBg, border: `1px solid ${sectionBorder}`, borderRadius: 2, overflow: 'hidden' }}>
+                                <Box sx={{ px: 1.5, py: 0.75, display: 'flex', alignItems: 'center', gap: 1, borderBottom: `1px solid ${sectionBorder}`, bgcolor: isDark ? alpha('#3b82f6', 0.08) : alpha('#3b82f6', 0.05) }}>
+                                    <LockOutlined sx={{ fontSize: 14, color: '#3b82f6' }} />
+                                    <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#3b82f6' }}>Reviewers (preserved — locked)</Typography>
                                 </Box>
-                            ))}
-                        </Box>
-                    </Paper>
-                )}
-
-                {isApproverRejection && <Divider />}
-
-                {/* Approver assignment section */}
-                <Paper
-                    elevation={0}
-                    sx={{ bgcolor: sectionBg, border: `1px solid ${sectionBorder}`, borderRadius: 2, overflow: 'hidden' }}
-                >
-                    <Box
-                        sx={{
-                            px: 1.5,
-                            py: 0.75,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            borderBottom: `1px solid ${sectionBorder}`,
-                            bgcolor: isDark ? alpha('#10b981', 0.08) : '#f0fdf4',
-                        }}
-                    >
-                        <ThumbUp sx={{ fontSize: 14, color: '#10b981' }} />
-                        <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#10b981' }}>
-                            {isReviewerRejection ? 'Approvers' : 'New Approvers'}
-                        </Typography>
-                        {isApproverRejection && (
-                            <Chip label="Replace" size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha('#f59e0b', 0.15), color: '#f59e0b', ml: 'auto' }} />
+                                <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                    {preservedReviewers.map(r => (
+                                        <Box
+                                            key={r.email}
+                                            sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.25, py: 0.75, borderRadius: 1.5, bgcolor: isDark ? alpha('#3b82f6', 0.06) : '#eff6ff', border: '1px solid', borderColor: isDark ? alpha('#3b82f6', 0.2) : '#bfdbfe' }}
+                                        >
+                                            <LockOutlined sx={{ fontSize: 13, color: '#3b82f6', flexShrink: 0 }} />
+                                            <Person sx={{ fontSize: 14, color: '#3b82f6', flexShrink: 0 }} />
+                                            <Box sx={{ flex: 1 }}>
+                                                <Typography variant="caption" fontWeight={600}>{r.name || r.email}</Typography>
+                                                {r.name && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{r.email}</Typography>}
+                                            </Box>
+                                            <Chip label={`Order ${r.order}`} size="small" sx={{ height: 18, fontSize: '0.62rem', bgcolor: alpha('#3b82f6', 0.12), color: '#3b82f6' }} />
+                                            <Chip label="Completed" size="small" sx={{ height: 18, fontSize: '0.62rem', bgcolor: alpha('#10b981', 0.12), color: '#10b981' }} />
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </Paper>
                         )}
-                    </Box>
 
-                    <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                        {approverRows.map((row) => (
-                            <Box
-                                key={row._id}
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 1,
-                                    p: 0.75,
-                                    borderRadius: 1.5,
-                                    bgcolor: 'background.paper',
-                                    border: '1px solid',
-                                    borderColor: 'divider',
-                                }}
-                            >
-                                <Autocomplete
-                                    options={availableUsers(row.email)}
-                                    getOptionLabel={(u) => typeof u === 'string' ? u : `${u.name || ''} (${u.email})`}
-                                    value={users.find((u) => u.email === row.email) || null}
-                                    onChange={(_, val) => {
-                                        if (val && typeof val !== 'string') updateApproverRow(row._id, { email: val.email, name: val.name });
-                                        else updateApproverRow(row._id, { email: '', name: '' });
-                                    }}
-                                    loading={loadingUsers}
-                                    size="small"
-                                    sx={{ flex: 1 }}
-                                    renderInput={(params) => (
-                                        <TextField
-                                            {...params}
-                                            placeholder="Search approver…"
-                                            size="small"
-                                            sx={{ '& .MuiOutlinedInput-root': { fontSize: '0.82rem' } }}
-                                        />
-                                    )}
-                                    freeSolo
-                                    onInputChange={(_, val, reason) => {
-                                        if (reason === 'input') updateApproverRow(row._id, { email: val });
-                                    }}
-                                />
-                                <TextField
-                                    type="number"
-                                    size="small"
-                                    label="Order"
-                                    value={row.order}
-                                    onChange={(e) => {
-                                        const v = parseInt(e.target.value, 10);
-                                        if (!isNaN(v) && v > 0) updateApproverRow(row._id, { order: v });
-                                    }}
-                                    inputProps={{ min: 1, style: { textAlign: 'center', padding: '4px 4px' } }}
-                                    sx={{ width: 68, flexShrink: 0 }}
-                                />
-                                <AppButton
-                                    size="small"
-                                    color="error"
-                                    variant="outlined"
-                                    onClick={() => removeApproverRow(row._id)}
-                                    disabled={approverRows.length === 1}
-                                    sx={{ p: 0.5, minWidth: 0 }}
-                                >
-                                    <Delete sx={{ fontSize: 16 }} />
-                                </AppButton>
+                        {isApproverRejection && <Divider />}
+
+                        {/* Case A: reviewer + approver sections side by side */}
+                        {/* Case B: approver section only */}
+                        {isApproverRejection ? (
+                            renderParticipantSection('APPROVER', approverRows, setApproverRows, preservedReviewers.length)
+                        ) : (
+                            <Box sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', md: 'row' } }}>
+                                <Box sx={{ flex: 1 }}>
+                                    {renderParticipantSection('REVIEWER', reviewerRows, setReviewerRows, 0)}
+                                </Box>
+                                <Box sx={{ flex: 1 }}>
+                                    {renderParticipantSection('APPROVER', approverRows, setApproverRows, reviewerRows.length)}
+                                </Box>
                             </Box>
-                        ))}
+                        )}
 
-                        <AppButton
-                            variant="outlined"
-                            size="small"
-                            startIcon={<Add />}
-                            onClick={addApproverRow}
-                            sx={{ mt: 0.25, borderColor: alpha('#10b981', 0.4), color: '#10b981', '&:hover': { borderColor: '#10b981', bgcolor: alpha('#10b981', 0.06) } }}
-                        >
-                            Add Approver
-                        </AppButton>
-                    </Box>
-                </Paper>
+                        {/* External signing toggle */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1, py: 0.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+                            <Box>
+                                <Typography variant="body2" fontWeight={600}>External Client Signing</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {externalSigningEnabled ? 'Signing emails auto-sent after last approver completes' : 'No external signing — owner sends manually if needed'}
+                                </Typography>
+                            </Box>
+                            <FormControlLabel
+                                control={<Switch checked={externalSigningEnabled} onChange={e => handleExternalToggle(e.target.checked)} size="small" />}
+                                label=""
+                                sx={{ m: 0 }}
+                            />
+                        </Box>
+
+                        {externalSigningEnabled && renderSignerSection()}
+                    </>
+                )}
             </Box>
         </BaseDialog>
     );

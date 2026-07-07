@@ -72,17 +72,17 @@ export default function UnifiedFlowInboxCard({
         switch (status) {
             case 'completed':
                 return isDark ? { bg: alpha('#10b981', 0.08), border: alpha('#10b981', 0.22), accent: '#6ee7b7' }
-                    : { bg: '#f0fdf4', border: '#bbf7d0', accent: '#059669' };
+                    : { bg: '#ffffff', border: '#bbf7d0', accent: '#059669' };
             case 'rejected':
                 return isDark ? { bg: alpha('#ef4444', 0.08), border: alpha('#ef4444', 0.22), accent: '#fca5a5' }
-                    : { bg: '#fff5f5', border: '#fecaca', accent: '#dc2626' };
+                    : { bg: '#ffffff', border: '#fecaca', accent: '#dc2626' };
             case 'unlocked':
             case 'in_progress':
                 return isDark ? { bg: alpha('#f59e0b', 0.08), border: alpha('#f59e0b', 0.22), accent: '#fcd34d' }
-                    : { bg: '#fffbeb', border: '#fde68a', accent: '#d97706' };
+                    : { bg: '#ffffff', border: '#fde68a', accent: '#d97706' };
             default:
                 return isDark ? { bg: alpha('#6b7280', 0.08), border: alpha('#6b7280', 0.22), accent: '#9ca3af' }
-                    : { bg: '#f9fafb', border: '#e5e7eb', accent: '#6b7280' };
+                    : { bg: '#ffffff', border: '#e5e7eb', accent: '#6b7280' };
         }
     };
 
@@ -128,7 +128,7 @@ export default function UnifiedFlowInboxCard({
                 <Box
                     sx={{
                         height: 3,
-                        bgcolor: role === 'APPROVER' ? '#10b981' : '#3b82f6',
+                        bgcolor: statusColors.accent,
                         borderRadius: '2px 2px 0 0',
                     }}
                 />

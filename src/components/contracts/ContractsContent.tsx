@@ -49,6 +49,7 @@ const DRAFT_STATUSES: ContractStatus[] = [
     ContractStatus.DRAFT,
     ContractStatus.IN_REVIEW,
     ContractStatus.IN_APPROVAL,
+    ContractStatus.REJECTED,
     ContractStatus.REJECTED_BY_REVIEWER,
     ContractStatus.REJECTED_BY_APPROVER,
 ];
@@ -132,6 +133,10 @@ export default function ContractsContent() {
 
     const [unifiedSubmitOpen, setUnifiedSubmitOpen] = useState(false);
     const [contractForUnifiedSubmit, setContractForUnifiedSubmit] = useState<Contract | null>(null);
+    const [unifiedSubmitResubmitMode, setUnifiedSubmitResubmitMode] = useState(false);
+    // Update & Resubmit flow — reuses EditContractDialog in resubmit mode, then UnifiedFlowSubmitDialog
+    const [editForResubmitOpen, setEditForResubmitOpen] = useState(false);
+    const [contractForEditResubmit, setContractForEditResubmit] = useState<Contract | null>(null);
 
     const [renewDialogOpen, setRenewDialogOpen] = useState(false);
     const [contractForRenewal, setContractForRenewal] = useState<Contract | null>(null);
@@ -429,13 +434,6 @@ export default function ContractsContent() {
         setEditDialogOpen(true);
     };
 
-    const handleShare = (id: string) => {
-        const contract = contracts.find(c => c.id === id);
-        if (!contract) return;
-        setContractForReview(contract);
-        setReviewDialogOpen(true);
-    };
-
     const handleSubmitForReview = async (
         mode: WorkflowMode,
         newReviewers: string[],
@@ -456,27 +454,37 @@ export default function ContractsContent() {
         }
     };
 
-    const handleShareContract = async (id: string) => {
-        // The list endpoint omits formFields and parties for performance.
-        // Fetch the full contract so the dialog has everything it needs.
-        const full = await apiService.getContractDetails(id);
-        const contract = (full as any) ?? contracts.find(c => c.id === id);
-        if (!contract) return;
-        setContractForSignature(contract);
-        setMultiPartyDialogOpen(true);
-    };
 
-    // Unified flow entry points — replace the legacy share handlers visually;
-    // the original handleShare / handleShareContract remain intact below for easy rollback.
     const handleUnifiedShare = (id: string) => {
         const contract = contracts.find(c => c.id === id);
         if (!contract) return;
+        // Active unified flow contract detected via participants[] (works because
+        // IN_REVIEW/IN_APPROVAL contracts arrive enriched from getFlowInbox()).
         if ((contract.participants?.length ?? 0) > 0) {
             router.push(`/contracts/${id}`);
             return;
         }
+        // Fresh DRAFT → open submit dialog
         setContractForUnifiedSubmit(contract);
         setUnifiedSubmitOpen(true);
+    };
+
+    // Step 1 of the Update & Resubmit flow — open EditContractDialog in resubmit mode
+    const handleUpdateAndResubmit = (id: string) => {
+        const contract = contracts.find(c => c.id === id);
+        if (!contract) return;
+        setContractForEditResubmit(contract);
+        setEditForResubmitOpen(true);
+    };
+
+    // Step 2 — EditContractDialog saved successfully; open UnifiedFlowSubmitDialog
+    const handleResubmitReady = (contractId: string, contract: Contract) => {
+        setEditForResubmitOpen(false);
+        setContractForEditResubmit(null);
+        setContractForUnifiedSubmit({ ...contract, id: contractId });
+        setUnifiedSubmitResubmitMode(true);
+        setUnifiedSubmitOpen(true);
+        loadContracts();
     };
 
     const handleUnifiedShareContract = async (id: string) => {
@@ -797,6 +805,7 @@ export default function ContractsContent() {
                                             onView={cardVariant !== 'terminated' ? handleView : undefined}
                                             onEdit={cardVariant === 'draft' ? handleEdit : undefined}
                                             onShare={cardVariant === 'draft' ? handleUnifiedShare : cardVariant === 'contract' ? handleUnifiedShareContract : undefined}
+                                            onUpdateAndResubmit={cardVariant === 'draft' ? handleUpdateAndResubmit : undefined}
                                             onRenew={cardVariant === 'contract' ? handleRenewContract : undefined}
                                             onTerminate={cardVariant === 'contract' ? handleTerminateContract : undefined}
                                             onFinalize={cardVariant === 'contract' ? handleFinalize : undefined}
@@ -829,6 +838,7 @@ export default function ContractsContent() {
                                             onView={cardVariant !== 'terminated' ? handleView : undefined}
                                             onEdit={cardVariant === 'draft' ? handleEdit : undefined}
                                             onShare={cardVariant === 'draft' ? handleUnifiedShare : cardVariant === 'contract' ? handleUnifiedShareContract : undefined}
+                                            onUpdateAndResubmit={cardVariant === 'draft' ? handleUpdateAndResubmit : undefined}
                                             onRenew={cardVariant === 'contract' ? handleRenewContract : undefined}
                                             onTerminate={cardVariant === 'contract' ? handleTerminateContract : undefined}
                                             onFinalize={cardVariant === 'contract' ? handleFinalize : undefined}
@@ -964,10 +974,21 @@ export default function ContractsContent() {
             {contractForUnifiedSubmit && (
                 <UnifiedFlowSubmitDialog
                     open={unifiedSubmitOpen}
-                    onClose={() => { setUnifiedSubmitOpen(false); setContractForUnifiedSubmit(null); }}
-                    onSubmitted={() => { setUnifiedSubmitOpen(false); setContractForUnifiedSubmit(null); loadContracts(); }}
+                    onClose={() => { setUnifiedSubmitOpen(false); setContractForUnifiedSubmit(null); setUnifiedSubmitResubmitMode(false); }}
+                    onSubmitted={() => { setUnifiedSubmitOpen(false); setContractForUnifiedSubmit(null); setUnifiedSubmitResubmitMode(false); loadContracts(); }}
                     contractId={contractForUnifiedSubmit.id}
                     contractTitle={contractForUnifiedSubmit.title}
+                    resubmitMode={unifiedSubmitResubmitMode}
+                />
+            )}
+
+            {contractForEditResubmit && (
+                <EditContractDialog
+                    open={editForResubmitOpen}
+                    onClose={() => { setEditForResubmitOpen(false); setContractForEditResubmit(null); }}
+                    contract={contractForEditResubmit}
+                    resubmitMode
+                    onResubmitReady={handleResubmitReady}
                 />
             )}
 

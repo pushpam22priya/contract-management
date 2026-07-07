@@ -26,6 +26,7 @@ interface UnifiedFlowSubmitDialogProps {
     onSubmitted: () => void;
     contractId: string;
     contractTitle?: string;
+    resubmitMode?: boolean;
 }
 
 interface ParticipantRow extends ParticipantAssignment {
@@ -71,6 +72,7 @@ export default function UnifiedFlowSubmitDialog({
     onSubmitted,
     contractId,
     contractTitle,
+    resubmitMode = false,
 }: UnifiedFlowSubmitDialogProps) {
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
@@ -93,6 +95,19 @@ export default function UnifiedFlowSubmitDialog({
 
     useEffect(() => {
         if (open) {
+            if (resubmitMode) {
+                // Skip status check — always show the assignment form for resubmission
+                setActiveFlowStatus(null);
+                setCheckingStatus(false);
+                loadUsers();
+                setReviewerRows([newParticipantRow('REVIEWER')]);
+                setApproverRows([newParticipantRow('APPROVER')]);
+                setExternalSigningIncluded(false);
+                setExternalSigners([]);
+                setExternalParties([]);
+                setError(null);
+                return;
+            }
             setCheckingStatus(true);
             setActiveFlowStatus(null);
             unifiedFlowService.getFlowStatus(contractId).then((res) => {
@@ -717,7 +732,7 @@ export default function UnifiedFlowSubmitDialog({
         <BaseDialog
             open={open}
             onClose={handleClose}
-            title={isReadOnlyMode ? 'UNIFIED FLOW STATUS' : 'SUBMIT FOR UNIFIED REVIEW'}
+            title={isReadOnlyMode ? 'UNIFIED FLOW STATUS' : resubmitMode ? 'RESUBMIT FOR UNIFIED REVIEW' : 'SUBMIT FOR UNIFIED REVIEW'}
             maxWidth="md"
             disableBackdropClick={submitting}
             actions={
