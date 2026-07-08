@@ -1066,6 +1066,11 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
                                     canAddFormFields={false}
                                     toolbarMode="forms"
                                     defaultToolbar="view"
+                                    // ✅ Enable the viewer's native EXTERNAL-party protection so contractors
+                                    // cannot SIGN external-party fields (text fields are blocked by handleFieldChange).
+                                    parties={selectedTemplate?.parties || []}
+                                    protectedPartyIds={externalTypePartyIds}
+                                    onSignaturePositionRestored={() => setShowWrongPartyWarning(true)}
                                     onFieldChange={handleFieldChange}
                                     onDocumentLoaded={() => {
                                         setDocumentLoaded(true);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { contractStep1Schema, ContractStep1Form } from '@/schemas/contractSchema';
@@ -22,6 +22,7 @@ import BaseDialog from '@/components/common/BaseDialog';
 import ConfirmationDialog from '@/components/common/ConfirmationDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
+import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
 import { templateService } from '@/services/templateService';
 import { apiService } from '@/services/apiService';
 import { contractService } from '@/services/contractService';
@@ -83,6 +84,7 @@ interface EditContractDialogProps {
 }
 
 const EditContractDialog = ({ open, onClose, onSuccess, contract, resubmitMode, onResubmitReady }: EditContractDialogProps) => {
+    console.log('🟢 [EditContractDialog BUILD MARKER v2] external-party guard active');
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
     const pdfViewerRef = useRef<PDFViewerHandle>(null);
@@ -113,6 +115,21 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract, resubmitMode, 
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [filledFieldValues, setFilledFieldValues] = useState<Record<string, string>>({});
+
+    // Contractor cannot edit EXTERNAL party fields (type === 'EXTERNAL' on the party config)
+    const [showWrongPartyWarning, setShowWrongPartyWarning] = useState(false);
+
+    // IDs of parties marked as EXTERNAL — contractor must not edit these fields.
+    // Prefer the freshly-loaded template's parties; fall back to the contract's own parties
+    // (e.g. resubmit without a matched template).
+    const externalTypePartyIds = useMemo(() => {
+        const parties = (selectedTemplate?.parties || (contract as any).parties || []) as any[];
+        return parties.filter((p) => p.type === 'EXTERNAL').map((p) => p.id as string);
+    }, [selectedTemplate?.parties, contract]);
+
+    // Ref so onFieldChange always sees latest values (called via viewer ref / closure)
+    const filledFieldValuesRef = useRef<Record<string, string>>({});
+    useEffect(() => { filledFieldValuesRef.current = filledFieldValues; }, [filledFieldValues]);
 
     // True when the user picked a different template than the contract's original one
     const templateChanged = selectedTemplate !== null && selectedTemplate.id !== contract.templateId;
@@ -634,7 +651,29 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract, resubmitMode, 
                                     defaultToolbar="view"
                                     editableFieldMode="all"
                                     showAnnotationNavigation={true}
+                                    // ✅ Enable the viewer's native EXTERNAL-party protection.
+                                    // protectedPartyIds activates signature blocking (viewer deletes an
+                                    // external-party signature and calls onSignaturePositionRestored),
+                                    // which reads party ownership from formFields directly (name match),
+                                    // so it is unaffected by the party-restore timing issue.
+                                    parties={selectedTemplate?.parties || (contract as any).parties || []}
+                                    protectedPartyIds={externalTypePartyIds}
+                                    onSignaturePositionRestored={() => setShowWrongPartyWarning(true)}
                                     onFieldChange={(fieldName, value) => {
+                                        // Block contractor from editing EXTERNAL party TEXT fields.
+                                        // (Signature fields are blocked by the viewer via protectedPartyIds above.)
+                                        // This guard must run in resubmit/edit mode too, not just on first creation.
+                                        const field = (initialFormFields || []).find((f: any) => f.name === fieldName);
+                                        if (field?.assignedParty && externalTypePartyIds.includes(field.assignedParty)) {
+                                            setShowWrongPartyWarning(true);
+                                            const prevValue = filledFieldValuesRef.current[fieldName] || '';
+                                            if (prevValue) {
+                                                pdfViewerRef.current?.restoreFieldValue(fieldName, prevValue);
+                                            } else {
+                                                pdfViewerRef.current?.clearField(fieldName);
+                                            }
+                                            return;
+                                        }
                                         setFilledFieldValues(prev => ({
                                             ...prev,
                                             [fieldName]: value?.toString() ?? '',
@@ -642,6 +681,17 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract, resubmitMode, 
                                     }}
                                     onDocumentLoaded={() => setDocumentLoaded(true)}
                                     onError={(err) => setError(err)}
+                                />
+
+                                {/* Warn contractor when they try to fill an EXTERNAL party's fields */}
+                                <WrongPartyWarningDialog
+                                    open={showWrongPartyWarning}
+                                    title="External Party Field"
+                                    description="This field belongs to an external party and cannot be edited by your organisation."
+                                    pdfViewerRef={pdfViewerRef}
+                                    navigateConfig={{ type: 'nonClient', excludePartyIds: externalTypePartyIds }}
+                                    onClose={() => setShowWrongPartyWarning(false)}
+                                    zIndex={1400}
                                 />
                             </Box>
                         ) : (
