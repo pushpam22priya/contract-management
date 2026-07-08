@@ -224,6 +224,7 @@ const ContractCard = ({
     // Rejected unified flow contracts get a dedicated "Update & Resubmit" button
     // instead of the normal Edit + Share buttons.
     const isRejectedForResubmit =
+        contract.status === ContractStatus.REJECTED ||
         contract.status === ContractStatus.REJECTED_BY_REVIEWER ||
         contract.status === ContractStatus.REJECTED_BY_APPROVER;
 

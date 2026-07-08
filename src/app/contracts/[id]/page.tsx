@@ -37,6 +37,7 @@ import UnifiedFlowOrgGateStatus from '@/components/unified-flow/UnifiedFlowOrgGa
 import UnifiedFlowSubmitDialog from '@/components/unified-flow/UnifiedFlowSubmitDialog';
 import UnifiedFlowResubmitDialog from '@/components/unified-flow/UnifiedFlowResubmitDialog';
 import UnifiedFlowSendForSignatureDialog from '@/components/unified-flow/UnifiedFlowSendForSignatureDialog';
+import { unifiedFlowService } from '@/services/unifiedFlowService';
 
 export default function ContractViewPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -50,6 +51,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const [contractTemplate, setContractTemplate] = useState<any | null>(null); // New state for template
     const [viewerOpen, setViewerOpen] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
+    const [viewingWithFlowUrl, setViewingWithFlowUrl] = useState(false);
 
     // History panel + dialog state
     const [historyAnchorEl, setHistoryAnchorEl] = useState<HTMLElement | null>(null);
@@ -529,12 +531,33 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
 
     // View Document Handler
     const handleViewDocument = async (doc: Document) => {
+        const isMainContract = !doc.id || doc.id === contract?.id || doc.id === id || doc.id === 'main-contract';
+
+        // For multi-party signed contracts, prefer _signed.pdf which has all parties' data baked
+        // correctly into the PDF binary. The base PDF + XFDF combo can misrepresent drawn ink
+        // signatures as text values because the XFDF stores the form field value (text) while the
+        // ink appearance is only in the PDF binary.
+        if (isMainContract && isMultiPartyContract) {
+            try {
+                const flowRes = await unifiedFlowService.getParticipantFileUrl(contract.id);
+                if (flowRes.ok && flowRes.data?.url) {
+                    setViewingWithFlowUrl(true);
+                    setSelectedDoc({ ...doc, url: flowRes.data.url });
+                    setViewerOpen(true);
+                    return;
+                }
+            } catch (e) {
+                console.warn('[ContractViewPage] Could not get flow file URL, falling back to base PDF:', e);
+            }
+        }
+
+        setViewingWithFlowUrl(false);
         let docWithUrl = doc;
-        if(!doc.url){
+        if (!doc.url) {
             docWithUrl = {
                 ...doc,
                 url: await apiService.getContractViewUrl(doc.id) || ''
-            }
+            };
         }
         setSelectedDoc(docWithUrl);
         setViewerOpen(true);
@@ -900,7 +923,7 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
             })()}
             <DocumentViewerDialog
                 open={viewerOpen}
-                onClose={() => setViewerOpen(false)}
+                onClose={() => { setViewerOpen(false); setViewingWithFlowUrl(false); }}
                 fileUrl={(() => {
                     // For chain docs (predecessor / renewal), always use their own URL directly
                     const isChainDoc = !!selectedDoc && selectedDoc.id !== 'main-contract' && selectedDoc?.id !== contract?.id;
@@ -943,8 +966,11 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                     }
                     return contract?.id || '';
                 })()}
-                // Only pass XFDF/formFields for the main (current) contract — chain docs are read-only
-                initialXfdf={(!selectedDoc || selectedDoc.id === contract?.id) ? contract?.xfdfData : undefined}
+                // Only pass XFDF/formFields for the main (current) contract — chain docs are read-only.
+                // When using _signed.pdf (viewingWithFlowUrl), the PDF already has all signatures and
+                // field values baked in as PDF appearances. Applying XFDF on top would override ink
+                // signatures with their text form-field values, causing drawn signatures to show as text.
+                initialXfdf={(!viewingWithFlowUrl && (!selectedDoc || selectedDoc.id === contract?.id)) ? contract?.xfdfData : undefined}
                 formFields={(!selectedDoc || selectedDoc.id === contract?.id) ? contract?.formFields : undefined}
                 currentUserRole="contractor"
                 // Chain docs are always read-only; main contract is editable unless finalized
@@ -1004,7 +1030,6 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                     }}
                     contractId={contract.id}
                     contractTitle={displayTitle}
-                    participants={contract.participants}
                 />
             )}
 

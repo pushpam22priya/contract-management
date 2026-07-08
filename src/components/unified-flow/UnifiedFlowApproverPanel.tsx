@@ -508,7 +508,11 @@ export default function UnifiedFlowApproverPanel({
                 unifiedParticipantRole="APPROVER"
                 contractParties={contractParties}
                 formFields={flowFormFields}
-                initialXfdf={initialXfdf}
+                // In read-only mode the viewer loads the _signed.pdf which already has ink signatures
+                // baked into its appearance streams. Passing XFDF here would replace those baked-in
+                // appearances with plain text values — the same bug that was fixed on the contract
+                // detail page. Skip the overlay entirely for completed/rejected participants.
+                initialXfdf={isReadOnly ? undefined : initialXfdf}
                 saveRef={viewerSaveRef}
                 hideSaveButton
                 externalWarning={internalFieldsWarning}
