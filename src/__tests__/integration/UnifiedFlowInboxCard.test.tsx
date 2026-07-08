@@ -15,6 +15,8 @@
  *  8.  No open button rendered when status is completed
  *  9.  Calls onOpen with contractId and role when open button clicked
  * 10.  Reject dialog opens and calls onReloaded after successful rejection
+ * 11.  No open button rendered when status is pending (waiting for earlier participant)
+ * 12.  Shows "Rejected" status label and no open button when participant has rejected
  */
 
 import React from 'react';
@@ -57,6 +59,16 @@ const APPROVER_UNLOCKED: WorkflowParticipant = {
 const REVIEWER_COMPLETED: WorkflowParticipant = {
     ...REVIEWER_UNLOCKED,
     status: 'completed',
+};
+
+const REVIEWER_PENDING: WorkflowParticipant = {
+    ...REVIEWER_UNLOCKED,
+    status: 'pending',
+};
+
+const REVIEWER_REJECTED: WorkflowParticipant = {
+    ...REVIEWER_UNLOCKED,
+    status: 'rejected',
 };
 
 function makeContract(participant: WorkflowParticipant): Contract {
@@ -131,6 +143,20 @@ test('9. calls onOpen with contractId and REVIEWER role when button clicked', as
     const props = renderCard(REVIEWER_UNLOCKED);
     await userEvent.click(screen.getByRole('button', { name: /open & review/i }));
     expect(props.onOpen).toHaveBeenCalledWith('c-inbox-1', 'REVIEWER');
+});
+
+test('11. no open button when status is pending (waiting for earlier participant)', () => {
+    renderCard(REVIEWER_PENDING);
+    // Status should show "Waiting"
+    expect(screen.getByText('Waiting')).toBeInTheDocument();
+    // No quick-open action button (only shown when canAct = unlocked or in_progress)
+    expect(screen.queryByRole('button', { name: /open &/i })).not.toBeInTheDocument();
+});
+
+test('12. shows "Rejected" status label and no open button when participant has rejected', () => {
+    renderCard(REVIEWER_REJECTED);
+    expect(screen.getByText('Rejected')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /open &/i })).not.toBeInTheDocument();
 });
 
 test('10. reject dialog opens via MoreVert and onReloaded called after rejection', async () => {

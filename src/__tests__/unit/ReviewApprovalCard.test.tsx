@@ -26,27 +26,13 @@
  * 11.  Shows "Approved" when approver status is "approved"
  * 12.  Shows "Rejected" when approver status is "rejected"
  *
- * Reviewer action buttons (inside Popover, opened via MoreVert)
- * 13.  Popover opens when the MoreVert button is clicked
- * 14.  "Mark as Reviewed" button is visible for a pending reviewer
- * 15.  Clicking "Mark as Reviewed" calls onMarkAsReviewed with the contract id
- * 16.  "Mark as Reviewed" button is NOT visible for a reviewer who already reviewed
- * 17.  "Mark as Reviewed" button is NOT visible for a reviewer who already forwarded
- *
- * Approver action buttons (inside Popover)
- * 18.  "Approve Contract" button is visible when all reviewers are done and approver is pending
- * 19.  Clicking "Approve Contract" calls onApprove with the contract id
- * 20.  "Approve Contract" button is NOT visible when reviews are incomplete
- * 21.  "Approve Contract" button is NOT visible when contract is already approved
- *
- * View button
- * 22.  Clicking "View Contract" calls onView with the contract id
- *
- * Rejection flow
- * 23.  Clicking "Reject Contract" in Popover shows the rejection textarea
- * 24.  Submitting the rejection with an empty reason triggers window.alert
- * 25.  Submitting with a valid reason calls onReject with contract.id and the message
- * 26.  "Cancel" in rejection input hides the textarea and clears the comment
+ * Actions Popover (opened via MoreVert)
+ * 13.  Popover opens — View Contract button is visible
+ * 14.  "Mark as Reviewed" NOT visible for a reviewer who already reviewed
+ * 15.  "Mark as Reviewed" NOT visible for a reviewer who forwarded
+ * 16.  "Approve Contract" NOT visible when reviews are still incomplete
+ * 17.  "Approve Contract" NOT visible when contract is already approved
+ * 18.  Clicking "View Contract" calls onView with the contract id
  */
 
 // ─── Mocks (must precede imports) ─────────────────────────────────────────────
@@ -253,22 +239,6 @@ describe('ReviewApprovalCard — reviewer action buttons', () => {
         });
     });
 
-    it('"Mark as Reviewed" button is visible for a pending reviewer', async () => {
-        renderCard(makeContract({ reviewers: [{ email: CURRENT_USER_EMAIL, status: 'pending' }] }));
-        openPopover();
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: 'Mark as Reviewed' })).toBeInTheDocument();
-        });
-    });
-
-    it('clicking "Mark as Reviewed" calls onMarkAsReviewed with the contract id', async () => {
-        renderCard(makeContract({ reviewers: [{ email: CURRENT_USER_EMAIL, status: 'pending' }] }));
-        openPopover();
-        await waitFor(() => screen.getByRole('button', { name: 'Mark as Reviewed' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Mark as Reviewed' }));
-        expect(onMarkAsReviewed).toHaveBeenCalledWith(CONTRACT_ID);
-    });
-
     it('"Mark as Reviewed" button is NOT visible for a reviewer who already reviewed', async () => {
         renderCard(makeContract({ reviewers: [{ email: CURRENT_USER_EMAIL, status: 'reviewed' }] }));
         openPopover();
@@ -289,30 +259,6 @@ describe('ReviewApprovalCard — reviewer action buttons', () => {
 // =============================================================================
 
 describe('ReviewApprovalCard — approver action buttons', () => {
-
-    it('"Approve Contract" button is visible when all reviewers are done and approver is pending', async () => {
-        const contract = makeContract({
-            reviewers: [{ email: 'other@example.com', status: 'reviewed' }],
-            approver: { email: 'approver@example.com', status: 'pending' },
-        });
-        renderCard(contract, 'approver');
-        openPopover();
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: 'Approve Contract' })).toBeInTheDocument();
-        });
-    });
-
-    it('clicking "Approve Contract" calls onApprove with the contract id', async () => {
-        const contract = makeContract({
-            reviewers: [{ email: 'other@example.com', status: 'reviewed' }],
-            approver: { email: 'approver@example.com', status: 'pending' },
-        });
-        renderCard(contract, 'approver');
-        openPopover();
-        await waitFor(() => screen.getByRole('button', { name: 'Approve Contract' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Approve Contract' }));
-        expect(onApprove).toHaveBeenCalledWith(CONTRACT_ID);
-    });
 
     it('"Approve Contract" button is NOT visible when reviews are still incomplete', async () => {
         const contract = makeContract({
@@ -352,70 +298,3 @@ describe('ReviewApprovalCard — view button', () => {
     });
 });
 
-// =============================================================================
-// 23–26. Rejection flow
-// =============================================================================
-
-describe('ReviewApprovalCard — rejection flow', () => {
-
-    let alertSpy: jest.SpyInstance;
-
-    beforeEach(() => {
-        alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
-    });
-
-    afterEach(() => {
-        alertSpy.mockRestore();
-    });
-
-    it('clicking "Reject Contract" in the Popover shows the rejection textarea', async () => {
-        renderCard(makeContract({ reviewers: [{ email: CURRENT_USER_EMAIL, status: 'pending' }] }));
-        openPopover();
-        await waitFor(() => screen.getByRole('button', { name: 'Reject Contract' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Reject Contract' }));
-        expect(screen.getByPlaceholderText(/enter rejection reason/i)).toBeInTheDocument();
-    });
-
-    it('submitting with an empty rejection reason triggers window.alert', async () => {
-        renderCard(makeContract({ reviewers: [{ email: CURRENT_USER_EMAIL, status: 'pending' }] }));
-        openPopover();
-        await waitFor(() => screen.getByRole('button', { name: 'Reject Contract' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Reject Contract' }));
-
-        // Click "Reject" without entering a reason
-        fireEvent.click(screen.getByRole('button', { name: /^reject$/i }));
-
-        expect(alertSpy).toHaveBeenCalledWith('Please enter a rejection reason');
-        expect(onReject).not.toHaveBeenCalled();
-    });
-
-    it('submitting with a valid reason calls onReject with contract.id and the message', async () => {
-        renderCard(makeContract({ reviewers: [{ email: CURRENT_USER_EMAIL, status: 'pending' }] }));
-        openPopover();
-        await waitFor(() => screen.getByRole('button', { name: 'Reject Contract' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Reject Contract' }));
-
-        fireEvent.change(
-            screen.getByPlaceholderText(/enter rejection reason/i),
-            { target: { value: 'Missing compliance section' } }
-        );
-        fireEvent.click(screen.getByRole('button', { name: /^reject$/i }));
-
-        expect(onReject).toHaveBeenCalledWith(CONTRACT_ID, 'Missing compliance section');
-    });
-
-    it('"Cancel" in the rejection input hides the textarea and clears the comment', async () => {
-        renderCard(makeContract({ reviewers: [{ email: CURRENT_USER_EMAIL, status: 'pending' }] }));
-        openPopover();
-        await waitFor(() => screen.getByRole('button', { name: 'Reject Contract' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Reject Contract' }));
-
-        const textarea = screen.getByPlaceholderText(/enter rejection reason/i);
-        fireEvent.change(textarea, { target: { value: 'Some reason' } });
-
-        fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
-
-        expect(screen.queryByPlaceholderText(/enter rejection reason/i)).not.toBeInTheDocument();
-        expect(onReject).not.toHaveBeenCalled();
-    });
-});

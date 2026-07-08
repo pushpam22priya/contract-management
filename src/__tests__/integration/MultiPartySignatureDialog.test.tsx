@@ -40,8 +40,8 @@ jest.mock('@/services/authService', () => ({
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
 const mockParties = [
-    { id: 'party_buyer', label: 'Buyer', color: '#4CAF50', order: 1 },
-    { id: 'party_seller', label: 'Seller', color: '#2196F3', order: 2 },
+    { id: 'party_buyer', label: 'Buyer', color: '#4CAF50', order: 1, type: 'EXTERNAL' },
+    { id: 'party_seller', label: 'Seller', color: '#2196F3', order: 2, type: 'EXTERNAL' },
 ];
 
 const mockFormFields = [
@@ -228,8 +228,8 @@ describe('MultiPartySignatureDialog — validation and errors', () => {
         });
 
         // The submit button should be disabled when no assignments are added
-        // Button text: "Create 0 Assignments"
-        const submitButton = screen.getByRole('button', { name: /create 0 assignments/i });
+        // Button text: "Submit for Signatures"
+        const submitButton = screen.getByRole('button', { name: /submit for signatures/i });
         expect(submitButton).toBeDisabled();
     });
 

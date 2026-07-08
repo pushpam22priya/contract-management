@@ -11,36 +11,36 @@
  *  1. Calls POST /contracts/{id}/flow/submit with assignments + externalSigningIncluded
  *  2. Returns the raw httpClient response
  *
- * saveFlowFields
- *  3. Calls POST /contracts/{id}/flow/save-fields with fieldValues + formFields
- *
  * markFlowComplete
- *  4. Calls POST /contracts/{id}/flow/complete with comments payload
- *  5. Calls POST /contracts/{id}/flow/complete with uploadId + parts for approver
+ *  3. Calls POST /contracts/{id}/flow/complete with comments payload
+ *  4. Calls POST /contracts/{id}/flow/complete with uploadId + parts for approver
  *
  * rejectFlow
- *  6. Calls POST /contracts/{id}/flow/reject with comments
+ *  5. Calls POST /contracts/{id}/flow/reject with message
  *
  * initiateFlowUpload
- *  7. Calls POST /contracts/{id}/flow/upload/initiate
+ *  6. Calls POST /contracts/{id}/flow/upload/initiate
  *
  * getFlowPresignedUrl
- *  8. Calls GET /contracts/{id}/flow/upload/{uploadId}/presign/{partNumber}
+ *  7. Calls GET /contracts/{id}/flow/upload/presign?uploadId=...&partNumber=...
  *
  * abortFlowUpload
- *  9. Calls DELETE /contracts/{id}/flow/upload/{uploadId}
+ *  8. Calls POST /contracts/{id}/flow/upload/abort with uploadId query param
  *
  * getParticipantFileUrl
- * 10. Calls GET /contracts/{id}/flow/file-url
+ *  9. Calls GET /contracts/{id}/flow/file-url
  *
  * sendForSignatureUnified
- * 11. Calls POST /contracts/{id}/flow/send-for-signature with signers + senderName
+ * 10. Calls POST /contracts/{id}/flow/send-for-signature; service adds type:'external' to each assignment
  *
  * getFlowStatus
- * 12. Calls GET /contracts/{id}/flow/status
+ * 11. Calls GET /contracts/{id}/flow/status
  *
  * getFlowInbox
- * 13. Calls GET /contracts/flow/inbox
+ * 12. Calls GET /contracts/flow/inbox
+ *
+ * getFlowSent
+ * 13. Calls GET /contracts/flow/sent
  */
 
 import { unifiedFlowService } from '@/services/unifiedFlowService';
@@ -84,24 +84,14 @@ test('2. submitFlow — returns httpClient response', async () => {
     expect(res).toEqual({ ok: true, data: { id: 'c1' } });
 });
 
-// ─── saveFlowFields ───────────────────────────────────────────────────────────
-
-test('3. saveFlowFields — POST /contracts/{id}/flow/fields', async () => {
-    await unifiedFlowService.saveFlowFields('c2', { fieldValues: { f: 'v' }, formFields: [] });
-    expect(mockPost).toHaveBeenCalledWith(
-        '/contracts/c2/flow/fields',
-        { fieldValues: { f: 'v' }, formFields: [] },
-    );
-});
-
 // ─── markFlowComplete ─────────────────────────────────────────────────────────
 
-test('4. markFlowComplete — POST /contracts/{id}/flow/complete with comments', async () => {
+test('3. markFlowComplete — POST /contracts/{id}/flow/complete with comments', async () => {
     await unifiedFlowService.markFlowComplete('c3', { comments: 'LGTM' });
     expect(mockPost).toHaveBeenCalledWith('/contracts/c3/flow/complete', { comments: 'LGTM' });
 });
 
-test('5. markFlowComplete — POST includes uploadId + parts for approver', async () => {
+test('4. markFlowComplete — POST includes uploadId + parts for approver', async () => {
     const parts = [{ partNumber: 1, etag: 'abc' }];
     await unifiedFlowService.markFlowComplete('c3', { uploadId: 'u1', parts });
     expect(mockPost).toHaveBeenCalledWith('/contracts/c3/flow/complete', { uploadId: 'u1', parts });
@@ -109,60 +99,71 @@ test('5. markFlowComplete — POST includes uploadId + parts for approver', asyn
 
 // ─── rejectFlow ───────────────────────────────────────────────────────────────
 
-test('6. rejectFlow — POST /contracts/{id}/flow/reject with message', async () => {
+test('5. rejectFlow — POST /contracts/{id}/flow/reject with message', async () => {
     await unifiedFlowService.rejectFlow('c4', 'Not acceptable');
     expect(mockPost).toHaveBeenCalledWith('/contracts/c4/flow/reject', { message: 'Not acceptable' });
 });
 
 // ─── initiateFlowUpload ───────────────────────────────────────────────────────
 
-test('7. initiateFlowUpload — POST /contracts/{id}/flow/upload/initiate', async () => {
+test('6. initiateFlowUpload — POST /contracts/{id}/flow/upload/initiate', async () => {
     await unifiedFlowService.initiateFlowUpload('c5');
     expect(mockPost).toHaveBeenCalledWith('/contracts/c5/flow/upload/initiate', {});
 });
 
 // ─── getFlowPresignedUrl ──────────────────────────────────────────────────────
 
-test('8. getFlowPresignedUrl — GET with uploadId + partNumber as query params', async () => {
+test('7. getFlowPresignedUrl — GET with uploadId + partNumber as query params', async () => {
     await unifiedFlowService.getFlowPresignedUrl('c6', 'upload123', 2);
     expect(mockGet).toHaveBeenCalledWith('/contracts/c6/flow/upload/presign?uploadId=upload123&partNumber=2');
 });
 
 // ─── abortFlowUpload ─────────────────────────────────────────────────────────
 
-test('9. abortFlowUpload — POST /contracts/{id}/flow/upload/abort with uploadId query param', async () => {
+test('8. abortFlowUpload — POST /contracts/{id}/flow/upload/abort with uploadId query param', async () => {
     await unifiedFlowService.abortFlowUpload('c7', 'upload456');
     expect(mockPost).toHaveBeenCalledWith('/contracts/c7/flow/upload/abort?uploadId=upload456', {});
 });
 
 // ─── getParticipantFileUrl ────────────────────────────────────────────────────
 
-test('10. getParticipantFileUrl — GET /contracts/{id}/flow/file-url', async () => {
+test('9. getParticipantFileUrl — GET /contracts/{id}/flow/file-url', async () => {
     await unifiedFlowService.getParticipantFileUrl('c8');
     expect(mockGet).toHaveBeenCalledWith('/contracts/c8/flow/file-url');
 });
 
 // ─── sendForSignatureUnified ─────────────────────────────────────────────────
 
-test('11. sendForSignatureUnified — POST with assignments and senderName', async () => {
-    const assignments = [{ email: 'client@co.com', order: 1 }];
-    await unifiedFlowService.sendForSignatureUnified('c9', assignments, 'Admin User');
+test('10. sendForSignatureUnified — POST with assignments (type:external added) and senderName', async () => {
+    const input = [{ email: 'client@co.com', order: 1 }];
+    await unifiedFlowService.sendForSignatureUnified('c9', input, 'Admin User');
+    // The service spreads type:'external' into every assignment before sending
     expect(mockPost).toHaveBeenCalledWith(
         '/contracts/c9/flow/send-for-signature',
-        { assignments, senderName: 'Admin User' },
+        {
+            assignments: [{ email: 'client@co.com', order: 1, type: 'external' }],
+            senderName: 'Admin User',
+        },
     );
 });
 
 // ─── getFlowStatus ────────────────────────────────────────────────────────────
 
-test('12. getFlowStatus — GET /contracts/{id}/flow/status', async () => {
+test('11. getFlowStatus — GET /contracts/{id}/flow/status', async () => {
     await unifiedFlowService.getFlowStatus('c10');
     expect(mockGet).toHaveBeenCalledWith('/contracts/c10/flow/status');
 });
 
 // ─── getFlowInbox ─────────────────────────────────────────────────────────────
 
-test('13. getFlowInbox — GET /contracts/flow/inbox', async () => {
+test('12. getFlowInbox — GET /contracts/flow/inbox', async () => {
     await unifiedFlowService.getFlowInbox();
     expect(mockGet).toHaveBeenCalledWith('/contracts/flow/inbox');
+});
+
+// ─── getFlowSent ──────────────────────────────────────────────────────────────
+
+test('13. getFlowSent — GET /contracts/flow/sent', async () => {
+    await unifiedFlowService.getFlowSent();
+    expect(mockGet).toHaveBeenCalledWith('/contracts/flow/sent');
 });

@@ -1,41 +1,49 @@
 /**
- * INTEGRATION TESTS — UnifiedFlowApproverPanel
- * (src/components/unified-flow/UnifiedFlowApproverPanel.tsx)
+ * INTEGRATION TESTS — UnifiedFlowReviewerPanel
+ * (src/components/unified-flow/UnifiedFlowReviewerPanel.tsx)
  *
  * DocumentViewerDialog (heavy PDF viewer) is dynamically imported and mocked.
  * unifiedFlowService and apiService are mocked for all API calls.
  *
+ * Key differences from ApproverPanel:
+ *  - Action button is "Mark Complete" (not "Sign & Approve")
+ *  - Reviewer still uploads the PDF via multipart upload (preserves any field edits)
+ *  - No internal-field gate (that's approver-only)
+ *  - Role passed to DocumentViewerDialog is "REVIEWER"
+ *
  * Scenarios covered:
  *  1.  Shows loading spinner while fetching file URL
  *  2.  Shows error alert when getParticipantFileUrl fails
- *  3.  Renders DocumentViewerDialog when file URL loads successfully
- *  4.  Sign & Approve button is always enabled (not gated on a prior viewer save)
- *  5.  Clicking Sign & Approve with no prior PDF export shows an action error
- *  6.  Initiates upload and calls initiateFlowUpload on Sign & Approve click (after viewer save)
- *  7.  Calls markFlowComplete with uploadId + parts after all chunks uploaded
+ *  3.  Renders DocumentViewerDialog with role="REVIEWER" when file URL loads
+ *  4.  Mark Complete button is always enabled (not gated on prior viewer save)
+ *  5.  Clicking Mark Complete with no prior PDF export shows action error
+ *  6.  Mark Complete triggers initiateFlowUpload after viewer save
+ *  7.  Calls markFlowComplete with uploadId + parts + xfdfData after successful upload
  *  8.  Shows upload progress stepper during upload phase
  *  9.  Shows error overlay + Retry button on upload failure
  * 10.  Abort is called when upload fails mid-way
- * 11.  Reject button opens UnifiedFlowRejectDialog
- * 12.  Read-only mode — Sign & Approve and Reject buttons not shown when completed
+ * 11.  Reject button opens UnifiedFlowRejectDialog with role="REVIEWER"
+ * 12.  Read-only mode — Mark Complete and Reject buttons not shown when completed
  * 13.  XFDF loaded from apiService.getContractDetails and passed as initialXfdf to viewer
  */
 
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import UnifiedFlowApproverPanel from '@/components/unified-flow/UnifiedFlowApproverPanel';
+import UnifiedFlowReviewerPanel from '@/components/unified-flow/UnifiedFlowReviewerPanel';
 import type { WorkflowParticipant } from '@/types/unifiedFlow';
 
 // ─── Mock DocumentViewerDialog ────────────────────────────────────────────────
 let capturedOnSave: Function | undefined;
 let capturedInitialXfdf: string | undefined;
+let capturedRole: string | undefined;
 
 jest.mock('@/components/viewer/DocumentViewerDialog', () => ({
     __esModule: true,
     default: (props: any) => {
         capturedOnSave = props.onSave;
         capturedInitialXfdf = props.initialXfdf;
+        capturedRole = props.unifiedParticipantRole;
         if (!props.open) return null;
         return (
             <div data-testid="pdf-viewer">
@@ -80,8 +88,8 @@ global.fetch = mockFetch as any;
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const UNLOCKED_PARTICIPANT: WorkflowParticipant = {
-    email: 'approver@co.com',
-    role: 'APPROVER',
+    email: 'reviewer@co.com',
+    role: 'REVIEWER',
     order: 1,
     status: 'unlocked',
 };
@@ -96,11 +104,11 @@ function renderPanel(participant: WorkflowParticipant = UNLOCKED_PARTICIPANT) {
         open: true,
         onClose: jest.fn(),
         onActed: jest.fn(),
-        contractId: 'c-approver',
-        contractTitle: 'Approval Contract',
+        contractId: 'c-reviewer',
+        contractTitle: 'Review Contract',
         participant,
     };
-    render(<UnifiedFlowApproverPanel {...props} />);
+    render(<UnifiedFlowReviewerPanel {...props} />);
     return props;
 }
 
@@ -108,16 +116,17 @@ beforeEach(() => {
     jest.clearAllMocks();
     capturedOnSave = undefined;
     capturedInitialXfdf = undefined;
+    capturedRole = undefined;
     mockGetFileUrl.mockResolvedValue({ ok: true, data: { url: 'https://minio.example.com/doc.pdf' } });
     mockGetContractDetails.mockResolvedValue({ xfdfData: undefined });
-    mockInitiate.mockResolvedValue({ ok: true, data: { uploadId: 'uid-123' } });
-    mockPresign.mockResolvedValue({ ok: true, data: { url: 'https://minio.example.com/presigned', partNumber: 1 } });
+    mockInitiate.mockResolvedValue({ ok: true, data: { uploadId: 'uid-rev-1' } });
+    mockPresign.mockResolvedValue({ ok: true, data: { url: 'https://minio.example.com/presigned' } });
     mockMarkComplete.mockResolvedValue({ ok: true });
     mockAbort.mockResolvedValue({ ok: true });
     mockRejectFlow.mockResolvedValue({ ok: true });
     mockFetch.mockResolvedValue({
         ok: true,
-        headers: { get: () => '"etag-abc"' },
+        headers: { get: () => '"etag-xyz"' },
     } as any);
 });
 
@@ -137,56 +146,58 @@ test('2. shows error alert when getParticipantFileUrl fails', async () => {
     });
 });
 
-test('3. renders PDF viewer when file URL loads', async () => {
+test('3. renders DocumentViewerDialog with role REVIEWER when file URL loads', async () => {
     renderPanel();
-    await waitFor(() => {
-        expect(screen.getByTestId('pdf-viewer')).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getByTestId('pdf-viewer')).toBeInTheDocument());
+    expect(capturedRole).toBe('REVIEWER');
 });
 
-test('4. Sign & Approve button is always enabled (not gated on prior viewer save)', async () => {
+test('4. Mark Complete button is always enabled (not gated on prior viewer save)', async () => {
     renderPanel();
     await waitFor(() => screen.getByTestId('extra-actions'));
-    // Button is enabled — no blob guard on the button itself
-    expect(screen.getByRole('button', { name: /sign.*approve/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /mark complete/i })).not.toBeDisabled();
 });
 
-test('5. clicking Sign & Approve with no prior PDF export shows action error', async () => {
+test('5. clicking Mark Complete with no prior PDF export shows action error', async () => {
     renderPanel();
     await waitFor(() => screen.getByTestId('extra-actions'));
     // Click without viewer ever calling onSave (no blob cached)
-    await userEvent.click(screen.getByRole('button', { name: /sign.*approve/i }));
+    await userEvent.click(screen.getByRole('button', { name: /mark complete/i }));
     await waitFor(() => {
         expect(screen.getByText(/could not export the pdf/i)).toBeInTheDocument();
     });
     expect(mockInitiate).not.toHaveBeenCalled();
 });
 
-test('6. initiates upload when Sign & Approve clicked after viewer save', async () => {
+test('6. Mark Complete triggers initiateFlowUpload after viewer onSave fires', async () => {
     renderPanel();
     await waitFor(() => screen.getByTestId('extra-actions'));
 
     const blob = new Blob(['%PDF-1.4'], { type: 'application/pdf' });
     await act(async () => { capturedOnSave?.(blob, '<xfdf/>', {}, []); });
 
-    await userEvent.click(screen.getByRole('button', { name: /sign.*approve/i }));
+    await userEvent.click(screen.getByRole('button', { name: /mark complete/i }));
     await waitFor(() => {
-        expect(mockInitiate).toHaveBeenCalledWith('c-approver');
+        expect(mockInitiate).toHaveBeenCalledWith('c-reviewer');
     });
 });
 
-test('7. calls markFlowComplete with uploadId + parts after successful upload', async () => {
+test('7. calls markFlowComplete with uploadId + parts + xfdfData after successful upload', async () => {
     renderPanel();
     await waitFor(() => screen.getByTestId('extra-actions'));
 
     const blob = new Blob(['%PDF-1.4'], { type: 'application/pdf' });
-    await act(async () => { capturedOnSave?.(blob, '<xfdf/>', {}, []); });
-    await userEvent.click(screen.getByRole('button', { name: /sign.*approve/i }));
+    await act(async () => { capturedOnSave?.(blob, '<xfdf><annots/></xfdf>', {}, []); });
+    await userEvent.click(screen.getByRole('button', { name: /mark complete/i }));
 
     await waitFor(() => {
         expect(mockMarkComplete).toHaveBeenCalledWith(
-            'c-approver',
-            expect.objectContaining({ uploadId: 'uid-123', parts: expect.any(Array) }),
+            'c-reviewer',
+            expect.objectContaining({
+                uploadId: 'uid-rev-1',
+                parts: expect.any(Array),
+                xfdfData: '<xfdf><annots/></xfdf>',
+            }),
         );
     });
 });
@@ -198,64 +209,65 @@ test('8. shows upload stepper during uploading phase', async () => {
 
     const blob = new Blob(['%PDF-1.4'], { type: 'application/pdf' });
     await act(async () => { capturedOnSave?.(blob, '<xfdf/>', {}, []); });
-    await userEvent.click(screen.getByRole('button', { name: /sign.*approve/i }));
+    await userEvent.click(screen.getByRole('button', { name: /mark complete/i }));
 
     await waitFor(() => {
         expect(screen.getByText(/uploading pdf/i)).toBeInTheDocument();
     });
 });
 
-test('9. shows error overlay and retry button on upload failure', async () => {
+test('9. shows error overlay and Retry button on upload failure', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500, headers: { get: () => null } } as any);
     renderPanel();
     await waitFor(() => screen.getByTestId('extra-actions'));
 
     const blob = new Blob(['%PDF-1.4'], { type: 'application/pdf' });
     await act(async () => { capturedOnSave?.(blob, '<xfdf/>', {}, []); });
-    await userEvent.click(screen.getByRole('button', { name: /sign.*approve/i }));
+    await userEvent.click(screen.getByRole('button', { name: /mark complete/i }));
 
     await waitFor(() => {
         expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
     });
 });
 
-test('10. abort is called when upload fails', async () => {
+test('10. abort is called when upload fails mid-way', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500, headers: { get: () => null } } as any);
     renderPanel();
     await waitFor(() => screen.getByTestId('extra-actions'));
 
     const blob = new Blob(['%PDF-1.4'], { type: 'application/pdf' });
     await act(async () => { capturedOnSave?.(blob, '<xfdf/>', {}, []); });
-    await userEvent.click(screen.getByRole('button', { name: /sign.*approve/i }));
+    await userEvent.click(screen.getByRole('button', { name: /mark complete/i }));
 
     await waitFor(() => {
-        expect(mockAbort).toHaveBeenCalledWith('c-approver', 'uid-123');
+        expect(mockAbort).toHaveBeenCalledWith('c-reviewer', 'uid-rev-1');
     });
 });
 
-test('11. Reject button opens UnifiedFlowRejectDialog', async () => {
+test('11. Reject button opens UnifiedFlowRejectDialog with role REVIEWER', async () => {
     renderPanel();
     await waitFor(() => screen.getByTestId('extra-actions'));
     await userEvent.click(screen.getByRole('button', { name: /reject/i }));
     await waitFor(() => {
-        expect(screen.getByRole('textbox')).toBeInTheDocument();
+        // Reject dialog title includes the role
+        expect(screen.getByText(/reject contract \(reviewer\)/i)).toBeInTheDocument();
     });
 });
 
-test('12. Sign & Approve and Reject buttons not shown when status is completed', async () => {
+test('12. Mark Complete and Reject buttons not shown when status is completed', async () => {
     renderPanel(COMPLETED_PARTICIPANT);
     await waitFor(() => screen.getByTestId('pdf-viewer'));
-    expect(screen.queryByRole('button', { name: /sign.*approve/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /mark complete/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^reject$/i })).not.toBeInTheDocument();
 });
 
-test('13. XFDF loaded from apiService.getContractDetails and passed to viewer as initialXfdf', async () => {
+test('13. XFDF loaded from apiService.getContractDetails and passed as initialXfdf to viewer', async () => {
     const xfdf = '<xfdf><fields><field name="Sig1"/></fields></xfdf>';
     mockGetContractDetails.mockResolvedValue({ xfdfData: xfdf });
 
     renderPanel();
     await waitFor(() => screen.getByTestId('pdf-viewer'));
 
-    expect(mockGetContractDetails).toHaveBeenCalledWith('c-approver');
+    expect(mockGetContractDetails).toHaveBeenCalledWith('c-reviewer');
     expect(capturedInitialXfdf).toBe(xfdf);
 });
