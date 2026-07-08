@@ -112,6 +112,7 @@ export default function UnifiedFlowInboxCard({
     return (
         <>
             <Box
+                onClick={handleOpen}
                 sx={{
                     border: '1px solid',
                     borderColor: statusColors.border,
@@ -122,6 +123,7 @@ export default function UnifiedFlowInboxCard({
                     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                     '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.1)' },
                     position: 'relative',
+                    cursor: 'pointer',
                 }}
             >
                 {/* Unified Flow indicator strip */}

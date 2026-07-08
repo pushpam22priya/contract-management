@@ -325,22 +325,6 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract, resubmitMode, 
             }
 
             if (resubmitMode) {
-                // Belt-and-suspenders: also write directly to MongoDB via the internal API so the
-                // reviewer/approver panels (which now read MongoDB first) always see the fresh values
-                // without depending solely on Spring Boot's flush timing.
-                try {
-                    await fetch(`/api/contracts/${contract.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            xfdfData: finalXfdf,
-                            fieldValues: finalFieldValues,
-                            formFields: exportedFormFields,
-                        }),
-                    });
-                } catch {
-                    // Non-fatal — Spring Boot path already persisted above
-                }
                 onResubmitReady?.(contract.id, contract);
                 handleClose();
             } else {
