@@ -31,6 +31,7 @@ interface PDFViewerContainerProps {
     silentPositionRestore?: boolean; // ✅ If true, restore signature positions silently without showing warning
     protectedPartyIds?: string[]; // ✅ Party IDs whose signatures should be protected from modification (e.g., client parties for contractor view)
     blockAllNewSignatures?: boolean; // ✅ When true, blocks ALL new signature additions (used for unified flow REVIEWER role)
+    lockedFieldNames?: string[]; // ✅ Specific field names to force read-only regardless of party (e.g. the approver's applied signature for the owner)
 
     // Multi-party field assignment props
     parties?: PartyConfiguration[];           // Available parties for field assignment
@@ -90,7 +91,7 @@ export interface PDFViewerHandle {
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole, currentUserEmail, canAddFormFields = false, blockAllNewSignatures = false }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole, currentUserEmail, canAddFormFields = false, blockAllNewSignatures = false, lockedFieldNames }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const isDark = useTheme().palette.mode === 'dark';
@@ -134,6 +135,9 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
         // Sync blockAllNewSignatures prop → ref so the annotationChanged handler always sees the latest value
         const blockAllNewSignaturesRef = useRef<boolean>(blockAllNewSignatures ?? false);
         useEffect(() => { blockAllNewSignaturesRef.current = blockAllNewSignatures ?? false; }, [blockAllNewSignatures]);
+        // Sync lockedFieldNames prop → ref so load-time enforcement always sees the latest value
+        const lockedFieldNamesRef = useRef<string[]>(lockedFieldNames ?? []);
+        useEffect(() => { lockedFieldNamesRef.current = lockedFieldNames ?? []; }, [lockedFieldNames]);
 
         // ✅ Helper: Switch toolbar group using the correct API for the UI version
         // WebViewer 11+ uses Modular UI by default, where setToolbarGroup is a Legacy API
@@ -2846,6 +2850,83 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 });
                                 if (allWidgets.length > 0) {
                                     console.log(`🔒 [FIELD LOCK] Locked positions of ${allWidgets.length} widget annotations (signing mode, canAddFormFields=false)`);
+                                }
+                            }
+
+                            // ══════════════════════════════════════════════════════════════════
+                            // EXPLICIT FIELD-LEVEL LOCK (e.g. approver's applied signature for the owner)
+                            // Force specific fields read-only regardless of party/mode. This runs even
+                            // when the contract-owner's fields are otherwise all editable, so the owner
+                            // can edit every internal field EXCEPT the approver's signature.
+                            // ══════════════════════════════════════════════════════════════════
+                            if (lockedFieldNamesRef.current.length > 0 && !effectiveReadOnly) {
+                                const lockedSet = new Set(lockedFieldNamesRef.current);
+                                const annotationManager = Core.annotationManager;
+                                const allAnnotations = annotationManager.getAnnotationsList();
+                                const lockedRects: { page: number; x1: number; y1: number; x2: number; y2: number }[] = [];
+                                let lockedCount = 0;
+
+                                // Pass 1: lock the matching widget fields
+                                allAnnotations.forEach((annot: any) => {
+                                    if (!(annot instanceof Core.Annotations.WidgetAnnotation)) return;
+                                    const field = annot.getField?.();
+                                    const fieldName = field?.name || (annot as any).fieldName;
+                                    if (!fieldName || !lockedSet.has(fieldName)) return;
+
+                                    if (field?.flags) (field.flags as any).ReadOnly = true;
+                                    annot.ReadOnly = true;
+                                    annot.Locked = true;
+                                    annot.LockedContents = true;
+                                    annot.NoMove = true;
+                                    const rect = annot.getRect?.();
+                                    if (rect) {
+                                        lockedRects.push({
+                                            page: annot.PageNumber,
+                                            x1: Math.min(rect.x1, rect.x2), y1: Math.min(rect.y1, rect.y2),
+                                            x2: Math.max(rect.x1, rect.x2), y2: Math.max(rect.y1, rect.y2),
+                                        });
+                                    }
+                                    lockedCount++;
+                                    console.log(`🔒 [FIELD LOCK] Field "${fieldName}": READ-ONLY (explicit lock)`);
+                                });
+
+                                // Pass 2: lock any drawn signature (FreeHand/Stamp) sitting on a locked widget
+                                if (lockedRects.length > 0) {
+                                    allAnnotations.forEach((annot: any) => {
+                                        const isDrawn = annot instanceof Core.Annotations.FreeHandAnnotation
+                                            || annot instanceof Core.Annotations.StampAnnotation;
+                                        if (!isDrawn) return;
+                                        const overlaps = lockedRects.some((r) =>
+                                            r.page === annot.PageNumber &&
+                                            annot.X >= r.x1 - 2 && annot.Y >= r.y1 - 2 &&
+                                            annot.X + annot.Width <= r.x2 + 2 && annot.Y + annot.Height <= r.y2 + 2
+                                        );
+                                        if (overlaps) {
+                                            annot.ReadOnly = true;
+                                            annot.Locked = true;
+                                            annot.LockedContents = true;
+                                            annot.NoMove = true;
+                                        }
+                                    });
+                                }
+
+                                if (lockedCount > 0) {
+                                    annotationManager.drawAnnotationsFromList(allAnnotations);
+                                    try {
+                                        const iframeDoc = viewerInstance.current.iframeWindow?.document;
+                                        if (iframeDoc) {
+                                            const oldStyle = iframeDoc.getElementById('locked-field-styles');
+                                            if (oldStyle) oldStyle.remove();
+                                            const styleEl = iframeDoc.createElement('style');
+                                            styleEl.id = 'locked-field-styles';
+                                            const selectors = [...lockedSet].map((n) => `div[data-name="${n}"]`).join(', ');
+                                            styleEl.innerHTML = `${selectors} { pointer-events: none !important; }`;
+                                            iframeDoc.head.appendChild(styleEl);
+                                        }
+                                    } catch (e) {
+                                        console.warn('⚠️ Could not apply locked-field CSS pointer-events:', e);
+                                    }
+                                    console.log(`🔒 [FIELD LOCK] Locked ${lockedCount} explicitly locked field(s)`);
                                 }
                             }
 

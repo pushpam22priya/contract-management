@@ -464,6 +464,23 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const isMultiPartyContract = (contract?.externalSigners && contract.externalSigners.length > 0) ||
         (contract?.internalSigners && contract.internalSigners.length > 0);
 
+    // True once the working copy contracts/{id}_signed.pdf exists. Once it does, it is the single
+    // source of truth: the owner reads AND writes it (never the original), and we never overlay XFDF
+    // on it (its signatures/values are already baked into the binary — overlaying would wipe ink
+    // signatures like the owner's "admin" mark). On rejection the working copy is archived to
+    // _rejected.pdf and the flow falls back to the original, so rejected contracts report false.
+    // Primary signal is the backend `hasSignedCopy` flag; the participant/signature heuristics keep
+    // this correct even if that field isn't present yet.
+    const isRejectedState = contract?.status === ContractStatus.REJECTED_BY_REVIEWER
+        || contract?.status === ContractStatus.REJECTED_BY_APPROVER
+        || contract?.status === ContractStatus.REJECTED;
+    const hasSignedCopy = !isRejectedState && (
+        !!contract?.hasSignedCopy
+        || (contract?.participants || []).some((p: any) => p.status === 'completed')
+        || !!contract?.signatureFlowStatus
+        || !!isMultiPartyContract
+    );
+
     /**
      * Check if all signers (internal + external) have completed
      */
@@ -491,35 +508,78 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const isFinalized = contract?.signatureFlowStatus === 'finalized';
 
     /**
+     * Signature fields the APPROVER has already applied. The owner may edit every other internal
+     * field (text, their own signature, reviewer-filled fields) but must not alter the approver's
+     * signature. Identified via `filledBy` (stamped server-side) so it works even when the owner
+     * and approver share the same org party. Enforced read-only in the viewer.
+     */
+    const approverSignatureFieldNames: string[] = (() => {
+        const participants = contract?.participants;
+        const formFields = contract?.formFields;
+        if (!participants?.length || !formFields?.length) return [];
+        const approverEmails = new Set(
+            participants
+                .filter((p: any) => p.role === 'APPROVER')
+                .map((p: any) => (p.email || '').toLowerCase())
+        );
+        if (approverEmails.size === 0) return [];
+        const isSignatureType = (t: any) => ['signature', 'sig'].includes(String(t || '').toLowerCase());
+        return (formFields as any[])
+            .filter((f) => isSignatureType(f.type) && f.filledBy && approverEmails.has(String(f.filledBy).toLowerCase()))
+            .map((f) => f.name)
+            .filter(Boolean);
+    })();
+
+    /**
      * Save contract changes from PDF viewer
      */
     const handleSaveChanges = async (pdfBlob: Blob, xfdfString: string, fieldValues?: Record<string, string>, formFields?: any[]) => {
         if (!contract) return;
 
         try {
-            const arrayBuffer = await pdfBlob.arrayBuffer();
-            const bytes = new Uint8Array(arrayBuffer);
-            let binary = '';
-            for (let i = 0; i < bytes.byteLength; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
-            const pdfBase64 = btoa(binary);
+            let result: { success: boolean; message: string };
 
-            const result = await contractService.updateContractSignedPdf(contract.id, pdfBase64, xfdfString);
+            if (hasSignedCopy) {
+                // A working copy (_signed.pdf) exists — it is the single source of truth. Write the
+                // owner's edits back to that SAME object (and persist field data in the same request)
+                // so everyone sees them. Otherwise they'd land in the shadowed original .pdf and
+                // silently disappear behind the working copy that everyone actually reads.
+                result = await contractService.saveOwnerWorkingCopy(contract.id, pdfBlob, {
+                    xfdfData: xfdfString,
+                    fieldValues: fieldValues && Object.keys(fieldValues).length > 0
+                        ? { ...(contract.fieldValues || {}), ...fieldValues }
+                        : undefined,
+                    formFields: formFields && formFields.length > 0 ? formFields : undefined,
+                });
+            } else {
+                // No working copy yet (fresh contract, or fell back to the original after a
+                // rejection) — save the base PDF + field metadata to the original .pdf.
+                const arrayBuffer = await pdfBlob.arrayBuffer();
+                const bytes = new Uint8Array(arrayBuffer);
+                let binary = '';
+                for (let i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                const pdfBase64 = btoa(binary);
+
+                result = await contractService.updateContractSignedPdf(contract.id, pdfBase64, xfdfString);
+
+                if (result.success) {
+                    const metadataUpdates: Record<string, any> = {};
+                    if (fieldValues && Object.keys(fieldValues).length > 0) {
+                        metadataUpdates.fieldValues = { ...(contract.fieldValues || {}), ...fieldValues };
+                    }
+                    if (formFields && formFields.length > 0) {
+                        metadataUpdates.formFields = formFields;
+                        metadataUpdates.hasFormFields = true;
+                    }
+                    if (Object.keys(metadataUpdates).length > 0) {
+                        await apiService.updateContractMetadata(contract.id, metadataUpdates);
+                    }
+                }
+            }
 
             if (result.success) {
-                const metadataUpdates: Record<string, any> = {};
-                if (fieldValues && Object.keys(fieldValues).length > 0) {
-                    metadataUpdates.fieldValues = { ...(contract.fieldValues || {}), ...fieldValues };
-                }
-                if (formFields && formFields.length > 0) {
-                    metadataUpdates.formFields = formFields;
-                    metadataUpdates.hasFormFields = true;
-                }
-                if (Object.keys(metadataUpdates).length > 0) {
-                    await apiService.updateContractMetadata(contract.id, metadataUpdates);
-                }
-
                 // Refresh contract data from Spring Boot
                 const updatedContract = await apiService.getContractDetails(contract.id);
                 if (updatedContract) setContract(updatedContract);
@@ -533,11 +593,12 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     const handleViewDocument = async (doc: Document) => {
         const isMainContract = !doc.id || doc.id === contract?.id || doc.id === id || doc.id === 'main-contract';
 
-        // For multi-party signed contracts, prefer _signed.pdf which has all parties' data baked
+        // Once a working copy (_signed.pdf) exists, always prefer it — it has all parties' data baked
         // correctly into the PDF binary. The base PDF + XFDF combo can misrepresent drawn ink
         // signatures as text values because the XFDF stores the form field value (text) while the
-        // ink appearance is only in the PDF binary.
-        if (isMainContract && isMultiPartyContract) {
+        // ink appearance is only in the PDF binary. This applies from the first reviewer edit onward,
+        // not just once signers exist.
+        if (isMainContract && hasSignedCopy) {
             try {
                 const flowRes = await unifiedFlowService.getParticipantFileUrl(contract.id);
                 if (flowRes.ok && flowRes.data?.url) {
@@ -967,16 +1028,23 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                     return contract?.id || '';
                 })()}
                 // Only pass XFDF/formFields for the main (current) contract — chain docs are read-only.
-                // When using _signed.pdf (viewingWithFlowUrl), the PDF already has all signatures and
-                // field values baked in as PDF appearances. Applying XFDF on top would override ink
-                // signatures with their text form-field values, causing drawn signatures to show as text.
-                initialXfdf={(!viewingWithFlowUrl && (!selectedDoc || selectedDoc.id === contract?.id)) ? contract?.xfdfData : undefined}
+                // Once a working copy (_signed.pdf) exists, the served PDF already has ALL signatures
+                // and field values baked in as PDF appearances. Applying XFDF on top would override ink
+                // signatures with their text form-field values (e.g. wipe the owner's baked "admin"
+                // signature while keeping the reviewer's text) — so we suppress it whenever hasSignedCopy,
+                // not just on the flow-url path. Before any working copy exists, the XFDF is the owner's
+                // own consistent export, so it's still applied to restore field values.
+                initialXfdf={(!viewingWithFlowUrl && !hasSignedCopy && (!selectedDoc || selectedDoc.id === contract?.id)) ? contract?.xfdfData : undefined}
                 formFields={(!selectedDoc || selectedDoc.id === contract?.id) ? contract?.formFields : undefined}
                 currentUserRole="contractor"
                 // Chain docs are always read-only; main contract is editable unless finalized
                 onSave={(!selectedDoc || selectedDoc.id === contract?.id) && !isFinalized ? handleSaveChanges : undefined}
                 readOnly={isFinalized || !!(selectedDoc && selectedDoc.id !== contract?.id)}
-                editableFieldMode={(!selectedDoc || selectedDoc.id === contract?.id) && !isFinalized ? 'empty-only' : 'none'}
+                // Owner may edit ALL internal party fields (filled or empty) until finalized — the
+                // approver's applied signature is locked separately via lockedFieldNames below.
+                editableFieldMode={(!selectedDoc || selectedDoc.id === contract?.id) && !isFinalized ? 'all' : 'none'}
+                // Lock only the approver's already-applied signature for the owner.
+                lockedFieldNames={(!selectedDoc || selectedDoc.id === contract?.id) && !isFinalized ? approverSignatureFieldNames : undefined}
                 showAnnotationNavigation={true}
                 parties={contract?.parties}
                 // ✅ Pass external signers info so contractor can't edit client party fields

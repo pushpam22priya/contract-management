@@ -80,6 +80,39 @@ export const unifiedFlowService = {
         return httpClient.get<FlowFileUrlResponse>(`${base(contractId)}/file-url`);
     },
 
+    // ─── Owner working-copy save ──────────────────────────────────────────
+    // The owner edits the single canonical working copy (contracts/{id}_signed.pdf) — the
+    // same object reviewers/approvers/signers read and write. Uses a parallel set of
+    // /contracts/{id}/working-copy/* endpoints (owner-authorized, allowed until finalized).
+
+    /** Owner: initiate a multipart upload of the working-copy PDF */
+    async initiateWorkingCopyUpload(contractId: string) {
+        return httpClient.post<FlowUploadInitiateResponse>(
+            `/contracts/${contractId}/working-copy/upload/initiate`,
+            {},
+        );
+    },
+
+    /** Owner: get a presigned PUT URL for a single working-copy upload chunk */
+    async getWorkingCopyPresignedUrl(contractId: string, uploadId: string, partNumber: number) {
+        return httpClient.get<FlowPresignResponse>(
+            `/contracts/${contractId}/working-copy/upload/presign?uploadId=${encodeURIComponent(uploadId)}&partNumber=${partNumber}`,
+        );
+    },
+
+    /** Owner: abort an in-progress working-copy multipart upload */
+    async abortWorkingCopyUpload(contractId: string, uploadId: string) {
+        return httpClient.post(
+            `/contracts/${contractId}/working-copy/upload/abort?uploadId=${encodeURIComponent(uploadId)}`,
+            {},
+        );
+    },
+
+    /** Owner: finalize the working-copy save — overwrites _signed.pdf and persists field edits */
+    async completeWorkingCopy(contractId: string, payload: FlowCompletePayload) {
+        return httpClient.post(`/contracts/${contractId}/working-copy/complete`, payload);
+    },
+
     /** Owner: manually send the contract to external signers (Case A, or Case B auto-trigger fallback) */
     async sendForSignatureUnified(
         contractId: string,

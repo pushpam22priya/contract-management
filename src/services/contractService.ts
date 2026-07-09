@@ -2,6 +2,7 @@ import { Contract, ContractStatus, WorkflowMode } from '@/types/contract';
 import { apiService } from './apiService';
 import { httpClient } from '@/lib/httpClient';
 import { submitForSignature as submitForSignatureSvc } from './externalSignatureService';
+import { unifiedFlowService } from './unifiedFlowService';
 
 class ContractService {
 
@@ -107,6 +108,70 @@ class ContractService {
             return { success: true, message: 'PDF saved' };
         } catch (e: any) {
             console.error(`[ContractService] updateContractSignedPdf ✗ unexpected error | id="${id}"`, e);
+            return { success: false, message: e?.message || 'Failed to save PDF' };
+        }
+    }
+
+    /**
+     * Owner working-copy save — multipart-uploads the full edited PDF to the shared
+     * working copy (contracts/{id}_signed.pdf), the SAME object reviewers/approvers/signers
+     * read and write, then persists xfdf/fieldValues/formFields in the same request.
+     *
+     * Use this (instead of updateContractSignedPdf) whenever the owner edits a contract that
+     * is already in / past the unified flow, so their edits are visible to everyone rather than
+     * silently landing in the shadowed original .pdf.
+     */
+    async saveOwnerWorkingCopy(
+        id: string,
+        pdfBlob: Blob,
+        opts?: { xfdfData?: string; fieldValues?: Record<string, string>; formFields?: any[] },
+    ): Promise<{ success: boolean; message: string }> {
+        const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB — matches the reviewer/approver upload
+        let uploadId: string | null = null;
+        try {
+            const initiateRes = await unifiedFlowService.initiateWorkingCopyUpload(id);
+            if (!initiateRes.ok || !initiateRes.data?.uploadId) {
+                return { success: false, message: initiateRes.message || 'Failed to initiate upload.' };
+            }
+            uploadId = initiateRes.data.uploadId;
+
+            const chunks: Blob[] = [];
+            for (let offset = 0; offset < pdfBlob.size; offset += CHUNK_SIZE) {
+                chunks.push(pdfBlob.slice(offset, offset + CHUNK_SIZE));
+            }
+
+            const parts: { partNumber: number; etag: string }[] = [];
+            for (let i = 0; i < chunks.length; i++) {
+                const partNumber = i + 1;
+                const presignRes = await unifiedFlowService.getWorkingCopyPresignedUrl(id, uploadId, partNumber);
+                if (!presignRes.ok || !presignRes.data?.url) {
+                    throw new Error(presignRes.message || `Failed to get upload URL for part ${partNumber}.`);
+                }
+                const putRes = await fetch(presignRes.data.url, {
+                    method: 'PUT',
+                    body: chunks[i],
+                    headers: { 'Content-Type': 'application/pdf' },
+                });
+                if (!putRes.ok) throw new Error(`Failed to upload part ${partNumber} (HTTP ${putRes.status}).`);
+                const etag = putRes.headers.get('ETag') || putRes.headers.get('etag') || `etag_${partNumber}`;
+                parts.push({ partNumber, etag: etag.replace(/"/g, '') });
+            }
+
+            const completeRes = await unifiedFlowService.completeWorkingCopy(id, {
+                uploadId,
+                parts,
+                xfdfData: opts?.xfdfData,
+                fieldValues: opts?.fieldValues,
+                formFields: opts?.formFields,
+            });
+            if (!completeRes.ok) throw new Error(completeRes.message || 'Failed to save working copy.');
+
+            return { success: true, message: 'PDF saved' };
+        } catch (e: any) {
+            if (uploadId) {
+                await unifiedFlowService.abortWorkingCopyUpload(id, uploadId).catch(() => {});
+            }
+            console.error(`[ContractService] saveOwnerWorkingCopy ✗ | id="${id}"`, e);
             return { success: false, message: e?.message || 'Failed to save PDF' };
         }
     }

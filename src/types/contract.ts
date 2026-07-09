@@ -168,6 +168,7 @@ export interface Contract {
     fileData?: string;           // Base64-encoded PDF with filled values (legacy MongoDB storage)
     fileUrl?: string;            // URL to fetch PDF from API (e.g., /api/file/[id])
     fileUploaded?: boolean;      // true once PDF has been successfully uploaded to MinIO (Spring Boot)
+    hasSignedCopy?: boolean;     // true once the working copy contracts/{id}_signed.pdf exists — read+write it, not the original
     xfdfData?: string;           // XFDF annotation data with field values
     // Review & Approval Workflow tracking
     workflowMode?: WorkflowMode;         // Workflow mode set at submission time

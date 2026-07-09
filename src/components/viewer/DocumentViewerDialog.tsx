@@ -93,6 +93,8 @@ interface DocumentViewerDialogProps {
     // ✅ Unified flow: participant role and party type info for field-level access control
     unifiedParticipantRole?: 'REVIEWER' | 'APPROVER';
     contractParties?: any[]; // PartyConfiguration[] — INTERNAL parties are editable, EXTERNAL are read-only
+    /** Specific field names to force read-only regardless of party (e.g. the approver's applied signature for the owner) */
+    lockedFieldNames?: string[];
     /** Ref exposed to parent panels so they can trigger PDF export before marking complete */
     saveRef?: React.RefObject<(() => Promise<void>) | null>;
     /** When true, hides the built-in Save/Send button while onSave still works via saveRef */
@@ -132,6 +134,7 @@ export default function DocumentViewerDialog({
     extraActions,
     unifiedParticipantRole,
     contractParties,
+    lockedFieldNames,
     saveRef,
     hideSaveButton,
     externalWarning,
@@ -851,6 +854,8 @@ export default function DocumentViewerDialog({
                         editableParties={unifiedEditableParties ?? (assignedPartyId ? [assignedPartyId] : undefined)}
                         // ✅ Block all new signatures for unified flow REVIEWERs
                         blockAllNewSignatures={unifiedParticipantRole === 'REVIEWER' && !readOnly}
+                        // ✅ Force-lock specific fields (e.g. the approver's applied signature for the owner)
+                        lockedFieldNames={lockedFieldNames}
                         // ✅ Auto-scroll to first assigned field + autofill on document load
                         onDocumentLoaded={(!readOnly && (assignedPartyId || currentUserRole === 'contractor')) ? () => {
                             if (assignedPartyId) {

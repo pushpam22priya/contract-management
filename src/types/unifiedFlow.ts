@@ -104,4 +104,6 @@ export interface FlowFileUrlResponse {
     url: string;
     /** Stored XFDF from previous participant edits — passed as initialXfdf to restore annotations */
     xfdfData?: string;
+    /** True when the served binary is the _signed working copy (already baked) — do NOT overlay XFDF */
+    isSignedCopy?: boolean;
 }

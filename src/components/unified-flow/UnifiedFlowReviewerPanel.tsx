@@ -96,6 +96,14 @@ export default function UnifiedFlowReviewerPanel({
         setLoadingUrl(false);
         if (res.ok && res.data?.url) {
             setFileUrl(res.data.url);
+            // If the backend served the _signed working copy, it already has ALL prior parties'
+            // signatures and field values baked into the binary. Overlaying XFDF on top would wipe
+            // baked ink signatures (e.g. the owner's "admin" mark) — so suppress it entirely.
+            if (res.data.isSignedCopy) {
+                setInitialXfdf(undefined);
+                return;
+            }
+            // No working copy yet — this is the original .pdf, so restore field values from XFDF.
             // Fetch xfdfData from Spring Boot's contract endpoint directly.
             // getFlowStatus (statusXfdf) and getParticipantFileUrl (res.data.xfdfData) both return
             // the flow-level xfdf which may be stale from a previous participant's markFlowComplete.
