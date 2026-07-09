@@ -4168,15 +4168,17 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                             // ✅ CRITICAL: Delay setting isLoadingInitialDocument to false
                             // This allows the widget rebuild process to complete first
                             // Widget rebuild happens async after document load, and we need to protect signatures during that process
+                            // onDocumentLoaded is deferred here too: fieldManager.getFields() is empty
+                            // immediately after documentLoaded fires and only populates after widget rebuild,
+                            // so callers like autofill must wait until rebuild is complete.
                             setTimeout(() => {
                                 isLoadingInitialDocument.current = false;
                                 console.log('✅ Initial document loading marked as complete (after widget rebuild)');
+                                if (onDocumentLoaded) {
+                                    console.log('📞 Calling onDocumentLoaded callback');
+                                    onDocumentLoaded();
+                                }
                             }, 1000); // Wait for widget rebuild to complete
-
-                            if (onDocumentLoaded) {
-                                console.log('📞 Calling onDocumentLoaded callback');
-                                onDocumentLoaded();
-                            }
                         } catch (err) {
                             console.error('❌ Error in documentLoaded handler:', err);
                             setLoading(false);
