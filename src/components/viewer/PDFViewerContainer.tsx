@@ -36,6 +36,7 @@ interface PDFViewerContainerProps {
     // Multi-party field assignment props
     parties?: PartyConfiguration[];           // Available parties for field assignment
     editableParties?: string[];               // Which parties' fields are editable (empty = all editable)
+    navigationParties?: string[];             // Parties whose fields the nav button cycles through (defaults to editableParties)
     currentFillingParty?: string;             // Which party the current user is filling for
     enablePartyAssignment?: boolean;          // Enable party assignment mode (for template creation)
     onPartyAssigned?: (fieldName: string, partyId: string, partyLabel: string) => void; // Callback when field is assigned to party
@@ -91,7 +92,7 @@ export interface PDFViewerHandle {
 }
 
 const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
-    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole, currentUserEmail, canAddFormFields = false, blockAllNewSignatures = false, lockedFieldNames }, ref) => {
+    ({ documentUrl, initialXfdf, readOnly, isReadOnly, onSave, onDocumentLoaded, onDocumentModified, onError, editableFieldMode = 'all', initialToolbarGroup, showAnnotationNavigation = false, onSignatureApplied, onPrefilledFieldModified, onSignaturePositionRestored, silentPositionRestore = false, protectedPartyIds, parties, editableParties, navigationParties, currentFillingParty, enablePartyAssignment, onPartyAssigned, onFieldsWithPartyExported, onFieldChange, formFields, currentUserRole, currentUserEmail, canAddFormFields = false, blockAllNewSignatures = false, lockedFieldNames }, ref) => {
         const viewerDiv = useRef<HTMLDivElement>(null);
         const viewerInstance = useRef<any>(null);
         const isDark = useTheme().palette.mode === 'dark';
@@ -4459,7 +4460,7 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                     showAnnotationNavigation={showAnnotationNavigation}
                     effectiveReadOnly={effectiveReadOnly}
                     loading={loading}
-                    editableParties={editableParties}
+                    editableParties={navigationParties ?? editableParties}
                     currentUserRole={currentUserRole}
                 />
             </Box>

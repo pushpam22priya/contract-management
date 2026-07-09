@@ -744,7 +744,7 @@ export default function UnifiedFlowSubmitDialog({
                         <AppButton
                             variant="contained"
                             loading={submitting}
-                            disabled={reviewerRows.length === 0 && approverRows.length === 0}
+                            disabled={!reviewerRows.some((r) => r.email.trim()) || !approverRows.some((r) => r.email.trim())}
                             startIcon={<SendOutlined />}
                             onClick={handleSubmit}
                             sx={{ fontWeight: 600, px: 3, boxShadow: (t) => `0 2px 8px ${t.palette.primary.main}40` }}

@@ -16,14 +16,17 @@ export const getFormFieldAnnotations = (Core: any, allowedParties?: string[], ro
     // Filter for widget annotations (form fields)
     let formAnnotations = allAnnotations.filter((annot: any) => annot instanceof Core.Annotations.WidgetAnnotation);
 
-    // ✅ PARTY FILTERING FOR EXTERNAL CLIENTS
-    // Only apply filtering if role is 'client' and we have specific parties allowed
-    if (role === 'client' && allowedParties && allowedParties.length > 0) {
-        console.log(`🔍 [NAV] Filtering annotations for client parties: [${allowedParties.join(', ')}]`);
+    // Filter to specified parties when allowedParties is provided.
+    // Works for both external clients (their party IDs) and internal users
+    // (internal party IDs + 'unassigned') so the nav button only cycles
+    // through the fields that belong to the current user's party.
+    if (allowedParties && allowedParties.length > 0) {
+        console.log(`🔍 [NAV] Filtering annotations for parties: [${allowedParties.join(', ')}]`);
         formAnnotations = formAnnotations.filter((annot: any) => {
-            const assignedParty = annot.getCustomData('assignedParty');
-            // Include if field is assigned to one of the user's parties
-            return assignedParty && allowedParties.includes(assignedParty);
+            // Treat empty/null assignedParty as 'unassigned' so unassigned fields
+            // are included when allowedParties contains 'unassigned'.
+            const assignedParty = annot.getCustomData('assignedParty') || 'unassigned';
+            return allowedParties.includes(assignedParty);
         });
         console.log(`🔍 [NAV] Filtered down to ${formAnnotations.length} fields for parties [${allowedParties.join(', ')}]`);
     }

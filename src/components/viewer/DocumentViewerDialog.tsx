@@ -856,14 +856,19 @@ export default function DocumentViewerDialog({
                         blockAllNewSignatures={unifiedParticipantRole === 'REVIEWER' && !readOnly}
                         // ✅ Force-lock specific fields (e.g. the approver's applied signature for the owner)
                         lockedFieldNames={lockedFieldNames}
-                        // ✅ Auto-scroll to first assigned field + autofill on document load
-                        onDocumentLoaded={(!readOnly && (assignedPartyId || currentUserRole === 'contractor')) ? () => {
+                        // ✅ Auto-scroll to first relevant field + autofill on document load.
+                        // PDFViewerContainer already defers this callback by 1 s (after widget rebuild),
+                        // so no extra setTimeout is needed here.
+                        onDocumentLoaded={(!readOnly && (assignedPartyId || currentUserRole === 'contractor' || unifiedParticipantRole)) ? () => {
                             if (assignedPartyId) {
-                                setTimeout(() => {
-                                    pdfViewerRef.current?.navigateToFirstPartyField([assignedPartyId]);
-                                }, 500);
+                                // Internal signer: jump to their assigned party's first field
+                                pdfViewerRef.current?.navigateToFirstPartyField([assignedPartyId]);
+                            } else if (unifiedParticipantRole && unifiedEditableParties && unifiedEditableParties.length > 0) {
+                                // Unified reviewer / approver: jump to first internal party field
+                                pdfViewerRef.current?.navigateToFirstPartyField(unifiedEditableParties);
                             }
-                            if (!hasAutoFilledRef.current) {
+                            // Autofill only for contractor or assigned internal signer
+                            if ((assignedPartyId || currentUserRole === 'contractor') && !hasAutoFilledRef.current) {
                                 hasAutoFilledRef.current = true;
                                 handleAutofill(true);
                             }
@@ -872,9 +877,9 @@ export default function DocumentViewerDialog({
 
                     <PartyValidationWarningPopup
                         partyValidationWarning={
-                            externalWarning != null
-                                ? externalWarning
-                                : (validationTriggered ? partyValidationWarning : null)
+                            externalWarning != null || validationTriggered
+                                ? partyValidationWarning
+                                : null
                         }
                         onNavigateToField={(name) => pdfViewerRef.current?.navigateToField(name)}
                     />

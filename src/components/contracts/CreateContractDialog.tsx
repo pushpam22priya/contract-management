@@ -27,6 +27,7 @@ import RequestReviewDialog from '@/components/contracts/RequestReviewDialog';
 import SubmitForSignatureDialog from '@/components/contracts/SubmitForSignatureDialog';
 import MultiPartySignatureDialog from '@/components/contracts/MultiPartySignatureDialog';
 import AutofillPartyDialog from '@/components/contracts/AutofillPartyDialog';
+import UnifiedFlowSubmitDialog from '@/components/unified-flow/UnifiedFlowSubmitDialog';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import PartyValidationWarningPopup from '@/components/viewer/pdfViewer/PartyValidationWarningPopup';
 import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
@@ -105,10 +106,11 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
     // Unsaved changes confirmation dialog state
     const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
     // Track which action triggered the unsaved changes dialog
-    const [pendingAction, setPendingAction] = useState<'close' | 'review' | 'signature' | null>(null);
+    const [pendingAction, setPendingAction] = useState<'close' | 'review' | 'signature' | 'unified' | null>(null);
     // Dialog states for Review & Signature
     const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
     const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
+    const [unifiedSubmitOpen, setUnifiedSubmitOpen] = useState(false);
     const [multiPartyDialogOpen, setMultiPartyDialogOpen] = useState(false);
     const [autofillPartyDialogOpen, setAutofillPartyDialogOpen] = useState(false);
 
@@ -126,6 +128,15 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
         return (selectedTemplate.parties as any[])
             .filter((p) => p.type === 'EXTERNAL')
             .map((p) => p.id as string);
+    }, [selectedTemplate?.parties]);
+
+    // IDs of INTERNAL parties + 'unassigned' — nav button only cycles these fields
+    const internalNavigationParties = useMemo(() => {
+        if (!selectedTemplate?.parties) return undefined;
+        const ids = (selectedTemplate.parties as any[])
+            .filter((p) => p.type !== 'EXTERNAL')
+            .map((p) => p.id as string);
+        return ids.length > 0 ? [...ids, 'unassigned'] : undefined;
     }, [selectedTemplate?.parties]);
 
     // Ref so handleFieldChange always sees latest values (called via viewer ref / closure)
@@ -475,6 +486,15 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
         }
     };
 
+    const handleUnifiedFlowClick = () => {
+        if (hasUnsavedChanges() || !contractId) {
+            setPendingAction('unified');
+            setShowUnsavedDialog(true);
+        } else {
+            setUnifiedSubmitOpen(true);
+        }
+    };
+
     const handleSignatureClick = () => {
         if (hasUnsavedChanges() || !contractId) {
             setPendingAction('signature');
@@ -505,6 +525,8 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
             onSuccess?.();
         } else if (pendingAction === 'review') {
             setReviewDialogOpen(true);
+        } else if (pendingAction === 'unified') {
+            setUnifiedSubmitOpen(true);
         } else if (pendingAction === 'signature') {
             // Check parties with fields to decide which dialog to open
             const partiesWithFields = (selectedTemplate?.parties || []).filter((party: any) => {
@@ -763,7 +785,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
 
             <AppButton
                 variant="contained"
-                onClick={handleReviewClick}
+                onClick={handleUnifiedFlowClick}
                 disabled={saving || !canSave}
                 sx={{
                     fontWeight: 600,
@@ -779,7 +801,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
                     },
                 }}
             >
-                Review & Approve
+                Unified Submission
             </AppButton>
             <AppButton
                 variant="contained"
@@ -1080,6 +1102,7 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
                                         }
                                     }}
                                     showAnnotationNavigation={true}
+                                    navigationParties={internalNavigationParties}
                                     onError={(err) => setError(err)}
                                 />
 
@@ -1200,6 +1223,23 @@ const CreateContractDialog = ({ open, onClose, onSuccess, initialTemplateName, f
                     parties={selectedTemplate.parties || []}
                     formFields={selectedTemplate.formFields}
                     fieldValues={filledFieldValues}
+                />
+            )}
+
+            {/* Unified Flow Submit Dialog */}
+            {contractId && (
+                <UnifiedFlowSubmitDialog
+                    open={unifiedSubmitOpen}
+                    onClose={() => setUnifiedSubmitOpen(false)}
+                    onSubmitted={() => {
+                        setUnifiedSubmitOpen(false);
+                        setTimeout(() => {
+                            handleClose();
+                            onSuccess?.();
+                        }, 1000);
+                    }}
+                    contractId={contractId}
+                    contractTitle={contractTitle}
                 />
             )}
 
