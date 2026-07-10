@@ -664,7 +664,9 @@ export default function UnifiedFlowSubmitDialog({
 
                             {externalParties.length > 0 && (
                                 <Autocomplete
-                                    options={externalParties}
+                                    options={externalParties.filter(
+                                        (p) => p.id === signer.partyId || !externalSigners.some((s) => s._id !== signer._id && s.partyId === p.id)
+                                    )}
                                     getOptionLabel={(p) => p.label}
                                     value={externalParties.find((p) => p.id === signer.partyId) ?? null}
                                     onChange={(_, val) => {

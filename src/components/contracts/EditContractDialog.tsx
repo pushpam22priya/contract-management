@@ -16,16 +16,19 @@ import {
     AlertColor,
     useTheme,
 } from '@mui/material';
-import { ArrowBack, ArrowForward } from '@mui/icons-material';
+import { ArrowBack, ArrowForward, AutoAwesome } from '@mui/icons-material';
 import AppButton from '@/components/common/AppButton';
 import BaseDialog from '@/components/common/BaseDialog';
 import ConfirmationDialog from '@/components/common/ConfirmationDialog';
 import NotificationSnackbar from '@/components/common/NotificationSnackbar';
 import PDFViewerContainer, { PDFViewerHandle } from '@/components/viewer/PDFViewerContainer';
 import WrongPartyWarningDialog from '@/components/viewer/pdfViewer/WrongPartyWarningDialog';
+import AutofillPartyDialog from '@/components/contracts/AutofillPartyDialog';
 import { templateService } from '@/services/templateService';
 import { apiService } from '@/services/apiService';
 import { contractService } from '@/services/contractService';
+import { authService } from '@/services/authService';
+import { buildProfileData } from '@/utils/profileKeyOptions';
 import { Template } from '@/types/template';
 import { Contract } from '@/types/contract';
 import dayjs, { Dayjs } from 'dayjs';
@@ -116,6 +119,10 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract, resubmitMode, 
     const [endDate, setEndDate] = useState('');
     const [filledFieldValues, setFilledFieldValues] = useState<Record<string, string>>({});
 
+    // Autofill
+    const [autofillPartyDialogOpen, setAutofillPartyDialogOpen] = useState(false);
+    const hasAutoFilledRef = useRef(false);
+
     // Contractor cannot edit EXTERNAL party fields (type === 'EXTERNAL' on the party config)
     const [showWrongPartyWarning, setShowWrongPartyWarning] = useState(false);
 
@@ -149,6 +156,7 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract, resubmitMode, 
         setDocumentUrl(null);
         setDocumentLoaded(false);
         setError('');
+        hasAutoFilledRef.current = false;
 
         loadTemplateList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -353,6 +361,53 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract, resubmitMode, 
         onClose();
     };
 
+    const handleAutofillConfirm = (partyId: string) => {
+        const currentUser = authService.getCurrentUser();
+        if (!currentUser) {
+            setSnackbar({ open: true, message: 'Please log in to use autofill', severity: 'warning' });
+            return;
+        }
+        const profileData = buildProfileData(currentUser);
+        if (Object.keys(profileData).length === 0) {
+            setSnackbar({ open: true, message: 'No profile data found to autofill', severity: 'warning' });
+            return;
+        }
+        try {
+            const count = pdfViewerRef.current?.autofillFields(partyId, profileData) ?? 0;
+            if (count === 0) {
+                setSnackbar({ open: true, message: 'No matching fields found for your profile data', severity: 'warning' });
+            } else {
+                setSnackbar({ open: true, message: `${count} field${count !== 1 ? 's' : ''} filled from your profile`, severity: 'success' });
+            }
+        } catch {
+            setSnackbar({ open: true, message: 'Something went wrong during autofill. Please try manually.', severity: 'error' });
+        }
+    };
+
+    const handleAutofillClick = (silent = false) => {
+        const allParties = (selectedTemplate?.parties || (contract as any).parties || []) as any[];
+        const parties = allParties.filter((p: any) => p.type !== 'EXTERNAL');
+        const formFields = initialFormFields || [];
+
+        const getTextFieldCount = (partyId: string) =>
+            (formFields as any[]).filter(
+                (f) => f.assignedParty === partyId && f.type !== 'Sig' && f.type !== 'signature' && !!f.profileKey
+            ).length;
+
+        const partiesWithFields = parties.filter((p: any) => getTextFieldCount(p.id) > 0);
+
+        if (partiesWithFields.length === 0) {
+            if (!silent) setSnackbar({ open: true, message: 'No autofillable fields found in this document', severity: 'info' });
+            return;
+        }
+
+        if (partiesWithFields.length === 1) {
+            handleAutofillConfirm(partiesWithFields[0].id);
+        } else {
+            setAutofillPartyDialogOpen(true);
+        }
+    };
+
     const handleCloseAttempt = () => {
         if (currentStep === 2 && documentLoaded) {
             setShowUnsavedDialog(true);
@@ -389,6 +444,16 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract, resubmitMode, 
                 sx={{ padding: '4px 10px', borderRadius: 2 }}
             >
                 Back to Details
+            </AppButton>
+            <AppButton
+                variant="outlined"
+                onClick={() => handleAutofillClick()}
+                disabled={!documentLoaded || saving}
+                size="small"
+                startIcon={<AutoAwesome />}
+                sx={{ borderRadius: 2, py: 0.5 }}
+            >
+                Autofill
             </AppButton>
             <AppButton
                 onClick={handleSave}
@@ -663,7 +728,13 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract, resubmitMode, 
                                             [fieldName]: value?.toString() ?? '',
                                         }));
                                     }}
-                                    onDocumentLoaded={() => setDocumentLoaded(true)}
+                                    onDocumentLoaded={() => {
+                                        setDocumentLoaded(true);
+                                        if (resubmitMode && !hasAutoFilledRef.current) {
+                                            hasAutoFilledRef.current = true;
+                                            handleAutofillClick(true);
+                                        }
+                                    }}
                                     onError={(err) => setError(err)}
                                 />
 
@@ -686,6 +757,18 @@ const EditContractDialog = ({ open, onClose, onSuccess, contract, resubmitMode, 
                     </Box>
                 )}
             </BaseDialog>
+
+            {/* Autofill party picker */}
+            <AutofillPartyDialog
+                open={autofillPartyDialogOpen}
+                onClose={() => setAutofillPartyDialogOpen(false)}
+                onConfirm={(partyId) => {
+                    setAutofillPartyDialogOpen(false);
+                    handleAutofillConfirm(partyId);
+                }}
+                parties={selectedTemplate?.parties || (contract as any).parties || []}
+                formFields={initialFormFields || []}
+            />
 
             {/* Discard confirmation */}
             <ConfirmationDialog
