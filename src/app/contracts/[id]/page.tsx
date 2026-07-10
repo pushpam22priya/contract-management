@@ -468,7 +468,8 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
     // source of truth: the owner reads AND writes it (never the original), and we never overlay XFDF
     // on it (its signatures/values are already baked into the binary — overlaying would wipe ink
     // signatures like the owner's "admin" mark). On rejection the working copy is archived to
-    // _rejected.pdf and the flow falls back to the original, so rejected contracts report false.
+    // _rejected.pdf (which the backend now serves instead of the original), so rejected contracts
+    // still report false here — the save path correctly writes to {id}.pdf for owner edits.
     // Primary signal is the backend `hasSignedCopy` flag; the participant/signature heuristics keep
     // this correct even if that field isn't present yet.
     const isRejectedState = contract?.status === ContractStatus.REJECTED_BY_REVIEWER
@@ -1031,10 +1032,12 @@ export default function ContractViewPage({ params }: { params: Promise<{ id: str
                 // Once a working copy (_signed.pdf) exists, the served PDF already has ALL signatures
                 // and field values baked in as PDF appearances. Applying XFDF on top would override ink
                 // signatures with their text form-field values (e.g. wipe the owner's baked "admin"
-                // signature while keeping the reviewer's text) — so we suppress it whenever hasSignedCopy,
-                // not just on the flow-url path. Before any working copy exists, the XFDF is the owner's
-                // own consistent export, so it's still applied to restore field values.
-                initialXfdf={(!viewingWithFlowUrl && !hasSignedCopy && (!selectedDoc || selectedDoc.id === contract?.id)) ? contract?.xfdfData : undefined}
+                // signature while keeping the reviewer's text) — so we suppress it whenever hasSignedCopy.
+                // Also suppress for rejected contracts: the backend now serves _rejected.pdf (a baked
+                // binary) instead of the original, so overlaying XFDF would corrupt baked ink signatures.
+                // Before any working copy exists (and not rejected), XFDF is the owner's own consistent
+                // export, so it's still applied to restore field values.
+                initialXfdf={(!viewingWithFlowUrl && !hasSignedCopy && !isRejectedState && (!selectedDoc || selectedDoc.id === contract?.id)) ? contract?.xfdfData : undefined}
                 formFields={(!selectedDoc || selectedDoc.id === contract?.id) ? contract?.formFields : undefined}
                 currentUserRole="contractor"
                 // Chain docs are always read-only; main contract is editable unless finalized

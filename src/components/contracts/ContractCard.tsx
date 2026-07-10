@@ -240,7 +240,7 @@ const ContractCard = ({
 
     const getShareTooltip = (): string => {
         return variant === 'draft'
-            ? tTooltips('submitForReviewOrApproval')
+            ? tTooltips('unifiedSubmission')
             : tTooltips('submitForSignature');
     };
 

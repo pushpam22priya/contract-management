@@ -213,17 +213,35 @@ export default function DocumentViewerDialog({
         return combined;
     }, [clientPartyIds, internalClientPartyIds]);
 
-    // ✅ Unified flow: compute editable parties (INTERNAL + unassigned).
-    // EXTERNAL party fields become read-only via the editableParties restriction in PDFViewerContainer.
-    // Memoised so the array reference stays stable across renders.
+    // ✅ Compute editable parties (INTERNAL + unassigned). EXTERNAL party fields become read-only
+    // via the editableParties restriction in PDFViewerContainer. Memoised so the array reference
+    // stays stable across renders.
     const unifiedEditableParties = useMemo<string[] | undefined>(() => {
-        if (!unifiedParticipantRole) return undefined;
-        if (!contractParties?.length) return undefined; // no party info → fall back to default (all fields interactive)
-        const internalIds = contractParties
-            .filter((p: any) => p.type !== 'EXTERNAL')
-            .map((p: any) => p.id as string);
-        return [...internalIds, 'unassigned'];
-    }, [unifiedParticipantRole, contractParties]);
+        // Unified-flow reviewer / approver.
+        if (unifiedParticipantRole) {
+            if (!contractParties?.length) return undefined; // no party info → default (all interactive)
+            const internalIds = contractParties
+                .filter((p: any) => p.type !== 'EXTERNAL')
+                .map((p: any) => p.id as string);
+            return [...internalIds, 'unassigned'];
+        }
+        // Contract owner on a MULTI-PARTY contract: keep INTERNAL fields editable (so the owner can
+        // still edit after a party signs) while EXTERNAL fields — including the external signer's
+        // signature — stay read-only. Without this, editableParties is undefined, the multi-party
+        // editability pass never runs, and once a party signs the signed PDF's locked field flags make
+        // everything view-only for the owner. Engaged whenever the contract has external parties or
+        // assigned signers, so single-party / draft editing keeps its default all-interactive behavior.
+        const hasExternalParty = (parties as any[] | undefined)?.some((p) => p.type === 'EXTERNAL');
+        if (currentUserRole === 'contractor'
+                && parties?.length
+                && (hasExternalParty || clientPartyIds.length > 0 || internalClientPartyIds.length > 0)) {
+            const internalIds = (parties as any[])
+                .filter((p) => p.type !== 'EXTERNAL')
+                .map((p) => p.id as string);
+            return [...internalIds, 'unassigned'];
+        }
+        return undefined;
+    }, [unifiedParticipantRole, contractParties, currentUserRole, parties, clientPartyIds, internalClientPartyIds]);
 
     // ✅ Store initial field values for restoration (for contractor protection)
     const initialFieldValuesRef = useRef<Record<string, string>>({});

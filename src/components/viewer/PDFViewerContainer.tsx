@@ -2931,6 +2931,79 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                 }
                             }
 
+                            // ══════════════════════════════════════════════════════════════════
+                            // OWNER: re-enable editing/deleting of the OWNER'S OWN signatures.
+                            // The multi-party pass above locks EVERY non-widget signature annotation, which
+                            // wrongly also locks the contract owner's own applied signature. Unlock the drawn
+                            // signatures that sit on an editable (internal) widget which is NOT an explicitly
+                            // locked field — so the owner can edit/delete their own signature, while the
+                            // approver's (locked field) and the external signer's (external party) stay locked.
+                            // ══════════════════════════════════════════════════════════════════
+                            if (currentUserRole === 'contractor'
+                                    && editableParties && editableParties.length > 0
+                                    && !effectiveReadOnly) {
+                                const annotationManager = Core.annotationManager;
+                                const allAnnotations = annotationManager.getAnnotationsList();
+                                const lockedSet = new Set(lockedFieldNamesRef.current);
+
+                                const norm = (r: any) => r && ({
+                                    x1: Math.min(r.x1, r.x2), y1: Math.min(r.y1, r.y2),
+                                    x2: Math.max(r.x1, r.x2), y2: Math.max(r.y1, r.y2),
+                                });
+                                const unlock = (annot: any) => {
+                                    if (annot.getField) {
+                                        const f = annot.getField();
+                                        if (f?.flags) (f.flags as any).ReadOnly = false;
+                                    }
+                                    annot.ReadOnly = false;
+                                    annot.Locked = false;
+                                    annot.LockedContents = false;
+                                    annot.NoMove = false;
+                                };
+
+                                let unlockedCount = 0;
+
+                                // Rects of the owner's own editable widgets (editable party, not a locked field).
+                                // Use getRect() for BOTH widgets and signatures so they share one coordinate space.
+                                const ownRects: { page: number; x1: number; y1: number; x2: number; y2: number }[] = [];
+                                allAnnotations.forEach((annot: any) => {
+                                    if (!(annot instanceof Core.Annotations.WidgetAnnotation)) return;
+                                    const field = annot.getField?.();
+                                    const fieldName = field?.name || (annot as any).fieldName;
+                                    const assignedParty = annot.getCustomData('assignedParty') || 'unassigned';
+                                    if (!editableParties.includes(assignedParty)) return; // external / non-editable
+                                    if (fieldName && lockedSet.has(fieldName)) return;    // approver's locked signature
+                                    const r = norm(annot.getRect?.());
+                                    if (r) ownRects.push({ page: annot.PageNumber, ...r });
+                                    // Unlock the widget field itself and its directly-linked signature annotation
+                                    // (the most reliable link — no geometry needed).
+                                    unlock(annot);
+                                    const linked = (annot as any).annot;
+                                    if (linked) { unlock(linked); unlockedCount++; }
+                                });
+                                if (ownRects.length > 0) {
+                                    allAnnotations.forEach((annot: any) => {
+                                        const isDrawn = annot instanceof Core.Annotations.FreeHandAnnotation
+                                            || annot instanceof Core.Annotations.StampAnnotation
+                                            || (annot.Subject && String(annot.Subject).includes('Signature'));
+                                        if (!isDrawn) return;
+                                        const a = norm(annot.getRect?.());
+                                        if (!a) return;
+                                        // Intersection test (signatures often overflow their widget bounds).
+                                        const overlaps = ownRects.some((r) =>
+                                            r.page === annot.PageNumber &&
+                                            a.x1 < r.x2 && a.x2 > r.x1 && a.y1 < r.y2 && a.y2 > r.y1
+                                        );
+                                        if (overlaps) { unlock(annot); unlockedCount++; }
+                                    });
+                                }
+
+                                if (unlockedCount > 0) {
+                                    annotationManager.drawAnnotationsFromList(allAnnotations);
+                                    console.log(`🔓 [OWNER SIG] Unlocked ${unlockedCount} of the owner's own signature annotation(s)`);
+                                }
+                            }
+
                             // ✅ CRITICAL: Capture initial positions of ALL signature annotations (pre-filled)
                             // This allows us to restore positions if external users try to drag them
                             // Apply for: 1) External signers (editableParties), 2) Contract viewers (silentPositionRestore), 3) Contractors (onSignaturePositionRestored)
@@ -4078,6 +4151,38 @@ const PDFViewerContainer = forwardRef<PDFViewerHandle, PDFViewerContainerProps>(
                                                 // If it's old, we stored 'ReadOnly=true' in the initial load hook.
                                                 if (annot.ReadOnly || annot.Locked) {
                                                     shouldLock = true;
+                                                }
+                                                // ✅ Owner may edit/delete their OWN signature. A signature is the owner's own
+                                                // when it sits on an editable (internal) widget that is NOT an explicitly locked
+                                                // field (the approver's signature) and NOT an external party field. So the
+                                                // approver's and external signer's signatures stay locked, the owner's does not.
+                                                if (shouldLock && currentUserRole === 'contractor') {
+                                                    const nz = (r: any) => r && ({
+                                                        x1: Math.min(r.x1, r.x2), y1: Math.min(r.y1, r.y2),
+                                                        x2: Math.max(r.x1, r.x2), y2: Math.max(r.y1, r.y2),
+                                                    });
+                                                    const a = nz(annot.getRect?.());
+                                                    const lockedSet = new Set(lockedFieldNamesRef.current);
+                                                    const ownsIt = !!a && Core.annotationManager.getAnnotationsList().some((w: any) => {
+                                                        if (!(w instanceof Core.Annotations.WidgetAnnotation)) return false;
+                                                        if (w.PageNumber !== annot.PageNumber) return false;
+                                                        const party = w.getCustomData('assignedParty') || 'unassigned';
+                                                        if (!editableParties.includes(party)) return false;      // external / non-editable
+                                                        const fieldName = w.getField?.()?.name || (w as any).fieldName;
+                                                        if (fieldName && lockedSet.has(fieldName)) return false; // approver's locked signature
+                                                        const r = nz(w.getRect?.());
+                                                        return r && a.x1 < r.x2 && a.x2 > r.x1 && a.y1 < r.y2 && a.y2 > r.y1;
+                                                    });
+                                                    if (ownsIt) {
+                                                        // Clear the lock flags so the owner can actually edit/delete it,
+                                                        // and keep it selected (do not auto-deselect).
+                                                        if (annot.getField) { const f = annot.getField(); if (f?.flags) (f.flags as any).ReadOnly = false; }
+                                                        annot.ReadOnly = false;
+                                                        annot.Locked = false;
+                                                        annot.LockedContents = false;
+                                                        annot.NoMove = false;
+                                                        shouldLock = false;
+                                                    }
                                                 }
                                             }
                                         }

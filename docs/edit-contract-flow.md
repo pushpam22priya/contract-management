@@ -866,7 +866,7 @@ The tooltip also changes:
 ```typescript
 const getShareTooltip = (): string =>
     variant === 'draft'
-        ? tTooltips('submitForReviewOrApproval')   // "Submit for review or approval"
+        ? tTooltips('unifiedSubmission')   // "Unified submission"
         : tTooltips('submitForSignature');          // "Submit for signature"
 ```
 
