@@ -82,14 +82,12 @@ test('2. renders APPROVER section header', async () => {
     await waitFor(() => expect(screen.getByText('Approvers')).toBeInTheDocument());
 });
 
-test('3. shows validation error when submitted with empty emails', async () => {
+test('3. Submit Flow button is disabled when participant emails are empty', async () => {
     renderDialog();
     await waitFor(() => screen.getByText('Approvers'));
-    // Both rows start empty — validation fires "All participants must have an email address."
-    await userEvent.click(screen.getByRole('button', { name: /submit flow/i }));
-    await waitFor(() => {
-        expect(screen.getByText(/all participants must have an email address/i)).toBeInTheDocument();
-    });
+    // Both rows start empty — button is disabled to prevent submission until emails are provided.
+    const submitBtn = screen.getByRole('button', { name: /submit flow/i });
+    expect(submitBtn).toBeDisabled();
     expect(mockSubmitFlow).not.toHaveBeenCalled();
 });
 

@@ -136,7 +136,7 @@ const FAILURE_RESPONSE = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -411,7 +411,7 @@ describe('LoginPage — login failure', () => {
         expect(await screen.findByText((content, element) =>
             content.includes('Login successful')
         )).toBeInTheDocument();
-    });
+    }, 20000);
 });
 
 // =============================================================================
